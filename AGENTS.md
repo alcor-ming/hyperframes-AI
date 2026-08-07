@@ -80,7 +80,9 @@
 
 - 规划和制作 HyperFrames 视频时，使用项目级 `hyperframes-codex-workflow` Skill（`.agents/skills/hyperframes-codex-workflow/`）。只使用 `talking_head` 与 `pure_hyperframes` 两套模板；用户批准同一份 Animation Plan 前，不生成正式图片、正式配音、composition 或最终渲染。
 - `ANIMATION_PLAN.md`、项目配置、Asset Brief 和资产清单等文本交付物保存到 `tasks/<task-id>/hyperframes/`；HyperFrames 工程、媒体、生成图片、配音、QA 输出和渲染保存到 `assets/<task-id>/hyperframes/`。Skill 包内的通用路径示例服从本仓库映射。
-- HyperFrames 视频任务只以 `hyperframes-codex-workflow` 为入口；它通过 `profile-registry.json` 每次只读取一套 Profile 的 `PROFILE.md` 与 `tokens.json`。日常制作不得并行加载其他 Profile、内嵌 Profile Skill、上游参考、完整 prompt block 或 `design-taste-frontend`，除非用户明确要求维护或审查 Profile。
+- HyperFrames 视频任务只以 `hyperframes-codex-workflow` 为入口；它通过 `profile-registry.json` 每次只读取一套 Profile 的 `PROFILE.md` 与 `tokens.json`。日常制作不得并行加载其他 Profile、内嵌 Profile Skill、上游参考或完整 prompt block。
+- `design-taste-frontend` 仅在 Animation Plan 已批准且存在明确 Asset Brief 的图片素材生成阶段调用，用于优化构图、留白和 image-gen 提示词；不得用于改写整体视觉方向、模板、Scene 结构或动效语言。
+- 调用 `design-taste-frontend` 前必须确认 Animation Plan 的大方向符合已选 Profile；出现冲突时，以用户已批准的 Animation Plan、所选 Profile 及其 tokens 为准，taste skill 的建议应被舍弃或收敛后再交给 image-gen。
 - 上下文用于视觉计划、设计和实现，不用于罗列读取文件、复述规则、展示逐项 QA 或证明遵守流程；用户可见回复只保留计划变更、实质偏差和未解决阻塞。
 - 使用对应素材目录中的音频、字幕、时间轴和画面完成所需剪辑、动画、字幕包装或导出，不要求这些输入必须在同一次任务中生成。
 - 当前流程不默认引入 ChatCut。缺少完成当前剪辑所必需的输入时说明缺口，不假装已剪辑或导出。
