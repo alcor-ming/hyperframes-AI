@@ -1,0 +1,27 @@
+{
+  "$schema": "./schemas/profile-registry.schema.json",
+  "version": 1,
+  "profiles": [
+    {
+      "id": "optical_fluidity",
+      "display_name": "Optical Fluidity｜光学流动",
+      "profile_path": "references/hyperframes-design-profile-pack-v0.1.0/profiles/01-optical-fluidity/PROFILE.md",
+      "tokens_path": "references/hyperframes-design-profile-pack-v0.1.0/profiles/01-optical-fluidity/tokens.json",
+      "motion_primitives": ["Focus", "Align", "Connect", "Resolve", "Refract"]
+    },
+    {
+      "id": "kami_editorial",
+      "display_name": "Kami Editorial｜纸上编辑",
+      "profile_path": "references/hyperframes-design-profile-pack-v0.1.0/profiles/02-kami-editorial/PROFILE.md",
+      "tokens_path": "references/hyperframes-design-profile-pack-v0.1.0/profiles/02-kami-editorial/tokens.json",
+      "motion_primitives": ["Compose", "Reveal", "Annotate", "Rule", "Turn", "Settle"]
+    },
+    {
+      "id": "monochrome_atelier",
+      "display_name": "Monochrome Atelier｜黑白工坊",
+      "profile_path": "references/hyperframes-design-profile-pack-v0.1.0/profiles/03-monochrome-atelier/PROFILE.md",
+      "tokens_path": "references/hyperframes-design-profile-pack-v0.1.0/profiles/03-monochrome-atelier/tokens.json",
+      "motion_primitives": ["Isolate", "Unveil", "Cut", "Condense", "Lock"]
+    }
+  ]
+}

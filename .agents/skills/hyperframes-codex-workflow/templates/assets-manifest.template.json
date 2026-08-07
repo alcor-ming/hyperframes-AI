@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "IMG-001",
+      "scene": "S02",
+      "source": "generated",
+      "brief": "assets/briefs/IMG-001.md",
+      "file": "assets/generated/IMG-001.png",
+      "status": "planned"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+# Local task state, personal media, and generated artifacts
+/tasks/
+/assets/
+/canvas/
+/outputs/
+
+# Third-party skills are installed locally; only the project workflow is public.
+/.agents/skills/*
+!/.agents/skills/hyperframes-codex-workflow/
+!/.agents/skills/hyperframes-codex-workflow/**

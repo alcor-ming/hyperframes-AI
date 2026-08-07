@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "status": "draft",
+  "template": "pure_hyperframes",
+  "profile": "kami_editorial",
+  "ratio": "9:16",
+  "fps": 60,
+  "timing": "voiceover_pending",
+  "voiceover": "ai_generated",
+  "authoritative_media": null,
+  "goal": "把信息失序到统一索引的变化讲清楚。",
+  "scenes": [
+    {
+      "id": "S01",
+      "anchor": "预计 5–6 秒；提出问题",
+      "visual_goal": "建立工具数量与信息秩序之间的反差。",
+      "hero_state": "三个分散条目围绕中央问题句，版面失序但仍可读。",
+      "motion": ["Reveal", "Annotate"],
+      "assets": [],
+      "scene_type": "opening_statement"
+    },
+    {
+      "id": "S02",
+      "anchor": "预计 7–8 秒；提出方案",
+      "visual_goal": "表达信息汇聚后才能治理。",
+      "hero_state": "墨线从边缘汇入中央索引结构。",
+      "motion": ["Turn", "Settle"],
+      "assets": ["IMG-001"],
+      "scene_type": "image_evidence"
+    }
+  ],
+  "asset_briefs": [
+    {
+      "id": "IMG-001",
+      "scene": "S02",
+      "purpose": "表达信息汇聚。",
+      "composition": "深蓝墨线从四周汇入中央，中央偏上留白。",
+      "ratio": "9:16",
+      "source": "generated",
+      "forbidden": ["文字", "Logo", "UI", "人物", "数字"]
+    }
+  ],
+  "open_decisions": [
+    "默认使用克制、解释型普通话 AI 配音，语速 0.95。"
+  ]
+}

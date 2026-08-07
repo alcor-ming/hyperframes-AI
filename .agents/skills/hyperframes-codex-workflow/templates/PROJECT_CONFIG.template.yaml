@@ -1,0 +1,37 @@
+version: 1
+project_name: replace-me
+
+template: talking_head
+profile: optical_fluidity
+
+output:
+  ratio: "16:9"
+  width: 1920
+  height: 1080
+  fps: 60
+
+inputs:
+  source_video: input/source.mp4
+  audio: null
+  script: null
+  notes: input/materials.md
+  section_map: null
+  assets: []
+
+timing:
+  mode: source_locked
+  authoritative_media: input/source.mp4
+
+voiceover:
+  mode: source
+  language: zh-CN
+  tone: null
+  speed: 1.0
+
+image_assets:
+  enabled: optional
+  manifest: assets/manifest.json
+
+plan:
+  file: ANIMATION_PLAN.md
+  approval_required: true

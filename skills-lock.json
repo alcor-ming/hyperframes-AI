@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "skills": {
+    "dbs": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs/SKILL.md",
+      "computedHash": "1a2c092ee5c5a0bb982afb02508ae01cb1e6e28a8657dda25807d588feac1817"
+    },
+    "dbs-action": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-action/SKILL.md",
+      "computedHash": "cdc9f24eab3f1afe396974c342fa1809f89bc4d599928161ce6b095a87b09558"
+    },
+    "dbs-agent-migration": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-agent-migration/SKILL.md",
+      "computedHash": "53c46f5b01afd2d3df9f50563301e3b80328b3a91d9082470676f23072e328b4"
+    },
+    "dbs-ai-check": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-ai-check/SKILL.md",
+      "computedHash": "6f687afbd8347401a28d82b5bba25cc9492c1fea84c4c4e000c054202beda605"
+    },
+    "dbs-benchmark": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-benchmark/SKILL.md",
+      "computedHash": "77c0bf38f918f08cbc6d7dd4fbacada553881682a44ac731f1827345821c7697"
+    },
+    "dbs-bridge": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-bridge/SKILL.md",
+      "computedHash": "cdf4be6e42cf7a36fe02060a66069516e65f1e6c01f1b3dc6c89c957454b34f1"
+    },
+    "dbs-chatroom": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-chatroom/SKILL.md",
+      "computedHash": "560df1db7416f75c6293f1d05dd445fe7e4c1fb9915424d7e4bc21167b6112c5"
+    },
+    "dbs-chatroom-austrian": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-chatroom-austrian/SKILL.md",
+      "computedHash": "7e0ad694a4d4dd9f10e4029524665f263d8bb1bb1a3b5549b7cffd5d912dca15"
+    },
+    "dbs-content": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-content/SKILL.md",
+      "computedHash": "793e22e5e74c4fe481c959348c40db0c53e20cfcfc92c9e5e97d0fa6d2d13732"
+    },
+    "dbs-content-system": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-content-system/SKILL.md",
+      "computedHash": "a538961469b951828b525969fe3077350bf92feffa86dc9475dbd8467cedf2ab"
+    },
+    "dbs-decision": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-decision/SKILL.md",
+      "computedHash": "8d2b65fad9396f2c2f5ca189ac9bd60dac426ba0be74751f97c11f95cb2837eb"
+    },
+    "dbs-deconstruct": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-deconstruct/SKILL.md",
+      "computedHash": "d3ffc3a7578d55da002dcc04140e79de416ef8943990b9fbe2818da347533357"
+    },
+    "dbs-diagnosis": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-diagnosis/SKILL.md",
+      "computedHash": "ac344e1c7970a8fea6eba724be95e6d65ad666a3cc87fd29ce4a8009fa711259"
+    },
+    "dbs-goal": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-goal/SKILL.md",
+      "computedHash": "12385ec5858f31b9ce82832d681873c21d11db11cf67a51381e251185869506a"
+    },
+    "dbs-good-question": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-good-question/SKILL.md",
+      "computedHash": "ead97a9e2780daff997b2666e3c8a1c9df8cf5f088e5310fcd747d6117469efb"
+    },
+    "dbs-hook": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-hook/SKILL.md",
+      "computedHash": "33bc020f3b0190a13e8e778d8e921ccc5739363630f7ab234936eb5803c2d656"
+    },
+    "dbs-knowledge": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-knowledge/SKILL.md",
+      "computedHash": "6a18ee1ae9411ad25fbda52af38efb7496723aba80ad4247f9f2eaa49a971027"
+    },
+    "dbs-learning": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-learning/SKILL.md",
+      "computedHash": "0353969356c9ddc5152fe0faf97a41f1a49122dea82edfcdc8205be5d87ae4e9"
+    },
+    "dbs-report": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-report/SKILL.md",
+      "computedHash": "03ba9f31df0ea4a0f2f81ee09a72e2714c95a9276e7655bdbcb5ab7ab23794de"
+    },
+    "dbs-resonate": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-resonate/SKILL.md",
+      "computedHash": "cb088d49c36591a8db402b82688a275de63aff22333cf56aa71ba959332d3756"
+    },
+    "dbs-restore": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-restore/SKILL.md",
+      "computedHash": "af81c15a5c93785765cb2bff06e4c07eb4457821551f6cd60e13ae7de96dd315"
+    },
+    "dbs-save": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-save/SKILL.md",
+      "computedHash": "e56f159a366c7ec8fb6341f8ff9c41831a21bbd5a7df6108fc1217976271484f"
+    },
+    "dbs-script-flow": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-script-flow/SKILL.md",
+      "computedHash": "dc36245efbe58956cba0852fa1c01b5b21f40ec3431234699aeb0c34f50cfbde"
+    },
+    "dbs-skill-cleaner": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-skill-cleaner/SKILL.md",
+      "computedHash": "59e0ef0d6ddb07e45223f5201af1d48b723b8195ce1296ecadaf6daef63d4ab0"
+    },
+    "dbs-slowisfast": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-slowisfast/SKILL.md",
+      "computedHash": "56284593cdc1af9edb2866d0d20cef31fda917eafbcde751380ea53088dd8112"
+    },
+    "dbs-spread": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-spread/SKILL.md",
+      "computedHash": "9e9a4cddf1cacfa9083ad76f1965d9b3f6593ada7a944821c58369ea26281836"
+    },
+    "dbs-standard-answer": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-standard-answer/SKILL.md",
+      "computedHash": "1158a75280541c5c6cd0a767e030e40a42e00d2cce4f699705fb00d3730a340a"
+    },
+    "dbs-update": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-update/SKILL.md",
+      "computedHash": "05e5ec0e004c47261bcb01d260fcb8ee5d3186060a456476808952c3b38cb5cf"
+    },
+    "dbs-wechat-html": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-wechat-html/SKILL.md",
+      "computedHash": "2323623eed23d36817483b6167560be44a2b48d533c8d927d53f5a8608b23ae9"
+    },
+    "dbs-xhs-title": {
+      "source": "dontbesilent2025/dbskill",
+      "sourceType": "github",
+      "skillPath": "skills/dbs-xhs-title/SKILL.md",
+      "computedHash": "3fae58f07d2da059a3fd50a98238cdaa4b9c6b2bdac0f8e1d6a491f55627e654"
+    },
+    "media-publish-check": {
+      "source": "XshuiAi/media-publish-check",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "50b1f7685d992ad7273532a5fa5073ef967077df09b6dff40d93cde49ce8268c"
+    }
+  }
+}

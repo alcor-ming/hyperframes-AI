@@ -1,0 +1,29 @@
+{
+  "name": "hyperframes-design-profile-pack",
+  "version": "0.1.0",
+  "generated_at": "2026-08-07",
+  "runtime_strategy": "owned-profile-skill-with-upstream-reference-and-optional-qa",
+  "modes": [
+    "talking_head",
+    "pure_hyperframes"
+  ],
+  "profiles": [
+    {
+      "id": "optical_fluidity",
+      "name": "Optical Fluidity",
+      "primary_upstream": "emilkowalski/skills"
+    },
+    {
+      "id": "kami_editorial",
+      "name": "Kami Editorial",
+      "primary_upstream": "tw93/Kami"
+    },
+    {
+      "id": "monochrome_atelier",
+      "name": "Monochrome Atelier",
+      "primary_upstream": "pbakaus/impeccable"
+    }
+  ],
+  "font_files_included": false,
+  "upstream_code_included": false
+}

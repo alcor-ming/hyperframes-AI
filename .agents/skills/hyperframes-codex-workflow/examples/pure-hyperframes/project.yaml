@@ -1,0 +1,29 @@
+version: 1
+project_name: pure-hyperframes-example
+template: pure_hyperframes
+profile: kami_editorial
+output:
+  ratio: "9:16"
+  width: 1080
+  height: 1920
+  fps: 60
+inputs:
+  source_video: null
+  audio: null
+  script: input/narration.md
+  notes: input/materials.md
+  section_map: null
+timing:
+  mode: voiceover_pending
+  authoritative_media: null
+voiceover:
+  mode: ai_generated
+  language: zh-CN
+  tone: calm_explanatory
+  speed: 0.95
+image_assets:
+  enabled: optional
+  manifest: assets/manifest.json
+plan:
+  file: ANIMATION_PLAN.md
+  approval_required: true
