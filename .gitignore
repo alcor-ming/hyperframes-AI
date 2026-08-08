@@ -3,6 +3,10 @@
 /assets/
 /canvas/
 /outputs/
+/works/
+/.studio/.runtime/
+__pycache__/
+*.py[cod]
 
 # Third-party skills are installed locally; only the project workflow is public.
 /.agents/skills/*

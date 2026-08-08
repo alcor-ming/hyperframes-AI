@@ -1,0 +1,22 @@
+version: 1
+
+templates:
+  talking_head: recipes/talking-head.md
+  pure_hyperframes: recipes/pure-hyperframes.md
+
+profiles:
+  optical_fluidity:
+    profile: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/01-optical-fluidity/PROFILE.md
+    tokens: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/01-optical-fluidity/tokens.json
+  kami_editorial:
+    profile: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/02-kami-editorial/PROFILE.md
+    tokens: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/02-kami-editorial/tokens.json
+  monochrome_atelier:
+    profile: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/03-monochrome-atelier/PROFILE.md
+    tokens: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/03-monochrome-atelier/tokens.json
+
+copywriting:
+  default: [dbs-content, dbs-hook, dbs-script-flow, dbs-ai-check]
+  optional: [dbs-xhs-title, media-publish-check]
+
+excluded_v1: [image_generation, prompt_library, design-taste-frontend, subtitles, publishing]
