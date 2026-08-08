@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0 - 2026-08-08
+
+- 将 Skill 收敛为 `.studio/` 创作 Harness 的薄路由器。
+- 保留两套 Template 与三套稳定 Profile，移除重复 Workflow、Prompt、Example、Schema 和模板文档。
+- 从 v1 运行时移除图片生成、Prompt 检索、Taste Skill 和字幕流程。
+- 作品生命周期改由根目录无依赖 `work` CLI 管理。
+
 ## 1.0.0
 
 - 固化两套模板：口播增强与纯 HyperFrames。

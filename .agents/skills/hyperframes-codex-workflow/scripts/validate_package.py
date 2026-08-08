@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate package structure and JSON syntax without third-party dependencies."""
+"""Validate the thin Skill, Profile registry, and repository Harness."""
 
 from __future__ import annotations
 
@@ -7,39 +7,38 @@ import json
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
 
-REQUIRED = [
+ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[2]
+REQUIRED_PACKAGE = [
     "README.md",
     "SKILL.md",
-    "AGENTS.md",
-    "CODEX_TASK.md",
-    "DECISIONS.md",
-    "WORKFLOW.md",
+    "CHANGELOG.md",
+    "VERSION",
     "profile-registry.json",
-    "docs/animation-plan-contract.md",
-    "docs/discussion-protocol.md",
-    "docs/template-talking-head.md",
-    "docs/template-pure-hyperframes.md",
-    "docs/profile-integration.md",
-    "docs/image-assets.md",
-    "docs/voiceover.md",
-    "docs/implementation-contract.md",
-    "docs/quiet-qa.md",
-    "docs/migration-from-existing-prompts.md",
-    "templates/ANIMATION_PLAN.template.md",
-    "prompts/CODEX_INTEGRATION_PROMPT.md",
-    "prompts/CODEX_VIDEO_PROMPT.md",
+]
+REQUIRED_HARNESS = [
+    "AGENTS.md",
+    "work",
+    ".studio/work.py",
+    ".studio/workflow.md",
+    ".studio/capabilities.yaml",
+    ".studio/spec/creative.md",
+    ".studio/spec/hyperframes.md",
+    ".studio/spec/privacy.md",
+    ".studio/recipes/talking-head.md",
+    ".studio/recipes/pure-hyperframes.md",
 ]
 
 
 def main() -> int:
     errors: list[str] = []
-
-    for relative in REQUIRED:
-        path = ROOT / relative
-        if not path.is_file():
-            errors.append(f"missing: {relative}")
+    for relative in REQUIRED_PACKAGE:
+        if not (ROOT / relative).is_file():
+            errors.append(f"missing package file: {relative}")
+    for relative in REQUIRED_HARNESS:
+        if not (REPO / relative).is_file():
+            errors.append(f"missing harness file: {relative}")
 
     for path in sorted(ROOT.rglob("*.json")):
         try:
@@ -48,23 +47,24 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             errors.append(f"invalid json: {path.relative_to(ROOT)}: {exc}")
 
-    registry = json.loads((ROOT / "profile-registry.json").read_text(encoding="utf-8"))
-    for profile in registry["profiles"]:
-        for key in ("profile_path", "tokens_path"):
-            if not (ROOT / profile[key]).is_file():
-                errors.append(f"missing profile asset: {profile[key]}")
-        tokens_path = ROOT / profile["tokens_path"]
-        if tokens_path.is_file():
-            tokens = json.loads(tokens_path.read_text(encoding="utf-8"))
-            if tokens.get("profile_id") != profile["id"]:
-                errors.append(f"profile id mismatch: {profile['id']}")
+    registry_path = ROOT / "profile-registry.json"
+    if registry_path.is_file():
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        for profile in registry.get("profiles", []):
+            for key in ("profile_path", "tokens_path"):
+                if not (ROOT / profile[key]).is_file():
+                    errors.append(f"missing profile asset: {profile[key]}")
+            tokens_path = ROOT / profile["tokens_path"]
+            if tokens_path.is_file():
+                tokens = json.loads(tokens_path.read_text(encoding="utf-8"))
+                if tokens.get("profile_id") != profile.get("id"):
+                    errors.append(f"profile id mismatch: {profile.get('id')}")
 
     if errors:
         for error in errors:
             print(error, file=sys.stderr)
         return 1
-
-    print(f"OK: {ROOT.name} ({sum(1 for p in ROOT.rglob('*') if p.is_file())} files)")
+    print(f"OK: {ROOT.name} v{(ROOT / 'VERSION').read_text().strip()}")
     return 0
 
 

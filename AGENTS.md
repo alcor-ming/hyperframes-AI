@@ -1,97 +1,51 @@
-# 短视频口播项目约定
+# HyperFrames AI 创作 Harness
 
-## 工作方式
+## 工作边界
 
-- 本项目不要求固定流程。根据用户当前要求和已有素材，按需选择、组合、调整顺序或跳过模块；已有合格输入时，不重复执行上游步骤。
-- Codex 只处理当前任务和必要依赖。缺少会影响结果的输入时说明缺口，不为凑齐“完整流程”自行扩展范围。
-- 如实报告实际调用、生成结果和失败项，不把计划执行写成已经完成。
-- 未经用户明确授权，不发布内容、不登录账号、不购买额度，也不调用外部付费服务或执行其他不可逆操作。
+- 本仓库公开管理 Harness 规则、模板、Profile 接入、Skill 路由与 Work CLI。
+- 所有作品均位于 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入 Git。
+- 不发布内容、不登录平台、不购买额度。外部或付费服务仍需用户明确授权。
+- v1 不生成 AI 图片、不调用 `design-taste-frontend`、不查询图片 Prompt 库，也不生成或烧录底部字幕。
 
-## 仓库结构
+## 启动顺序
 
-- `tasks/<task-id>/` 是仅保存在本机的任务目录，不进入公开 Git 历史。每一份独立原始内容对应一个任务，任务内按“转录基线 → 工作资产 → 批准交付物”管理文案生命周期。
-- 同一原始内容的转录、改稿、审核记录、字幕、参数和其他文本交付物始终保存在同一个任务目录；多轮修改不得另建任务。
-- `assets/<task-id>/` 是与任务同名的本地个人素材目录，用于保存用户导入的口播视频、图片、Image Gen 生成图片、配音、剪辑素材和最终导出视频。
-- 整个 `assets/` 由 `.gitignore` 排除，不得暂存或提交。任务文档只记录对应资产的相对路径和必要元数据。
-- 公开 Git 只管理 Harness 约定、依赖清单和项目自有的 `hyperframes-codex-workflow`；不管理 `tasks/`、第三方 Skill 源码、音频、图片、视频或其他媒体文件。
+1. 运行 `./work current`；没有 Current 时运行 `./work list`，不得猜测作品。
+2. 读取当前 `WORK.md`、`variant.yaml`、`SCRIPT.md`。
+3. 读取 `.studio/workflow.md` 和当前 Template 对应的 Recipe。
+4. 通过 `.studio/capabilities.yaml` 只读取当前 Variant 选定的一套 Profile。
+5. 进入视觉设计时再读取 `ANIMATION_PLAN.md`；进入实现或 QA 时才读取对应 `.studio/spec/`。
 
-## 文案资产生命周期
+不要默认加载全部 Profile、全部 DBS Skill、Examples、Migration、发行文件、全部 QA 历史或全部 Draft 快照。
 
-### 1. 转录基线（Transcript Baseline）
+## 创作真源
 
-- `source.md` 是人类可读的规范化转录稿，只保留口播正文，不包含时间戳、来源元数据、编辑意见、诊断结论或改写内容。
-- `source-timestamped.<ext>` 是与原始音视频对齐的时间码转录稿，优先保留转录工具可稳定解析的原生格式，例如 JSON、SRT、VTT 或带时间码的 Markdown。一个任务只指定一份权威时间码转录稿。
-- 来源、作者、平台、时长、转录工具和校对说明记录在 `task.md`，不得混入两份转录正文。
-- 转录校对完成后锁定基线。后续创意改写不得覆盖 `source.md` 或权威时间码转录稿。
+- `source.md`：主要原始基线，DBS 不覆盖。
+- `SCRIPT.md`：当前 Variant 唯一口播正文；批准后的隐藏段落 ID 保持稳定。
+- `PACKAGE.md`：标题、封面、发布说明等非口播内容，不阻塞视觉制作。
+- `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
+- `ANIMATION_PLAN.md`：正式 HTML 制作前唯一必须批准的视觉设计 PRD。
+- `variant.yaml`：当前 Variant 状态，由 CLI 与 Agent 更新。
 
-### 2. 工作资产（Working Artifacts）
+## 创作检查点
 
-- 用户编辑稿、DBS 改稿、平台适配稿、审核记录和其他中间结果均属于工作资产，按用途和版本命名，例如 `draft-v1.md`、`optimized-v2.md`、`publish-review-douyin-v1.md`。
-- 工作资产可以包含诊断、批注、修改说明、备选方案、审核风险和待确认事项；每份文件必须标明输入来源与用途，不得冒充原始转录或最终交付物。
-- 多轮修改继续在当前任务目录内形成可追溯版本，不覆盖转录基线，也不通过新建任务规避版本管理。
+- DBS 实际修改口播正文时，等待用户批准 `SCRIPT.md`；只诊断或只改包装文案时不等待。
+- `ANIMATION_PLAN.md` 必须整体批准后才能正式实现 HTML 和 Draft。
+- Final 必须从用户接受的 Draft 源码快照继续。
+- 只在 Scene 数量、顺序、视觉目标、Hero State、Template、Profile 或文案结构发生实质变化时重新批准 Plan。
+- 时间码、easing、换行、安全区、性能和不改变 Hero State 的布局修复无需重新批准。
 
-### 3. 批准交付物（Approved Deliverable）
+## 模板
 
-- `final.md` 是当前任务唯一的最终文案真源，仅在用户明确确认成稿后创建或更新。
-- `final.md` 只保留实际交付内容，例如最终标题、封面文字和口播正文；不得包含诊断、审查记录、修改说明、版本比较、待办事项或流程证明。
-- 后续产生新版成稿时仍更新 `final.md`，历史版本由 Git 和工作资产保存，不并行维护多个“最终版”文件。
+- `talking_head`：先完成文案，再录制人物视频，以实际音频生成 `section_map.json` 后设计画面。
+- `pure_hyperframes`：可先用估算时间完成视觉 Draft；用户接受 Draft 后接入正式配音并仅做重定时。
+- 人物持续作为主视觉时才使用 `talking_head`；否则使用 `pure_hyperframes`，不增加第三套模板。
 
-### 流转规则
+## 用户回复
 
-- 文案只能按“转录基线 → 工作资产 → `final.md`”提升；中间稿和审核记录不得反向写入转录基线。
-- `section-map.json` 是从权威时间码转录稿派生的结构化索引，可按任务需要生成或重建，不属于原始文案，也不得替代权威时间码转录稿。
-- 未经用户明确确认，工作资产不得自动提升为 `final.md`；文件名含 `final`、`成品` 或类似字样也不等于获得批准。
+只展示实际设计结果、变更、阻塞和需要决定的内容。不要展示读取清单、逐项 QA、审批证明或流程自证。Plan 首版可以完整展示，后续只展示变更 Scene 和未解决决策。
 
-## 可用模块
+## 生命周期
 
-### 下载与转录
-
-- 优先复用本机已有的下载和转录工具，调用前确认真实入口和参数，不另写重复实现。
-- 为转录而下载的源视频、缓存和临时媒体必须留在仓库外，不得复制到本仓库或 `assets/`。
-- 转录任务同时产出 `source.md` 与一份权威 `source-timestamped.<ext>`；无法获得可靠时间码时报告缺口，不伪造时间戳。来源和必要元数据写入 `task.md`，完成后核验三个文件的实际路径。
-- 保留可定位来源，并复核人名、专有名词、断句和明显错字。工具不可用或来源不明时如实说明，不虚构内容。
-
-### 选题与文案
-
-- 可直接基于用户提供的稿件或已有任务工作，不强制先完成其他模块。
-- 按需使用 `dbs-content`、`dbs-xhs-title`、`dbs-hook`、`dbs-script-flow` 和 `dbs-ai-check`；根据结果自动改稿，并简要说明关键改动。
-- 修改前先确认对应的 `tasks/<task-id>/`，所有编辑、DBS 修改和审查结果以工作资产保存，不直接修改转录基线或 `final.md`。
-- 区分原始内容、事实补充和 Codex 改写，不捏造事实、夸大承诺、伪造引用或改变原意。
-
-### 发布审核
-
-- 需要评估发布风险时，调用 `XshuiAi/media-publish-check` 并指定目标平台；多平台分别检查。
-- 只有文案时标注为“文本层面初审”。不得承诺“100% 过审”、提供绕审方案，或把文案审核说成成片审核。
-- 审核记录和修改稿作为工作资产保存在原任务目录；事实性疑点交给用户确认，审核通过也不自动生成或覆盖 `final.md`。
-
-### 配音
-
-- 默认使用本机 `voicebox` MCP，不默认使用豆包、`OpenBMB/VoxCPM` 或其他服务。
-- 优先复用用户已确认的声音配置；需要选声线时，先用 `voicebox.list_profiles` 查看真实配置，再用 `voicebox.speak` 生成短试听或正式配音。
-- 配音文件保存到 `assets/<task-id>/`，参数记录到对应任务目录。Voicebox 不可用时报告缺口，不静默回退；外部或付费语音服务需要另行授权。
-
-### 字幕与画面
-
-- 可从用户提供或素材库已有的音频提取字幕和时间轴，文本结果保存到任务目录。
-- 镜头表和提示词保存到任务目录；用户导入的口播视频、图片及生成图片保存到对应的 `assets/<task-id>/`。
-- 记录外部素材的来源和授权信息，使任务文档可以定位对应资产。
-
-### HyperFrames
-
-- 规划和制作 HyperFrames 视频时，使用项目级 `hyperframes-codex-workflow` Skill（`.agents/skills/hyperframes-codex-workflow/`）。只使用 `talking_head` 与 `pure_hyperframes` 两套模板；用户批准同一份 Animation Plan 前，不生成正式图片、正式配音、composition 或最终渲染。
-- `ANIMATION_PLAN.md`、项目配置、Asset Brief 和资产清单等文本交付物保存到 `tasks/<task-id>/hyperframes/`；HyperFrames 工程、媒体、生成图片、配音、QA 输出和渲染保存到 `assets/<task-id>/hyperframes/`。Skill 包内的通用路径示例服从本仓库映射。
-- HyperFrames 视频任务只以 `hyperframes-codex-workflow` 为入口；它通过 `profile-registry.json` 每次只读取一套 Profile 的 `PROFILE.md` 与 `tokens.json`。日常制作不得并行加载其他 Profile、内嵌 Profile Skill、上游参考或完整 prompt block。
-- `design-taste-frontend` 仅在 Animation Plan 已批准且存在明确 Asset Brief 的图片素材生成阶段调用，用于优化构图、留白和 image-gen 提示词；不得用于改写整体视觉方向、模板、Scene 结构或动效语言。
-- 调用 `design-taste-frontend` 前必须确认 Animation Plan 的大方向符合已选 Profile；出现冲突时，以用户已批准的 Animation Plan、所选 Profile 及其 tokens 为准，taste skill 的建议应被舍弃或收敛后再交给 image-gen。
-- 上下文用于视觉计划、设计和实现，不用于罗列读取文件、复述规则、展示逐项 QA 或证明遵守流程；用户可见回复只保留计划变更、实质偏差和未解决阻塞。
-- 使用对应素材目录中的音频、字幕、时间轴和画面完成所需剪辑、动画、字幕包装或导出，不要求这些输入必须在同一次任务中生成。
-- 当前流程不默认引入 ChatCut。缺少完成当前剪辑所必需的输入时说明缺口，不假装已剪辑或导出。
-- HyperFrames 工程和导出视频保存到 `assets/<task-id>/`。导出视频属于个人资产，不得加入 Git。导出前按需检查音画同步、字幕、画面规格和完整时长；实际发布仍需用户明确授权。
-
-## 必守边界
-
-- 转录源视频不得进入仓库；用户主动导入或生成的任务媒体只能进入 `assets/<task-id>/`。
-- 一份原始文案只创建一个任务，多轮修改不得拆成多个任务。
-- 不覆盖转录基线，不把工作资产伪装为批准交付物，不虚构来源、工具结果、审核结论或生成状态。
-- 不得将 `tasks/`、`assets/`、`canvas/` 或 `outputs/` 加入公开 Git。
-- 涉及外部服务、付费调用或实际发布时，先取得用户明确授权。
+- Work 和 Variant 的创建、指针、等待、Park、Draft 注册、Final、Archive 与 Reopen 只通过 `./work` 管理。
+- CLI 只管理生命周期和文件一致性；文案、Scene、视觉方向与 HTML 实现仍由 Agent 判断。
+- Final 是本地交付物，不表示已发布。

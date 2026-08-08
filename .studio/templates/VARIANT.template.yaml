@@ -1,0 +1,16 @@
+{
+  "id": "__VARIANT_ID__",
+  "template": "__TEMPLATE__",
+  "profile": "__PROFILE__",
+  "ratio": "__RATIO__",
+  "subject_position": __SUBJECT_POSITION__,
+  "status": "active",
+  "wait_for": "none",
+  "next_action": "完善 SCRIPT.md",
+  "script_revision": 1,
+  "plan_revision": 1,
+  "accepted_preview": null,
+  "accepted_plan_revision": null,
+  "accepted_script_revision": null,
+  "current_final": null
+}
