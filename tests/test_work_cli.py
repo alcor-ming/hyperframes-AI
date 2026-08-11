@@ -79,6 +79,11 @@ class WorkCliTest(unittest.TestCase):
         status = json.loads(self.invoke("status"))
         self.assertEqual("douyin-9x16", status["variant"]["id"])
 
+    def test_legacy_archive_directory_is_ignored(self) -> None:
+        (self.root / "works" / "archive" / "tasks" / "001-legacy").mkdir(parents=True)
+        self.assertEqual([], json.loads(self.invoke("list")))
+        self.new_work()
+
     def test_wait_park_resume_archive_and_reopen(self) -> None:
         work_id, work = self.new_work()
         self.invoke("wait", "voiceover")

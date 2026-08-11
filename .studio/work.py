@@ -167,7 +167,7 @@ def archived_work_paths(root: Path) -> Iterable[Path]:
     paths: list[Path] = []
     for month in sorted(archive.iterdir(), reverse=True):
         if month.is_dir():
-            paths.extend(path for path in sorted(month.iterdir()) if path.is_dir())
+            paths.extend(path for path in sorted(month.iterdir()) if path.is_dir() and (path / "WORK.md").is_file())
     return paths
 
 
