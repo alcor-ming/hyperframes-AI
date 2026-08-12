@@ -12,11 +12,12 @@ This Skill is intentionally thin. The repository root owns the workflow.
 1. Run `./work current`; when no Work is current, run `./work list` and do not guess.
 2. Follow root `AGENTS.md` and `.studio/workflow.md`.
 3. Load the current `WORK.md`, `variant.yaml`, `SCRIPT.md`, one Recipe, and only the selected Profile resolved through `.studio/capabilities.yaml`.
-4. Load `ANIMATION_PLAN.md` only for visual planning or recovery. Load `.studio/spec/hyperframes.md` only for implementation and QA.
+4. After the Script route is settled, create or load the matching `RESEARCH.md`; load `ANIMATION_PLAN.md` only for visual planning or recovery. Load `.studio/spec/hyperframes.md` only for implementation and QA.
 
 ## Route
 
-- Use the default DBS set from `.studio/capabilities.yaml` for copy design. Script approval appears only when spoken text changed.
+- For downloaded video, route `SCRIPT.md` through either multi-round `dbs` editing or timestamp-preserving `verbatim`; Script approval appears only when spoken text changed.
+- Research the settled Script online into `RESEARCH.md`, then require the Animation Plan to target that Research Revision.
 - Use exactly one of `talking_head` or `pure_hyperframes` and exactly one stable Profile.
 - Require one approved `ANIMATION_PLAN.md` before formal HTML work.
 - Register each Draft with `./work preview register`, then record the user's accepted Draft with `./work preview accept`.

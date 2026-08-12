@@ -28,6 +28,7 @@ REQUIRED_HARNESS = [
     ".studio/spec/privacy.md",
     ".studio/recipes/talking-head.md",
     ".studio/recipes/pure-hyperframes.md",
+    ".studio/templates/RESEARCH.template.md",
 ]
 
 

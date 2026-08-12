@@ -7,7 +7,7 @@
   "status": "active",
   "wait_for": "none",
   "next_action": "完善 SCRIPT.md",
-  "script_revision": 1,
+  "script_revision": __SCRIPT_REVISION__,
   "plan_revision": 1,
   "accepted_preview": null,
   "accepted_plan_revision": null,

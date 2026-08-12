@@ -1,6 +1,6 @@
 # HyperFrames AI Harness
 
-面向约两分钟中文口播视频的轻量创作 Harness。它以 Work 组织长期作品，以 Variant 管理平台版本，保留 DBS 文案设计、Animation Plan、HyperFrames Draft/Final 和可恢复归档。
+面向约两分钟中文口播视频的轻量创作 Harness。它以 Work 组织长期作品，以 Variant 管理平台版本，支持 DBS 改写或逐字保留、联网 Research、Animation Plan、HyperFrames Draft/Final 和可恢复归档。
 
 ## 快速开始
 
