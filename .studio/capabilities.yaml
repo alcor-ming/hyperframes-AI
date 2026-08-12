@@ -19,4 +19,7 @@ copywriting:
   default: [dbs-content, dbs-hook, dbs-script-flow, dbs-ai-check]
   optional: [dbs-xhs-title, media-publish-check]
 
+packaging:
+  required: [dbs-xhs-title]
+
 excluded_v1: [image_generation, prompt_library, design-taste-frontend, subtitles, publishing]

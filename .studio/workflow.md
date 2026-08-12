@@ -13,6 +13,8 @@
 
 两条路径汇合后，按最终 `SCRIPT.md` 联网研究一手资料并完成同一 Variant 的 `RESEARCH.md`。研究按 Anchor 提供补充事实、可视化机制、边界和来源链接，不替代或反向改写口播。Script Revision 变化时必须刷新 Research Revision，之后才能设计 Animation Plan。
 
+Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS 完成 `PACKAGE.md`：使用 `dbs-xhs-title` 生成候选并选择 Top 1，再根据最终 Script 与 Research 写一条封面文字和一句话简介。文档只保留这三项最终结果，不附公式分析或候选清单，也不新增审批门。
+
 `verbatim` 的 Animation Plan 直接使用 `SCRIPT.md` 原时间戳；源视频或音频仍是最终时间权威。`dbs` 在没有正式音频时才估算时间。
 
 ## Talking-head
@@ -34,8 +36,9 @@
 
 1. DBS 修改口播正文时批准 `SCRIPT.md`。
 2. `RESEARCH.md` 必须与当前 Script Revision 对齐并标记为 `ready`。
-3. 正式 HTML 制作前批准一份引用当前 Research Revision 的 `ANIMATION_PLAN.md`。
-4. Final 前接受一个 Draft 作为视觉基线。
+3. 创建 Animation Plan 时同步用 DBS 完成 `PACKAGE.md` 的标题、封面文字和一句话简介。
+4. 正式 HTML 制作前批准一份引用当前 Research Revision 的 `ANIMATION_PLAN.md`。
+5. Final 前接受一个 Draft 作为视觉基线。
 
 技术 QA、时间微调、换行、easing、性能优化和归档不要求用户批准。
 

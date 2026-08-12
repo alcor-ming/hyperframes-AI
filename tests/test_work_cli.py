@@ -71,6 +71,10 @@ class WorkCliTest(unittest.TestCase):
         work_id, work = self.new_work("中文标题")
         self.assertTrue((work / "variants" / "main" / "SCRIPT.md").is_file())
         self.assertTrue((work / "variants" / "main" / "RESEARCH.md").is_file())
+        package = (work / "variants" / "main" / "PACKAGE.md").read_text(encoding="utf-8")
+        self.assertIn("## 标题", package)
+        self.assertIn("## 封面文字", package)
+        self.assertIn("## 一句话", package)
         self.assertEqual(work_id, (self.root / ".studio" / ".runtime" / "current-work").read_text().strip())
 
         script = work / "variants" / "main" / "SCRIPT.md"

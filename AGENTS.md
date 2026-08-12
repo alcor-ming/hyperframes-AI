@@ -22,7 +22,7 @@
 - `source.md`：主要原始基线，DBS 不覆盖。
 - `SCRIPT.md`：当前 Variant 唯一口播正文；批准后的隐藏段落 ID 保持稳定。
 - `RESEARCH.md`：与当前 Script Revision 对齐的联网资料、可视化机制与事实边界；不反向改写口播。
-- `PACKAGE.md`：标题、封面、发布说明等非口播内容，不阻塞视觉制作。
+- `PACKAGE.md`：Animation Plan 创建时由 DBS 同步生成的标题、封面文字和一句话简介；不进入口播正文，也不阻塞视觉制作。
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
 - `ANIMATION_PLAN.md`：正式 HTML 制作前唯一必须批准的视觉设计 PRD。
 - `variant.yaml`：当前 Variant 状态，由 CLI 与 Agent 更新。
@@ -32,6 +32,7 @@
 - 下载视频转录后必须在 `SCRIPT.md` 中明确选择 `dbs` 或 `verbatim`：前者允许多轮 DBS 修改并在正文变化后等待批准；后者逐字保留口播与原时间戳，不运行正文改写。
 - DBS 实际修改口播正文时，等待用户批准 `SCRIPT.md`；只诊断或只改包装文案时不等待。
 - Script 确定后，按口播 Anchor 联网研究并完成同一 Variant 的 `RESEARCH.md`；Script Revision 变化后旧研究失效。
+- Research 完成后，创建 Animation Plan 的同时调用 DBS 完成 `PACKAGE.md`；只保留最终标题、封面文字和一句话简介。
 - `ANIMATION_PLAN.md` 必须整体批准后才能正式实现 HTML 和 Draft。
 - Final 必须从用户接受的 Draft 源码快照继续。
 - 只在 Scene 数量、顺序、视觉目标、Hero State、Template、Profile 或文案结构发生实质变化时重新批准 Plan。

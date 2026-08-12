@@ -18,6 +18,7 @@ This Skill is intentionally thin. The repository root owns the workflow.
 
 - For downloaded video, route `SCRIPT.md` through either multi-round `dbs` editing or timestamp-preserving `verbatim`; Script approval appears only when spoken text changed.
 - Research the settled Script online into `RESEARCH.md`, then require the Animation Plan to target that Research Revision.
+- When creating the Animation Plan, use DBS to write the final title, cover text, and one-line summary to `PACKAGE.md`; do not retain the candidate list there.
 - Use exactly one of `talking_head` or `pure_hyperframes` and exactly one stable Profile.
 - Require one approved `ANIMATION_PLAN.md` before formal HTML work.
 - Register each Draft with `./work preview register`, then record the user's accepted Draft with `./work preview accept`.
