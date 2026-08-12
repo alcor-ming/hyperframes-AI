@@ -13,7 +13,7 @@
 2. 读取当前 `WORK.md`、`variant.yaml`、`SCRIPT.md`。
 3. 读取 `.studio/workflow.md` 和当前 Template 对应的 Recipe。
 4. 通过 `.studio/capabilities.yaml` 只读取当前 Variant 选定的一套 Profile。
-5. 进入视觉设计时再读取 `ANIMATION_PLAN.md`；进入实现或 QA 时才读取对应 `.studio/spec/`。
+5. 进入视觉设计时再读取 `RESEARCH.md` 与 `ANIMATION_PLAN.md`；进入实现或 QA 时才读取对应 `.studio/spec/`。
 
 不要默认加载全部 Profile、全部 DBS Skill、Examples、Migration、发行文件、全部 QA 历史或全部 Draft 快照。
 
@@ -21,6 +21,7 @@
 
 - `source.md`：主要原始基线，DBS 不覆盖。
 - `SCRIPT.md`：当前 Variant 唯一口播正文；批准后的隐藏段落 ID 保持稳定。
+- `RESEARCH.md`：与当前 Script Revision 对齐的联网资料、可视化机制与事实边界；不反向改写口播。
 - `PACKAGE.md`：标题、封面、发布说明等非口播内容，不阻塞视觉制作。
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
 - `ANIMATION_PLAN.md`：正式 HTML 制作前唯一必须批准的视觉设计 PRD。
@@ -28,7 +29,9 @@
 
 ## 创作检查点
 
+- 下载视频转录后必须在 `SCRIPT.md` 中明确选择 `dbs` 或 `verbatim`：前者允许多轮 DBS 修改并在正文变化后等待批准；后者逐字保留口播与原时间戳，不运行正文改写。
 - DBS 实际修改口播正文时，等待用户批准 `SCRIPT.md`；只诊断或只改包装文案时不等待。
+- Script 确定后，按口播 Anchor 联网研究并完成同一 Variant 的 `RESEARCH.md`；Script Revision 变化后旧研究失效。
 - `ANIMATION_PLAN.md` 必须整体批准后才能正式实现 HTML 和 Draft。
 - Final 必须从用户接受的 Draft 源码快照继续。
 - 只在 Scene 数量、顺序、视觉目标、Hero State、Template、Profile 或文案结构发生实质变化时重新批准 Plan。

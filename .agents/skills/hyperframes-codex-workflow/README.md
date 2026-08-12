@@ -1,6 +1,6 @@
-# HyperFrames Codex Workflow v2.0.0
+# HyperFrames Codex Workflow v2.1.0
 
-这是 HyperFrames AI 创作 Harness 的薄路由 Skill。产品工作流、规范、Recipe 和模板统一由仓库根目录 `.studio/` 管理；Skill 不再维护第二套流程文档。
+这是 HyperFrames AI 创作 Harness 的薄路由 Skill。产品工作流、规范、Recipe 和模板统一由仓库根目录 `.studio/` 管理；Skill 不再维护第二套流程文档。下载视频支持 DBS 改写或逐字保留两条 Script 路径，两者都先形成 `RESEARCH.md` 再进入 Animation Plan。
 
 保留内容：
 

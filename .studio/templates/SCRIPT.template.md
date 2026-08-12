@@ -1,5 +1,5 @@
 ---
-{"origin":"user_provided","approval":"not_required","revision":1}
+{"origin":"user_provided","mode":"dbs","approval":"not_required","revision":1}
 ---
 
 <!-- P001 -->

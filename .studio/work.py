@@ -167,7 +167,7 @@ def archived_work_paths(root: Path) -> Iterable[Path]:
     paths: list[Path] = []
     for month in sorted(archive.iterdir(), reverse=True):
         if month.is_dir():
-            paths.extend(path for path in sorted(month.iterdir()) if path.is_dir())
+            paths.extend(path for path in sorted(month.iterdir()) if path.is_dir() and (path / "WORK.md").is_file())
     return paths
 
 
@@ -269,18 +269,27 @@ def create_variant(
     ):
         (path / directory).mkdir(parents=True, exist_ok=True)
 
+    source_research = copy_script_from.parent / "RESEARCH.md" if copy_script_from else None
+    script_revision = read_frontmatter(copy_script_from).get("revision", 1) if copy_script_from else 1
+    research_revision = read_frontmatter(source_research).get("revision", 1) if source_research and source_research.is_file() else 1
     values = {
         "VARIANT_ID": json_string_content(variant_id),
         "TEMPLATE": json_string_content(template),
         "PROFILE": json_string_content(profile),
         "RATIO": json_string_content(ratio),
         "SUBJECT_POSITION": json.dumps(subject_position),
+        "SCRIPT_REVISION": json.dumps(script_revision),
+        "RESEARCH_REVISION": json.dumps(research_revision),
     }
     atomic_write(path / "variant.yaml", template_text(root, "VARIANT.template.yaml", values))
     if copy_script_from:
         shutil.copy2(copy_script_from, path / "SCRIPT.md")
     else:
         atomic_write(path / "SCRIPT.md", template_text(root, "SCRIPT.template.md", {}))
+    if source_research and source_research.is_file():
+        shutil.copy2(source_research, path / "RESEARCH.md")
+    else:
+        atomic_write(path / "RESEARCH.md", template_text(root, "RESEARCH.template.md", values))
     atomic_write(path / "PACKAGE.md", "# Package\n\n")
     atomic_write(
         path / "ANIMATION_PLAN.md",
@@ -537,6 +546,14 @@ def assert_preview_ready(variant: Path, state: dict[str, Any]) -> None:
         raise HarnessError("ANIMATION_PLAN.md revision does not match variant.yaml")
     if plan.get("script_revision") != state.get("script_revision"):
         raise HarnessError("ANIMATION_PLAN.md targets a different Script revision")
+    if plan.get("research_revision") is not None:
+        research = read_frontmatter(variant / "RESEARCH.md")
+        if research.get("status") != "ready":
+            raise HarnessError("RESEARCH.md is not ready")
+        if research.get("revision") != plan.get("research_revision"):
+            raise HarnessError("ANIMATION_PLAN.md targets a different Research revision")
+        if research.get("script_revision") != state.get("script_revision"):
+            raise HarnessError("RESEARCH.md targets a different Script revision")
 
 
 def preview_metadata(path: Path) -> dict[str, Any]:

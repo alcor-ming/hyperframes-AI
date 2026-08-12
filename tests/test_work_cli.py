@@ -54,6 +54,7 @@ class WorkCliTest(unittest.TestCase):
     def prepare_preview(self, work: Path, variant_id: str = "main", content: bytes = b"draft") -> Path:
         variant = work / "variants" / variant_id
         self.update_frontmatter(variant / "ANIMATION_PLAN.md", status="approved")
+        self.update_frontmatter(variant / "RESEARCH.md", status="ready")
         project = variant / "project"
         (project / "index.html").write_text("<html></html>", encoding="utf-8")
         (project / "compositions").mkdir(exist_ok=True)
@@ -69,15 +70,27 @@ class WorkCliTest(unittest.TestCase):
     def test_new_variant_and_status(self) -> None:
         work_id, work = self.new_work("中文标题")
         self.assertTrue((work / "variants" / "main" / "SCRIPT.md").is_file())
+        self.assertTrue((work / "variants" / "main" / "RESEARCH.md").is_file())
         self.assertEqual(work_id, (self.root / ".studio" / ".runtime" / "current-work").read_text().strip())
 
         script = work / "variants" / "main" / "SCRIPT.md"
         script.write_text(script.read_text(encoding="utf-8") + "正文\n", encoding="utf-8")
+        self.update_frontmatter(script, revision=2)
+        self.update_frontmatter(work / "variants" / "main" / "RESEARCH.md", status="ready", revision=3, script_revision=2)
         self.invoke("variant", "add", "douyin-9x16", "--from", "main", "--profile", "kami_editorial")
-        copied = work / "variants" / "douyin-9x16" / "SCRIPT.md"
+        copied_variant = work / "variants" / "douyin-9x16"
+        copied = copied_variant / "SCRIPT.md"
         self.assertIn("正文", copied.read_text(encoding="utf-8"))
+        self.assertEqual(2, json.loads((copied_variant / "variant.yaml").read_text())["script_revision"])
+        self.assertEqual(3, WORK_CLI.read_frontmatter(copied_variant / "ANIMATION_PLAN.md")["research_revision"])
+        self.assertEqual("ready", WORK_CLI.read_frontmatter(copied_variant / "RESEARCH.md")["status"])
         status = json.loads(self.invoke("status"))
         self.assertEqual("douyin-9x16", status["variant"]["id"])
+
+    def test_legacy_archive_directory_is_ignored(self) -> None:
+        (self.root / "works" / "archive" / "tasks" / "001-legacy").mkdir(parents=True)
+        self.assertEqual([], json.loads(self.invoke("list")))
+        self.new_work()
 
     def test_wait_park_resume_archive_and_reopen(self) -> None:
         work_id, work = self.new_work()
@@ -128,6 +141,16 @@ class WorkCliTest(unittest.TestCase):
         draft.write_bytes(b"draft")
         result = self.invoke("preview", "register", str(draft), expected=2)
         self.assertIn("not approved", result)
+        self.assertFalse((variant / "previews" / "draft-v001").exists())
+
+    def test_preview_rejects_stale_research(self) -> None:
+        _, work = self.new_work()
+        variant = work / "variants" / "main"
+        self.update_frontmatter(variant / "ANIMATION_PLAN.md", status="approved")
+        draft = self.root / "draft.mp4"
+        draft.write_bytes(b"draft")
+        result = self.invoke("preview", "register", str(draft), expected=2)
+        self.assertIn("RESEARCH.md is not ready", result)
         self.assertFalse((variant / "previews" / "draft-v001").exists())
 
     def test_finalize_recovers_archive_and_rotates_history(self) -> None:

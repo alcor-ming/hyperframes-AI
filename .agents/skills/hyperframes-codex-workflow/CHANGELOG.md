@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0 - 2026-08-12
+
+- 下载视频新增 `dbs` 与 `verbatim` 两条 Script 路径，逐字模式保留原时间戳。
+- 新增与 Script Revision 对齐的 `RESEARCH.md`，Animation Plan 必须引用当前 Research Revision。
+- 固化丰富 GSAP 组件、统一入场、结束前 0.4 秒收束、progress/counter/pulse、多色进度与 Skill GitHub 介绍页规则。
+
 ## 2.0.0 - 2026-08-08
 
 - 将 Skill 收敛为 `.studio/` 创作 Harness 的薄路由器。
