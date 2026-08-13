@@ -6,7 +6,15 @@
 
 ## 下载视频的文案分流
 
-下载并转录源视频后，在 `SCRIPT.md` frontmatter 中选择一种 `mode`：
+下载视频统一复用 `qivance-music` 的共享 WhisperX/FasterWhisper 运行时与 GPU 锁，不在本仓库复制模型或 ASR 实现：
+
+```bash
+/home/jym/workspace/_external/scripts/asr.sh transcribe-faster <video> --output-dir <work>/materials
+```
+
+命令必须同时生成 `*.transcript.json` 和 `*.transcript.md`。JSON 的 `characters[]` 是字级时间真源；`segments[]` 只用于快速阅读。存在口播但字级对齐失败时停止，不得以段级结果冒充完成。
+
+转录完成后，在 `SCRIPT.md` frontmatter 中选择一种 `mode`：
 
 - `dbs`：保留 `source.md` 原始基线，允许 DBS 多轮修改口播；正文变化时递增 Script Revision 并等待批准。
 - `verbatim`：逐字保留转录口播、稳定 Anchor 和原时间戳；正文 `approval` 为 `not_required`，DBS 只可处理诊断或 `PACKAGE.md`，不得改写口播。
@@ -15,7 +23,7 @@
 
 Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS 完成 `PACKAGE.md`：使用 `dbs-xhs-title` 生成候选并选择 Top 1，再根据最终 Script 与 Research 写一条封面文字和一句话简介。文档只保留这三项最终结果，不附公式分析或候选清单，也不新增审批门。
 
-`verbatim` 的 Animation Plan 直接使用 `SCRIPT.md` 原时间戳；源视频或音频仍是最终时间权威。`dbs` 在没有正式音频时才估算时间。
+`verbatim` 的 Animation Plan 直接使用字级转录证据聚合出的原时间戳；源视频或音频仍是最终时间权威。`dbs` 在没有正式音频时才估算时间。
 
 ## Talking-head
 

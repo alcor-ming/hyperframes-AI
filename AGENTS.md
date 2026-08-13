@@ -20,6 +20,7 @@
 ## 创作真源
 
 - `source.md`：主要原始基线，DBS 不覆盖。
+- `materials/*.transcript.json`：下载视频的字级时间真源；统一复用 `qivance-music` 使用的共享 ASR，`characters[]` 不得退化为仅段级时间戳。
 - `SCRIPT.md`：当前 Variant 唯一口播正文；批准后的隐藏段落 ID 保持稳定。
 - `RESEARCH.md`：与当前 Script Revision 对齐的联网资料、可视化机制与事实边界；不反向改写口播。
 - `PACKAGE.md`：Animation Plan 创建时由 DBS 同步生成的标题、封面文字和一句话简介；不进入口播正文，也不阻塞视觉制作。
@@ -29,7 +30,7 @@
 
 ## 创作检查点
 
-- 下载视频转录后必须在 `SCRIPT.md` 中明确选择 `dbs` 或 `verbatim`：前者允许多轮 DBS 修改并在正文变化后等待批准；后者逐字保留口播与原时间戳，不运行正文改写。
+- 下载视频必须通过共享 ASR 生成字级时间戳文案，再在 `SCRIPT.md` 中明确选择 `dbs` 或 `verbatim`：前者允许多轮 DBS 修改并在正文变化后等待批准；后者逐字保留口播与原时间戳，不运行正文改写。
 - DBS 实际修改口播正文时，等待用户批准 `SCRIPT.md`；只诊断或只改包装文案时不等待。
 - Script 确定后，按口播 Anchor 联网研究并完成同一 Variant 的 `RESEARCH.md`；Script Revision 变化后旧研究失效。
 - Research 完成后，创建 Animation Plan 的同时调用 DBS 完成 `PACKAGE.md`；只保留最终标题、封面文字和一句话简介。

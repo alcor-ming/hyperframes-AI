@@ -2,7 +2,7 @@
 
 ## 无正式配音
 
-1. 在 `dbs` 与 `verbatim` 中选择文案路径；`dbs` 正文被修改时等待 Script Approval，`verbatim` 保留原文和原时间戳。
+1. 下载视频先通过共享 ASR 生成 `characters[]` 字级时间戳，再在 `dbs` 与 `verbatim` 中选择文案路径；`dbs` 正文被修改时等待 Script Approval，`verbatim` 保留原文和原时间戳。
 2. 按最终 Script 联网研究并完成同一 Variant 的 `RESEARCH.md`。
 3. `verbatim` 沿用原时间戳；其他输入根据字数、参考语速和 Scene 信息密度估算时间；调用 DBS 完成 `PACKAGE.md`，同时生成引用当前 Research Revision 的 Animation Plan。
 4. Plan 批准后完成接近 Final 的 HTML 和无声 Draft。
