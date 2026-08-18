@@ -42,6 +42,101 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         path.write_text(json.dumps(value, ensure_ascii=False) + "\n", encoding="utf-8")
         return path
 
+    def test_acquire_adopts_only_verified_trendradar_media(self) -> None:
+        profile = self.write_json("media-profile.json", {"schema_version": "2.0"})
+        materials = self.root / "variant" / "materials"
+        materials.mkdir(parents=True)
+        downloaded = self.root / "external-run" / "asset.mp4"
+        downloaded.parent.mkdir()
+        downloaded.write_bytes(b"verified-video")
+        manifest = self.root / "external-run" / "media-manifest.private.jsonl"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "source_id": "podcast-source",
+                    "source_url": "https://youtu.be/example",
+                    "platform": "youtube",
+                    "media_type": "video",
+                    "local_media_path": str(downloaded.resolve()),
+                    "media_size_bytes": downloaded.stat().st_size,
+                    "media_hash": f"sha256:{PIPELINE.sha256(downloaded)}",
+                    "download_status": "succeeded",
+                    "error_code": "",
+                    "retryable": False,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fake_run(command: list[str], **_kwargs: object) -> object:
+            request = json.loads(Path(command[-1]).read_text(encoding="utf-8"))
+            self.assertEqual("2.0", request["schema_version"])
+            self.assertEqual("youtube", request["sources"][0]["platform"])
+            envelope = {
+                "schema_version": "2.0",
+                "job_id": request["job_id"],
+                "status": "succeeded",
+                "manifest_ref": str(manifest.resolve()),
+                "completed_at": "2026-08-18T12:00:00Z",
+                "expires_at": "2026-08-25T12:00:00Z",
+                "succeeded": 1,
+                "failed": 0,
+                "exit_code": 0,
+                "error": None,
+            }
+            return PIPELINE.subprocess.CompletedProcess(command, 0, json.dumps(envelope), "")
+
+        arguments = (
+            "acquire",
+            "--url",
+            "https://youtu.be/example",
+            "--profile",
+            str(profile),
+            "--job-id",
+            "work-20260818-播客",
+            "--platform",
+            "youtube",
+            "--materials-dir",
+            str(materials),
+        )
+        with mock.patch.object(PIPELINE.shutil, "which", return_value="/usr/local/bin/trendradar-media"), mock.patch.object(
+            PIPELINE.subprocess, "run", side_effect=fake_run
+        ):
+            adopted = Path(self.invoke(*arguments))
+            self.assertEqual(str(adopted), self.invoke(*arguments))
+        self.assertEqual(b"verified-video", adopted.read_bytes())
+        receipt_text = (materials / "acquisition.json").read_text(encoding="utf-8")
+        receipt = json.loads(receipt_text)
+        self.assertEqual("trendradar-media", receipt["provider"])
+        self.assertTrue(receipt["job_id"].startswith("hf-"))
+        self.assertEqual(PIPELINE.sha256(adopted), receipt["media"]["sha256"])
+        self.assertNotIn("manifest_ref", receipt_text)
+        self.assertNotIn(str(downloaded), receipt_text)
+
+        failed = PIPELINE.subprocess.CompletedProcess(
+            ["trendradar-media"],
+            3,
+            json.dumps(
+                {
+                    "schema_version": "2.0",
+                    "job_id": "work-20260818-failed",
+                    "status": "failed",
+                    "succeeded": 0,
+                    "failed": 0,
+                    "error": {"code": "backend_unavailable", "retryable": True},
+                }
+            ),
+            "",
+        )
+        failed_arguments = list(arguments)
+        failed_arguments[failed_arguments.index("work-20260818-播客")] = "work-20260818-failed"
+        with mock.patch.object(PIPELINE.shutil, "which", return_value="/usr/local/bin/trendradar-media"), mock.patch.object(
+            PIPELINE.subprocess, "run", return_value=failed
+        ):
+            message = self.invoke(*failed_arguments, expected=2)
+        self.assertIn("backend_unavailable", message)
+
     def test_resolve_uses_subtitle_wording_and_flags_clear_conflict(self) -> None:
         transcript = self.write_json(
             "source.json",

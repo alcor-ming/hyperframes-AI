@@ -6,6 +6,8 @@ workflows:
   podcast_quote_image:
     skill: ../.agents/skills/podcast-quote-image/SKILL.md
     fallback: ../.agents/skills/native-subtitle-quote-image/SKILL.md
+    downloader: trendradar-media
+    downloader_contract: "2.0"
 
 templates:
   talking_head: recipes/talking-head.md
@@ -32,4 +34,4 @@ packaging:
 excluded_v1:
   global: [prompt_library, publishing]
   hyperframes_video: [bottom_subtitles]
-  podcast_quote_image: [downloader, bundled_asr, image_generation]
+  podcast_quote_image: [bundled_asr, image_generation]

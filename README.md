@@ -18,7 +18,7 @@
 ./work resume
 ```
 
-播客金句图以本地视频和可选字幕/转录为输入，筛选 6 组双语候选，用户确认 3 到 4 组后自动对齐时间、抽取候选帧并渲染：
+播客金句图接受本地视频或明确的来源 URL。URL 通过外部 `trendradar-media` v2.0 下载并校验后复制进 Work；随后筛选 6 组双语候选，用户确认 3 到 4 组后自动对齐时间、抽取候选帧并渲染：
 
 ```bash
 ./work new "播客金句" --workflow podcast_quote_image
@@ -46,6 +46,6 @@ Draft 与 Final 生命周期：
 
 ## 私有内容
 
-`works/`、旧 `tasks/`、媒体、工程、Draft、Final 和运行状态均由 `.gitignore` 排除。Harness 不下载或发布内容，不登录平台，也不内置 ASR 模型。
+`works/`、旧 `tasks/`、媒体、工程、Draft、Final 和运行状态均由 `.gitignore` 排除。Harness 不实现下载后端，而是调用独立的 `trendradar-media`；它不发布内容、不登录平台，也不内置 ASR 模型。
 
 完整产品契约以 `.studio/` 和 `AGENTS.md` 为准。

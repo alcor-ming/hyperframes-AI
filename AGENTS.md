@@ -5,6 +5,7 @@
 - 本仓库公开管理 Harness 规则、模板、Profile 接入、Skill 路由与 Work CLI。
 - 所有作品均位于 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入 Git。
 - 不发布内容、不登录平台、不购买额度。外部或付费服务仍需用户明确授权。
+- `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
 - v1 不生成 AI 图片、不调用 `design-taste-frontend`、不查询图片 Prompt 库。`hyperframes_video` 不生成或烧录底部字幕；`podcast_quote_image` 只按固定版式渲染批准的双语金句。
 
 ## 启动顺序
@@ -26,6 +27,7 @@
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
 - `ANIMATION_PLAN.md`：正式 HTML 制作前唯一必须批准的视觉设计 PRD。
 - `variant.yaml`：当前 Variant 状态，由 CLI 与 Agent 更新。
+- `materials/acquisition.json`：URL 媒体的来源、Hermes job、平台和本地副本摘要；不得保存外部 `manifest_ref` 或临时媒体路径。
 - `artifacts/transcript.json`：`podcast_quote_image` 的已解析文案和时间真源；字幕优先，转录仅补空档，冲突必须人工确认。
 - `artifacts/quote-candidates.json` 与 `quote-selection.json`：6 组候选及用户批准的 3 至 4 组金句真源。
 - `artifacts/aligned-quotes.json`、`frames/frame-candidates.json` 与 `frames/frame-selection.json`：脚本生成的时间对齐与候选帧状态，不用临时文档替代。

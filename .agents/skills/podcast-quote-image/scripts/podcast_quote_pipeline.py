@@ -31,6 +31,7 @@ FONT_CANDIDATES = (
     Path("/mnt/c/Windows/Fonts/msyh.ttc"),
 )
 ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+MEDIA_JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 class PipelineError(RuntimeError):
@@ -214,6 +215,153 @@ def run_asr(video: Path, output_dir: Path, language: str, asr_script: Path) -> P
     if not result.is_file():
         raise PipelineError(f"Shared ASR did not create {result}")
     return result
+
+
+def media_job_id(value: str) -> str:
+    if MEDIA_JOB_ID_RE.fullmatch(value):
+        return value
+    if not value.strip():
+        raise PipelineError("--job-id cannot be empty")
+    return "hf-" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+
+
+def command_acquire(args: argparse.Namespace) -> None:
+    profile = Path(args.profile).expanduser() if args.profile else None
+    materials_arg = Path(args.materials_dir).expanduser()
+    if profile is None or profile.is_symlink() or not profile.is_file():
+        raise PipelineError("Provide a regular trendradar-media profile with --profile or TRENDRADAR_MEDIA_PROFILE")
+    if materials_arg.is_symlink() or not materials_arg.is_dir():
+        raise PipelineError(f"Materials directory is missing or a symlink: {materials_arg}")
+    job_id = media_job_id(args.job_id)
+    if not MEDIA_JOB_ID_RE.fullmatch(args.source_id):
+        raise PipelineError("--source-id must use 1-64 safe characters")
+    parsed_url = urlparse(args.url)
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc or parsed_url.username or parsed_url.password:
+        raise PipelineError("--url must be a credential-free HTTP(S) URL")
+    downloader = shutil.which(args.downloader)
+    if not downloader:
+        raise PipelineError(f"trendradar-media executable is unavailable: {args.downloader}")
+    if args.timeout <= 0:
+        raise PipelineError("--timeout must be positive")
+
+    materials = materials_arg.resolve()
+    request = {
+        "schema_version": "2.0",
+        "job_id": job_id,
+        "sources": [{"source_id": args.source_id, "url": args.url}],
+    }
+    if args.platform:
+        request["sources"][0]["platform"] = args.platform
+    fd, request_name = tempfile.mkstemp(prefix=".trendradar-request.", suffix=".json", dir=materials)
+    os.close(fd)
+    request_path = Path(request_name)
+    try:
+        write_json(request_path, request)
+        try:
+            completed = subprocess.run(
+                [downloader, "--profile", str(profile.resolve()), "fetch", "--request", str(request_path)],
+                capture_output=True,
+                text=True,
+                timeout=args.timeout,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise PipelineError("trendradar-media is unavailable or timed out") from exc
+    finally:
+        request_path.unlink(missing_ok=True)
+
+    try:
+        envelope = json.loads(completed.stdout)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise PipelineError("trendradar-media returned an invalid JSON envelope") from exc
+    if not isinstance(envelope, dict) or envelope.get("schema_version") != "2.0":
+        raise PipelineError("trendradar-media envelope contract mismatch")
+    if completed.returncode != 0 or envelope.get("exit_code") != 0 or envelope.get("status") != "succeeded":
+        error = envelope.get("error")
+        code = error.get("code") if isinstance(error, dict) else envelope.get("status")
+        raise PipelineError(f"trendradar-media fetch failed: {code or 'unknown_error'}")
+    if envelope.get("job_id") != job_id or envelope.get("succeeded") != 1 or envelope.get("failed") != 0:
+        raise PipelineError("trendradar-media returned an unexpected single-source result")
+
+    manifest = Path(str(envelope.get("manifest_ref") or ""))
+    if not manifest.is_absolute() or manifest.is_symlink() or not manifest.is_file():
+        raise PipelineError("trendradar-media manifest_ref is missing or unsafe")
+    try:
+        rows = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PipelineError("trendradar-media manifest is unreadable") from exc
+    if len(rows) != 1 or not isinstance(rows[0], dict):
+        raise PipelineError("trendradar-media manifest must contain exactly one item")
+    row = rows[0]
+    source_path = Path(str(row.get("local_media_path") or ""))
+    expected_size = row.get("media_size_bytes")
+    expected_hash = row.get("media_hash")
+    if (
+        row.get("source_id") != args.source_id
+        or row.get("source_url") != args.url
+        or row.get("platform") not in {"douyin", "youtube", "bilibili", "direct"}
+        or row.get("media_type") != "video"
+        or row.get("download_status") != "succeeded"
+        or not source_path.is_absolute()
+        or source_path.is_symlink()
+        or not source_path.is_file()
+        or not isinstance(expected_size, int)
+        or expected_size <= 0
+        or source_path.stat().st_size != expected_size
+        or expected_hash != f"sha256:{sha256(source_path)}"
+    ):
+        raise PipelineError("trendradar-media success item failed local verification")
+
+    receipt_path = materials / "acquisition.json"
+    if receipt_path.is_symlink():
+        raise PipelineError("Refusing to replace a symlinked acquisition receipt")
+    if receipt_path.is_file():
+        existing = read_json(receipt_path)
+        if existing.get("source_url") != args.url:
+            raise PipelineError("This Variant is already bound to a different source URL")
+    suffix = source_path.suffix.lower()
+    if not re.fullmatch(r"\.[a-z0-9]{1,8}", suffix):
+        suffix = ".mp4"
+    target = materials / f"source-video{suffix}"
+    other_targets = [path for path in materials.glob("source-video.*") if path != target]
+    if other_targets:
+        raise PipelineError("Materials already contains a different source-video file")
+    if target.is_symlink():
+        raise PipelineError("Refusing to replace a symlinked source-video file")
+    if target.exists() and not target.is_file():
+        raise PipelineError("Materials source-video path is not a regular file")
+    media_digest = sha256(source_path)
+    if target.is_file() and sha256(target) != media_digest:
+        raise PipelineError("Materials already contains a different source video")
+    if not target.exists():
+        fd, temporary_name = tempfile.mkstemp(prefix=".source-video.", suffix=suffix, dir=materials)
+        os.close(fd)
+        temporary = Path(temporary_name)
+        try:
+            shutil.copy2(source_path, temporary)
+            if temporary.stat().st_size != expected_size or sha256(temporary) != media_digest:
+                raise PipelineError("Adopted media failed copy verification")
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    write_json(
+        receipt_path,
+        {
+            "schema_version": SCHEMA_VERSION,
+            "workflow": WORKFLOW,
+            "provider": "trendradar-media",
+            "provider_contract": "2.0",
+            "job_id": job_id,
+            "source_id": args.source_id,
+            "source_url": args.url,
+            "platform": row.get("platform"),
+            "completed_at": envelope.get("completed_at"),
+            "external_expires_at": envelope.get("expires_at"),
+            "media": {"path": target.name, "size_bytes": expected_size, "sha256": media_digest},
+        },
+    )
+    print(target)
 
 
 def command_resolve(args: argparse.Namespace) -> None:
@@ -935,6 +1083,17 @@ def command_verify(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+
+    acquire = commands.add_parser("acquire", help="Adopt one verified trendradar-media download")
+    acquire.add_argument("--url", required=True)
+    acquire.add_argument("--profile", default=os.environ.get("TRENDRADAR_MEDIA_PROFILE"))
+    acquire.add_argument("--job-id", required=True)
+    acquire.add_argument("--source-id", default="podcast-source")
+    acquire.add_argument("--platform", choices=("douyin", "youtube", "bilibili", "direct"))
+    acquire.add_argument("--materials-dir", required=True)
+    acquire.add_argument("--downloader", default=os.environ.get("TRENDRADAR_MEDIA_COMMAND", "trendradar-media"))
+    acquire.add_argument("--timeout", type=int, default=1200)
+    acquire.set_defaults(handler=command_acquire)
 
     resolve = commands.add_parser("resolve", help="Resolve transcript and structured subtitles")
     resolve.add_argument("--video")

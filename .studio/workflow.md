@@ -55,7 +55,8 @@ Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS �
 ## 播客金句图
 
 ```text
-本地视频 + 可选转录/字幕 -> resolve transcript
+来源 URL -> trendradar-media -> 校验并复制到 materials/
+本地或已下载视频 + 可选转录/字幕 -> resolve transcript
 -> Agent 筛选并翻译 6 组候选 -> 用户批准 3 至 4 组
 -> align time -> 每条抽取 3 张候选帧 -> Agent 选帧
 -> PACKAGE.md -> 固定版式 render -> Agent 视觉 QA -> Finalize -> 自动归档
@@ -65,7 +66,7 @@ Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS �
 
 每组固定 5 条双语文字：主画面金句加 4 条连贯字幕。用户批准是唯一内容门；批准后只做确定性对齐、取帧、渲染和视觉 QA。首张使用批准候选中排名最强的一组，其余按来源时间排序。图片只保留金句，人物、节目、期数和来源放入 `PACKAGE.md`。
 
-本仓库不实现下载器，也不为未来下载工具预留空接口。当前输入只接受本地视频和可选转录/字幕；共享 ASR 仅在用户明确同意运行时调用。
+URL 获取只调用外部 `trendradar-media` v2.0。适配器只接受成功 envelope 与单条成功 manifest，复核大小和 SHA-256 后原子复制到 `materials/source-video.*`，并保存不含外部临时路径的 `materials/acquisition.json`。下载后仍由本工作流解析已有字幕/转录，或在用户明确同意时调用共享 ASR；下载器本身不提供转录。
 
 ## 状态
 

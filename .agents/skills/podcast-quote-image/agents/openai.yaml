@@ -1,4 +1,4 @@
 interface:
   display_name: "播客金句图"
   short_description: "筛选并翻译播客金句，取帧生成双语小红书长图"
-  default_prompt: "使用 $podcast-quote-image 将本地播客视频制作成 3 到 4 张双语金句图和配套文案。"
+  default_prompt: "使用 $podcast-quote-image 将本地视频或播客链接制作成 3 到 4 张双语金句图和配套文案。"
