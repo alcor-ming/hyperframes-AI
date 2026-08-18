@@ -2,9 +2,11 @@
 
 ## 最小启动
 
-运行 `./work current`，然后只加载当前 Work、Variant、Script、一个 Recipe 和一套 Profile。已有合格输入时跳过上游步骤。
+运行 `./work current`，读取 `WORK.md` 的 `workflow` 后再路由。`hyperframes_video` 只加载当前 Work、Variant、Script、一个 Recipe 和一套 Profile；`podcast_quote_image` 只加载当前 Work、Variant、PACKAGE 与对应 Skill。已有合格输入时跳过上游步骤。
 
-## 下载视频的文案分流
+## HyperFrames 视频
+
+### 下载视频的文案分流
 
 下载视频统一复用 `qivance-music` 的共享 WhisperX/FasterWhisper 运行时与 GPU 锁，不在本仓库复制模型或 ASR 实现：
 
@@ -49,6 +51,21 @@ Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS �
 5. Final 前接受一个 Draft 作为视觉基线。
 
 技术 QA、时间微调、换行、easing、性能优化和归档不要求用户批准。
+
+## 播客金句图
+
+```text
+本地视频 + 可选转录/字幕 -> resolve transcript
+-> Agent 筛选并翻译 6 组候选 -> 用户批准 3 至 4 组
+-> align time -> 每条抽取 3 张候选帧 -> Agent 选帧
+-> PACKAGE.md -> 固定版式 render -> Agent 视觉 QA -> Finalize -> 自动归档
+```
+
+字幕在覆盖区间内拥有文案和时间权威，转录只补无字幕区间；同语种明显冲突必须先人工处理。转录条件缺失或失败时进入 `waiting_user`，由用户决定是否改用保留原画面字幕的 fallback，不得静默降级。
+
+每组固定 5 条双语文字：主画面金句加 4 条连贯字幕。用户批准是唯一内容门；批准后只做确定性对齐、取帧、渲染和视觉 QA。首张使用批准候选中排名最强的一组，其余按来源时间排序。图片只保留金句，人物、节目、期数和来源放入 `PACKAGE.md`。
+
+本仓库不实现下载器，也不为未来下载工具预留空接口。当前输入只接受本地视频和可选转录/字幕；共享 ASR 仅在用户明确同意运行时调用。
 
 ## 状态
 

@@ -8,7 +8,15 @@
 __pycache__/
 *.py[cod]
 
-# Third-party skills are installed locally; only the project workflow is public.
+# Third-party skills are installed locally; only project workflow skills are public.
 /.agents/skills/*
 !/.agents/skills/hyperframes-codex-workflow/
 !/.agents/skills/hyperframes-codex-workflow/**
+!/.agents/skills/podcast-quote-image/
+!/.agents/skills/podcast-quote-image/**
+!/.agents/skills/native-subtitle-quote-image/
+!/.agents/skills/native-subtitle-quote-image/**
+
+# Project Skills are tracked, but their runtime bytecode is not.
+**/__pycache__/
+*.py[cod]

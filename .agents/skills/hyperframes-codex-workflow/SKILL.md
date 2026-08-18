@@ -10,9 +10,10 @@ This Skill is intentionally thin. The repository root owns the workflow.
 ## Start
 
 1. Run `./work current`; when no Work is current, run `./work list` and do not guess.
-2. Follow root `AGENTS.md` and `.studio/workflow.md`.
-3. Load the current `WORK.md`, `variant.yaml`, `SCRIPT.md`, one Recipe, and only the selected Profile resolved through `.studio/capabilities.yaml`.
-4. After the Script route is settled, create or load the matching `RESEARCH.md`; load `ANIMATION_PLAN.md` only for visual planning or recovery. Load `.studio/spec/hyperframes.md` only for implementation and QA.
+2. Confirm `WORK.md` declares `"workflow":"hyperframes_video"`; route `podcast_quote_image` to its own Skill.
+3. Follow root `AGENTS.md` and `.studio/workflow.md`.
+4. Load the current `WORK.md`, `variant.yaml`, `SCRIPT.md`, one Recipe, and only the selected Profile resolved through `.studio/capabilities.yaml`.
+5. After the Script route is settled, create or load the matching `RESEARCH.md`; load `ANIMATION_PLAN.md` only for visual planning or recovery. Load `.studio/spec/hyperframes.md` only for implementation and QA.
 
 ## Route
 

@@ -36,9 +36,39 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual(expected, result, stderr.getvalue())
         return stdout.getvalue().strip() or stderr.getvalue().strip()
 
-    def new_work(self, title: str = "Test Work") -> tuple[str, Path]:
-        work_id = self.invoke("new", title)
+    def new_work(self, title: str = "Test Work", workflow: str = "hyperframes_video") -> tuple[str, Path]:
+        work_id = self.invoke("new", title, "--workflow", workflow)
         return work_id, self.root / "works" / "active" / work_id
+
+    def prepare_package_final(self, name: str = "quote-final", marker: bytes = b"one") -> Path:
+        directory = self.root / name
+        directory.mkdir()
+        artifacts = []
+        for index in range(1, 4):
+            path = directory / f"{index:02d}.jpg"
+            path.write_bytes(marker + str(index).encode())
+            artifacts.append({"path": path.name, "role": "image", "sha256": WORK_CLI.file_sha256(path)})
+        contact = directory / "final_contact_sheet.jpg"
+        contact.write_bytes(b"contact-" + marker)
+        artifacts.append({"path": contact.name, "role": "contact_sheet", "sha256": WORK_CLI.file_sha256(contact)})
+        package = directory / "PACKAGE.md"
+        package.write_text("# Package\n", encoding="utf-8")
+        artifacts.append({"path": package.name, "role": "package", "sha256": WORK_CLI.file_sha256(package)})
+        (directory / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow": "podcast_quote_image",
+                    "qa": "passed",
+                    "artifacts": artifacts,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return directory
 
     @staticmethod
     def update_frontmatter(path: Path, **updates: object) -> None:
@@ -71,11 +101,13 @@ class WorkCliTest(unittest.TestCase):
         work_id, work = self.new_work("中文标题")
         self.assertTrue((work / "variants" / "main" / "SCRIPT.md").is_file())
         self.assertTrue((work / "variants" / "main" / "RESEARCH.md").is_file())
+        self.assertEqual("9:16", json.loads((work / "variants" / "main" / "variant.yaml").read_text())["ratio"])
         package = (work / "variants" / "main" / "PACKAGE.md").read_text(encoding="utf-8")
         self.assertIn("## 标题", package)
         self.assertIn("## 封面文字", package)
         self.assertIn("## 一句话", package)
         self.assertEqual(work_id, (self.root / ".studio" / ".runtime" / "current-work").read_text().strip())
+        self.assertEqual("hyperframes_video", WORK_CLI.read_frontmatter(work / "WORK.md")["workflow"])
 
         script = work / "variants" / "main" / "SCRIPT.md"
         script.write_text(script.read_text(encoding="utf-8") + "正文\n", encoding="utf-8")
@@ -90,6 +122,39 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual("ready", WORK_CLI.read_frontmatter(copied_variant / "RESEARCH.md")["status"])
         status = json.loads(self.invoke("status"))
         self.assertEqual("douyin-9x16", status["variant"]["id"])
+
+    def test_workflow_is_required_and_podcast_init_is_content_specific(self) -> None:
+        with self.assertRaises(SystemExit):
+            WORK_CLI.main(["new", "Missing workflow"], root=self.root)
+
+        work_id, work = self.new_work("Podcast quotes", "podcast_quote_image")
+        variant = work / "variants" / "main"
+        self.assertEqual("podcast_quote_image", WORK_CLI.read_frontmatter(work / "WORK.md")["workflow"])
+        self.assertEqual("3:4", json.loads((variant / "variant.yaml").read_text())["ratio"])
+        self.assertTrue((variant / "materials").is_dir())
+        self.assertTrue((variant / "artifacts").is_dir())
+        self.assertTrue((variant / "frames").is_dir())
+        self.assertTrue((variant / "render").is_dir())
+        self.assertTrue((variant / "PACKAGE.md").is_file())
+        self.assertFalse((variant / "SCRIPT.md").exists())
+        self.assertFalse((variant / "ANIMATION_PLAN.md").exists())
+        self.assertEqual(work_id, json.loads(self.invoke("list"))[0]["id"])
+
+        result = self.invoke("preview", "register", str(self.root / "missing.mp4"), expected=2)
+        self.assertIn("requires workflow hyperframes_video", result)
+
+    def test_podcast_workflow_rejects_video_options_before_creation(self) -> None:
+        result = self.invoke(
+            "new",
+            "Wrong options",
+            "--workflow",
+            "podcast_quote_image",
+            "--ratio",
+            "9:16",
+            expected=2,
+        )
+        self.assertIn("does not accept video", result)
+        self.assertFalse((self.root / "works").exists())
 
     def test_legacy_archive_directory_is_ignored(self) -> None:
         (self.root / "works" / "archive" / "tasks" / "001-legacy").mkdir(parents=True)
@@ -207,6 +272,27 @@ class WorkCliTest(unittest.TestCase):
         archived, location = WORK_CLI.locate_work(self.root, work_id)
         self.assertEqual("archive", location)
         self.assertTrue((archived / "variants" / "main" / "final" / "final.mp4").is_file())
+
+    def test_podcast_final_promotes_manifest_directory_and_archives(self) -> None:
+        work_id, _ = self.new_work("Podcast quotes", "podcast_quote_image")
+        candidate = self.prepare_package_final()
+        result = self.invoke("finalize", str(candidate), expected=2)
+        self.assertIn("Final QA must pass", result)
+
+        archived_final = Path(self.invoke("finalize", str(candidate), "--qa-passed"))
+        self.assertTrue((archived_final / "manifest.json").is_file())
+        self.assertIn("/archive/", archived_final.as_posix())
+        self.assertEqual(
+            "manifest.json",
+            json.loads((archived_final.parent / "variant.yaml").read_text(encoding="utf-8"))["current_final"],
+        )
+        self.assertEqual(str(archived_final), self.invoke("--work", work_id, "finalize", str(candidate), "--qa-passed"))
+
+        self.invoke("reopen", work_id)
+        replacement = self.prepare_package_final("quote-final-two", b"two")
+        replaced_final = Path(self.invoke("finalize", str(replacement), "--qa-passed"))
+        self.assertEqual(b"two1", (replaced_final / "01.jpg").read_bytes())
+        self.assertEqual(b"one1", (replaced_final / "history" / "final-v001" / "01.jpg").read_bytes())
 
 
 if __name__ == "__main__":

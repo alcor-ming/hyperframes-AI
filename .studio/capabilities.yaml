@@ -1,5 +1,12 @@
 version: 1
 
+workflows:
+  hyperframes_video:
+    skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md
+  podcast_quote_image:
+    skill: ../.agents/skills/podcast-quote-image/SKILL.md
+    fallback: ../.agents/skills/native-subtitle-quote-image/SKILL.md
+
 templates:
   talking_head: recipes/talking-head.md
   pure_hyperframes: recipes/pure-hyperframes.md
@@ -22,4 +29,7 @@ copywriting:
 packaging:
   required: [dbs-xhs-title]
 
-excluded_v1: [image_generation, prompt_library, design-taste-frontend, subtitles, publishing]
+excluded_v1:
+  global: [prompt_library, publishing]
+  hyperframes_video: [bottom_subtitles]
+  podcast_quote_image: [downloader, bundled_asr, image_generation]
