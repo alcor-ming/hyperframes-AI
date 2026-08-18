@@ -351,6 +351,7 @@ def create_podcast_quote_variant(root: Path, work: Path, variant_id: str) -> Pat
         (path / directory).mkdir(parents=True, exist_ok=True)
     values = {"VARIANT_ID": json_string_content(variant_id)}
     atomic_write(path / "variant.yaml", template_text(root, "PODCAST_QUOTE_VARIANT.template.yaml", values))
+    atomic_write(path / "RESEARCH.md", template_text(root, "PODCAST_QUOTE_RESEARCH.template.md", {}))
     atomic_write(path / "PACKAGE.md", template_text(root, "PODCAST_QUOTE_PACKAGE.template.md", {}))
     return path
 

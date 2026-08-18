@@ -13,7 +13,7 @@
 1. 前台交互运行 `./work current`；没有 Current 时运行 `./work list`，不得猜测作品。后台任务必须接收明确的 Work ID 与 Variant ID，并用 `./work --work <id> --variant <id> status` 启动，不读取或改写 Current。
 2. 读取当前 `WORK.md` 与 `variant.yaml` 后按 `workflow` 路由：`hyperframes_video` 使用唯一视频 Skill；`podcast_quote_image` 在文章方案批准前使用 `planner_skill`，批准后使用 `copy_skill`。
 3. `hyperframes_video` 再读取 `SCRIPT.md`、当前 Template Recipe 与选定 Profile；进入视觉设计时再读取 `RESEARCH.md` 与 `ANIMATION_PLAN.md`，进入实现或 QA 时才读取对应 `.studio/spec/`。
-4. `podcast_quote_image` 只读取当前阶段的 Skill 与机器 JSON；文章方案批准后才读取或生成 `PACKAGE.md`。不得加载视频工作流的 Script、Research、Plan、Recipe 或 Profile。
+4. `podcast_quote_image` 只读取当前阶段的 Skill 与机器 JSON；文章方案批准后先完成播客专用 `RESEARCH.md`，再生成 `PACKAGE.md`。不得加载视频工作流的 Script、Plan、Recipe 或 Profile。
 
 不要默认加载全部 Profile、全部 DBS Skill、Examples、Migration、发行文件、全部 QA 历史或全部 Draft 快照。
 
@@ -29,8 +29,8 @@
 - `source.md`：主要原始基线，DBS 不覆盖。
 - `materials/*.transcript.json`：下载视频的时间真源；YouTube 可优先采用结构化原生转录，其余或 fallback 统一复用 `qivance-music` 的共享 ASR，ASR 的 `characters[]` 不得退化为仅段级时间戳。
 - `SCRIPT.md`：当前 Variant 唯一口播正文；批准后的隐藏段落 ID 保持稳定。
-- `RESEARCH.md`：与当前 Script Revision 对齐的联网资料、可视化机制与事实边界；不反向改写口播。
-- `PACKAGE.md`：视频工作流保存最终标题、封面文字和一句话简介；播客图文工作流保存大标题、开篇、每图小标题与第三人称正文、来源和话题标签。
+- `RESEARCH.md`：视频工作流记录与 Script Revision 对齐的联网资料、可视化机制与事实边界；播客图文工作流记录嘉宾身份、与获批观点相关的经历、可用于开篇的背景故事、事实边界和来源。
+- `PACKAGE.md`：视频工作流保存最终标题、封面文字和一句话简介；播客图文工作流保存大标题、开篇、每图小标题与第三人称正文、来源和话题标签，其中标题必须在全文稳定后最后拟定。
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
 - `ANIMATION_PLAN.md`：正式 HTML 制作前唯一必须批准的视觉设计 PRD。
 - `variant.yaml`：当前 Variant 状态，由 CLI 与 Agent 更新。
@@ -50,7 +50,7 @@
 - 只在 Scene 数量、顺序、视觉目标、Hero State、Template、Profile 或文案结构发生实质变化时重新批准 Plan。
 - 时间码、easing、换行、安全区、性能和不改变 Hero State 的布局修复无需重新批准。
 
-`podcast_quote_image` 拆成两个 Skill：第一个通读已解析文案，结合 `dbs-spread` 与 `dbs-resonate` 生成 3 个有原文证据的完整文章方案；用户只批准 1 个。第二个为批准方案拟定标题和图文文案，并执行 `dbs-xhs-title`、限定范围的 `dbs-content` 与必做的 `dbs-ai-check`，再完成时间匹配、取帧、渲染和 Final。每篇文章输出 4 至 8 张图，每张图固定 1 条 Hero 加 3 至 4 条支撑句；图片边界按原文的铺垫、观点、论证、例子、对比与收束组织，不按句号机械切分。批准文章方案是唯一内容门，不增加第二个 Draft 审批门。转录缺失、失败或不可用时进入 `waiting_user`，仅在用户确认后使用保留的 `native-subtitle-quote-image` fallback，不得静默降级。
+`podcast_quote_image` 拆成两个 Skill：第一个通读已解析文案，结合 `dbs-spread` 与 `dbs-resonate` 生成 3 个有原文证据的完整文章方案；用户只批准 1 个。第二个先调研嘉宾背景并完成 `RESEARCH.md`，再写开篇、每图小标题与第三人称正文，全文稳定后最后用 `dbs-xhs-title` 拟定结合核心总结和嘉宾背景的大标题，并执行限定范围的 `dbs-content` 与必做的 `dbs-ai-check`，之后完成时间匹配、取帧、渲染和 Final。每篇文章输出 4 至 8 张图，每张图固定 1 条 Hero 加 3 至 4 条支撑句；图片边界按原文的铺垫、观点、论证、例子、对比与收束组织，不按句号机械切分。批准文章方案是唯一内容门，不增加第二个 Draft 审批门。转录缺失、失败或不可用时进入 `waiting_user`，仅在用户确认后使用保留的 `native-subtitle-quote-image` fallback，不得静默降级。
 
 ## 模板
 

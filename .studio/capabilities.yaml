@@ -32,8 +32,9 @@ copywriting:
   optional: [dbs-xhs-title, media-publish-check]
   podcast_quote_image:
     candidate_analysis: [dbs-spread, dbs-resonate]
-    package_title: dbs-xhs-title
+    guest_research: RESEARCH.md
     package_checks: [dbs-content.expression_efficiency, dbs-content.cognitive_gap]
+    package_title_last: dbs-xhs-title
     package_qa: dbs-ai-check
     excluded: [dbs-hook, dbs-script-flow]
 

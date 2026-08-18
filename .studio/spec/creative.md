@@ -8,11 +8,11 @@
 - 标题必须调用 `dbs-xhs-title` 生成候选并选择 Top 1；封面文字与一句话简介基于最终 Script 和 Research，不编造正文没有支撑的承诺。
 - `dbs` 允许多轮正文修改；DBS 只有在实际修改口播时才把 Script 状态设为 `pending` 并等待用户批准。
 - `verbatim` 必须保留转录文字、Anchor 和由 `characters[]` 聚合出的原时间戳，`approval` 为 `not_required`；DBS 不改正文，只可诊断或处理包装文案。
-- `podcast_quote_image` 的 `PACKAGE.md` 使用“大标题 + 开篇 + 每图小标题与第三人称正文 + 来源 + 话题标签”结构。DBS 不得改写批准方案中的原文金句或忠实翻译：`dbs-resonate` 检查单一核心，`dbs-spread` 只参与候选理由与排序，`dbs-xhs-title` 处理最终标题，`dbs-content` 只检查包装正文的表达效率与认知落差，`dbs-ai-check` 是成稿必做质检。
+- `podcast_quote_image` 先在 `RESEARCH.md` 中记录与获批观点相关的嘉宾身份、经历、背景故事、事实边界和来源，再生成“大标题 + 开篇 + 每图小标题与第三人称正文 + 来源 + 话题标签”的 `PACKAGE.md`。开篇直接综合全文核心与嘉宾背景故事；每图小标题总结该段；大标题在全文稳定后最后拟定，并结合核心总结与嘉宾背景。DBS 不得改写批准方案中的原文金句或忠实翻译：`dbs-resonate` 检查单一核心，`dbs-spread` 只参与候选理由与排序，`dbs-content` 只检查包装正文的表达效率与认知落差，`dbs-xhs-title` 最后处理标题，`dbs-ai-check` 是成稿必做质检。
 
 ## Research
 
-- `RESEARCH.md` 与 `SCRIPT.md` 位于同一 Variant，记录 `script_revision`、Research Revision、联网来源、可视化机制和事实边界。
+- 视频工作流的 `RESEARCH.md` 与 `SCRIPT.md` 位于同一 Variant，记录 `script_revision`、Research Revision、联网来源、可视化机制和事实边界；播客图文的 `RESEARCH.md` 不使用 Script Revision，只服务当前获批文章方案。
 - 研究以当前口播 Anchor 为目录，优先查找一手资料；宣传、自述与实际验证必须分开陈述，不编造 UI、功能、数据或成功状态。
 - Research 为 Animation Plan 提供组件内容与媒体线索，但不得覆盖 `source.md`、改写 `SCRIPT.md` 或把未经口播表达的事实伪装成口播观点。
 - Script Revision 变化后 Research 状态回到 `pending`；完成更新后递增 Research Revision 并设为 `ready`。
