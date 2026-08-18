@@ -10,7 +10,7 @@
 ./work variant add douyin-9x16 --from main --ratio 9:16
 ```
 
-`work new` 必须选择 Workflow。视频工作流创建 `pure_hyperframes`、`optical_fluidity`、`9:16` 的 `main` Variant；Agent 可通过参数选择其他 Template、Profile 和 Ratio。
+`work new` 必须选择 Workflow。视频工作流创建 `pure_hyperframes`、`optical_fluidity`、`16:9` 的 `main` Variant；Agent 可通过参数选择其他 Template、Profile 和 Ratio。
 
 ```bash
 ./work new "人物口播" --workflow hyperframes_video --template talking_head --subject-position left
@@ -18,12 +18,22 @@
 ./work resume
 ```
 
-播客金句图接受本地视频或明确的来源 URL。URL 通过外部 `trendradar-media` v2.0 下载并校验后复制进 Work；随后筛选 6 组双语候选，用户确认 3 到 4 组后自动对齐时间、抽取候选帧并渲染：
+播客图文接受本地视频或明确的来源 URL。URL 通过外部 `trendradar-media` v2.0 下载并校验后复制进 Work；YouTube 可先读取带时间戳的原生字幕，失败后再使用已授权的共享 ASR。第一个 Skill 通读转录并给出 3 个完整文章方案，用户确认其中 1 个；第二个 Skill 生成标题和图文文案，再对齐时间、取帧并渲染 4 到 8 张图。每张图包含 1 条 Hero 与 3 到 4 条支撑句：
 
 ```bash
 ./work new "播客金句" --workflow podcast_quote_image
 ./work finalize /path/to/render --qa-passed
 ```
+
+多链接输入按“一条来源一个 Work”拆分，并以 detached 方式交给后台任务。`Current Work` 只代表前台焦点；后台任务必须始终显式绑定自己的 Work 和 Variant，因此小红书与 HyperFrames Work 可以同时运行：
+
+```bash
+./work new "播客 A" --workflow podcast_quote_image --detached
+./work --work <work-id> --variant main status
+./work list
+```
+
+后台可完成下载、转录和 3 个文章方案，然后停在 `article_selection`。用户只需确认 1 个方案；单个 Work 失败不阻塞同批其他 Work。
 
 Draft 与 Final 生命周期：
 
@@ -40,7 +50,8 @@ Draft 与 Final 生命周期：
 - `AGENTS.md`：创作边界与最小上下文路由。
 - `.studio/`：工作流、能力表、规范、Recipe、模板和生命周期 CLI。
 - `.agents/skills/hyperframes-codex-workflow/`：视频工作流薄路由 Skill 与三套稳定 Profile。
-- `.agents/skills/podcast-quote-image/`：播客金句筛选、翻译、取帧、渲染与 QA Skill。
+- `.agents/skills/podcast-quote-image/`：转录理解、原文证据整理与 3 个文章候选方案 Skill。
+- `.agents/skills/xiaohongshu-article-copy/`：标题、开篇、每图文案、DBS 检查、取帧、渲染与 QA Skill。
 - `.agents/skills/native-subtitle-quote-image/`：无法转录时经人工确认启用的 [原版 v1.0.0 Skill](https://github.com/chengyi-ai/native-subtitle-quote-image/tree/f1fa5b70448f620ea92179357eca4b0222481b9d)。
 - `work`：无第三方依赖的本地 Work CLI。
 

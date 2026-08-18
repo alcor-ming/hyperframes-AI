@@ -30,7 +30,7 @@ WAIT_REASONS = {
     "draft_feedback": ("waiting_user", "Wait for Draft feedback or acceptance"),
     "voiceover": ("waiting_asset", "Wait for the final voiceover"),
     "external_asset": ("waiting_asset", "Wait for an external media asset"),
-    "quote_selection": ("waiting_user", "Wait for quote selection confirmation"),
+    "article_selection": ("waiting_user", "Wait for one article plan selection"),
     "transcript_fallback": ("waiting_user", "Wait for the transcript fallback decision"),
     "source_metadata": ("waiting_user", "Wait for source metadata"),
 }
@@ -200,30 +200,40 @@ def locate_work(root: Path, work_id: str) -> tuple[Path, str]:
     raise HarnessError(f"Unknown work: {work_id}")
 
 
-def list_work_rows(root: Path) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
+def list_work_rows(root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     for location in ("active", "parked"):
         parent = works_root(root) / location
         if parent.is_dir():
             for path in sorted(parent.iterdir()):
                 if path.is_dir():
                     metadata = read_frontmatter(path / "WORK.md")
+                    state_path = path / "variants" / "main" / "variant.yaml"
+                    state = read_json(state_path) if state_path.is_file() else {}
                     rows.append(
                         {
                             "id": path.name,
                             "title": str(metadata.get("title", "")),
                             "workflow": str(metadata.get("workflow", "hyperframes_video")),
                             "location": location,
+                            "status": state.get("status"),
+                            "wait_for": state.get("wait_for"),
+                            "next_action": state.get("next_action"),
                         }
                     )
     for path in archived_work_paths(root):
         metadata = read_frontmatter(path / "WORK.md")
+        state_path = path / "variants" / "main" / "variant.yaml"
+        state = read_json(state_path) if state_path.is_file() else {}
         rows.append(
             {
                 "id": path.name,
                 "title": str(metadata.get("title", "")),
                 "workflow": str(metadata.get("workflow", "hyperframes_video")),
                 "location": "archive",
+                "status": state.get("status"),
+                "wait_for": state.get("wait_for"),
+                "next_action": state.get("next_action"),
             }
         )
     return rows
@@ -248,7 +258,9 @@ def variant_paths(work: Path) -> list[Path]:
 
 
 def selected_variant(root: Path, work: Path, args: argparse.Namespace) -> tuple[Path, dict[str, Any]]:
-    variant_id = args.variant_override or read_pointer(root, "current-variant")
+    variant_id = args.variant_override
+    if not variant_id and not args.work_override:
+        variant_id = read_pointer(root, "current-variant")
     if not variant_id or not (work / "variants" / variant_id).is_dir():
         variant_id = "main" if (work / "variants" / "main").is_dir() else None
     if not variant_id:
@@ -367,7 +379,7 @@ def create_variant(
         variant_id,
         template=template or "pure_hyperframes",
         profile=profile or "optical_fluidity",
-        ratio=ratio or "9:16",
+        ratio=ratio or "16:9",
         subject_position=subject_position,
         copy_script_from=copy_script_from,
     )
@@ -380,13 +392,19 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError("podcast_quote_image does not accept video Template, Profile, Ratio, or subject options")
     ensure_roots(root)
     base_id = f"work-{datetime.now().astimezone():%Y%m%d}-{slugify(args.title)}"
-    work_id = base_id
-    suffix = 2
-    while any(row["id"] == work_id for row in list_work_rows(root)):
-        work_id = f"{base_id}-{suffix}"
-        suffix += 1
-    work = works_root(root) / "active" / work_id
-    work.mkdir(parents=True)
+    existing_ids = {row["id"] for row in list_work_rows(root)}
+    suffix = 1
+    while True:
+        work_id = base_id if suffix == 1 else f"{base_id}-{suffix}"
+        if work_id in existing_ids:
+            suffix += 1
+            continue
+        work = works_root(root) / "active" / work_id
+        try:
+            work.mkdir()
+            break
+        except FileExistsError:
+            suffix += 1
     created_at = datetime.now().astimezone().date().isoformat()
     atomic_write(
         work / "WORK.md",
@@ -413,8 +431,9 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
         ratio=args.ratio,
         subject_position=args.subject_position,
     )
-    write_pointer(root, "current-work", work_id)
-    write_pointer(root, "current-variant", "main")
+    if not args.detached:
+        write_pointer(root, "current-work", work_id)
+        write_pointer(root, "current-variant", "main")
     print(work_id)
 
 
@@ -481,7 +500,8 @@ def command_variant_add(root: Path, args: argparse.Namespace) -> None:
         subject_position=args.subject_position,
         copy_script_from=source,
     )
-    write_pointer(root, "current-variant", path.name)
+    if not args.work_override:
+        write_pointer(root, "current-variant", path.name)
     print(path.name)
 
 
@@ -538,7 +558,8 @@ def command_resume(root: Path, args: argparse.Namespace) -> None:
     restored_from_park = location == "parked"
     if location == "parked":
         work = restore_parked_work(root, work)
-        write_pointer(root, "current-work", work.name)
+        if not args.work_override:
+            write_pointer(root, "current-work", work.name)
     variant, state = selected_variant(root, work, args)
     if not restored_from_park and state.get("status") != "active":
         state.update(status="active", wait_for="none", next_action=args.next_action or "Continue current production")
@@ -623,8 +644,8 @@ def validate_deliverable_manifest(directory: Path, expected_workflow: str) -> di
         roles[role] = roles.get(role, 0) + 1
 
     if expected_workflow == "podcast_quote_image":
-        if roles.get("image") not in {3, 4}:
-            raise HarnessError("podcast_quote_image Final requires 3 or 4 image artifacts")
+        if roles.get("image", 0) not in range(4, 9):
+            raise HarnessError("podcast_quote_image Final requires 4 to 8 image artifacts")
         if roles.get("contact_sheet") != 1 or roles.get("package") != 1:
             raise HarnessError("podcast_quote_image Final requires one contact sheet and one package")
         if len(artifacts) != roles["image"] + 2:
@@ -992,6 +1013,8 @@ def command_finalize_video(
 
     if location == "archive":
         if final_file.is_file() and file_sha256(final_file) == candidate_digest:
+            write_json(variant / ".runtime" / "finalize.json", {"state": "complete", "final_sha256": candidate_digest})
+            clear_current_if(root, work.name)
             print(str(final_file))
             return
         raise HarnessError("Archived work has a different Final; reopen it before finalizing")
@@ -1144,6 +1167,7 @@ def build_parser() -> argparse.ArgumentParser:
     new = commands.add_parser("new")
     new.add_argument("title")
     new.add_argument("--workflow", choices=sorted(WORKFLOWS), required=True)
+    new.add_argument("--detached", action="store_true", help="create without changing the foreground Current Work")
     add_variant_options(new)
     new.set_defaults(handler=command_new)
 

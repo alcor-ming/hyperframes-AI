@@ -167,6 +167,15 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.invoke("resolve", "--subtitle", str(subtitle_json), "--out", str(resolved))
         self.assertEqual("json subtitle", json.loads(resolved.read_text())["segments"][0]["text"])
 
+        duration_json = self.write_json(
+            "duration.json",
+            {"language_code": "en", "segments": [{"start": 2, "duration": 1.5, "text": "duration timing"}]},
+        )
+        self.invoke("resolve", "--transcript", str(duration_json), "--out", str(resolved))
+        duration_value = json.loads(resolved.read_text())
+        self.assertEqual("en", duration_value["language"])
+        self.assertEqual(3.5, duration_value["segments"][0]["end"])
+
         transcript.write_text(
             json.dumps({"language": "en", "segments": [{"start": 0, "end": 1, "text": "aaaaaaaaaaaa"}]})
             + "\n",
@@ -176,7 +185,46 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.invoke("resolve", "--transcript", str(transcript), "--subtitle", str(subtitle), "--out", str(resolved))
         self.assertEqual("needs_review", json.loads(resolved.read_text())["status"])
 
-    def test_approved_quotes_flow_through_frames_render_and_qa(self) -> None:
+    def test_youtube_transcript_preserves_structured_timing_and_url_forms(self) -> None:
+        video_id = "dQw4w9WgXcQ"
+        for value in (
+            video_id,
+            f"https://youtu.be/{video_id}",
+            f"https://www.youtube.com/watch?v={video_id}",
+            f"https://youtube.com/shorts/{video_id}",
+            f"https://youtube.com/embed/{video_id}",
+            f"https://youtube.com/live/{video_id}",
+        ):
+            self.assertEqual(video_id, PIPELINE.extract_youtube_video_id(value))
+
+        class FakeTranscript(list):
+            language_code = "en"
+            is_generated = True
+
+        transcript = FakeTranscript(
+            [
+                mock.Mock(start=0.0, duration=1.25, text="First line"),
+                mock.Mock(start=1.25, duration=2.0, text="Second line"),
+            ]
+        )
+        output = self.root / "youtube-transcript.json"
+        with mock.patch.object(PIPELINE, "fetch_youtube_transcript", return_value=transcript):
+            self.invoke(
+                "youtube-transcript",
+                "--url",
+                f"https://youtu.be/{video_id}",
+                "--language",
+                "zh-Hans,en",
+                "--out",
+                str(output),
+            )
+        value = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual("youtube-transcript-api", value["provider"])
+        self.assertEqual([0.0, 1.25], [item["start"] for item in value["segments"]])
+        self.assertEqual([1.25, 3.25], [item["end"] for item in value["segments"]])
+        self.assertFalse(value["used_language_fallback"])
+
+    def test_approved_article_flows_through_frames_render_and_qa(self) -> None:
         transcript = self.write_json(
             "transcript.json",
             {
@@ -185,37 +233,64 @@ class PodcastQuotePipelineTest(unittest.TestCase):
                 "status": "ready",
                 "segments": [
                     {"id": f"s{index:06d}", "start": index - 1, "end": index, "text": f"line {index}"}
-                    for index in range(1, 31)
+                    for index in range(1, 121)
                 ],
             },
         )
+        image_counts = [4, 6, 8]
         candidates = self.write_json(
-            "quote-candidates.json",
+            "article-candidates.json",
             {
                 "schema_version": 1,
                 "workflow": "podcast_quote_image",
                 "transcript_sha256": PIPELINE.sha256(transcript),
                 "candidates": [
                     {
-                        "id": f"q{group:02d}",
-                        "rank": group,
+                        "id": f"a{article:02d}",
+                        "rank": article,
+                        "core_viewpoint": f"Core viewpoint {article}",
+                        "audience_tension": f"Audience tension {article}",
                         "rationale": "useful",
-                        "units": [
+                        "images": [
                             {
-                                "id": f"u{unit:02d}",
-                                "original": f"Original {group}-{unit}",
-                                "translation_zh": f"中文 {group}-{unit}",
-                                "source_segment_ids": [f"s{((group - 1) * 5 + unit):06d}"],
+                                "id": f"g{image:02d}",
+                                "structural_role": "argument beat",
+                                "focus": f"Image focus {article}-{image}",
+                                "units": [
+                                    {
+                                        "id": f"u{unit:02d}",
+                                        "original": f"Original {article}-{image}-{unit}",
+                                        "translation_zh": f"中文 {article}-{image}-{unit}",
+                                        "source_segment_ids": [
+                                            f"s{((article - 1) * 40 + (image - 1) * 5 + unit):06d}"
+                                        ],
+                                    }
+                                    for unit in range(1, 5 + image % 2)
+                                ],
                             }
-                            for unit in range(1, 6)
+                            for image in range(1, image_counts[article - 1] + 1)
                         ],
                     }
-                    for group in range(1, 7)
+                    for article in range(1, 4)
                 ],
             },
         )
         self.invoke("validate-candidates", "--transcript", str(transcript), "--candidates", str(candidates))
-        selection = self.root / "quote-selection.json"
+        invalid_value = json.loads(candidates.read_text(encoding="utf-8"))
+        invalid_value["candidates"][0]["images"][0]["units"] = invalid_value["candidates"][0]["images"][0][
+            "units"
+        ][:3]
+        invalid = self.write_json("invalid-candidates.json", invalid_value)
+        message = self.invoke(
+            "validate-candidates",
+            "--transcript",
+            str(transcript),
+            "--candidates",
+            str(invalid),
+            expected=2,
+        )
+        self.assertIn("1 Hero and 3 or 4 supports", message)
+        selection = self.root / "article-selection.json"
         self.invoke(
             "approve",
             "--transcript",
@@ -223,15 +298,11 @@ class PodcastQuotePipelineTest(unittest.TestCase):
             "--candidates",
             str(candidates),
             "--select",
-            "q04",
-            "--select",
-            "q01",
-            "--select",
-            "q06",
+            "a02",
             "--out",
             str(selection),
         )
-        self.assertEqual(["q01", "q04", "q06"], json.loads(selection.read_text())["selected_ids"])
+        self.assertEqual("a02", json.loads(selection.read_text())["selected_id"])
 
         aligned = self.root / "aligned-quotes.json"
         self.invoke("align", "--transcript", str(transcript), "--selection", str(selection), "--out", str(aligned))
@@ -247,7 +318,10 @@ class PodcastQuotePipelineTest(unittest.TestCase):
             self.invoke("extract", str(video), "--aligned", str(aligned), "--out-dir", str(frames_dir))
         frame_candidates = frames_dir / "frame-candidates.json"
         frame_value = json.loads(frame_candidates.read_text())
-        self.assertEqual([0.25, 0.5, 0.75], [item["time"] for item in frame_value["groups"][0]["units"][0]["candidates"]])
+        self.assertEqual(
+            [40.25, 40.5, 40.75],
+            [item["time"] for item in frame_value["groups"][0]["units"][0]["candidates"]],
+        )
 
         choices = [
             candidate["id"]
@@ -263,8 +337,12 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.invoke(*arguments)
 
         package = self.root / "PACKAGE.md"
+        image_copy = "\n\n".join(
+            f"### g{index:02d}｜小标题 {index}\n第三人称正文 {index}。" for index in range(1, 7)
+        )
         package.write_text(
-            "# Package\n\n## 标题\n测试\n\n## 正文\n正文\n\n## 播客信息\n\n"
+            "# Package\n\n## 大标题\n测试标题\n\n## 开篇\n她的核心观点是测试。\n\n"
+            f"## 图片文案\n\n{image_copy}\n\n## 播客信息\n\n"
             "- 频道：Test Channel\n- 节目：Test Podcast\n- 嘉宾：\n- 期数：\n"
             "- 来源 URL：https://example.com/watch\n\n## 话题标签\n#测试\n",
             encoding="utf-8",
@@ -289,7 +367,7 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertEqual("pending_visual_review", self.invoke("verify", "--render-dir", str(render)))
         self.assertEqual("passed", self.invoke("verify", "--render-dir", str(render), "--visual-passed"))
         manifest = json.loads((render / "manifest.json").read_text())
-        self.assertEqual(3, manifest["image_count"])
+        self.assertEqual(6, manifest["image_count"])
         with Image.open(next(render.glob("[0-9][0-9]_*.jpg"))) as image:
             self.assertEqual((1440, 1920), image.size)
 

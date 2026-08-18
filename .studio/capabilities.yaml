@@ -4,10 +4,13 @@ workflows:
   hyperframes_video:
     skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md
   podcast_quote_image:
-    skill: ../.agents/skills/podcast-quote-image/SKILL.md
+    planner_skill: ../.agents/skills/podcast-quote-image/SKILL.md
+    copy_skill: ../.agents/skills/xiaohongshu-article-copy/SKILL.md
     fallback: ../.agents/skills/native-subtitle-quote-image/SKILL.md
     downloader: trendradar-media
     downloader_contract: "2.0"
+    youtube_transcript: youtube-transcript-api
+    youtube_transcript_optional: true
 
 templates:
   talking_head: recipes/talking-head.md
@@ -27,6 +30,12 @@ profiles:
 copywriting:
   default: [dbs-content, dbs-hook, dbs-script-flow, dbs-ai-check]
   optional: [dbs-xhs-title, media-publish-check]
+  podcast_quote_image:
+    candidate_analysis: [dbs-spread, dbs-resonate]
+    package_title: dbs-xhs-title
+    package_checks: [dbs-content.expression_efficiency, dbs-content.cognitive_gap]
+    package_qa: dbs-ai-check
+    excluded: [dbs-hook, dbs-script-flow]
 
 packaging:
   required: [dbs-xhs-title]

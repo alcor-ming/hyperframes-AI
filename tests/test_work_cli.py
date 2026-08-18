@@ -44,7 +44,7 @@ class WorkCliTest(unittest.TestCase):
         directory = self.root / name
         directory.mkdir()
         artifacts = []
-        for index in range(1, 4):
+        for index in range(1, 5):
             path = directory / f"{index:02d}.jpg"
             path.write_bytes(marker + str(index).encode())
             artifacts.append({"path": path.name, "role": "image", "sha256": WORK_CLI.file_sha256(path)})
@@ -101,7 +101,7 @@ class WorkCliTest(unittest.TestCase):
         work_id, work = self.new_work("中文标题")
         self.assertTrue((work / "variants" / "main" / "SCRIPT.md").is_file())
         self.assertTrue((work / "variants" / "main" / "RESEARCH.md").is_file())
-        self.assertEqual("9:16", json.loads((work / "variants" / "main" / "variant.yaml").read_text())["ratio"])
+        self.assertEqual("16:9", json.loads((work / "variants" / "main" / "variant.yaml").read_text())["ratio"])
         package = (work / "variants" / "main" / "PACKAGE.md").read_text(encoding="utf-8")
         self.assertIn("## 标题", package)
         self.assertIn("## 封面文字", package)
@@ -155,6 +155,24 @@ class WorkCliTest(unittest.TestCase):
         )
         self.assertIn("does not accept video", result)
         self.assertFalse((self.root / "works").exists())
+
+    def test_detached_work_keeps_foreground_and_explicit_binding_is_isolated(self) -> None:
+        foreground_id, _ = self.new_work("Foreground")
+        self.invoke("variant", "add", "wide", "--from", "main")
+
+        background_id = self.invoke(
+            "new", "Background", "--workflow", "podcast_quote_image", "--detached"
+        )
+        runtime = self.root / ".studio" / ".runtime"
+        self.assertEqual(foreground_id, (runtime / "current-work").read_text().strip())
+        self.assertEqual("wide", (runtime / "current-variant").read_text().strip())
+
+        status = json.loads(self.invoke("--work", background_id, "status"))
+        self.assertEqual("main", status["variant"]["id"])
+        self.invoke("--work", background_id, "--variant", "main", "wait", "article_selection")
+        row = next(item for item in json.loads(self.invoke("list")) if item["id"] == background_id)
+        self.assertEqual("waiting_user", row["status"])
+        self.assertEqual("article_selection", row["wait_for"])
 
     def test_legacy_archive_directory_is_ignored(self) -> None:
         (self.root / "works" / "archive" / "tasks" / "001-legacy").mkdir(parents=True)
@@ -241,7 +259,15 @@ class WorkCliTest(unittest.TestCase):
         self.assertTrue(archived_final.is_file())
         self.assertIn("/archive/", archived_final.as_posix())
         self.assertEqual(first_manifest, (archived_final.parent / "manifest.json").read_bytes())
+        archived_variant = archived_final.parent.parent
+        (archived_variant / ".runtime" / "finalize.json").write_text(
+            json.dumps({"state": "archive_pending"}), encoding="utf-8"
+        )
+        (self.root / ".studio" / ".runtime" / "current-work").write_text(work_id, encoding="utf-8")
+        (self.root / ".studio" / ".runtime" / "current-variant").write_text("main", encoding="utf-8")
         self.assertEqual(str(archived_final), self.invoke("--work", work_id, "finalize", str(final_one), "--qa-passed"))
+        self.assertEqual("complete", json.loads((archived_variant / ".runtime" / "finalize.json").read_text())["state"])
+        self.assertFalse((self.root / ".studio" / ".runtime" / "current-work").exists())
 
         self.invoke("reopen", work_id)
         final_two = self.root / "final-two.mp4"

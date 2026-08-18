@@ -4,10 +4,11 @@
 
 - `source.md` 保存主要原始基线，任何改写不得覆盖它。
 - `SCRIPT.md` 只包含当前 Variant 的口播正文。使用 `<!-- P001 -->` 形式的稳定 Anchor；批准后新增 Anchor，不重排全部编号。Frontmatter 的 `mode` 只使用 `dbs` 或 `verbatim`。
-- `PACKAGE.md` 在 Research 完成、Animation Plan 创建时同步生成，只保存一个最终标题、一条封面文字和一句话简介，不进入口播正文。
+- `hyperframes_video` 的 `PACKAGE.md` 在 Research 完成、Animation Plan 创建时同步生成，只保存一个最终标题、一条封面文字和一句话简介，不进入口播正文。
 - 标题必须调用 `dbs-xhs-title` 生成候选并选择 Top 1；封面文字与一句话简介基于最终 Script 和 Research，不编造正文没有支撑的承诺。
 - `dbs` 允许多轮正文修改；DBS 只有在实际修改口播时才把 Script 状态设为 `pending` 并等待用户批准。
 - `verbatim` 必须保留转录文字、Anchor 和由 `characters[]` 聚合出的原时间戳，`approval` 为 `not_required`；DBS 不改正文，只可诊断或处理包装文案。
+- `podcast_quote_image` 的 `PACKAGE.md` 使用“大标题 + 开篇 + 每图小标题与第三人称正文 + 来源 + 话题标签”结构。DBS 不得改写批准方案中的原文金句或忠实翻译：`dbs-resonate` 检查单一核心，`dbs-spread` 只参与候选理由与排序，`dbs-xhs-title` 处理最终标题，`dbs-content` 只检查包装正文的表达效率与认知落差，`dbs-ai-check` 是成稿必做质检。
 
 ## Research
 

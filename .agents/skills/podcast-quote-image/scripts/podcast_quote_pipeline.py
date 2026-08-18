@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import tempfile
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -92,6 +92,90 @@ def validate_segment_times(start: Any, end: Any, label: str) -> tuple[float, flo
     return round(first, 3), round(last, 3)
 
 
+def extract_youtube_video_id(value: str) -> str:
+    candidate = value.strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", candidate):
+        return candidate
+    parsed = urlparse(candidate)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or not host or parsed.username or parsed.password:
+        raise PipelineError("YouTube source must be a video URL or 11-character video id")
+    if host == "youtu.be":
+        video_id = parsed.path.strip("/").split("/", 1)[0]
+    elif host == "youtube.com" or host.endswith(".youtube.com"):
+        parts = [item for item in parsed.path.split("/") if item]
+        if parsed.path.rstrip("/") == "/watch":
+            video_id = (parse_qs(parsed.query).get("v") or [""])[0]
+        elif len(parts) >= 2 and parts[0] in {"shorts", "embed", "live"}:
+            video_id = parts[1]
+        else:
+            video_id = ""
+    elif host == "youtube-nocookie.com" or host.endswith(".youtube-nocookie.com"):
+        parts = [item for item in parsed.path.split("/") if item]
+        video_id = parts[1] if len(parts) >= 2 and parts[0] == "embed" else ""
+    else:
+        video_id = ""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+        raise PipelineError("Cannot extract an 11-character YouTube video id")
+    return video_id
+
+
+def fetch_youtube_transcript(video_id: str, languages: list[str]) -> Any:
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+    except ImportError as exc:
+        raise PipelineError(
+            "youtube-transcript-api is unavailable; install it with 'uv pip install youtube-transcript-api'"
+        ) from exc
+    try:
+        transcripts = list(YouTubeTranscriptApi().list(video_id))
+    except Exception as exc:
+        raise PipelineError(f"YouTube transcript lookup failed: {exc}") from exc
+    if not transcripts:
+        raise PipelineError("YouTube returned no transcripts for this video")
+    selected = next(
+        (item for language in languages for item in transcripts if item.language_code == language),
+        next((item for item in transcripts if not item.is_generated), transcripts[0]),
+    )
+    try:
+        return selected.fetch()
+    except Exception as exc:
+        raise PipelineError(f"YouTube transcript fetch failed: {exc}") from exc
+
+
+def command_youtube_transcript(args: argparse.Namespace) -> None:
+    video_id = extract_youtube_video_id(args.url)
+    languages = [code.strip() for value in args.language for code in value.split(",") if code.strip()]
+    transcript = fetch_youtube_transcript(video_id, languages)
+    segments = []
+    for index, snippet in enumerate(transcript, 1):
+        start, end = validate_segment_times(
+            snippet.start,
+            snippet.start + snippet.duration,
+            f"YouTube transcript segment {index}",
+        )
+        text = clean_text(snippet.text)
+        if text:
+            segments.append({"start": start, "end": end, "text": text})
+    if not segments:
+        raise PipelineError("YouTube transcript contains no usable text")
+    language_code = clean_text(getattr(transcript, "language_code", ""))
+    write_json(
+        Path(args.out).expanduser().resolve(),
+        {
+            "schema_version": SCHEMA_VERSION,
+            "provider": "youtube-transcript-api",
+            "source_url": args.url,
+            "video_id": video_id,
+            "language": language_code,
+            "is_generated": bool(getattr(transcript, "is_generated", False)),
+            "used_language_fallback": bool(languages and language_code not in languages),
+            "segments": segments,
+        },
+    )
+    print(Path(args.out).expanduser().resolve())
+
+
 def parse_json_segments(path: Path) -> tuple[list[dict[str, Any]], str]:
     value = read_json(path)
     raw_segments = value.get("segments")
@@ -101,14 +185,18 @@ def parse_json_segments(path: Path) -> tuple[list[dict[str, Any]], str]:
     for index, item in enumerate(raw_segments, 1):
         if not isinstance(item, dict):
             raise PipelineError(f"Transcript segment {index} must be an object")
-        start, end = validate_segment_times(item.get("start"), item.get("end"), f"Transcript segment {index}")
+        start_value = item.get("start")
+        end_value = item.get("end")
+        if end_value is None and finite_number(start_value) and finite_number(item.get("duration")):
+            end_value = float(start_value) + float(item["duration"])
+        start, end = validate_segment_times(start_value, end_value, f"Transcript segment {index}")
         text = clean_text(item.get("text"))
         if not text:
             continue
         segments.append({"start": start, "end": end, "text": text})
     if not segments:
         raise PipelineError(f"Transcript contains no usable text: {path}")
-    return segments, clean_text(value.get("language"))
+    return segments, clean_text(value.get("language") or value.get("language_code"))
 
 
 def parse_timestamp(value: str) -> float:
@@ -414,7 +502,7 @@ def transcript_index(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, An
     if transcript.get("schema_version") != SCHEMA_VERSION or transcript.get("workflow") != WORKFLOW:
         raise PipelineError("Transcript contract mismatch")
     if transcript.get("status") != "ready":
-        raise PipelineError("Transcript is not ready; resolve conflicts before quote selection")
+        raise PipelineError("Transcript is not ready; resolve conflicts before article planning")
     raw_segments = transcript.get("segments")
     if not isinstance(raw_segments, list) or not raw_segments:
         raise PipelineError("Transcript requires non-empty segments")
@@ -433,89 +521,90 @@ def transcript_index(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, An
     return transcript, index
 
 
-def candidate_time(candidate: dict[str, Any], segments: dict[str, dict[str, Any]]) -> tuple[float, float]:
-    ids = [segment_id for unit in candidate["units"] for segment_id in unit["source_segment_ids"]]
-    return min(float(segments[item]["start"]) for item in ids), max(float(segments[item]["end"]) for item in ids)
-
-
 def validate_candidates(transcript_path: Path, candidates_path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     _, segments = transcript_index(transcript_path)
     value = read_json(candidates_path)
     if value.get("schema_version") != SCHEMA_VERSION or value.get("workflow") != WORKFLOW:
-        raise PipelineError("Quote candidate contract mismatch")
+        raise PipelineError("Article candidate contract mismatch")
     if value.get("transcript_sha256") != sha256(transcript_path):
-        raise PipelineError("Quote candidates target a different transcript")
+        raise PipelineError("Article candidates target a different transcript")
     candidates = value.get("candidates")
-    if not isinstance(candidates, list) or len(candidates) != 6:
-        raise PipelineError("Quote selection must provide exactly 6 candidates")
+    if not isinstance(candidates, list) or len(candidates) != 3:
+        raise PipelineError("Article planning must provide exactly 3 candidates")
     ids: set[str] = set()
     ranks: set[int] = set()
     for candidate in candidates:
         if not isinstance(candidate, dict):
-            raise PipelineError("Each quote candidate must be an object")
+            raise PipelineError("Each article candidate must be an object")
         candidate_id = candidate.get("id")
         rank = candidate.get("rank")
         if not isinstance(candidate_id, str) or not ID_RE.fullmatch(candidate_id) or candidate_id in ids:
             raise PipelineError(f"Invalid or duplicate candidate id: {candidate_id!r}")
-        if not isinstance(rank, int) or rank not in range(1, 7) or rank in ranks:
+        if not isinstance(rank, int) or rank not in range(1, 4) or rank in ranks:
             raise PipelineError(f"Invalid or duplicate candidate rank: {rank!r}")
-        if not clean_text(candidate.get("rationale")):
-            raise PipelineError(f"Candidate {candidate_id} requires a rationale")
-        units = candidate.get("units")
-        if not isinstance(units, list) or len(units) != 5:
-            raise PipelineError(f"Candidate {candidate_id} must contain exactly 5 text units")
+        for field in ("core_viewpoint", "audience_tension", "rationale"):
+            if not clean_text(candidate.get(field)):
+                raise PipelineError(f"Candidate {candidate_id} requires {field}")
+        images = candidate.get("images")
+        if not isinstance(images, list) or len(images) not in range(4, 9):
+            raise PipelineError(f"Candidate {candidate_id} must contain 4 to 8 image groups")
         used_segments: set[str] = set()
-        previous_start = -1.0
-        for unit_index, unit in enumerate(units, 1):
-            expected_unit_id = f"u{unit_index:02d}"
-            if not isinstance(unit, dict) or unit.get("id") != expected_unit_id:
-                raise PipelineError(f"Candidate {candidate_id} unit {unit_index} must be {expected_unit_id}")
-            if not clean_text(unit.get("original")) or not clean_text(unit.get("translation_zh")):
-                raise PipelineError(f"Candidate {candidate_id}/{expected_unit_id} requires original and translation_zh")
-            source_ids = unit.get("source_segment_ids")
-            if (
-                not isinstance(source_ids, list)
-                or not source_ids
-                or not all(isinstance(item, str) and item in segments for item in source_ids)
-            ):
-                raise PipelineError(f"Candidate {candidate_id}/{expected_unit_id} has invalid source segment ids")
-            if used_segments.intersection(source_ids):
-                raise PipelineError(f"Candidate {candidate_id} reuses a source segment across units")
-            used_segments.update(source_ids)
-            unit_start = min(float(segments[item]["start"]) for item in source_ids)
-            if unit_start < previous_start:
-                raise PipelineError(f"Candidate {candidate_id} units must follow source order")
-            previous_start = unit_start
+        previous_image_start = -1.0
+        for image_index, image in enumerate(images, 1):
+            image_id = f"g{image_index:02d}"
+            if not isinstance(image, dict) or image.get("id") != image_id:
+                raise PipelineError(f"Candidate {candidate_id} image {image_index} must be {image_id}")
+            if not clean_text(image.get("structural_role")) or not clean_text(image.get("focus")):
+                raise PipelineError(f"Candidate {candidate_id}/{image_id} requires structural_role and focus")
+            units = image.get("units")
+            if not isinstance(units, list) or len(units) not in {4, 5}:
+                raise PipelineError(f"Candidate {candidate_id}/{image_id} requires 1 Hero and 3 or 4 supports")
+            previous_unit_start = -1.0
+            image_start = None
+            for unit_index, unit in enumerate(units, 1):
+                unit_id = f"u{unit_index:02d}"
+                if not isinstance(unit, dict) or unit.get("id") != unit_id:
+                    raise PipelineError(f"Candidate {candidate_id}/{image_id} unit {unit_index} must be {unit_id}")
+                if not clean_text(unit.get("original")) or not clean_text(unit.get("translation_zh")):
+                    raise PipelineError(f"Candidate {candidate_id}/{image_id}/{unit_id} requires bilingual text")
+                source_ids = unit.get("source_segment_ids")
+                if (
+                    not isinstance(source_ids, list)
+                    or not source_ids
+                    or not all(isinstance(item, str) and item in segments for item in source_ids)
+                ):
+                    raise PipelineError(f"Candidate {candidate_id}/{image_id}/{unit_id} has invalid source ids")
+                if used_segments.intersection(source_ids):
+                    raise PipelineError(f"Candidate {candidate_id} reuses a source segment")
+                used_segments.update(source_ids)
+                unit_start = min(float(segments[item]["start"]) for item in source_ids)
+                if unit_start < previous_unit_start:
+                    raise PipelineError(f"Candidate {candidate_id}/{image_id} units must follow source order")
+                previous_unit_start = unit_start
+                image_start = unit_start if image_start is None else min(image_start, unit_start)
+            if image_start is None or image_start < previous_image_start:
+                raise PipelineError(f"Candidate {candidate_id} images must follow source order")
+            previous_image_start = image_start
         ids.add(candidate_id)
         ranks.add(rank)
-    if ranks != set(range(1, 7)):
-        raise PipelineError("Candidate ranks must be exactly 1 through 6")
+    if ranks != {1, 2, 3}:
+        raise PipelineError("Candidate ranks must be exactly 1 through 3")
     return value, candidates
 
 
 def command_validate_candidates(args: argparse.Namespace) -> None:
     validate_candidates(Path(args.transcript).resolve(), Path(args.candidates).resolve())
-    print("ok: quote candidates")
+    print("ok: article candidates")
 
 
 def command_approve(args: argparse.Namespace) -> None:
     transcript_path = Path(args.transcript).expanduser().resolve()
     candidates_path = Path(args.candidates).expanduser().resolve()
     _, candidates = validate_candidates(transcript_path, candidates_path)
-    selected_ids = args.select
-    if len(selected_ids) not in {3, 4} or len(set(selected_ids)) != len(selected_ids):
-        raise PipelineError("Select 3 or 4 unique quote candidates")
     by_id = {item["id"]: item for item in candidates}
-    if any(item not in by_id for item in selected_ids):
-        raise PipelineError("Selected quote id does not exist")
-    _, segments = transcript_index(transcript_path)
-    selected = [by_id[item] for item in selected_ids]
-    strongest = min(selected, key=lambda item: item["rank"])
-    remaining = sorted(
-        (item for item in selected if item["id"] != strongest["id"]),
-        key=lambda item: candidate_time(item, segments)[0],
-    )
-    ordered = [strongest, *remaining]
+    if args.select not in by_id:
+        raise PipelineError("Selected article candidate does not exist")
+    selected = by_id[args.select]
     payload = {
         "schema_version": SCHEMA_VERSION,
         "workflow": WORKFLOW,
@@ -523,8 +612,11 @@ def command_approve(args: argparse.Namespace) -> None:
         "approved_at": now(),
         "transcript_sha256": sha256(transcript_path),
         "candidates_sha256": sha256(candidates_path),
-        "selected_ids": [item["id"] for item in ordered],
-        "groups": ordered,
+        "selected_id": selected["id"],
+        "core_viewpoint": selected["core_viewpoint"],
+        "audience_tension": selected["audience_tension"],
+        "rationale": selected["rationale"],
+        "groups": selected["images"],
     }
     output = Path(args.out).expanduser().resolve()
     write_json(output, payload)
@@ -535,12 +627,17 @@ def validate_selection(transcript_path: Path, selection_path: Path) -> tuple[dic
     _, segments = transcript_index(transcript_path)
     selection = read_json(selection_path)
     if selection.get("schema_version") != SCHEMA_VERSION or selection.get("workflow") != WORKFLOW:
-        raise PipelineError("Quote selection contract mismatch")
+        raise PipelineError("Article selection contract mismatch")
     if selection.get("status") != "approved" or selection.get("transcript_sha256") != sha256(transcript_path):
-        raise PipelineError("Quote selection is not approved for the current transcript")
+        raise PipelineError("Article selection is not approved for the current transcript")
     groups = selection.get("groups")
-    if not isinstance(groups, list) or len(groups) not in {3, 4}:
-        raise PipelineError("Approved selection requires 3 or 4 groups")
+    if not isinstance(groups, list) or len(groups) not in range(4, 9):
+        raise PipelineError("Approved article requires 4 to 8 image groups")
+    for index, group in enumerate(groups, 1):
+        if not isinstance(group, dict) or group.get("id") != f"g{index:02d}":
+            raise PipelineError("Approved image groups must be ordered g01 through g08")
+        if not isinstance(group.get("units"), list) or len(group["units"]) not in {4, 5}:
+            raise PipelineError(f"{group.get('id')} requires 1 Hero and 3 or 4 supports")
     return selection, segments
 
 
@@ -563,7 +660,8 @@ def command_align(args: argparse.Namespace) -> None:
         groups.append(
             {
                 "id": group["id"],
-                "rank": group["rank"],
+                "structural_role": group["structural_role"],
+                "focus": group["focus"],
                 "start": units[0]["start"],
                 "end": units[-1]["end"],
                 "units": units,
@@ -633,10 +731,10 @@ def command_extract(args: argparse.Namespace) -> None:
     aligned_path = Path(args.aligned).expanduser().resolve()
     aligned = read_json(aligned_path)
     if aligned.get("schema_version") != SCHEMA_VERSION or aligned.get("workflow") != WORKFLOW:
-        raise PipelineError("Aligned quote contract mismatch")
+        raise PipelineError("Aligned article contract mismatch")
     groups = aligned.get("groups")
-    if not isinstance(groups, list) or len(groups) not in {3, 4}:
-        raise PipelineError("Aligned quotes require 3 or 4 groups")
+    if not isinstance(groups, list) or len(groups) not in range(4, 9):
+        raise PipelineError("Aligned article requires 4 to 8 image groups")
     out_dir = Path(args.out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     candidate_groups = []
@@ -926,17 +1024,28 @@ def package_field(text: str, label: str) -> str:
     return clean_text(match.group(1)) if match else ""
 
 
-def validate_package(path: Path) -> None:
+def validate_package(path: Path, group_ids: list[str]) -> None:
     if not path.is_file() or path.stat().st_size == 0:
         raise PipelineError("PACKAGE.md is missing or empty")
     text = path.read_text(encoding="utf-8")
-    missing_sections = [heading for heading in ("标题", "正文", "话题标签") if not markdown_section(text, heading)]
+    missing_sections = [
+        heading for heading in ("大标题", "开篇", "图片文案", "话题标签") if not markdown_section(text, heading)
+    ]
+    title = clean_text(markdown_section(text, "大标题"))
+    image_copy = markdown_section(text, "图片文案")
+    image_sections = re.findall(
+        r"^### (g\d{2})[｜|]\s*(.+?)\s*$\n(.*?)(?=^### |\Z)",
+        image_copy,
+        flags=re.MULTILINE | re.DOTALL,
+    )
     channel = package_field(text, "频道")
     source_url = package_field(text, "来源 URL")
-    if missing_sections or not channel or not source_url:
+    if missing_sections or not channel or not source_url or [item[0] for item in image_sections] != group_ids:
         raise PipelineError(
-            f"PACKAGE.md requires title, body, tags, channel, and source URL; missing sections={missing_sections}"
+            "PACKAGE.md requires a title, opening, ordered copy for every image group, tags, channel, and source URL"
         )
+    if len(title) > 20 or any(not clean_text(item[1]) or not clean_text(item[2]) for item in image_sections):
+        raise PipelineError("PACKAGE.md title must be <=20 characters and every image needs a subtitle and body")
     parsed = urlparse(source_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise PipelineError("PACKAGE.md 来源 URL must be an http(s) URL")
@@ -965,14 +1074,14 @@ def command_render(args: argparse.Namespace) -> None:
     if frames.get("schema_version") != SCHEMA_VERSION or frames.get("workflow") != WORKFLOW:
         raise PipelineError("Frame selection contract mismatch")
     if frames.get("aligned_sha256") != sha256(aligned_path):
-        raise PipelineError("Frame selection targets different aligned quotes")
-    validate_package(package_path)
+        raise PipelineError("Frame selection targets a different aligned article")
     groups = aligned.get("groups")
-    if not isinstance(groups, list) or len(groups) not in {3, 4}:
-        raise PipelineError("Render requires 3 or 4 aligned groups")
+    if not isinstance(groups, list) or len(groups) not in range(4, 9):
+        raise PipelineError("Render requires 4 to 8 aligned image groups")
+    validate_package(package_path, [group["id"] for group in groups])
     frame_groups = {group["id"]: group for group in frames.get("groups") or []}
     if set(frame_groups) != {group["id"] for group in groups}:
-        raise PipelineError("Frame selection targets different quote groups")
+        raise PipelineError("Frame selection targets different image groups")
     frames_root = Path(frames.get("frames_root", "")).expanduser().resolve()
     font = resolve_font(args.font)
     out_dir = Path(args.out_dir).expanduser().resolve()
@@ -988,7 +1097,8 @@ def command_render(args: argparse.Namespace) -> None:
         out_width, out_height = 1440, 1920
         hero_height = round(out_height * 0.42)
         remaining = out_height - hero_height
-        strip_heights = [remaining // 4] * 4
+        strip_count = len(group["units"]) - 1
+        strip_heights = [remaining // strip_count] * strip_count
         strip_heights[-1] += remaining - sum(strip_heights)
         canvas = Image.new("RGB", (out_width, out_height), "black")
         y = 0
@@ -1060,8 +1170,8 @@ def verify_render(directory: Path) -> dict[str, Any]:
         roles[item["role"]] = roles.get(item["role"], 0) + 1
         if item["role"] == "image":
             images.append(path)
-    if len(images) not in {3, 4} or roles.get("contact_sheet") != 1 or roles.get("package") != 1:
-        raise PipelineError("Render requires 3 or 4 images, one contact sheet, and one package")
+    if len(images) not in range(4, 9) or roles.get("contact_sheet") != 1 or roles.get("package") != 1:
+        raise PipelineError("Render requires 4 to 8 images, one contact sheet, and one package")
     for path in images:
         with Image.open(path) as image:
             if image.size != (1440, 1920) or image.format != "JPEG":
@@ -1095,6 +1205,14 @@ def build_parser() -> argparse.ArgumentParser:
     acquire.add_argument("--timeout", type=int, default=1200)
     acquire.set_defaults(handler=command_acquire)
 
+    youtube_transcript = commands.add_parser(
+        "youtube-transcript", help="Fetch one structured native YouTube transcript"
+    )
+    youtube_transcript.add_argument("--url", required=True)
+    youtube_transcript.add_argument("--language", action="append", default=[])
+    youtube_transcript.add_argument("--out", required=True)
+    youtube_transcript.set_defaults(handler=command_youtube_transcript)
+
     resolve = commands.add_parser("resolve", help="Resolve transcript and structured subtitles")
     resolve.add_argument("--video")
     resolve.add_argument("--transcript")
@@ -1106,15 +1224,15 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--out", required=True)
     resolve.set_defaults(handler=command_resolve)
 
-    validate = commands.add_parser("validate-candidates", help="Validate six Agent-authored quote candidates")
+    validate = commands.add_parser("validate-candidates", help="Validate three Agent-authored article candidates")
     validate.add_argument("--transcript", required=True)
     validate.add_argument("--candidates", required=True)
     validate.set_defaults(handler=command_validate_candidates)
 
-    approve = commands.add_parser("approve", help="Record the user-approved 3 or 4 quote groups")
+    approve = commands.add_parser("approve", help="Record one user-approved article plan")
     approve.add_argument("--transcript", required=True)
     approve.add_argument("--candidates", required=True)
-    approve.add_argument("--select", action="append", required=True)
+    approve.add_argument("--select", required=True)
     approve.add_argument("--out", required=True)
     approve.set_defaults(handler=command_approve)
 

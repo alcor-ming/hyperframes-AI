@@ -14,6 +14,8 @@ __pycache__/
 !/.agents/skills/hyperframes-codex-workflow/**
 !/.agents/skills/podcast-quote-image/
 !/.agents/skills/podcast-quote-image/**
+!/.agents/skills/xiaohongshu-article-copy/
+!/.agents/skills/xiaohongshu-article-copy/**
 !/.agents/skills/native-subtitle-quote-image/
 !/.agents/skills/native-subtitle-quote-image/**
 

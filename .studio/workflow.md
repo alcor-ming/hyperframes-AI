@@ -2,7 +2,7 @@
 
 ## 最小启动
 
-运行 `./work current`，读取 `WORK.md` 的 `workflow` 后再路由。`hyperframes_video` 只加载当前 Work、Variant、Script、一个 Recipe 和一套 Profile；`podcast_quote_image` 只加载当前 Work、Variant、PACKAGE 与对应 Skill。已有合格输入时跳过上游步骤。
+前台交互运行 `./work current`；后台任务使用已分配的 Work ID 与 Variant ID 显式启动。读取 `WORK.md` 的 `workflow` 后再路由。`hyperframes_video` 只加载当前 Work、Variant、Script、一个 Recipe 和一套 Profile；`podcast_quote_image` 在文章方案批准前加载规划 Skill，批准后加载文案 Skill，且只读取当前阶段的机器产物。已有合格输入时跳过上游步骤。
 
 ## HyperFrames 视频
 
@@ -56,17 +56,21 @@ Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS �
 
 ```text
 来源 URL -> trendradar-media -> 校验并复制到 materials/
-本地或已下载视频 + 可选转录/字幕 -> resolve transcript
--> Agent 筛选并翻译 6 组候选 -> 用户批准 3 至 4 组
--> align time -> 每条抽取 3 张候选帧 -> Agent 选帧
--> PACKAGE.md -> 固定版式 render -> Agent 视觉 QA -> Finalize -> 自动归档
+本地或已下载视频 + 可选原生转录/字幕 -> resolve transcript
+-> 规划 Skill 通读原文并生成 3 个完整文章方案
+-> DBS 检查核心机制、受众情绪与传播理由 -> 用户批准 1 个方案
+-> 文案 Skill 完成标题、开篇、每图小标题与第三人称正文并通过 DBS 检查
+-> align time -> 每条 Hero/支撑句抽取 3 张候选帧 -> Agent 选帧
+-> 固定版式 render 4 至 8 张图 -> Agent 视觉 QA -> Finalize -> 自动归档
 ```
 
 字幕在覆盖区间内拥有文案和时间权威，转录只补无字幕区间；同语种明显冲突必须先人工处理。转录条件缺失或失败时进入 `waiting_user`，由用户决定是否改用保留原画面字幕的 fallback，不得静默降级。
 
-每组固定 5 条双语文字：主画面金句加 4 条连贯字幕。用户批准是唯一内容门；批准后只做确定性对齐、取帧、渲染和视觉 QA。首张使用批准候选中排名最强的一组，其余按来源时间排序。图片只保留金句，人物、节目、期数和来源放入 `PACKAGE.md`。
+每个文章方案包含 4 至 8 个按原文结构排列的图片组，每组固定 1 条 Hero 与 3 至 4 条支撑句。图片边界跟随原文的铺垫、观点、论证、例子、对比与收束，不把句数直接当成画面数。用户批准 1 个文章方案是唯一内容门；批准后不得重新解释原文或另提方向。图片只保留双语金句；`PACKAGE.md` 使用“大标题 + 开篇 + 每图小标题与第三人称正文 + 来源 + 话题标签”的结构。
 
-URL 获取只调用外部 `trendradar-media` v2.0。适配器只接受成功 envelope 与单条成功 manifest，复核大小和 SHA-256 后原子复制到 `materials/source-video.*`，并保存不含外部临时路径的 `materials/acquisition.json`。下载后仍由本工作流解析已有字幕/转录，或在用户明确同意时调用共享 ASR；下载器本身不提供转录。
+候选阶段用 `dbs-resonate` 检查每个方案是否只服务一个核心机制；`dbs-spread` 只提供受众情绪、有效立场和第一传播者信号，用于候选理由与排序，不改写原文。文案阶段用 `dbs-xhs-title` 选择不超过 20 字且不超出原文证据的 Top 1 标题；`dbs-content` 只检查表达效率与认知落差，`dbs-ai-check` 是成稿必做质检。`dbs-hook` 与 `dbs-script-flow` 不进入本工作流。
+
+URL 获取只调用外部 `trendradar-media` v2.0。适配器只接受成功 envelope 与单条成功 manifest，复核大小和 SHA-256 后原子复制到 `materials/source-video.*`，并保存不含外部临时路径的 `materials/acquisition.json`。YouTube 可先采用带结构化时间戳的原生转录；不可用时才在用户明确同意后调用共享 ASR。下载器本身不提供转录。
 
 ## 状态
 

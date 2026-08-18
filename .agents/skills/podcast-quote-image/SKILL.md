@@ -1,15 +1,21 @@
 ---
 name: podcast-quote-image
-description: Turn one local or explicitly linked podcast/interview video into 3 or 4 bilingual Xiaohongshu quote images. Use when a Work has workflow podcast_quote_image, or when the user asks to acquire a source through trendradar-media, resolve a transcript, select and translate podcast quotes, choose nearby frames, render the fixed stacked layout, or package this image-and-copy format.
+description: Resolve one podcast or interview transcript, understand its argument and audience tension, and produce three evidence-backed Xiaohongshu article plans for human selection.
 ---
 
-# Podcast Quote Image
+# Podcast Quote Planner
 
-Build one `podcast_quote_image` Work from local media or one user-approved source URL. Download only through `trendradar-media`; do not publish or run ASR unless the user explicitly authorizes that local model step.
+Prepare the transcript and one approved article plan for a `podcast_quote_image` Work. Download only through `trendradar-media`; do not publish or run ASR unless the user explicitly authorizes that local model step.
+
+## Batch Background Mode
+
+For multiple URLs, create one detached Work per source and dispatch each as an independent background task. Do not put multiple sources in one Work. A background task must receive its Work and Variant IDs, start with `./work --work <work-id> --variant <variant-id> status`, and pass both overrides to every lifecycle command; `Current Work` is foreground navigation only.
+
+Different Works and workflows may run in parallel. Keep the shared ASR dispatcher single-instance, while verified downloads may overlap. One failed or waiting Work must not stop its siblings. Continue each podcast Work through acquisition, transcript resolution, and three article plans, then stop at `waiting_user/article_selection`. Do not add a daemon or shared Batch content directory to the Harness.
 
 ## Start
 
-1. Run `./work current`; if there is no Current Work, run `./work list` and do not guess.
+1. In foreground mode, run `./work current`; if there is no Current Work, run `./work list` and do not guess. In background mode, use the explicitly assigned Work and Variant IDs instead.
 2. Confirm `WORK.md` declares `"workflow":"podcast_quote_image"`. Otherwise create a new Work with `./work new "<title>" --workflow podcast_quote_image`.
 3. Put a supplied local video and any supplied transcript/subtitle in `materials/`; generated state belongs in `artifacts/`, `frames/`, `render/`, and `final/`.
 4. Require either one local video or one explicit source URL. Accept an optional structured transcript JSON and optional `.srt`, `.vtt`, or subtitle JSON.
@@ -37,11 +43,23 @@ If the command, profile, backend, manifest, or copied media is unavailable or in
 
 Use `.agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py resolve`; run its subcommand `--help` for exact flags. Structured subtitles own wording and timing; transcript segments only fill uncovered intervals. Clear same-language disagreement produces `status: needs_review` and must be resolved before selection.
 
-`trendradar-media` supplies verified media, not a transcript. Resolution order is: supplied structured transcript/subtitle, then explicitly authorized shared ASR against `materials/source-video.*`. If neither is usable, or ASR is unavailable or fails, run `./work wait transcript_fallback`, explain the failure, and ask whether to use the vendored `native-subtitle-quote-image` fallback. Never switch silently.
+For YouTube, reuse the native-transcript fast path adapted from NousResearch's [youtube-content Skill](https://github.com/NousResearch/hermes-agent/blob/main/skills/media/youtube-content/SKILL.md) before shared ASR. `trendradar-media` remains the only media downloader. Install the optional transcript dependency into the same environment with `uv pip install youtube-transcript-api`, then run:
 
-## Select And Translate Quotes
+```bash
+.agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py youtube-transcript \
+  --url <youtube-url> --language en,zh-Hans,zh-Hant \
+  --out <variant>/materials/youtube-transcript.json
+```
 
-Read the whole resolved `artifacts/transcript.json`. Author exactly 6 candidates in `artifacts/quote-candidates.json`:
+The adapter accepts standard, short, Shorts, embed, live, and raw video IDs; keeps structured segment timing; prefers requested languages; and records when it falls back to another available transcript. Validate non-empty text and actual language before `resolve`. Native transcript failure falls through to explicitly authorized shared ASR, not to a second media downloader.
+
+For transcripts over roughly 50K characters, inspect overlapping windows of about 40K characters with 2K overlap, but keep the full canonical transcript unchanged. Candidate units must still cite original segment IDs; never select quotes from a summary.
+
+`trendradar-media` supplies verified media, not a transcript. Resolution order is: supplied structured transcript/subtitle, native YouTube transcript when applicable, then explicitly authorized shared ASR against `materials/source-video.*`. If none is usable, or ASR is unavailable or fails, run `./work wait transcript_fallback`, explain the failure, and ask whether to use the vendored `native-subtitle-quote-image` fallback. Never switch silently.
+
+## Produce Article Plans
+
+Read the whole resolved `artifacts/transcript.json`. Author exactly 3 complete article candidates in `artifacts/article-candidates.json`:
 
 ```json
 {
@@ -49,39 +67,37 @@ Read the whole resolved `artifacts/transcript.json`. Author exactly 6 candidates
   "workflow": "podcast_quote_image",
   "transcript_sha256": "<sha256>",
   "candidates": [{
-    "id": "q01",
+    "id": "a01",
     "rank": 1,
+    "core_viewpoint": "<whose central viewpoint and what it is>",
+    "audience_tension": "<the audience predicament or emotion>",
     "rationale": "<why it matters to Chinese readers>",
-    "units": [{
-      "id": "u01",
-      "original": "<faithful source wording>",
-      "translation_zh": "<natural faithful Chinese>",
-      "source_segment_ids": ["s000001"]
+    "images": [{
+      "id": "g01",
+      "structural_role": "<setup|viewpoint|reasoning|example|contrast|payoff>",
+      "focus": "<what this image contributes to the article>",
+      "units": [{
+        "id": "u01",
+        "original": "<faithful source wording>",
+        "translation_zh": "<natural faithful Chinese>",
+        "source_segment_ids": ["s000001"]
+      }]
     }]
   }]
 }
 ```
 
-Each candidate is one coherent passage with exactly 5 chronological units: one hero quote and four supporting strips. Prefer growth, women's growth, reading, technology, and podcast insight that stands alone without invented context. Preserve the source meaning, names, numbers, uncertainty, and tone. Chinese is primary and the source language remains secondary; do not embellish, merge unrelated claims, or translate the entire transcript.
+Each candidate is one complete Xiaohongshu article direction containing 4 to 8 ordered image groups. Every image group contains exactly one Hero unit followed by 3 or 4 supporting units. Image boundaries follow the source passage's setup, viewpoint, reasoning, example, contrast, and payoff; they are not a sentence counter. Every unit must cite the source segments that justify both its wording and frame timing. Do not pad, merge unrelated claims, or split a sentence mechanically.
 
-Validate the file, then show all 6 ranked candidates with their bilingual units and rationale. Stop for explicit user approval of exactly 3 or 4 candidate IDs. Record that decision with `approve`; it orders the strongest approved candidate first and the rest by source chronology.
+Use `dbs-resonate` to ensure every image in a candidate serves one article-level core mechanism. Use only the audience emotion, effective stance, and first-spreader signals from `dbs-spread` to write each rationale and rank the three plans. DBS must not rewrite the original quote or its faithful translation.
 
-## Align And Choose Frames
-
-Run `align`, then `extract`. The script maps source segment IDs to time and extracts three nearby candidates at 25%, 50%, and 75% of every unit span.
-
-Inspect each generated contact sheet or candidate frame. Choose one per unit for clear expression, recognizable speaker, good composition, and room for text. Reject closed eyes, motion blur, awkward gestures, overlays covering a key subject, or frames that contradict the quote. Record choices with `choose-frames`; do not calculate timestamps or edit image paths by hand.
-
-## Package, Render, Verify
-
-Complete `PACKAGE.md` with one Xiaohongshu title, body, podcast/channel, source URL, and tags. Reuse `materials/acquisition.json` for an acquired source URL; verify the channel separately. Add guest and episode only when verified. If source URL or channel is missing, run `./work wait source_metadata` and ask the user before Final.
-
-Run `render`. The fixed `podcast_stack_v1` output is 1440x1920: a 42% hero panel plus four equal strips, with Chinese primary and original text secondary on every panel. The lower scrim may cover hard subtitles; if it hides a key subject, stop for a human fallback decision.
-
-Run `verify` without `--visual-passed`, inspect every final image and the final contact sheet, then rerun with `--visual-passed` only after checking text fidelity, bilingual pairing, crop, readability, and no truncation. Finalize the verified directory with:
+Validate the file, then show the three article directions, their 4 to 8 image outlines, core viewpoint, audience tension, and rationale. Stop for explicit approval of exactly one article ID with `./work wait article_selection`. Record the decision with:
 
 ```bash
-./work finalize <variant>/render --qa-passed
+.agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py approve \
+  --transcript <variant>/artifacts/transcript.json \
+  --candidates <variant>/artifacts/article-candidates.json \
+  --select a01 --out <variant>/artifacts/article-selection.json
 ```
 
-Do not add a second Draft approval gate after quote approval. Do not put speaker, episode, or source attribution on the images; those belong in `PACKAGE.md`.
+The approved `article-selection.json` is the only handoff to `xiaohongshu-article-copy`. Do not generate final title, opening, per-image copy, frames, or renders in this Skill.
