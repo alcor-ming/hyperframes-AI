@@ -1029,7 +1029,7 @@ def validate_package(path: Path, group_ids: list[str]) -> None:
         for index, match in enumerate(image_headings)
     ]
     forbidden = {"Package", "大标题", "开篇", "图片文案", "播客信息", "话题标签"}
-    source_match = re.search(r"https?://[^\s)>]+", text)
+    original_video_match = re.search(r"^原视频：\s*\S.*$", text, flags=re.MULTILINE)
     if (
         not title
         or len(title) > 20
@@ -1037,15 +1037,14 @@ def validate_package(path: Path, group_ids: list[str]) -> None:
         or not opening
         or any(not subtitle or subtitle in forbidden for subtitle in subtitles)
         or any(not clean_text(body) for body in bodies)
-        or not source_match
+        or not original_video_match
+        or re.search(r"(?:https?://|www\.)", text, flags=re.IGNORECASE)
         or not re.search(r"(?:^|\s)#[^\s#]+", text, flags=re.MULTILINE)
     ):
         raise PipelineError(
-            "PACKAGE.md must be publish-ready Markdown with a <=20-character title, opening, image sections, source, and tags"
+            "PACKAGE.md must be publish-ready Markdown with a <=20-character title, opening, image sections, "
+            "an original-video title, no URL, and tags"
         )
-    parsed = urlparse(source_match.group(0))
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise PipelineError("PACKAGE.md source must be an http(s) URL")
 
 
 def final_contact_sheet(paths: list[Path], output: Path) -> None:
@@ -1260,7 +1259,7 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--frames", required=True)
     render.add_argument("--package", required=True)
     render.add_argument("--font")
-    render.add_argument("--hero-fraction", type=float, default=0.60)
+    render.add_argument("--hero-fraction", type=float, default=0.62)
     render.add_argument("--out-dir", required=True)
     render.set_defaults(handler=command_render)
 

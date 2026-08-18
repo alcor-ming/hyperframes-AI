@@ -42,6 +42,15 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         path.write_text(json.dumps(value, ensure_ascii=False) + "\n", encoding="utf-8")
         return path
 
+    def test_package_uses_original_video_title_without_url(self) -> None:
+        package = self.root / "PACKAGE.md"
+        text = "# 测试标题\n\n开篇。\n\n## 小标题\n\n正文。\n\n原视频：Original Title\n\n#测试\n"
+        package.write_text(text, encoding="utf-8")
+        PIPELINE.validate_package(package, ["g01"])
+        package.write_text(text.replace("\n\n#测试", "\n\nhttps://youtu.be/example\n\n#测试"), encoding="utf-8")
+        with self.assertRaises(PIPELINE.PipelineError):
+            PIPELINE.validate_package(package, ["g01"])
+
     def test_acquire_adopts_only_verified_trendradar_media(self) -> None:
         profile = self.write_json("media-profile.json", {"schema_version": "2.0"})
         materials = self.root / "variant" / "materials"
@@ -343,7 +352,7 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         package.write_text(
             "# 测试标题\n\n她的核心观点是测试。\n\n"
             f"{image_copy}\n\nTest Channel · Test Podcast\n\n"
-            "[原节目](https://example.com/watch)\n\n#测试\n",
+            "原视频：Test Video Original Title\n\n#测试\n",
             encoding="utf-8",
         )
         font = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
@@ -369,7 +378,7 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertEqual(6, manifest["image_count"])
         self.assertEqual("podcast_drawn_subtitle_stack_v1", manifest["style"])
         self.assertEqual("frame_bottom", manifest["crop_anchor"])
-        self.assertEqual(0.6, manifest["hero_fraction"])
+        self.assertEqual(0.62, manifest["hero_fraction"])
         self.assertIn("font", manifest)
         with Image.open(next(render.glob("[0-9][0-9]_*.jpg"))) as image:
             self.assertEqual((1440, 1920), image.size)

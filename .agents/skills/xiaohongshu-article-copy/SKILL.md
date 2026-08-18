@@ -60,7 +60,7 @@ Draft the opening and image sections first. After the title is settled, write `P
 
 <podcast · guest · episode attribution>
 
-[原节目](<source URL>)
+原视频：<original video title>
 
 <topic tags>
 ```
@@ -75,7 +75,7 @@ After the full article is stable, use `dbs-xhs-title` to generate formula-tracea
 
 Run `dbs-ai-check` on the completed title, opening, subtitles, and third-person copy, then fix only confirmed issues without touching the approved source quotes or translations. Do not use `dbs-hook` or `dbs-script-flow`.
 
-Reuse `materials/acquisition.json` for the source URL and the verified research for guest metadata; verify the channel separately. Add episode or issue only when verified. If channel or source URL is missing, run `./work wait source_metadata` and stop.
+Reuse `materials/acquisition.json` only to verify the source and use the verified research for guest metadata; verify the channel and original video title separately. Add episode or issue only when verified. End the publishable copy with `原视频：<original video title>` and do not include the source URL, because the target audience may not be able to open YouTube. If the channel or original video title is missing, run `./work wait source_metadata` and stop.
 
 ## Align And Choose Frames
 
@@ -85,13 +85,13 @@ Inspect each contact sheet. Choose one frame per unit with a clear expression, r
 
 ## Render And Verify
 
-Run `render`. Each 1440x1920 image uses a 60% Hero panel and 3 or 4 tightly stacked support strips in the remaining 40%, with no gaps. Every panel crops from the bottom edge of its selected video-frame image upward. The workflow then draws compact bilingual subtitles over the lower part of each panel; it does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
+Run `render`. Each 1440x1920 image uses a 62% Hero panel and 3 or 4 tightly stacked support strips in the remaining 38%, reducing the subtitle stack by 2% of the full image compared with the previous layout. Every panel crops from the bottom edge of its selected video-frame image upward. The workflow then draws compact bilingual subtitles over the lower part of each panel; it does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
 
 ```bash
 .agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py render \
   --aligned <variant>/artifacts/aligned-quotes.json \
   --frames <variant>/frames/frame-selection.json \
-  --package <variant>/PACKAGE.md --hero-fraction 0.60 \
+  --package <variant>/PACKAGE.md --hero-fraction 0.62 \
   --out-dir <variant>/render
 ```
 
