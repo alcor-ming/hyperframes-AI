@@ -850,21 +850,16 @@ def resolve_font(explicit: str | None) -> Path:
     for path in candidates:
         if path.is_file():
             try:
-                ImageFont.truetype(str(path), 32)
+                ImageFont.truetype(str(path), 24)
             except OSError:
                 continue
             return path
     raise PipelineError("No supported CJK font found; install Noto Sans CJK SC, Source Han Sans SC, or Microsoft YaHei")
 
 
-def line_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, stroke: int) -> int:
+def text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, stroke: int) -> int:
     left, _, right, _ = draw.textbbox((0, 0), text, font=font, stroke_width=stroke)
     return right - left
-
-
-def line_height(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, stroke: int) -> int:
-    _, top, _, bottom = draw.textbbox((0, 0), text, font=font, stroke_width=stroke)
-    return bottom - top
 
 
 def wrap_text(
@@ -875,20 +870,19 @@ def wrap_text(
     max_lines: int,
     stroke: int,
 ) -> list[str] | None:
-    text = clean_text(text)
     lines: list[str] = []
-    remaining = text
+    remaining = clean_text(text)
     while remaining:
-        if line_width(draw, remaining, font, stroke) <= max_width:
+        if text_width(draw, remaining, font, stroke) <= max_width:
             lines.append(remaining)
             break
         best = 0
         for index in range(1, len(remaining) + 1):
-            if line_width(draw, remaining[:index], font, stroke) <= max_width:
+            if text_width(draw, remaining[:index], font, stroke) <= max_width:
                 best = index
             else:
                 break
-        if best == 0:
+        if not best:
             return None
         space = remaining.rfind(" ", 0, best + 1)
         if space > 0 and best - space < max(6, best // 3):
@@ -897,7 +891,7 @@ def wrap_text(
         remaining = remaining[best:].lstrip()
         if len(lines) >= max_lines and remaining:
             return None
-    return lines if len(lines) <= max_lines else None
+    return lines
 
 
 def text_layout(
@@ -909,9 +903,9 @@ def text_layout(
     max_height: int,
     hero: bool,
 ) -> dict[str, Any]:
-    zh_max, zh_min = ((76, 48) if hero else (56, 36))
-    original_max, original_min = ((38, 24) if hero else (28, 20))
-    stroke = 4 if hero else 3
+    zh_max, zh_min = ((52, 36) if hero else (34, 24))
+    original_max, original_min = ((26, 18) if hero else (18, 14))
+    stroke = 3 if hero else 2
     for zh_size in range(zh_max, zh_min - 1, -2):
         original_size = max(original_min, min(original_max, round(zh_size * 0.5)))
         zh_font = ImageFont.truetype(str(font_path), zh_size)
@@ -920,14 +914,18 @@ def text_layout(
         original_lines = wrap_text(draw, original, original_font, max_width, 2, max(1, stroke - 1))
         if zh_lines is None or original_lines is None:
             continue
-        zh_height = sum(line_height(draw, line, zh_font, stroke) for line in zh_lines)
-        original_height = sum(
-            line_height(draw, line, original_font, max(1, stroke - 1))
-            for line in original_lines
-        )
-        line_gap = max(5, zh_size // 8)
-        language_gap = max(8, zh_size // 5)
-        total = zh_height + original_height + line_gap * (len(zh_lines) + len(original_lines) - 2) + language_gap
+        line_gap = max(3, zh_size // 10)
+        language_gap = max(6, zh_size // 6)
+        line_heights = [
+            draw.textbbox((0, 0), line, font=font, stroke_width=width)[3]
+            - draw.textbbox((0, 0), line, font=font, stroke_width=width)[1]
+            for lines, font, width in (
+                (zh_lines, zh_font, stroke),
+                (original_lines, original_font, max(1, stroke - 1)),
+            )
+            for line in lines
+        ]
+        total = sum(line_heights) + line_gap * (len(line_heights) - 2) + language_gap
         if total <= max_height:
             return {
                 "zh_font": zh_font,
@@ -939,7 +937,7 @@ def text_layout(
                 "language_gap": language_gap,
                 "height": total,
             }
-    raise PipelineError("Bilingual text exceeds the readable layout capacity")
+    raise PipelineError("Bilingual text exceeds the compact subtitle layout")
 
 
 def draw_centered_line(
@@ -951,45 +949,46 @@ def draw_centered_line(
     stroke: int,
     width: int,
 ) -> int:
-    box = draw.textbbox((0, 0), text, font=font, stroke_width=stroke)
-    text_width = box[2] - box[0]
-    text_height = box[3] - box[1]
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font, stroke_width=stroke)
     draw.text(
-        ((width - text_width) // 2, y - box[1]),
+        ((width - (right - left)) // 2, y - top),
         text,
         font=font,
         fill=fill,
         stroke_width=stroke,
         stroke_fill="#050505",
     )
-    return y + text_height
+    return y + bottom - top
 
 
-def render_panel(frame: Image.Image, size: tuple[int, int], zh: str, original: str, font: Path, hero: bool) -> Image.Image:
+def render_panel(
+    frame: Image.Image,
+    size: tuple[int, int],
+    zh: str,
+    original: str,
+    font_path: Path,
+    hero: bool,
+) -> Image.Image:
     width, height = size
-    panel = ImageOps.fit(
-        frame.convert("RGB"),
-        size,
-        method=Image.Resampling.LANCZOS,
-        centering=(0.5, 0.62 if hero else 0.72),
-    )
+    source = frame.convert("RGB")
+    wanted_height = max(1, round(source.width * height / width))
+    crop = source.crop((0, max(0, source.height - wanted_height), source.width, source.height))
+    panel = ImageOps.fit(crop, size, method=Image.Resampling.LANCZOS, centering=(0.5, 1.0))
     overlay = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    horizontal_padding = round(width * 0.055)
-    vertical_padding = round(height * (0.035 if hero else 0.06))
-    maximum_height = round(height * (0.36 if hero else 0.82))
+    padding_x = round(width * 0.06)
+    padding_y = round(height * (0.03 if hero else 0.04))
     layout = text_layout(
         draw,
         zh,
         original,
-        font,
-        width - 2 * horizontal_padding,
-        maximum_height,
+        font_path,
+        width - 2 * padding_x,
+        round(height * (0.28 if hero else 0.76)),
         hero,
     )
-    block_top = height - layout["height"] - vertical_padding
-    scrim_top = max(0, block_top - vertical_padding)
-    draw.rectangle((0, scrim_top, width, height), fill=(0, 0, 0, 150 if hero else 165))
+    block_top = height - layout["height"] - padding_y
+    draw.rectangle((0, max(0, block_top - padding_y), width, height), fill=(0, 0, 0, 145 if hero else 165))
     y = block_top
     for line in layout["zh_lines"]:
         y = draw_centered_line(draw, y, line, layout["zh_font"], "#FFFFFF", layout["stroke"], width)
@@ -1014,41 +1013,39 @@ def safe_title(value: str) -> str:
     return cleaned[:36] or "quote"
 
 
-def markdown_section(text: str, heading: str) -> str:
-    match = re.search(rf"^## {re.escape(heading)}\s*$\n(.*?)(?=^## |\Z)", text, flags=re.MULTILINE | re.DOTALL)
-    return match.group(1).strip() if match else ""
-
-
-def package_field(text: str, label: str) -> str:
-    match = re.search(rf"^- {re.escape(label)}：\s*(.+?)\s*$", text, flags=re.MULTILINE)
-    return clean_text(match.group(1)) if match else ""
-
-
 def validate_package(path: Path, group_ids: list[str]) -> None:
     if not path.is_file() or path.stat().st_size == 0:
         raise PipelineError("PACKAGE.md is missing or empty")
     text = path.read_text(encoding="utf-8")
-    missing_sections = [
-        heading for heading in ("大标题", "开篇", "图片文案", "话题标签") if not markdown_section(text, heading)
+    title_match = re.match(r"\A# ([^\n]+)\n\n", text)
+    image_headings = list(re.finditer(r"^## ([^\n]+)\n\n", text, flags=re.MULTILINE))
+    if not title_match or len(image_headings) != len(group_ids):
+        raise PipelineError("PACKAGE.md requires one publishable H1 and one H2 section per image")
+    title = clean_text(title_match.group(1))
+    opening = text[title_match.end() : image_headings[0].start()].strip()
+    subtitles = [clean_text(match.group(1)) for match in image_headings]
+    bodies = [
+        text[match.end() : image_headings[index + 1].start() if index + 1 < len(image_headings) else len(text)].strip()
+        for index, match in enumerate(image_headings)
     ]
-    title = clean_text(markdown_section(text, "大标题"))
-    image_copy = markdown_section(text, "图片文案")
-    image_sections = re.findall(
-        r"^### (g\d{2})[｜|]\s*(.+?)\s*$\n(.*?)(?=^### |\Z)",
-        image_copy,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    channel = package_field(text, "频道")
-    source_url = package_field(text, "来源 URL")
-    if missing_sections or not channel or not source_url or [item[0] for item in image_sections] != group_ids:
+    forbidden = {"Package", "大标题", "开篇", "图片文案", "播客信息", "话题标签"}
+    source_match = re.search(r"https?://[^\s)>]+", text)
+    if (
+        not title
+        or len(title) > 20
+        or title in forbidden
+        or not opening
+        or any(not subtitle or subtitle in forbidden for subtitle in subtitles)
+        or any(not clean_text(body) for body in bodies)
+        or not source_match
+        or not re.search(r"(?:^|\s)#[^\s#]+", text, flags=re.MULTILINE)
+    ):
         raise PipelineError(
-            "PACKAGE.md requires a title, opening, ordered copy for every image group, tags, channel, and source URL"
+            "PACKAGE.md must be publish-ready Markdown with a <=20-character title, opening, image sections, source, and tags"
         )
-    if len(title) > 20 or any(not clean_text(item[1]) or not clean_text(item[2]) for item in image_sections):
-        raise PipelineError("PACKAGE.md title must be <=20 characters and every image needs a subtitle and body")
-    parsed = urlparse(source_url)
+    parsed = urlparse(source_match.group(0))
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise PipelineError("PACKAGE.md 来源 URL must be an http(s) URL")
+        raise PipelineError("PACKAGE.md source must be an http(s) URL")
 
 
 def final_contact_sheet(paths: list[Path], output: Path) -> None:
@@ -1078,6 +1075,8 @@ def command_render(args: argparse.Namespace) -> None:
     groups = aligned.get("groups")
     if not isinstance(groups, list) or len(groups) not in range(4, 9):
         raise PipelineError("Render requires 4 to 8 aligned image groups")
+    if not 0.60 <= args.hero_fraction <= 0.75:
+        raise PipelineError("Hero fraction must be between 0.60 and 0.75")
     validate_package(package_path, [group["id"] for group in groups])
     frame_groups = {group["id"]: group for group in frames.get("groups") or []}
     if set(frame_groups) != {group["id"] for group in groups}:
@@ -1095,7 +1094,7 @@ def command_render(args: argparse.Namespace) -> None:
         if set(selected_units) != {unit["id"] for unit in group["units"]}:
             raise PipelineError(f"Incomplete frame selection for {group['id']}")
         out_width, out_height = 1440, 1920
-        hero_height = round(out_height * 0.42)
+        hero_height = round(out_height * args.hero_fraction)
         remaining = out_height - hero_height
         strip_count = len(group["units"]) - 1
         strip_heights = [remaining // strip_count] * strip_count
@@ -1140,9 +1139,11 @@ def command_render(args: argparse.Namespace) -> None:
         "schema_version": SCHEMA_VERSION,
         "workflow": WORKFLOW,
         "qa": "pending_visual_review",
-        "style": "podcast_stack_v1",
+        "style": "podcast_drawn_subtitle_stack_v1",
         "image_count": len(outputs),
         "dimensions": {"width": 1440, "height": 1920},
+        "crop_anchor": "frame_bottom",
+        "hero_fraction": args.hero_fraction,
         "font": {"name": font.name, "path": str(font), "sha256": sha256(font)},
         "aligned_sha256": sha256(aligned_path),
         "frame_selection_sha256": sha256(frames_path),
@@ -1254,11 +1255,12 @@ def build_parser() -> argparse.ArgumentParser:
     choose.add_argument("--out", required=True)
     choose.set_defaults(handler=command_choose_frames)
 
-    render = commands.add_parser("render", help="Render the fixed bilingual 3:4 stack")
+    render = commands.add_parser("render", help="Render the fixed drawn-subtitle 3:4 stack")
     render.add_argument("--aligned", required=True)
     render.add_argument("--frames", required=True)
     render.add_argument("--package", required=True)
     render.add_argument("--font")
+    render.add_argument("--hero-fraction", type=float, default=0.60)
     render.add_argument("--out-dir", required=True)
     render.set_defaults(handler=command_render)
 

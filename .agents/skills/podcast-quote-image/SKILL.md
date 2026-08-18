@@ -18,7 +18,7 @@ Different Works and workflows may run in parallel. Keep the shared ASR dispatche
 1. In foreground mode, run `./work current`; if there is no Current Work, run `./work list` and do not guess. In background mode, use the explicitly assigned Work and Variant IDs instead.
 2. Confirm `WORK.md` declares `"workflow":"podcast_quote_image"`. Otherwise create a new Work with `./work new "<title>" --workflow podcast_quote_image`.
 3. Put a supplied local video and any supplied transcript/subtitle in `materials/`; generated state belongs in `artifacts/`, `frames/`, `render/`, and `final/`.
-4. Require either one local video or one explicit source URL. Accept an optional structured transcript JSON and optional `.srt`, `.vtt`, or subtitle JSON.
+4. Require either one local video or one explicit source URL. Accept an optional structured transcript JSON and optional `.srt`, `.vtt`, or subtitle JSON. The final renderer draws approved subtitle text over selected video frames; embedded source subtitles are not required.
 
 ## Acquire URL Media
 

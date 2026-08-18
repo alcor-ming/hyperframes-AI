@@ -338,13 +338,12 @@ class PodcastQuotePipelineTest(unittest.TestCase):
 
         package = self.root / "PACKAGE.md"
         image_copy = "\n\n".join(
-            f"### g{index:02d}｜小标题 {index}\n第三人称正文 {index}。" for index in range(1, 7)
+            f"## 小标题 {index}\n\n第三人称正文 {index}。" for index in range(1, 7)
         )
         package.write_text(
-            "# Package\n\n## 大标题\n测试标题\n\n## 开篇\n她的核心观点是测试。\n\n"
-            f"## 图片文案\n\n{image_copy}\n\n## 播客信息\n\n"
-            "- 频道：Test Channel\n- 节目：Test Podcast\n- 嘉宾：\n- 期数：\n"
-            "- 来源 URL：https://example.com/watch\n\n## 话题标签\n#测试\n",
+            "# 测试标题\n\n她的核心观点是测试。\n\n"
+            f"{image_copy}\n\nTest Channel · Test Podcast\n\n"
+            "[原节目](https://example.com/watch)\n\n#测试\n",
             encoding="utf-8",
         )
         font = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
@@ -368,6 +367,10 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertEqual("passed", self.invoke("verify", "--render-dir", str(render), "--visual-passed"))
         manifest = json.loads((render / "manifest.json").read_text())
         self.assertEqual(6, manifest["image_count"])
+        self.assertEqual("podcast_drawn_subtitle_stack_v1", manifest["style"])
+        self.assertEqual("frame_bottom", manifest["crop_anchor"])
+        self.assertEqual(0.6, manifest["hero_fraction"])
+        self.assertIn("font", manifest)
         with Image.open(next(render.glob("[0-9][0-9]_*.jpg"))) as image:
             self.assertEqual((1440, 1920), image.size)
 

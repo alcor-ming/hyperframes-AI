@@ -6,7 +6,7 @@
 - 所有作品均位于 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入 Git。
 - 不发布内容、不登录平台、不购买额度。外部或付费服务仍需用户明确授权。
 - `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
-- v1 默认不生成 AI 图片；仅在用户明确授权、Animation Plan 已批准且存在明确 Asset Brief 时可调用 ImageGen。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。`hyperframes_video` 不生成或烧录底部字幕；`podcast_quote_image` 只按固定版式渲染批准的双语金句。
+- v1 默认不生成 AI 图片；仅在用户明确授权、Animation Plan 已批准且存在明确 Asset Brief 时可调用 ImageGen。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。`hyperframes_video` 不生成或烧录底部字幕；`podcast_quote_image` 由工作流在选定视频帧上绘制批准的双语字幕。
 
 ## 启动顺序
 
@@ -30,7 +30,7 @@
 - `materials/*.transcript.json`：下载视频的时间真源；YouTube 可优先采用结构化原生转录，其余或 fallback 统一复用 `qivance-music` 的共享 ASR，ASR 的 `characters[]` 不得退化为仅段级时间戳。
 - `SCRIPT.md`：当前 Variant 唯一口播正文；批准后的隐藏段落 ID 保持稳定。
 - `RESEARCH.md`：视频工作流记录与 Script Revision 对齐的联网资料、可视化机制与事实边界；播客图文工作流记录嘉宾身份、与获批观点相关的经历、可用于开篇的背景故事、事实边界和来源。
-- `PACKAGE.md`：视频工作流保存最终标题、封面文字和一句话简介；播客图文工作流保存大标题、开篇、每图小标题与第三人称正文、来源和话题标签，其中标题必须在全文稳定后最后拟定。
+- `PACKAGE.md`：视频工作流保存最终标题、封面文字和一句话简介；播客图文工作流直接保存可发布 Markdown，依次为实际 H1 标题、开篇、实际 H2 小标题与第三人称正文、署名、来源链接和话题标签，不出现“大标题”“开篇”“图片文案”等结构说明。标题必须在全文稳定后最后拟定。
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
 - `ANIMATION_PLAN.md`：正式 HTML 制作前唯一必须批准的视觉设计 PRD。
 - `variant.yaml`：当前 Variant 状态，由 CLI 与 Agent 更新。
@@ -50,7 +50,7 @@
 - 只在 Scene 数量、顺序、视觉目标、Hero State、Template、Profile 或文案结构发生实质变化时重新批准 Plan。
 - 时间码、easing、换行、安全区、性能和不改变 Hero State 的布局修复无需重新批准。
 
-`podcast_quote_image` 拆成两个 Skill：第一个通读已解析文案，结合 `dbs-spread` 与 `dbs-resonate` 生成 3 个有原文证据的完整文章方案；用户只批准 1 个。第二个先调研嘉宾背景并完成 `RESEARCH.md`，再写开篇、每图小标题与第三人称正文，全文稳定后最后用 `dbs-xhs-title` 拟定结合核心总结和嘉宾背景的大标题，并执行限定范围的 `dbs-content` 与必做的 `dbs-ai-check`，之后完成时间匹配、取帧、渲染和 Final。每篇文章输出 4 至 8 张图，每张图固定 1 条 Hero 加 3 至 4 条支撑句；图片边界按原文的铺垫、观点、论证、例子、对比与收束组织，不按句号机械切分。批准文章方案是唯一内容门，不增加第二个 Draft 审批门。转录缺失、失败或不可用时进入 `waiting_user`，仅在用户确认后使用保留的 `native-subtitle-quote-image` fallback，不得静默降级。
+`podcast_quote_image` 拆成两个 Skill：第一个通读已解析文案，结合 `dbs-spread` 与 `dbs-resonate` 生成 3 个有原文证据的完整文章方案；用户只批准 1 个。第二个先调研嘉宾背景并完成 `RESEARCH.md`，再写开篇、每图小标题与第三人称正文，全文稳定后最后用 `dbs-xhs-title` 拟定结合核心总结和嘉宾背景的大标题，并执行限定范围的 `dbs-content` 与必做的 `dbs-ai-check`，之后完成时间匹配、取帧、渲染和 Final。每篇文章输出 4 至 8 张图，每张图固定 1 条 Hero 加 3 至 4 条支撑句；Hero 默认占 60%，字幕条无间隙占其余 40%。每个面板都从选定视频帧图片的底部向上裁切，再由工作流用紧凑字号绘制双语字幕，整张图至少保留 40% 无字幕视觉空间。图片边界按原文的铺垫、观点、论证、例子、对比与收束组织，不按句号机械切分。批准文章方案是唯一内容门，不增加第二个 Draft 审批门。转录缺失、失败或不可用时进入 `waiting_user`，仅在用户确认后使用保留的 `native-subtitle-quote-image` fallback，不得静默降级。
 
 ## 模板
 
@@ -58,7 +58,7 @@
 - `pure_hyperframes`：可先用估算时间完成视觉 Draft；用户接受 Draft 后接入正式配音并仅做重定时。
 - 人物持续作为主视觉时才使用 `talking_head`；否则使用 `pure_hyperframes`，不增加第三套模板。
 
-以上 Template 仅属于 `hyperframes_video`。`podcast_quote_image` 固定使用 `podcast_stack_v1`，输出 1440x1920 的 3:4 图片，不新增 Template 或 Profile。
+以上 Template 仅属于 `hyperframes_video`。`podcast_quote_image` 固定使用 `podcast_drawn_subtitle_stack_v1`，输出 1440x1920 的 3:4 图片，不新增 Template 或 Profile。
 
 ## 用户回复
 

@@ -1,6 +1,6 @@
 ---
 name: xiaohongshu-article-copy
-description: Research the guest behind one approved podcast article plan, then write its Xiaohongshu copy, title, frames, renders, and local Final package.
+description: Research the guest behind one approved podcast article plan, write publish-ready Xiaohongshu Markdown, and render its drawn-subtitle image stack and local Final package.
 ---
 
 # Xiaohongshu Article Copy
@@ -12,6 +12,7 @@ Continue one `podcast_quote_image` Work only after the user has approved exactly
 1. In foreground mode, run `./work current`; in background mode, use the assigned Work and Variant IDs explicitly.
 2. Confirm the Work uses `podcast_quote_image` and read only `article-selection.json`, the resolved transcript, acquisition metadata, `RESEARCH.md`, `PACKAGE.md`, and the machine artifacts needed by the current stage.
 3. Reject a missing, stale, or unapproved selection. Do not fall back to an unapproved candidate.
+4. Confirm the local video and selected frames are available. The workflow draws the approved bilingual subtitle text; embedded source subtitles are not required.
 
 ## Research The Guest
 
@@ -42,33 +43,29 @@ Do not turn biography into a general profile or use an unsourced anecdote. If th
 
 ## Write Copy Before The Title
 
-Draft the opening and image sections first. Generate `PACKAGE.md` in this output order, but leave the title blank until the rest of the article is settled:
+Draft the opening and image sections first. After the title is settled, write `PACKAGE.md` as publication-ready Markdown in this exact shape:
 
 ```markdown
-# Package
+# <final title, written last>
 
-## 大标题
-<write this last>
-
-## 开篇
 <summarize the article's core viewpoint and connect it to the guest's verified background story>
 
-## 图片文案
+## <summary of the first image's passage>
 
-### g01｜<summary of this image's passage>
 <third-person copy>
 
-### g02｜<image subtitle>
+## <summary of the second image's passage>
+
 <third-person copy>
 
-## 播客信息
-...
+<podcast · guest · episode attribution>
 
-## 话题标签
-...
+[原节目](<source URL>)
+
+<topic tags>
 ```
 
-The opening states the core conclusion immediately, then uses the guest's relevant background story to explain why the viewpoint carries weight. Each image subtitle summarizes that image's approved passage rather than adding a hook or a new claim. The image sections must cover every approved group once, in `g01...g08` order, with no extra group. Write in third person. Attribute viewpoints to the actual speaker; never impersonate the guest, invent first-person experience, or turn a faithful translation into a stronger claim.
+Do not emit structural labels such as `大标题`, `开篇`, `图片文案`, `播客信息`, or `话题标签`. Put a blank line after every heading and between sentences or paragraphs so the file can be published without cleanup. The opening states the core conclusion immediately, then uses the guest's relevant background story to explain why the viewpoint carries weight. Each H2 summarizes its approved image passage rather than adding a hook or a new claim. The H2 sections must cover every approved group once, in source order, with no extra section. Write in third person. Attribute viewpoints to the actual speaker; never impersonate the guest, invent first-person experience, or turn a faithful translation into a stronger claim.
 
 Apply only the expression-efficiency and cognitive-gap checks from `dbs-content` to the opening, subtitles, and third-person copy; do not rerun format selection or its product-premise flow.
 
@@ -84,13 +81,23 @@ Reuse `materials/acquisition.json` for the source URL and the verified research 
 
 Run `align`, then `extract`. Each approved article contains 4 to 8 image groups, and every image contains one Hero plus 3 or 4 supports. The script maps every unit's source segment IDs to time and extracts candidates at 25%, 50%, and 75% of its span.
 
-Inspect each contact sheet. Choose one frame per unit for a clear expression, recognizable speaker, useful composition, and room for text. Reject closed eyes, motion blur, awkward gestures, obstructive overlays, or a frame that contradicts the text. Record choices with `choose-frames`; do not hand-edit timestamps or paths.
+Inspect each contact sheet. Choose one frame per unit with a clear expression, recognizable speaker, useful composition, and clean lower area for the workflow-drawn subtitle. Reject closed eyes, motion blur, awkward gestures, obstructive overlays, or a frame that contradicts the passage. Record choices with `choose-frames`; do not hand-edit timestamps or paths.
 
 ## Render And Verify
 
-Run `render`. Each 1440x1920 image uses a 42% Hero panel and 3 or 4 equal supporting panels. Chinese is primary and the original wording secondary. The article produces 4 to 8 images plus one contact sheet and `PACKAGE.md`.
+Run `render`. Each 1440x1920 image uses a 60% Hero panel and 3 or 4 tightly stacked support strips in the remaining 40%, with no gaps. Every panel crops from the bottom edge of its selected video-frame image upward. The workflow then draws compact bilingual subtitles over the lower part of each panel; it does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
 
-Run `verify` without `--visual-passed`, inspect every image and the contact sheet, then rerun with `--visual-passed` only after checking fidelity, bilingual pairing, crop, readability, ordering, and no truncation. Finalize with:
+```bash
+.agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py render \
+  --aligned <variant>/artifacts/aligned-quotes.json \
+  --frames <variant>/frames/frame-selection.json \
+  --package <variant>/PACKAGE.md --hero-fraction 0.60 \
+  --out-dir <variant>/render
+```
+
+The article produces 4 to 8 images plus one contact sheet and the publish-ready `PACKAGE.md`.
+
+Run `verify` without `--visual-passed`, inspect every image and the contact sheet, then rerun with `--visual-passed` only after checking compact font sizing, tight strip spacing, bottom-anchored crop, readability, ordering, and no truncation. Finalize with:
 
 ```bash
 ./work finalize <variant>/render --qa-passed
