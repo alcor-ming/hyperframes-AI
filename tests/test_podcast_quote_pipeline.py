@@ -362,8 +362,8 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         real_text_layout = PIPELINE.text_layout
 
         def require_tighter_padding(*args, **kwargs):
-            max_width = args[4]
-            hero = args[5]
+            max_width = args[3]
+            hero = args[4]
             if not hero and max_width < 1300:
                 raise PIPELINE.PipelineError("fixture requires tighter padding")
             return real_text_layout(*args, **kwargs)
@@ -388,15 +388,18 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertEqual(6, manifest["image_count"])
         self.assertEqual("podcast_drawn_subtitle_stack_v1", manifest["style"])
         self.assertEqual("frame_bottom", manifest["crop_anchor"])
-        self.assertEqual("dynamic_support", manifest["layout"]["mode"])
-        self.assertEqual(0.60, manifest["layout"]["min_hero_fraction"])
-        self.assertEqual(30, manifest["layout"]["max_support_visual_allowance"])
+        self.assertEqual("fixed_hero_dynamic_support", manifest["layout"]["mode"])
+        self.assertEqual(0.52, manifest["layout"]["hero_fraction"])
+        self.assertEqual(185, manifest["layout"]["text_backdrop_alpha"])
         self.assertEqual(6, len(manifest["layout"]["groups"]))
         self.assertTrue(
-            all(group["hero_fraction"] >= 0.60 for group in manifest["layout"]["groups"])
+            all(group["hero_fraction"] == 0.52 for group in manifest["layout"]["groups"])
         )
         self.assertTrue(
-            all(0 <= group["support_visual_allowance"] <= 30 for group in manifest["layout"]["groups"])
+            all(
+                group["hero_height"] + sum(group["support_heights"]) == 1920
+                for group in manifest["layout"]["groups"]
+            )
         )
         self.assertTrue(
             all(0.03 <= group["horizontal_padding_fraction"] <= 0.06 for group in manifest["layout"]["groups"])
@@ -404,8 +407,9 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertTrue(
             all(group["horizontal_padding_fraction"] == 0.04 for group in manifest["layout"]["groups"])
         )
-        self.assertEqual(50, manifest["font"]["zh_size"])
-        self.assertEqual(33, manifest["font"]["original_size"])
+        self.assertEqual("zh_only", manifest["font"]["mode"])
+        self.assertEqual(42, manifest["font"]["zh_size"])
+        self.assertNotIn("original_size", manifest["font"])
         with Image.open(next(render.glob("[0-9][0-9]_*.jpg"))) as image:
             self.assertEqual((1440, 1920), image.size)
 

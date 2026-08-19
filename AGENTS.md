@@ -6,7 +6,7 @@
 - 所有作品均位于 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入 Git。
 - 不发布内容、不登录平台、不购买额度。外部或付费服务仍需用户明确授权。
 - `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
-- v1 默认不生成 AI 图片；仅在用户明确授权、Animation Plan 已批准且存在明确 Asset Brief 时可调用 ImageGen。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。`hyperframes_video` 不生成或烧录底部字幕；`podcast_quote_image` 由工作流在选定视频帧上绘制批准的双语字幕。
+- v1 默认不生成 AI 图片；仅在用户明确授权、Animation Plan 已批准且存在明确 Asset Brief 时可调用 ImageGen。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。`hyperframes_video` 不生成或烧录底部字幕；`podcast_quote_image` 由工作流在选定视频帧上只绘制批准的中文字幕。
 
 ## 启动顺序
 
@@ -50,7 +50,7 @@
 - 只在 Scene 数量、顺序、视觉目标、Hero State、Template、Profile 或文案结构发生实质变化时重新批准 Plan。
 - 时间码、easing、换行、安全区、性能和不改变 Hero State 的布局修复无需重新批准。
 
-`podcast_quote_image` 拆成两个 Skill：第一个通读已解析文案，结合 `dbs-spread` 与 `dbs-resonate` 生成 3 个有原文证据的完整文章方案；用户只批准 1 个。第二个先调研嘉宾背景并完成 `RESEARCH.md`，再写开篇、每图小标题与第三人称正文，全文稳定后最后用 `dbs-xhs-title` 拟定结合核心总结和嘉宾背景的大标题，并执行限定范围的 `dbs-content` 与必做的 `dbs-ai-check`，之后完成时间匹配、取帧、渲染和 Final。每篇文章输出 4 至 8 张图，每张图固定 1 条 Hero 加 3 至 4 条支撑句；全部面板固定使用中文 50px、原文 33px，支撑条按文本实测高度动态分配并最多额外保留 30px。长文本时先缩减这部分余量，再把水平边距从 6% 收到最低 3%，Hero 使用剩余空间且不得低于整图 60%。每个面板都从选定视频帧图片的底部向上裁切，字幕条之间无间隙，整张图至少保留 40% 无字幕视觉空间。图片边界按原文的铺垫、观点、论证、例子、对比与收束组织，不按句号机械切分。批准文章方案是唯一内容门，不增加第二个 Draft 审批门。转录缺失、失败或不可用时进入 `waiting_user`，仅在用户确认后使用保留的 `native-subtitle-quote-image` fallback，不得静默降级。
+`podcast_quote_image` 拆成两个 Skill：第一个通读已解析文案，结合 `dbs-spread` 与 `dbs-resonate` 生成 3 个有原文证据的完整文章方案；用户只批准 1 个。第二个先调研嘉宾背景并完成 `RESEARCH.md`，再写开篇、每图小标题与第三人称正文，全文稳定后最后用 `dbs-xhs-title` 拟定结合核心总结和嘉宾背景的大标题，并执行限定范围的 `dbs-content` 与必做的 `dbs-ai-check`，之后完成时间匹配、取帧、渲染和 Final。每篇文章输出 4 至 8 张图，每张图固定 1 条 Hero 加 3 至 4 条支撑句；全部面板只显示中文并固定使用 42px，Hero 固定占 52%，支撑条按文本实测高度动态分配其余 48%，必要时把水平边距从 6% 收到最低 3%。文字后的黑底使用 alpha 185，降低透明度以提高可读性。每个面板都从选定视频帧图片的底部向上裁切，字幕条之间无间隙，整张图至少保留 40% 无字幕视觉空间。图片边界按原文的铺垫、观点、论证、例子、对比与收束组织，不按句号机械切分。批准文章方案是唯一内容门，不增加第二个 Draft 审批门。转录缺失、失败或不可用时进入 `waiting_user`，仅在用户确认后使用保留的 `native-subtitle-quote-image` fallback，不得静默降级。
 
 ## 模板
 

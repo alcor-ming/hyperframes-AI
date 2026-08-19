@@ -12,7 +12,7 @@ Continue one `podcast_quote_image` Work only after the user has approved exactly
 1. In foreground mode, run `./work current`; in background mode, use the assigned Work and Variant IDs explicitly.
 2. Confirm the Work uses `podcast_quote_image` and read only `article-selection.json`, the resolved transcript, acquisition metadata, `RESEARCH.md`, `PACKAGE.md`, and the machine artifacts needed by the current stage.
 3. Reject a missing, stale, or unapproved selection. Do not fall back to an unapproved candidate.
-4. Confirm the local video and selected frames are available. The workflow draws the approved bilingual subtitle text; embedded source subtitles are not required.
+4. Confirm the local video and selected frames are available. The workflow draws the approved Chinese subtitle text; embedded source subtitles are not required.
 
 ## Research The Guest
 
@@ -85,13 +85,13 @@ Inspect each contact sheet. Choose one frame per unit with a clear expression, r
 
 ## Render And Verify
 
-Run `render`. Every panel uses fixed 50px Chinese and 33px original-language text. The 3 or 4 support strips take their measured bilingual text height and up to 30px of extra visual room each. Long text reduces that extra room first, then tightens horizontal padding from 6% to no less than 3%, so the Hero stays at or above 60%. Every panel crops from the bottom edge of its selected video-frame image upward, and the support strips have no gaps. The workflow draws the bilingual subtitles itself; it does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
+Run `render`. Every panel displays only the approved Chinese text at a fixed 42px size. Hero is fixed at 52% of the image; the 3 or 4 support strips fill the remaining 48% and divide it dynamically from their measured text heights. Horizontal padding tightens from 6% to no less than 3% only when needed for fit. The black text backdrop uses alpha 185, reducing transparency for clearer text. Every panel crops from the bottom edge of its selected video-frame image upward, and the support strips have no gaps. The workflow does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
 
 ```bash
 .agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py render \
   --aligned <variant>/artifacts/aligned-quotes.json \
   --frames <variant>/frames/frame-selection.json \
-  --package <variant>/PACKAGE.md --min-hero-fraction 0.60 \
+  --package <variant>/PACKAGE.md --hero-fraction 0.52 \
   --out-dir <variant>/render
 ```
 
