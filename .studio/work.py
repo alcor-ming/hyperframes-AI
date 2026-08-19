@@ -645,8 +645,8 @@ def validate_deliverable_manifest(directory: Path, expected_workflow: str) -> di
         roles[role] = roles.get(role, 0) + 1
 
     if expected_workflow == "podcast_quote_image":
-        if roles.get("image", 0) not in range(4, 9):
-            raise HarnessError("podcast_quote_image Final requires 4 to 8 image artifacts")
+        if roles.get("image", 0) not in range(8, 13):
+            raise HarnessError("podcast_quote_image Final requires 8 to 12 image artifacts")
         if roles.get("contact_sheet") != 1 or roles.get("package") != 1:
             raise HarnessError("podcast_quote_image Final requires one contact sheet and one package")
         if len(artifacts) != roles["image"] + 2:

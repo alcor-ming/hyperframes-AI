@@ -242,11 +242,11 @@ class PodcastQuotePipelineTest(unittest.TestCase):
                 "status": "ready",
                 "segments": [
                     {"id": f"s{index:06d}", "start": index - 1, "end": index, "text": f"line {index}"}
-                    for index in range(1, 121)
+                    for index in range(1, 361)
                 ],
             },
         )
-        image_counts = [4, 6, 8]
+        image_counts = [8, 10, 12]
         candidates = self.write_json(
             "article-candidates.json",
             {
@@ -271,10 +271,10 @@ class PodcastQuotePipelineTest(unittest.TestCase):
                                         "original": f"Original {article}-{image}-{unit}",
                                         "translation_zh": f"中文 {article}-{image}-{unit}",
                                         "source_segment_ids": [
-                                            f"s{((article - 1) * 40 + (image - 1) * 5 + unit):06d}"
+                                            f"s{((article - 1) * 120 + (image - 1) * 7 + unit):06d}"
                                         ],
                                     }
-                                    for unit in range(1, 5 + image % 2)
+                                    for unit in range(1, 8)
                                 ],
                             }
                             for image in range(1, image_counts[article - 1] + 1)
@@ -284,7 +284,29 @@ class PodcastQuotePipelineTest(unittest.TestCase):
                 ],
             },
         )
+        split_value = json.loads(candidates.read_text(encoding="utf-8"))
+        split_value["candidates"][0]["images"][0]["units"][1]["source_segment_ids"] = split_value[
+            "candidates"
+        ][0]["images"][0]["units"][0]["source_segment_ids"]
+        split_value["candidates"][0]["images"][1]["units"][0]["source_segment_ids"] = split_value[
+            "candidates"
+        ][0]["images"][0]["units"][5]["source_segment_ids"]
+        candidates.write_text(json.dumps(split_value, ensure_ascii=False), encoding="utf-8")
         self.invoke("validate-candidates", "--transcript", str(transcript), "--candidates", str(candidates))
+        nonadjacent_value = json.loads(candidates.read_text(encoding="utf-8"))
+        nonadjacent_value["candidates"][0]["images"][2]["units"][0]["source_segment_ids"] = nonadjacent_value[
+            "candidates"
+        ][0]["images"][0]["units"][5]["source_segment_ids"]
+        nonadjacent = self.write_json("nonadjacent-candidates.json", nonadjacent_value)
+        message = self.invoke(
+            "validate-candidates",
+            "--transcript",
+            str(transcript),
+            "--candidates",
+            str(nonadjacent),
+            expected=2,
+        )
+        self.assertIn("outside two adjacent image groups", message)
         invalid_value = json.loads(candidates.read_text(encoding="utf-8"))
         invalid_value["candidates"][0]["images"][0]["units"] = invalid_value["candidates"][0]["images"][0][
             "units"
@@ -298,7 +320,7 @@ class PodcastQuotePipelineTest(unittest.TestCase):
             str(invalid),
             expected=2,
         )
-        self.assertIn("1 Hero and 3 or 4 supports", message)
+        self.assertIn("1 Hero and at least 3 supports", message)
         selection = self.root / "article-selection.json"
         self.invoke(
             "approve",
@@ -328,7 +350,7 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         frame_candidates = frames_dir / "frame-candidates.json"
         frame_value = json.loads(frame_candidates.read_text())
         self.assertEqual(
-            [40.25, 40.5, 40.75],
+            [120.25, 120.5, 120.75],
             [item["time"] for item in frame_value["groups"][0]["units"][0]["candidates"]],
         )
 
@@ -347,7 +369,7 @@ class PodcastQuotePipelineTest(unittest.TestCase):
 
         package = self.root / "PACKAGE.md"
         image_copy = "\n\n".join(
-            f"## 小标题 {index}\n\n第三人称正文 {index}。" for index in range(1, 7)
+            f"## 小标题 {index}\n\n第三人称正文 {index}。" for index in range(1, 11)
         )
         package.write_text(
             "# 测试标题\n\n她的核心观点是测试。\n\n"
@@ -362,8 +384,8 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         real_text_layout = PIPELINE.text_layout
 
         def require_tighter_padding(*args, **kwargs):
-            max_width = args[3]
-            hero = args[4]
+            max_width = args[4]
+            hero = args[5]
             if not hero and max_width < 1300:
                 raise PIPELINE.PipelineError("fixture requires tighter padding")
             return real_text_layout(*args, **kwargs)
@@ -385,15 +407,15 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertEqual("pending_visual_review", self.invoke("verify", "--render-dir", str(render)))
         self.assertEqual("passed", self.invoke("verify", "--render-dir", str(render), "--visual-passed"))
         manifest = json.loads((render / "manifest.json").read_text())
-        self.assertEqual(6, manifest["image_count"])
+        self.assertEqual(10, manifest["image_count"])
         self.assertEqual("podcast_drawn_subtitle_stack_v1", manifest["style"])
         self.assertEqual("frame_bottom", manifest["crop_anchor"])
-        self.assertEqual("fixed_hero_dynamic_support", manifest["layout"]["mode"])
-        self.assertEqual(0.52, manifest["layout"]["hero_fraction"])
-        self.assertEqual(185, manifest["layout"]["text_backdrop_alpha"])
-        self.assertEqual(6, len(manifest["layout"]["groups"]))
+        self.assertEqual("dynamic_support", manifest["layout"]["mode"])
+        self.assertEqual(0.60, manifest["layout"]["min_hero_fraction"])
+        self.assertEqual(30, manifest["layout"]["max_support_visual_allowance"])
+        self.assertEqual(10, len(manifest["layout"]["groups"]))
         self.assertTrue(
-            all(group["hero_fraction"] == 0.52 for group in manifest["layout"]["groups"])
+            all(group["hero_fraction"] >= 0.60 for group in manifest["layout"]["groups"])
         )
         self.assertTrue(
             all(
@@ -407,9 +429,9 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertTrue(
             all(group["horizontal_padding_fraction"] == 0.04 for group in manifest["layout"]["groups"])
         )
-        self.assertEqual("zh_only", manifest["font"]["mode"])
-        self.assertEqual(42, manifest["font"]["zh_size"])
-        self.assertNotIn("original_size", manifest["font"])
+        self.assertEqual("bilingual", manifest["font"]["mode"])
+        self.assertEqual(50, manifest["font"]["zh_size"])
+        self.assertEqual(30, manifest["font"]["original_size"])
         with Image.open(next(render.glob("[0-9][0-9]_*.jpg"))) as image:
             self.assertEqual((1440, 1920), image.size)
 

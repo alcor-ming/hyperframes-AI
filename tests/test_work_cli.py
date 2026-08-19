@@ -44,7 +44,7 @@ class WorkCliTest(unittest.TestCase):
         directory = self.root / name
         directory.mkdir()
         artifacts = []
-        for index in range(1, 5):
+        for index in range(1, 9):
             path = directory / f"{index:02d}.jpg"
             path.write_bytes(marker + str(index).encode())
             artifacts.append({"path": path.name, "role": "image", "sha256": WORK_CLI.file_sha256(path)})

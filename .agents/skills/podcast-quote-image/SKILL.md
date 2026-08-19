@@ -87,11 +87,11 @@ Read the whole resolved `artifacts/transcript.json`. Author exactly 3 complete a
 }
 ```
 
-Each candidate is one complete Xiaohongshu article direction containing 4 to 8 ordered image groups. Every image group contains exactly one Hero unit followed by 3 or 4 supporting units. Image boundaries follow the source passage's setup, viewpoint, reasoning, example, contrast, and payoff; they are not a sentence counter. Every unit must cite the source segments that justify both its wording and frame timing. Do not pad, merge unrelated claims, or split a sentence mechanically.
+Each candidate is one complete Xiaohongshu article direction containing 8 to 12 ordered image groups. Every image group contains exactly one Hero followed by enough supporting units to advance that beat; use complete short sentences of about 10 Chinese characters for both Hero and supports, with about 60 to 90 Chinese characters across the image. These are generation targets, not per-unit hard limits. Keep the English original faithful and similarly concise. A single argument may continue across two adjacent images, while its background, examples, and full reasoning stay available for the later article body through the group focus and cited transcript. Image boundaries follow the source passage's setup, viewpoint, reasoning, example, contrast, and payoff; they are not a sentence counter. Every unit must cite the source segments that justify both its wording and frame timing. A source segment may support multiple short units within one image or span two adjacent image groups, but no farther. Do not pad, merge unrelated claims, or split on punctuation mechanically.
 
 Use `dbs-resonate` to ensure every image in a candidate serves one article-level core mechanism. Use only the audience emotion, effective stance, and first-spreader signals from `dbs-spread` to write each rationale and rank the three plans. DBS must not rewrite the original quote or its faithful translation.
 
-Validate the file, then show the three article directions, their 4 to 8 image outlines, core viewpoint, audience tension, and rationale. Stop for explicit approval of exactly one article ID with `./work wait article_selection`. Record the decision with:
+Validate the file, then show the three article directions, their 8 to 12 image outlines, core viewpoint, audience tension, and rationale. Stop for explicit approval of exactly one article ID with `./work wait article_selection`. Record the decision with:
 
 ```bash
 .agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py approve \

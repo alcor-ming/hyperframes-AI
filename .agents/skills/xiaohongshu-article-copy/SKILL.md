@@ -12,7 +12,7 @@ Continue one `podcast_quote_image` Work only after the user has approved exactly
 1. In foreground mode, run `./work current`; in background mode, use the assigned Work and Variant IDs explicitly.
 2. Confirm the Work uses `podcast_quote_image` and read only `article-selection.json`, the resolved transcript, acquisition metadata, `RESEARCH.md`, `PACKAGE.md`, and the machine artifacts needed by the current stage.
 3. Reject a missing, stale, or unapproved selection. Do not fall back to an unapproved candidate.
-4. Confirm the local video and selected frames are available. The workflow draws the approved Chinese subtitle text; embedded source subtitles are not required.
+4. Confirm the local video and selected frames are available. The workflow draws the approved bilingual subtitle text; embedded source subtitles are not required.
 
 ## Research The Guest
 
@@ -79,25 +79,25 @@ Reuse `materials/acquisition.json` only to verify the source and use the verifie
 
 ## Align And Choose Frames
 
-Run `align`, then `extract`. Each approved article contains 4 to 8 image groups, and every image contains one Hero plus 3 or 4 supports. The script maps every unit's source segment IDs to time and extracts candidates at 25%, 50%, and 75% of its span.
+Run `align`, then `extract`. Each approved article contains 8 to 12 image groups. Every image contains one Hero followed by the short supporting sentences needed for that beat; a single source segment may support adjacent short units within one image or span two adjacent image groups. The script maps every unit's source segment IDs to time and extracts candidates at 25%, 50%, and 75% of its span.
 
 Inspect each contact sheet. Choose one frame per unit with a clear expression, recognizable speaker, useful composition, and clean lower area for the workflow-drawn subtitle. Reject closed eyes, motion blur, awkward gestures, obstructive overlays, or a frame that contradicts the passage. Record choices with `choose-frames`; do not hand-edit timestamps or paths.
 
 ## Render And Verify
 
-Run `render`. Every panel displays only the approved Chinese text at a fixed 42px size. Hero is fixed at 52% of the image; the 3 or 4 support strips fill the remaining 48% and divide it dynamically from their measured text heights. Horizontal padding tightens from 6% to no less than 3% only when needed for fit. The black text backdrop uses alpha 185, reducing transparency for clearer text. Every panel crops from the bottom edge of its selected video-frame image upward, and the support strips have no gaps. The workflow does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
+Run `render`. Every panel displays the approved bilingual text at fixed 50px Chinese and 30px English. Each support strip takes its measured bilingual text height plus up to 30px of visual room; long text reduces that room first, then tightens horizontal padding from 6% to no less than 3%, so Hero remains at or above 60%. Hero and support text backdrops use alpha 145 and 165 respectively. Every panel crops from the bottom edge of its selected video-frame image upward, and the support strips have no gaps. The workflow does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
 
 ```bash
 .agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py render \
   --aligned <variant>/artifacts/aligned-quotes.json \
   --frames <variant>/frames/frame-selection.json \
-  --package <variant>/PACKAGE.md --hero-fraction 0.52 \
+  --package <variant>/PACKAGE.md --min-hero-fraction 0.60 \
   --out-dir <variant>/render
 ```
 
-The article produces 4 to 8 images plus one contact sheet and the publish-ready `PACKAGE.md`.
+The article produces 8 to 12 images plus one contact sheet and the publish-ready `PACKAGE.md`.
 
-Run `verify` without `--visual-passed`, inspect every image and the contact sheet, then rerun with `--visual-passed` only after checking fixed font sizing, dynamic strip heights, bottom-anchored crop, readability, ordering, and no truncation. Finalize with:
+Run `verify` without `--visual-passed`, inspect every image and the contact sheet, then rerun with `--visual-passed` only after checking fixed bilingual font sizing, dynamic strip heights, bottom-anchored crop, readability, ordering, and no truncation. Finalize with:
 
 ```bash
 ./work finalize <variant>/render --qa-passed
