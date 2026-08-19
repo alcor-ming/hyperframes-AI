@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+import fcntl
 import hashlib
 import json
 import os
@@ -36,6 +37,7 @@ WAIT_REASONS = {
 }
 SNAPSHOT_ITEMS = ("index.html", "compositions", "DESIGN.md", "project-config.json")
 ID_PATTERN = re.compile(r"^[\w.-]+$", re.UNICODE)
+NUMBERED_TITLE_PATTERN = re.compile(r"^(\d{3})-(.+)$")
 
 
 class HarnessError(RuntimeError):
@@ -143,6 +145,11 @@ def slugify(title: str) -> str:
     return slug[:48].rstrip("-") or "untitled"
 
 
+def title_number(title: str) -> int | None:
+    match = NUMBERED_TITLE_PATTERN.match(title)
+    return int(match.group(1)) if match else None
+
+
 def works_root(root: Path) -> Path:
     return root / "works"
 
@@ -214,6 +221,7 @@ def list_work_rows(root: Path) -> list[dict[str, Any]]:
                         {
                             "id": path.name,
                             "title": str(metadata.get("title", "")),
+                            "created_at": str(metadata.get("created_at", "")),
                             "workflow": str(metadata.get("workflow", "hyperframes_video")),
                             "location": location,
                             "status": state.get("status"),
@@ -229,6 +237,7 @@ def list_work_rows(root: Path) -> list[dict[str, Any]]:
             {
                 "id": path.name,
                 "title": str(metadata.get("title", "")),
+                "created_at": str(metadata.get("created_at", "")),
                 "workflow": str(metadata.get("workflow", "hyperframes_video")),
                 "location": "archive",
                 "status": state.get("status"),
@@ -236,6 +245,17 @@ def list_work_rows(root: Path) -> list[dict[str, Any]]:
                 "next_action": state.get("next_action"),
             }
         )
+    location_order = {"active": 0, "parked": 1, "archive": 2}
+    rows.sort(
+        key=lambda row: (
+            location_order[row["location"]],
+            row["workflow"],
+            title_number(row["title"]) is None,
+            title_number(row["title"]) or 0,
+            row["created_at"],
+            row["id"],
+        )
+    )
     return rows
 
 
@@ -406,7 +426,7 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
             break
         except FileExistsError:
             suffix += 1
-    created_at = datetime.now().astimezone().date().isoformat()
+    created_at = now()
     atomic_write(
         work / "WORK.md",
         template_text(
@@ -450,6 +470,50 @@ def command_current(root: Path, args: argparse.Namespace) -> None:
 def command_list(root: Path, args: argparse.Namespace) -> None:
     ensure_roots(root)
     print(json.dumps(list_work_rows(root), ensure_ascii=False, indent=2))
+
+
+def command_name(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args)
+    semantic_title = unicodedata.normalize("NFKC", args.title).strip()
+    semantic_title = NUMBERED_TITLE_PATTERN.sub(r"\2", semantic_title).strip(" -")
+    if not semantic_title or any(char in semantic_title for char in "\r\n") or len(semantic_title) > 40:
+        raise HarnessError("Work name must contain 1-40 characters on one line")
+
+    ensure_roots(root)
+    with (runtime_root(root) / "naming.lock").open("w", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        metadata_path = work / "WORK.md"
+        metadata = read_frontmatter(metadata_path)
+        number = title_number(str(metadata.get("title", "")))
+        if number is None:
+            workflow = work_workflow(work)
+            numbers = [
+                title_number(row["title"])
+                for row in list_work_rows(root)
+                if row["workflow"] == workflow and title_number(row["title"]) is not None
+            ]
+            number = max(numbers, default=0) + 1
+        if number > 999:
+            raise HarnessError("Work name sequence is exhausted")
+        title = f"{number:03d}-{semantic_title}"
+
+        lines = metadata_path.read_text(encoding="utf-8").splitlines()
+        frontmatter_end = lines.index("---", 1)
+        metadata["title"] = title
+        body = lines[frontmatter_end + 1 :]
+        for index, line in enumerate(body):
+            if line.startswith("# "):
+                body[index] = f"# {title}"
+                break
+        atomic_write(
+            metadata_path,
+            "---\n"
+            + json.dumps(metadata, ensure_ascii=False, separators=(",", ":"))
+            + "\n---\n"
+            + "\n".join(body)
+            + "\n",
+        )
+    print(title)
 
 
 def command_use(root: Path, args: argparse.Namespace) -> None:
@@ -1174,6 +1238,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("current").set_defaults(handler=command_current)
     commands.add_parser("list").set_defaults(handler=command_list)
+    name = commands.add_parser("name")
+    name.add_argument("title")
+    name.set_defaults(handler=command_name)
     use = commands.add_parser("use")
     use.add_argument("work_id")
     use.set_defaults(handler=command_use)

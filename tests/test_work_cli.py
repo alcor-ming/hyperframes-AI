@@ -178,6 +178,25 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual("waiting_user", row["status"])
         self.assertEqual("article_selection", row["wait_for"])
 
+    def test_work_names_are_numbered_per_workflow_and_sorted(self) -> None:
+        first_id, first = self.new_work("Podcast A", "podcast_quote_image")
+        second_id, second = self.new_work("Podcast B", "podcast_quote_image")
+
+        self.assertEqual("001-Lucy Guo-创业", self.invoke("--work", first_id, "name", "Lucy Guo-创业"))
+        self.assertEqual("002-李飞飞-AI工作", self.invoke("--work", second_id, "name", "李飞飞-AI工作"))
+        self.assertEqual("001-Lucy Guo-转型", self.invoke("--work", first_id, "name", "999-Lucy Guo-转型"))
+        self.assertEqual("001-Lucy Guo-转型", WORK_CLI.read_frontmatter(first / "WORK.md")["title"])
+        self.assertIn("# 002-李飞飞-AI工作", (second / "WORK.md").read_text(encoding="utf-8"))
+
+        rows = json.loads(self.invoke("list"))
+        self.assertEqual([first_id, second_id], [row["id"] for row in rows])
+        self.assertIn("T", rows[0]["created_at"])
+
+        numbered_id, _ = self.new_work("007-Old video")
+        future_id, _ = self.new_work("Future video")
+        self.assertEqual("008-新主题", self.invoke("--work", future_id, "name", "新主题"))
+        self.assertEqual(numbered_id, next(row["id"] for row in json.loads(self.invoke("list")) if row["title"] == "007-Old video"))
+
     def test_legacy_archive_directory_is_ignored(self) -> None:
         (self.root / "works" / "archive" / "tasks" / "001-legacy").mkdir(parents=True)
         self.assertEqual([], json.loads(self.invoke("list")))

@@ -30,10 +30,11 @@
 ```bash
 ./work new "播客 A" --workflow podcast_quote_image --detached
 ./work --work <work-id> --variant main status
+./work --work <work-id> --variant main name "嘉宾名-核心主题"
 ./work list
 ```
 
-后台可完成下载、转录和 3 个文章方案，然后停在 `article_selection`。用户只需确认 1 个方案；单个 Work 失败不阻塞同批其他 Work。
+后台在转录完成后自动写入三位序号 + 嘉宾名 + 核心主题的显示名，再完成 3 个文章方案并停在 `article_selection`。HyperFrames 视频在 Script 稳定后按三位序号 + 核心主题命名。Work ID 与目录名始终不变，重复命名保留原序号；`work list` 按位置、Workflow 和序号排列。用户只需确认 1 个方案；单个 Work 失败不阻塞同批其他 Work。
 
 Draft 与 Final 生命周期：
 

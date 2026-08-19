@@ -18,6 +18,7 @@ This Skill is intentionally thin. The repository root owns the workflow.
 ## Route
 
 - For downloaded video, route `SCRIPT.md` through either multi-round `dbs` editing or timestamp-preserving `verbatim`; Script approval appears only when spoken text changed.
+- Once the Script is settled, run `./work --work <work-id> --variant <variant-id> name "<core-topic>"` before Research. The CLI adds the per-workflow three-digit sequence and leaves the Work ID unchanged.
 - Research the settled Script online into `RESEARCH.md`, then require the Animation Plan to target that Research Revision.
 - When creating the Animation Plan, use DBS to write the final title, cover text, and one-line summary to `PACKAGE.md`; do not retain the candidate list there.
 - Use exactly one of `talking_head` or `pure_hyperframes` and exactly one stable Profile.

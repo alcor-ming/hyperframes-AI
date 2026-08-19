@@ -21,7 +21,7 @@
 - `dbs`：保留 `source.md` 原始基线，允许 DBS 多轮修改口播；正文变化时递增 Script Revision 并等待批准。
 - `verbatim`：逐字保留转录口播、稳定 Anchor 和原时间戳；正文 `approval` 为 `not_required`，DBS 只可处理诊断或 `PACKAGE.md`，不得改写口播。
 
-两条路径汇合后，按最终 `SCRIPT.md` 联网研究一手资料并完成同一 Variant 的 `RESEARCH.md`。研究按 Anchor 提供补充事实、可视化机制、边界和来源链接，不替代或反向改写口播。Script Revision 变化时必须刷新 Research Revision，之后才能设计 Animation Plan。
+两条路径汇合后，先用最终 Script 的核心主题执行 `./work --work <id> --variant <variant-id> name "<核心主题>"`，再按最终 `SCRIPT.md` 联网研究一手资料并完成同一 Variant 的 `RESEARCH.md`。研究按 Anchor 提供补充事实、可视化机制、边界和来源链接，不替代或反向改写口播。Script Revision 变化时必须刷新 Research Revision，之后才能设计 Animation Plan。
 
 Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS 完成 `PACKAGE.md`：使用 `dbs-xhs-title` 生成候选并选择 Top 1，再根据最终 Script 与 Research 写一条封面文字和一句话简介。文档只保留这三项最终结果，不附公式分析或候选清单，也不新增审批门。
 
@@ -57,6 +57,7 @@ Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS �
 ```text
 来源 URL -> trendradar-media -> 校验并复制到 materials/
 本地或已下载视频 + 可选原生转录/字幕 -> resolve transcript
+-> 自动命名为三位序号 + 嘉宾名 + 核心主题
 -> 规划 Skill 通读原文并生成 3 个完整文章方案
 -> DBS 检查核心机制、受众情绪与传播理由 -> 用户批准 1 个方案
 -> 文案 Skill 调研嘉宾背景并完成 RESEARCH.md
