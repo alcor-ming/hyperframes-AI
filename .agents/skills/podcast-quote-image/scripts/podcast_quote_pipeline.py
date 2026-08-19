@@ -32,6 +32,11 @@ FONT_CANDIDATES = (
 )
 ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 MEDIA_JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+ZH_FONT_SIZE = 50
+ORIGINAL_FONT_SIZE = 33
+MAX_TEXT_LINES = 3
+MAX_SUPPORT_VISUAL_ALLOWANCE = 30
+HORIZONTAL_PADDING_FRACTIONS = (0.06, 0.05, 0.04, 0.03)
 
 
 class PipelineError(RuntimeError):
@@ -900,44 +905,37 @@ def text_layout(
     original: str,
     font_path: Path,
     max_width: int,
-    max_height: int,
     hero: bool,
 ) -> dict[str, Any]:
-    zh_max, zh_min = ((52, 36) if hero else (34, 24))
-    original_max, original_min = ((26, 18) if hero else (18, 14))
     stroke = 3 if hero else 2
-    for zh_size in range(zh_max, zh_min - 1, -2):
-        original_size = max(original_min, min(original_max, round(zh_size * 0.5)))
-        zh_font = ImageFont.truetype(str(font_path), zh_size)
-        original_font = ImageFont.truetype(str(font_path), original_size)
-        zh_lines = wrap_text(draw, zh, zh_font, max_width, 2, stroke)
-        original_lines = wrap_text(draw, original, original_font, max_width, 2, max(1, stroke - 1))
-        if zh_lines is None or original_lines is None:
-            continue
-        line_gap = max(3, zh_size // 10)
-        language_gap = max(6, zh_size // 6)
-        line_heights = [
-            draw.textbbox((0, 0), line, font=font, stroke_width=width)[3]
-            - draw.textbbox((0, 0), line, font=font, stroke_width=width)[1]
-            for lines, font, width in (
-                (zh_lines, zh_font, stroke),
-                (original_lines, original_font, max(1, stroke - 1)),
-            )
-            for line in lines
-        ]
-        total = sum(line_heights) + line_gap * (len(line_heights) - 2) + language_gap
-        if total <= max_height:
-            return {
-                "zh_font": zh_font,
-                "original_font": original_font,
-                "zh_lines": zh_lines,
-                "original_lines": original_lines,
-                "stroke": stroke,
-                "line_gap": line_gap,
-                "language_gap": language_gap,
-                "height": total,
-            }
-    raise PipelineError("Bilingual text exceeds the compact subtitle layout")
+    original_stroke = max(1, stroke - 1)
+    zh_font = ImageFont.truetype(str(font_path), ZH_FONT_SIZE)
+    original_font = ImageFont.truetype(str(font_path), ORIGINAL_FONT_SIZE)
+    zh_lines = wrap_text(draw, zh, zh_font, max_width, MAX_TEXT_LINES, stroke)
+    original_lines = wrap_text(draw, original, original_font, max_width, MAX_TEXT_LINES, original_stroke)
+    if zh_lines is None or original_lines is None:
+        raise PipelineError(f"Bilingual text exceeds {MAX_TEXT_LINES} lines at the fixed font size")
+    line_gap = ZH_FONT_SIZE // 10
+    language_gap = ZH_FONT_SIZE // 6
+    line_heights = [
+        draw.textbbox((0, 0), line, font=font, stroke_width=width)[3]
+        - draw.textbbox((0, 0), line, font=font, stroke_width=width)[1]
+        for lines, font, width in (
+            (zh_lines, zh_font, stroke),
+            (original_lines, original_font, original_stroke),
+        )
+        for line in lines
+    ]
+    return {
+        "zh_font": zh_font,
+        "original_font": original_font,
+        "zh_lines": zh_lines,
+        "original_lines": original_lines,
+        "stroke": stroke,
+        "line_gap": line_gap,
+        "language_gap": language_gap,
+        "height": sum(line_heights) + line_gap * (len(line_heights) - 2) + language_gap,
+    }
 
 
 def draw_centered_line(
@@ -968,6 +966,7 @@ def render_panel(
     original: str,
     font_path: Path,
     hero: bool,
+    padding_fraction: float,
 ) -> Image.Image:
     width, height = size
     source = frame.convert("RGB")
@@ -976,17 +975,21 @@ def render_panel(
     panel = ImageOps.fit(crop, size, method=Image.Resampling.LANCZOS, centering=(0.5, 1.0))
     overlay = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    padding_x = round(width * 0.06)
-    padding_y = round(height * (0.03 if hero else 0.04))
+    padding_x = round(width * padding_fraction)
     layout = text_layout(
         draw,
         zh,
         original,
         font_path,
         width - 2 * padding_x,
-        round(height * (0.28 if hero else 0.76)),
         hero,
     )
+    padding_y = min(
+        round(height * (0.03 if hero else 0.04)),
+        max(0, (height - layout["height"]) // 2),
+    )
+    if layout["height"] + 2 * padding_y > height:
+        raise PipelineError("Fixed bilingual text exceeds its panel height")
     block_top = height - layout["height"] - padding_y
     draw.rectangle((0, max(0, block_top - padding_y), width, height), fill=(0, 0, 0, 145 if hero else 165))
     y = block_top
@@ -1074,8 +1077,8 @@ def command_render(args: argparse.Namespace) -> None:
     groups = aligned.get("groups")
     if not isinstance(groups, list) or len(groups) not in range(4, 9):
         raise PipelineError("Render requires 4 to 8 aligned image groups")
-    if not 0.60 <= args.hero_fraction <= 0.75:
-        raise PipelineError("Hero fraction must be between 0.60 and 0.75")
+    if not 0.60 <= args.min_hero_fraction <= 0.75:
+        raise PipelineError("Minimum Hero fraction must be between 0.60 and 0.75")
     validate_package(package_path, [group["id"] for group in groups])
     frame_groups = {group["id"]: group for group in frames.get("groups") or []}
     if set(frame_groups) != {group["id"] for group in groups}:
@@ -1088,16 +1091,68 @@ def command_render(args: argparse.Namespace) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     outputs = []
+    layout_groups = []
+    measure = ImageDraw.Draw(Image.new("RGB", (1440, 1920)))
     for group_index, group in enumerate(groups, 1):
         selected_units = {unit["id"]: unit for unit in frame_groups[group["id"]]["units"]}
         if set(selected_units) != {unit["id"] for unit in group["units"]}:
             raise PipelineError(f"Incomplete frame selection for {group['id']}")
         out_width, out_height = 1440, 1920
-        hero_height = round(out_height * args.hero_fraction)
-        remaining = out_height - hero_height
-        strip_count = len(group["units"]) - 1
-        strip_heights = [remaining // strip_count] * strip_count
-        strip_heights[-1] += remaining - sum(strip_heights)
+        max_support_height = out_height - round(out_height * args.min_hero_fraction)
+        text_heights = []
+        candidate_heights = []
+        padding_fraction = HORIZONTAL_PADDING_FRACTIONS[-1]
+        for candidate_padding in HORIZONTAL_PADDING_FRACTIONS:
+            max_text_width = out_width - 2 * round(out_width * candidate_padding)
+            try:
+                candidate_heights = [
+                    text_layout(
+                        measure,
+                        clean_text(unit["translation_zh"]),
+                        clean_text(unit["original"]),
+                        font,
+                        max_text_width,
+                        False,
+                    )["height"]
+                    for unit in group["units"][1:]
+                ]
+            except PipelineError:
+                continue
+            if sum(candidate_heights) <= max_support_height:
+                text_heights = candidate_heights
+                padding_fraction = candidate_padding
+                break
+        if not text_heights:
+            if not candidate_heights:
+                raise PipelineError(
+                    f"{group['id']} fixed subtitles exceed {MAX_TEXT_LINES} lines "
+                    f"at {HORIZONTAL_PADDING_FRACTIONS[-1]:.0%} horizontal padding"
+                )
+            required_fraction = (out_height - sum(candidate_heights)) / out_height
+            raise PipelineError(
+                f"{group['id']} fixed subtitles require Hero at {required_fraction:.3f}, "
+                f"below the {args.min_hero_fraction:.3f} minimum"
+            )
+        allowance_budget = max_support_height - sum(text_heights)
+        visual_allowance = min(MAX_SUPPORT_VISUAL_ALLOWANCE, allowance_budget // len(text_heights))
+        strip_heights = [height + visual_allowance for height in text_heights]
+        hero_height = out_height - sum(strip_heights)
+        hero_fraction = hero_height / out_height
+        if hero_fraction < args.min_hero_fraction:
+            raise PipelineError(
+                f"{group['id']} fixed subtitles leave Hero at {hero_fraction:.3f}, "
+                f"below the {args.min_hero_fraction:.3f} minimum"
+            )
+        layout_groups.append(
+            {
+                "id": group["id"],
+                "hero_fraction": round(hero_fraction, 3),
+                "hero_height": hero_height,
+                "horizontal_padding_fraction": padding_fraction,
+                "support_visual_allowance": visual_allowance,
+                "support_heights": strip_heights,
+            }
+        )
         canvas = Image.new("RGB", (out_width, out_height), "black")
         y = 0
         for unit_index, unit in enumerate(group["units"]):
@@ -1114,6 +1169,7 @@ def command_render(args: argparse.Namespace) -> None:
                     clean_text(unit["original"]),
                     font,
                     hero=unit_index == 0,
+                    padding_fraction=padding_fraction,
                 )
             canvas.paste(panel, (0, y))
             y += height
@@ -1142,8 +1198,19 @@ def command_render(args: argparse.Namespace) -> None:
         "image_count": len(outputs),
         "dimensions": {"width": 1440, "height": 1920},
         "crop_anchor": "frame_bottom",
-        "hero_fraction": args.hero_fraction,
-        "font": {"name": font.name, "path": str(font), "sha256": sha256(font)},
+        "layout": {
+            "mode": "dynamic_support",
+            "min_hero_fraction": args.min_hero_fraction,
+            "max_support_visual_allowance": MAX_SUPPORT_VISUAL_ALLOWANCE,
+            "groups": layout_groups,
+        },
+        "font": {
+            "name": font.name,
+            "path": str(font),
+            "sha256": sha256(font),
+            "zh_size": ZH_FONT_SIZE,
+            "original_size": ORIGINAL_FONT_SIZE,
+        },
         "aligned_sha256": sha256(aligned_path),
         "frame_selection_sha256": sha256(frames_path),
         "artifacts": artifacts,
@@ -1259,7 +1326,13 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--frames", required=True)
     render.add_argument("--package", required=True)
     render.add_argument("--font")
-    render.add_argument("--hero-fraction", type=float, default=0.62)
+    render.add_argument(
+        "--min-hero-fraction",
+        "--hero-fraction",
+        dest="min_hero_fraction",
+        type=float,
+        default=0.60,
+    )
     render.add_argument("--out-dir", required=True)
     render.set_defaults(handler=command_render)
 

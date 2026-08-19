@@ -359,27 +359,53 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         if not font.is_file():
             self.skipTest("DejaVu Sans is unavailable")
         render = self.root / "render"
-        self.invoke(
-            "render",
-            "--aligned",
-            str(aligned),
-            "--frames",
-            str(frame_selection),
-            "--package",
-            str(package),
-            "--font",
-            str(font),
-            "--out-dir",
-            str(render),
-        )
+        real_text_layout = PIPELINE.text_layout
+
+        def require_tighter_padding(*args, **kwargs):
+            max_width = args[4]
+            hero = args[5]
+            if not hero and max_width < 1300:
+                raise PIPELINE.PipelineError("fixture requires tighter padding")
+            return real_text_layout(*args, **kwargs)
+
+        with mock.patch.object(PIPELINE, "text_layout", side_effect=require_tighter_padding):
+            self.invoke(
+                "render",
+                "--aligned",
+                str(aligned),
+                "--frames",
+                str(frame_selection),
+                "--package",
+                str(package),
+                "--font",
+                str(font),
+                "--out-dir",
+                str(render),
+            )
         self.assertEqual("pending_visual_review", self.invoke("verify", "--render-dir", str(render)))
         self.assertEqual("passed", self.invoke("verify", "--render-dir", str(render), "--visual-passed"))
         manifest = json.loads((render / "manifest.json").read_text())
         self.assertEqual(6, manifest["image_count"])
         self.assertEqual("podcast_drawn_subtitle_stack_v1", manifest["style"])
         self.assertEqual("frame_bottom", manifest["crop_anchor"])
-        self.assertEqual(0.62, manifest["hero_fraction"])
-        self.assertIn("font", manifest)
+        self.assertEqual("dynamic_support", manifest["layout"]["mode"])
+        self.assertEqual(0.60, manifest["layout"]["min_hero_fraction"])
+        self.assertEqual(30, manifest["layout"]["max_support_visual_allowance"])
+        self.assertEqual(6, len(manifest["layout"]["groups"]))
+        self.assertTrue(
+            all(group["hero_fraction"] >= 0.60 for group in manifest["layout"]["groups"])
+        )
+        self.assertTrue(
+            all(0 <= group["support_visual_allowance"] <= 30 for group in manifest["layout"]["groups"])
+        )
+        self.assertTrue(
+            all(0.03 <= group["horizontal_padding_fraction"] <= 0.06 for group in manifest["layout"]["groups"])
+        )
+        self.assertTrue(
+            all(group["horizontal_padding_fraction"] == 0.04 for group in manifest["layout"]["groups"])
+        )
+        self.assertEqual(50, manifest["font"]["zh_size"])
+        self.assertEqual(33, manifest["font"]["original_size"])
         with Image.open(next(render.glob("[0-9][0-9]_*.jpg"))) as image:
             self.assertEqual((1440, 1920), image.size)
 

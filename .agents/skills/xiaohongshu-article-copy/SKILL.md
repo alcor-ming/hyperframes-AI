@@ -85,19 +85,19 @@ Inspect each contact sheet. Choose one frame per unit with a clear expression, r
 
 ## Render And Verify
 
-Run `render`. Each 1440x1920 image uses a 62% Hero panel and 3 or 4 tightly stacked support strips in the remaining 38%, reducing the subtitle stack by 2% of the full image compared with the previous layout. Every panel crops from the bottom edge of its selected video-frame image upward. The workflow then draws compact bilingual subtitles over the lower part of each panel; it does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
+Run `render`. Every panel uses fixed 50px Chinese and 33px original-language text. The 3 or 4 support strips take their measured bilingual text height and up to 30px of extra visual room each. Long text reduces that extra room first, then tightens horizontal padding from 6% to no less than 3%, so the Hero stays at or above 60%. Every panel crops from the bottom edge of its selected video-frame image upward, and the support strips have no gaps. The workflow draws the bilingual subtitles itself; it does not preserve or locate subtitles from the source video. Keep at least 40% of the full image free of subtitle text.
 
 ```bash
 .agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py render \
   --aligned <variant>/artifacts/aligned-quotes.json \
   --frames <variant>/frames/frame-selection.json \
-  --package <variant>/PACKAGE.md --hero-fraction 0.62 \
+  --package <variant>/PACKAGE.md --min-hero-fraction 0.60 \
   --out-dir <variant>/render
 ```
 
 The article produces 4 to 8 images plus one contact sheet and the publish-ready `PACKAGE.md`.
 
-Run `verify` without `--visual-passed`, inspect every image and the contact sheet, then rerun with `--visual-passed` only after checking compact font sizing, tight strip spacing, bottom-anchored crop, readability, ordering, and no truncation. Finalize with:
+Run `verify` without `--visual-passed`, inspect every image and the contact sheet, then rerun with `--visual-passed` only after checking fixed font sizing, dynamic strip heights, bottom-anchored crop, readability, ordering, and no truncation. Finalize with:
 
 ```bash
 ./work finalize <variant>/render --qa-passed
