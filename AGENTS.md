@@ -4,7 +4,7 @@
 
 - 本仓库公开管理 Harness 规则、模板、Profile 接入、Skill 路由与 Work CLI。
 - 所有作品均位于 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入 Git。
-- 不发布内容、不登录平台、不购买额度。外部或付费服务仍需用户明确授权。
+- 不公开发布内容、不购买额度。只有用户对准确 Work 与 Variant 明确授权后，才可使用其已登录的 Windows Chrome 保存到小红书创作者平台草稿箱；不得读取 Cookie、调用未公开接口或点击发布。
 - `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
 - v1 默认不生成 AI 图片；仅在用户明确授权、Animation Plan 已批准且存在明确 Asset Brief 时可调用 ImageGen。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。`hyperframes_video` 不生成或烧录底部字幕；`podcast_quote_image` 由工作流在选定视频帧上绘制批准的中英双语字幕。
 
@@ -32,7 +32,7 @@ Work ID 和目录名创建后保持不变。`podcast_quote_image` 在转录可�
 - `materials/*.transcript.json`：下载视频的时间真源；YouTube 可优先采用结构化原生转录，其余或 fallback 统一复用 `qivance-music` 的共享 ASR，ASR 的 `characters[]` 不得退化为仅段级时间戳。
 - `SCRIPT.md`：当前 Variant 唯一口播正文；批准后的隐藏段落 ID 保持稳定。
 - `RESEARCH.md`：视频工作流记录与 Script Revision 对齐的联网资料、可视化机制与事实边界；播客图文工作流记录嘉宾身份、与获批观点相关的经历、可用于开篇的背景故事、事实边界和来源。
-- `PACKAGE.md`：视频工作流保存最终标题、封面文字和一句话简介；播客图文工作流直接保存可发布 Markdown，依次为实际 H1 标题、开篇、实际 H2 小标题与第三人称正文、署名、`原视频：<视频原标题>` 和话题标签，不放来源地址，也不出现“大标题”“开篇”“图片文案”等结构说明。标题必须在全文稳定后最后拟定。
+- `PACKAGE.md`：视频工作流保存最终标题、封面文字和一句话简介；播客图文工作流直接保存可复制的纯文本，第一行为标题，其后依次为开篇、`01｜小标题` 形式的分节与第三人称正文、署名、`原视频：<视频原标题>` 和话题标签，不放来源地址、Markdown 标记或“大标题”“开篇”“图片文案”等结构说明。标题必须在全文稳定后最后拟定；render 生成 `xiaohongshu.json`，分别保存标题、正文、1 至 3 个话题与有序图片。
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
 - `ANIMATION_PLAN.md`：正式 HTML 制作前唯一必须批准的视觉设计 PRD。
 - `variant.yaml`：当前 Variant 状态，由 CLI 与 Agent 更新。
@@ -70,4 +70,4 @@ Work ID 和目录名创建后保持不变。`podcast_quote_image` 在转录可�
 
 - Work 和 Variant 的创建、指针、等待、Park、Draft 注册、Final、Archive 与 Reopen 只通过 `./work` 管理。
 - CLI 只管理生命周期和文件一致性；内容判断与视觉选择仍由 Agent 负责，确定性的解析、时间与格式处理交给对应 Skill 脚本。
-- Final 是本地交付物，不表示已发布。
+- Final 是本地交付物，不表示已保存到平台草稿箱或已发布；两者分别需要外部动作，且草稿授权绝不包含发布。

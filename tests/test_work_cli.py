@@ -54,12 +54,22 @@ class WorkCliTest(unittest.TestCase):
         package = directory / "PACKAGE.md"
         package.write_text("# Package\n", encoding="utf-8")
         artifacts.append({"path": package.name, "role": "package", "sha256": WORK_CLI.file_sha256(package)})
+        publish_payload = directory / "xiaohongshu.json"
+        publish_payload.write_text('{"destination":"creator_draft"}\n', encoding="utf-8")
+        artifacts.append(
+            {
+                "path": publish_payload.name,
+                "role": "publish_payload",
+                "sha256": WORK_CLI.file_sha256(publish_payload),
+            }
+        )
         (directory / "manifest.json").write_text(
             json.dumps(
                 {
                     "schema_version": 1,
                     "workflow": "podcast_quote_image",
                     "qa": "passed",
+                    "publish_contract": "xiaohongshu_creator_draft_v1",
                     "artifacts": artifacts,
                 },
                 ensure_ascii=False,

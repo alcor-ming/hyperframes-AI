@@ -11,6 +11,8 @@ workflows:
     downloader_contract: "2.0"
     youtube_transcript: youtube-transcript-api
     youtube_transcript_optional: true
+    publish_payload: xiaohongshu_creator_draft_v1
+    creator_draft: explicit_authorization
 
 templates:
   talking_head: recipes/talking-head.md
@@ -42,6 +44,6 @@ packaging:
   required: [dbs-xhs-title]
 
 excluded_v1:
-  global: [prompt_library, publishing]
+  global: [prompt_library, public_publishing]
   hyperframes_video: [bottom_subtitles]
   podcast_quote_image: [bundled_asr, image_generation]

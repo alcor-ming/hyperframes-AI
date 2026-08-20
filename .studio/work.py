@@ -713,7 +713,10 @@ def validate_deliverable_manifest(directory: Path, expected_workflow: str) -> di
             raise HarnessError("podcast_quote_image Final requires 8 to 12 image artifacts")
         if roles.get("contact_sheet") != 1 or roles.get("package") != 1:
             raise HarnessError("podcast_quote_image Final requires one contact sheet and one package")
-        if len(artifacts) != roles["image"] + 2:
+        publish_payloads = roles.get("publish_payload", 0)
+        if manifest.get("publish_contract") == "xiaohongshu_creator_draft_v1" and publish_payloads != 1:
+            raise HarnessError("Xiaohongshu Creator draft Final requires one publish payload")
+        if publish_payloads not in (0, 1) or len(artifacts) != roles["image"] + 2 + publish_payloads:
             raise HarnessError("podcast_quote_image Final contains unsupported artifact roles")
     actual_files: set[str] = set()
     for path in directory.rglob("*"):

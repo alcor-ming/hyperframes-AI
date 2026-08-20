@@ -1,6 +1,6 @@
 ---
 name: xiaohongshu-article-copy
-description: Research the guest behind one approved podcast article plan, write publish-ready Xiaohongshu Markdown, and render its drawn-subtitle image stack and local Final package.
+description: Research one approved podcast article, write and render its Xiaohongshu image note, and save an explicitly authorized Final to Xiaohongshu Creator drafts.
 ---
 
 # Xiaohongshu Article Copy
@@ -43,18 +43,18 @@ Do not turn biography into a general profile or use an unsourced anecdote. If th
 
 ## Write Copy Before The Title
 
-Draft the opening and image sections first. After the title is settled, write `PACKAGE.md` as publication-ready Markdown in this exact shape:
+Draft the opening and image sections first. After the title is settled, write `PACKAGE.md` as copy-ready plain text in this exact shape:
 
-```markdown
-# <final title, written last>
+```text
+<final title, written last>
 
 <summarize the article's core viewpoint and connect it to the guest's verified background story>
 
-## <summary of the first image's passage>
+01｜<summary of the first image's passage>
 
 <third-person copy>
 
-## <summary of the second image's passage>
+02｜<summary of the second image's passage>
 
 <third-person copy>
 
@@ -65,7 +65,9 @@ Draft the opening and image sections first. After the title is settled, write `P
 <topic tags>
 ```
 
-Do not emit structural labels such as `大标题`, `开篇`, `图片文案`, `播客信息`, or `话题标签`. Put a blank line after every heading and between sentences or paragraphs so the file can be published without cleanup. The opening states the core conclusion immediately, then uses the guest's relevant background story to explain why the viewpoint carries weight. Each H2 summarizes its approved image passage rather than adding a hook or a new claim. The H2 sections must cover every approved group once, in source order, with no extra section. Write in third person. Attribute viewpoints to the actual speaker; never impersonate the guest, invent first-person experience, or turn a faithful translation into a stronger claim.
+Do not emit Markdown headings or structural labels such as `大标题`, `开篇`, `图片文案`, `播客信息`, or `话题标签`. The first line is the platform title; the remaining copy already uses sequential `01｜小标题` sections and can be pasted directly into the body field. `render` separates the trailing tags into `topics` without otherwise reformatting the body. The title is at most 20 characters; body plus topics is at most 1000 characters; use 1 to 3 unique topics, each at most 30 characters. The opening states the core conclusion immediately, then uses the guest's relevant background story to explain why the viewpoint carries weight. Each numbered section summarizes its approved image passage rather than adding a hook or a new claim. The sections must cover every approved group once, in source order, with no extra section. Write in third person. Attribute viewpoints to the actual speaker; never impersonate the guest, invent first-person experience, or turn a faithful translation into a stronger claim.
+
+For an intentionally designed cover, follow the cited Xiaohongshu image-copy guidance: keep the cover's main title to 3 to 7 Chinese characters and total cover copy within 15 characters, establish a clear title/subtitle/body hierarchy, use high contrast, and confirm readability at feed size. Those are cover rules, not limits for the platform title or note body; this quote-stack workflow does not invent a separate cover or shorten faithful quotes unless the user approves that content change. See [花叔的小红书图片设计调研](https://www.huasheng.ai/insights/xiaohongshu-image-design/) and the [official Creator platform](https://creator.xiaohongshu.com/).
 
 Apply only the expression-efficiency and cognitive-gap checks from `dbs-content` to the opening, subtitles, and third-person copy; do not rerun format selection or its product-premise flow.
 
@@ -95,7 +97,7 @@ Run `render`. Every panel displays the approved bilingual text at fixed 50px Chi
   --out-dir <variant>/render
 ```
 
-The article produces 8 to 12 images plus one contact sheet and the publish-ready `PACKAGE.md`.
+The article produces 8 to 12 images, one contact sheet, the copy-ready `PACKAGE.md`, and `xiaohongshu.json`. The JSON is the native draft input and fixes the ordered image paths and digests, title, plain-text body, and topics.
 
 Run `verify` without `--visual-passed`, inspect every image and the contact sheet, then rerun with `--visual-passed` only after checking fixed bilingual font sizing, dynamic strip heights, bottom-anchored crop, readability, ordering, and no truncation. Finalize with:
 
@@ -103,4 +105,10 @@ Run `verify` without `--visual-passed`, inspect every image and the contact shee
 ./work finalize <variant>/render --qa-passed
 ```
 
-The approved article plan is the only content gate. Do not add a second Draft approval. Final is local and does not authorize publishing.
+The approved article plan is the only content gate. Do not add a second visual Draft approval. Final is local and does not authorize any platform action.
+
+## Save To Xiaohongshu Creator Drafts
+
+Only continue when the user explicitly authorizes saving this exact Work and Variant to the Xiaohongshu Creator draft box. Validate the Final manifest and `xiaohongshu.json`, including every image digest and its order. Use the user's existing logged-in Windows Chrome session through Computer Use; never read, export, or reuse browser cookies and never call an undocumented private API.
+
+Open the official Creator platform, create an image note, upload the ordered images, fill `title` and `body`, and add the listed topics through the platform topic control. Never click `发布`, `定时发布`, or any equivalent submission control. Let the platform save the draft, then open `草稿箱` and verify the matching title and image count. Record only the payload digest, save time, title, image count, and verification result in `<variant>/.runtime/xiaohongshu-draft.json`; do not store cookies or page data. Stop without retrying if login, CAPTCHA, an ambiguous save state, or changed fields prevent verification.

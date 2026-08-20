@@ -37,6 +37,10 @@ ORIGINAL_FONT_SIZE = 30
 MAX_TEXT_LINES = 3
 MAX_SUPPORT_VISUAL_ALLOWANCE = 30
 HORIZONTAL_PADDING_FRACTIONS = (0.06, 0.05, 0.04, 0.03)
+XHS_TITLE_MAX = 20
+XHS_CONTENT_MAX = 1000
+XHS_TOPIC_MAX = 3
+XHS_TOPIC_NAME_MAX = 30
 
 
 class PipelineError(RuntimeError):
@@ -1020,38 +1024,136 @@ def safe_title(value: str) -> str:
     return cleaned[:36] or "quote"
 
 
-def validate_package(path: Path, group_ids: list[str]) -> None:
+def parse_package(path: Path, group_ids: list[str]) -> dict[str, Any]:
     if not path.is_file() or path.stat().st_size == 0:
         raise PipelineError("PACKAGE.md is missing or empty")
     text = path.read_text(encoding="utf-8")
-    title_match = re.match(r"\A# ([^\n]+)\n\n", text)
-    image_headings = list(re.finditer(r"^## ([^\n]+)\n\n", text, flags=re.MULTILINE))
+    title_match = re.match(r"\A([^\n]+)\n\n", text)
+    image_headings = list(re.finditer(r"^(\d{2})｜([^\n]+)\n\n", text, flags=re.MULTILINE))
     if not title_match or len(image_headings) != len(group_ids):
-        raise PipelineError("PACKAGE.md requires one publishable H1 and one H2 section per image")
+        raise PipelineError("PACKAGE.md requires a first-line title and one numbered plain-text section per image")
     title = clean_text(title_match.group(1))
     opening = text[title_match.end() : image_headings[0].start()].strip()
-    subtitles = [clean_text(match.group(1)) for match in image_headings]
+    heading_numbers = [match.group(1) for match in image_headings]
+    subtitles = [clean_text(match.group(2)) for match in image_headings]
     bodies = [
         text[match.end() : image_headings[index + 1].start() if index + 1 < len(image_headings) else len(text)].strip()
         for index, match in enumerate(image_headings)
     ]
+    topics = re.findall(r"(?<!\S)#([^\s#]+)", text)
+    topic_text = " ".join(f"#{topic}" for topic in topics)
+    body = text[title_match.end() :].strip()
+    body = re.sub(r"(?<!\S)#[^\s#]+", "", body)
+    body = re.sub(r"[ \t]+\n", "\n", body)
+    body = re.sub(r"\n{3,}", "\n\n", body).strip()
+    published_length = len(body) + (2 + len(topic_text) if topic_text else 0)
     forbidden = {"Package", "大标题", "开篇", "图片文案", "播客信息", "话题标签"}
     original_video_match = re.search(r"^原视频：\s*\S.*$", text, flags=re.MULTILINE)
     if (
         not title
-        or len(title) > 20
+        or len(title) > XHS_TITLE_MAX
         or title in forbidden
+        or heading_numbers != [f"{index:02d}" for index in range(1, len(image_headings) + 1)]
         or not opening
         or any(not subtitle or subtitle in forbidden for subtitle in subtitles)
         or any(not clean_text(body) for body in bodies)
         or not original_video_match
         or re.search(r"(?:https?://|www\.)", text, flags=re.IGNORECASE)
-        or not re.search(r"(?:^|\s)#[^\s#]+", text, flags=re.MULTILINE)
+        or re.search(r"^#{1,6}\s", text, flags=re.MULTILINE)
+        or not 1 <= len(topics) <= XHS_TOPIC_MAX
+        or len(set(topics)) != len(topics)
+        or any(len(topic) > XHS_TOPIC_NAME_MAX for topic in topics)
+        or published_length > XHS_CONTENT_MAX
     ):
         raise PipelineError(
-            "PACKAGE.md must be publish-ready Markdown with a <=20-character title, opening, image sections, "
-            "an original-video title, no URL, and tags"
+            "PACKAGE.md must produce a Xiaohongshu title <=20 characters, plain-text content <=1000 "
+            "characters, 1 to 3 unique topics, numbered sections, an original-video title, and no URL"
         )
+    return {"title": title, "body": body, "topics": topics}
+
+
+def validate_package(path: Path, group_ids: list[str]) -> None:
+    parse_package(path, group_ids)
+
+
+def build_publish_payload(package: Path, group_ids: list[str], images: list[Path], output: Path) -> dict[str, Any]:
+    copy = parse_package(package, group_ids)
+    if len(images) != len(group_ids):
+        raise PipelineError("Xiaohongshu payload requires one ordered image per article group")
+    resolved_output = output.expanduser().resolve()
+    payload = {
+        "schema_version": 1,
+        "platform": "xiaohongshu",
+        "destination": "creator_draft",
+        "note_type": "image",
+        "title": copy["title"],
+        "body": copy["body"],
+        "topics": copy["topics"],
+        "images": [
+            {
+                "path": path.name if path.parent.resolve() == resolved_output.parent else str(path.resolve()),
+                "sha256": sha256(path),
+            }
+            for path in images
+        ],
+        "source_package_sha256": sha256(package),
+    }
+    write_json(resolved_output, payload)
+    return payload
+
+
+def validate_publish_payload(
+    path: Path, expected_images: list[Path], expected_package: Path | None = None
+) -> dict[str, Any]:
+    payload = read_json(path)
+    title = payload.get("title")
+    body = payload.get("body")
+    topics = payload.get("topics")
+    topic_text = " ".join(f"#{topic}" for topic in topics) if isinstance(topics, list) else ""
+    if (
+        payload.get("schema_version") != 1
+        or payload.get("platform") != "xiaohongshu"
+        or payload.get("destination") != "creator_draft"
+        or payload.get("note_type") != "image"
+        or not isinstance(title, str)
+        or not title
+        or len(title) > XHS_TITLE_MAX
+        or not isinstance(body, str)
+        or not body
+        or not isinstance(topics, list)
+        or not 1 <= len(topics) <= XHS_TOPIC_MAX
+        or any(not isinstance(topic, str) or not topic or len(topic) > XHS_TOPIC_NAME_MAX for topic in topics)
+        or len(set(topics)) != len(topics)
+        or len(body) + 2 + len(topic_text) > XHS_CONTENT_MAX
+        or re.search(r"(?:https?://|www\.)", body, flags=re.IGNORECASE)
+        or not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("source_package_sha256", "")))
+    ):
+        raise PipelineError("Xiaohongshu publish payload contract mismatch")
+    images = payload.get("images")
+    if not isinstance(images, list) or len(images) != len(expected_images):
+        raise PipelineError("Xiaohongshu publish payload image count mismatch")
+    if expected_package and payload["source_package_sha256"] != sha256(expected_package):
+        raise PipelineError("Xiaohongshu publish payload package digest mismatch")
+    for item, expected in zip(images, expected_images, strict=True):
+        if not isinstance(item, dict):
+            raise PipelineError("Xiaohongshu publish payload image entry mismatch")
+        candidate = Path(item.get("path", ""))
+        candidate = candidate if candidate.is_absolute() else path.parent / candidate
+        if candidate.resolve() != expected.resolve() or item.get("sha256") != sha256(expected):
+            raise PipelineError("Xiaohongshu publish payload image order or digest mismatch")
+    return payload
+
+
+def command_publish_package(args: argparse.Namespace) -> None:
+    package = Path(args.package).expanduser().resolve()
+    image_dir = Path(args.image_dir).expanduser().resolve()
+    images = sorted(path for path in image_dir.glob("[0-9][0-9]_*.jpg") if path.is_file())
+    if len(images) not in range(8, 13):
+        raise PipelineError("Xiaohongshu publish package requires 8 to 12 ordered images")
+    group_ids = [f"g{index:02d}" for index in range(1, len(images) + 1)]
+    output = Path(args.out).expanduser().resolve()
+    build_publish_payload(package, group_ids, images, output)
+    print(output)
 
 
 def final_contact_sheet(paths: list[Path], output: Path) -> None:
@@ -1083,7 +1185,8 @@ def command_render(args: argparse.Namespace) -> None:
         raise PipelineError("Render requires 8 to 12 aligned image groups")
     if not 0.60 <= args.min_hero_fraction <= 0.75:
         raise PipelineError("Minimum Hero fraction must be between 0.60 and 0.75")
-    validate_package(package_path, [group["id"] for group in groups])
+    group_ids = [group["id"] for group in groups]
+    validate_package(package_path, group_ids)
     frame_groups = {group["id"]: group for group in frames.get("groups") or []}
     if set(frame_groups) != {group["id"] for group in groups}:
         raise PipelineError("Frame selection targets different image groups")
@@ -1185,6 +1288,8 @@ def command_render(args: argparse.Namespace) -> None:
     final_contact_sheet(outputs, contact)
     package_output = out_dir / "PACKAGE.md"
     shutil.copy2(package_path, package_output)
+    publish_output = out_dir / "xiaohongshu.json"
+    build_publish_payload(package_output, group_ids, outputs, publish_output)
     artifacts = [
         {"path": path.name, "role": "image", "sha256": sha256(path)} for path in outputs
     ]
@@ -1192,6 +1297,7 @@ def command_render(args: argparse.Namespace) -> None:
         [
             {"path": contact.name, "role": "contact_sheet", "sha256": sha256(contact)},
             {"path": package_output.name, "role": "package", "sha256": sha256(package_output)},
+            {"path": publish_output.name, "role": "publish_payload", "sha256": sha256(publish_output)},
         ]
     )
     manifest = {
@@ -1199,6 +1305,7 @@ def command_render(args: argparse.Namespace) -> None:
         "workflow": WORKFLOW,
         "qa": "pending_visual_review",
         "style": "podcast_drawn_subtitle_stack_v1",
+        "publish_contract": "xiaohongshu_creator_draft_v1",
         "image_count": len(outputs),
         "dimensions": {"width": 1440, "height": 1920},
         "crop_anchor": "frame_bottom",
@@ -1242,13 +1349,21 @@ def verify_render(directory: Path) -> dict[str, Any]:
         roles[item["role"]] = roles.get(item["role"], 0) + 1
         if item["role"] == "image":
             images.append(path)
-    if len(images) not in range(8, 13) or roles.get("contact_sheet") != 1 or roles.get("package") != 1:
-        raise PipelineError("Render requires 8 to 12 images, one contact sheet, and one package")
+    if (
+        len(images) not in range(8, 13)
+        or roles.get("contact_sheet") != 1
+        or roles.get("package") != 1
+        or roles.get("publish_payload") != 1
+    ):
+        raise PipelineError("Render requires 8 to 12 images, one contact sheet, one package, and one publish payload")
     for path in images:
         with Image.open(path) as image:
             if image.size != (1440, 1920) or image.format != "JPEG":
                 raise PipelineError(f"Unexpected image geometry or format: {path.name}")
             image.verify()
+    if images != sorted(images):
+        raise PipelineError("Render image artifacts are not in publish order")
+    validate_publish_payload(directory / "xiaohongshu.json", images, directory / "PACKAGE.md")
     return manifest
 
 
@@ -1325,6 +1440,14 @@ def build_parser() -> argparse.ArgumentParser:
     choose.add_argument("--choice", action="append", required=True)
     choose.add_argument("--out", required=True)
     choose.set_defaults(handler=command_choose_frames)
+
+    publish_package = commands.add_parser(
+        "publish-package", help="Build one Xiaohongshu Creator draft payload from PACKAGE.md and rendered images"
+    )
+    publish_package.add_argument("--package", required=True)
+    publish_package.add_argument("--image-dir", required=True)
+    publish_package.add_argument("--out", required=True)
+    publish_package.set_defaults(handler=command_publish_package)
 
     render = commands.add_parser("render", help="Render the fixed drawn-subtitle 3:4 stack")
     render.add_argument("--aligned", required=True)

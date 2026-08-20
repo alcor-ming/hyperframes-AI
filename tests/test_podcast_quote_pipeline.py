@@ -44,10 +44,19 @@ class PodcastQuotePipelineTest(unittest.TestCase):
 
     def test_package_uses_original_video_title_without_url(self) -> None:
         package = self.root / "PACKAGE.md"
-        text = "# 测试标题\n\n开篇。\n\n## 小标题\n\n正文。\n\n原视频：Original Title\n\n#测试\n"
+        text = (
+            "测试标题\n\n开篇。\n\n01｜小标题\n\n正文。\n\n"
+            "原视频：Original Title\n\n#测试 #产品 #创业\n"
+        )
         package.write_text(text, encoding="utf-8")
-        PIPELINE.validate_package(package, ["g01"])
+        copy = PIPELINE.parse_package(package, ["g01"])
+        self.assertEqual("测试标题", copy["title"])
+        self.assertEqual(["测试", "产品", "创业"], copy["topics"])
+        self.assertIn("01｜小标题", copy["body"])
         package.write_text(text.replace("\n\n#测试", "\n\nhttps://youtu.be/example\n\n#测试"), encoding="utf-8")
+        with self.assertRaises(PIPELINE.PipelineError):
+            PIPELINE.validate_package(package, ["g01"])
+        package.write_text(text.replace("#测试 #产品 #创业", "#测试 #产品 #创业 #访谈"), encoding="utf-8")
         with self.assertRaises(PIPELINE.PipelineError):
             PIPELINE.validate_package(package, ["g01"])
 
@@ -369,10 +378,10 @@ class PodcastQuotePipelineTest(unittest.TestCase):
 
         package = self.root / "PACKAGE.md"
         image_copy = "\n\n".join(
-            f"## 小标题 {index}\n\n第三人称正文 {index}。" for index in range(1, 11)
+            f"{index:02d}｜小标题 {index}\n\n第三人称正文 {index}。" for index in range(1, 11)
         )
         package.write_text(
-            "# 测试标题\n\n她的核心观点是测试。\n\n"
+            "测试标题\n\n她的核心观点是测试。\n\n"
             f"{image_copy}\n\nTest Channel · Test Podcast\n\n"
             "原视频：Test Video Original Title\n\n#测试\n",
             encoding="utf-8",
@@ -408,6 +417,13 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertEqual("passed", self.invoke("verify", "--render-dir", str(render), "--visual-passed"))
         manifest = json.loads((render / "manifest.json").read_text())
         self.assertEqual(10, manifest["image_count"])
+        self.assertEqual("xiaohongshu_creator_draft_v1", manifest["publish_contract"])
+        payload = json.loads((render / "xiaohongshu.json").read_text(encoding="utf-8"))
+        self.assertEqual("creator_draft", payload["destination"])
+        self.assertEqual("测试标题", payload["title"])
+        self.assertEqual(["测试"], payload["topics"])
+        self.assertEqual(10, len(payload["images"]))
+        self.assertNotIn("## ", payload["body"])
         self.assertEqual("podcast_drawn_subtitle_stack_v1", manifest["style"])
         self.assertEqual("frame_bottom", manifest["crop_anchor"])
         self.assertEqual("dynamic_support", manifest["layout"]["mode"])
