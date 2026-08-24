@@ -242,6 +242,62 @@ class PodcastQuotePipelineTest(unittest.TestCase):
         self.assertEqual([1.25, 3.25], [item["end"] for item in value["segments"]])
         self.assertFalse(value["used_language_fallback"])
 
+    def test_asr_auto_language_contract_and_quality_gate(self) -> None:
+        video = self.root / "source-video.mp4"
+        video.write_bytes(b"video")
+        asr_script = self.root / "asr.sh"
+        asr_script.write_text("#!/bin/sh\n", encoding="utf-8")
+        asr_script.chmod(0o755)
+        output_dir = self.root / "asr"
+        transcript = output_dir / "source-video.transcript.json"
+
+        def fake_run(command: list[str], **_kwargs: object) -> object:
+            self.assertEqual("auto", command[command.index("--language") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+            transcript.write_text(
+                json.dumps(
+                    {
+                        "requested_language": "auto",
+                        "language_detection_mode": "auto",
+                        "language": "en",
+                        "timing_granularity": "character",
+                        "segments": [{"start": 0, "end": 1, "text": "clear English transcript"}],
+                        "characters": [
+                            {"aligned": True, "confidence": 0.9},
+                            {"aligned": True, "confidence": 0.8},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return PIPELINE.subprocess.CompletedProcess(command, 0)
+
+        with mock.patch.object(PIPELINE.subprocess, "run", side_effect=fake_run):
+            self.assertEqual(transcript, PIPELINE.run_asr(video, output_dir, "auto", asr_script))
+
+        resolved = self.root / "resolved.json"
+        self.invoke("resolve", "--transcript", str(transcript), "--out", str(resolved))
+        value = json.loads(resolved.read_text(encoding="utf-8"))
+        self.assertEqual("ready", value["status"])
+        self.assertEqual("auto", value["requested_language"])
+        self.assertEqual("auto", value["language_detection_mode"])
+
+        bad = json.loads(transcript.read_text(encoding="utf-8"))
+        bad["language"] = "zh"
+        bad["segments"] = [{"start": 0, "end": 1, "text": "this should not pass as Chinese"}]
+        bad["characters"] = [
+            {"aligned": True, "confidence": 0.0},
+            {"aligned": True, "confidence": 0.1},
+        ]
+        transcript.write_text(json.dumps(bad), encoding="utf-8")
+        self.invoke("resolve", "--transcript", str(transcript), "--out", str(resolved))
+        value = json.loads(resolved.read_text(encoding="utf-8"))
+        self.assertEqual("needs_review", value["status"])
+        self.assertEqual(
+            ["dominant_script_mismatch", "low_alignment_confidence"],
+            value["quality"]["issues"],
+        )
+
     def test_approved_article_flows_through_frames_render_and_qa(self) -> None:
         transcript = self.write_json(
             "transcript.json",

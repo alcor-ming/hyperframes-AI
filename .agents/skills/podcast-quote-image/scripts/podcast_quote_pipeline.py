@@ -37,6 +37,8 @@ ORIGINAL_FONT_SIZE = 30
 MAX_TEXT_LINES = 3
 MAX_SUPPORT_VISUAL_ALLOWANCE = 30
 HORIZONTAL_PADDING_FRACTIONS = (0.06, 0.05, 0.04, 0.03)
+LOW_ALIGNMENT_CONFIDENCE = 0.2
+MAX_LOW_CONFIDENCE_RATIO = 0.2
 XHS_TITLE_MAX = 20
 XHS_CONTENT_MAX = 1000
 XHS_TOPIC_MAX = 3
@@ -253,6 +255,47 @@ def dominant_script(text: str) -> str:
     return "mixed"
 
 
+def transcript_quality(
+    payload: dict[str, Any], segments: list[dict[str, Any]], language: str
+) -> dict[str, Any]:
+    text = " ".join(item["text"] for item in segments)
+    cjk = sum("\u3400" <= character <= "\u9fff" for character in text)
+    latin = sum(character.isascii() and character.isalpha() for character in text)
+    script_total = cjk + latin
+    latin_ratio = latin / script_total if script_total else 0
+    characters = payload.get("characters")
+    character_rows = characters if isinstance(characters, list) else []
+    confidences = [
+        item.get("confidence")
+        for item in character_rows
+        if isinstance(item, dict) and item.get("aligned") and finite_number(item.get("confidence"))
+    ]
+    low_confidence_ratio = (
+        sum(value < LOW_ALIGNMENT_CONFIDENCE for value in confidences) / len(confidences)
+        if confidences
+        else None
+    )
+    issues = []
+    if language == "zh" and latin_ratio > 0.5:
+        issues.append("dominant_script_mismatch")
+    elif language == "en" and script_total and latin_ratio < 0.5:
+        issues.append("dominant_script_mismatch")
+    if low_confidence_ratio is not None and low_confidence_ratio > MAX_LOW_CONFIDENCE_RATIO:
+        issues.append("low_alignment_confidence")
+    if payload.get("timing_granularity") == "character" and not character_rows:
+        issues.append("missing_character_timestamps")
+    return {
+        "status": "needs_review" if issues else "passed",
+        "issues": issues,
+        "dominant_script": dominant_script(text),
+        "latin_ratio": round(latin_ratio, 6),
+        "low_confidence_threshold": LOW_ALIGNMENT_CONFIDENCE,
+        "low_confidence_ratio": (
+            round(low_confidence_ratio, 6) if low_confidence_ratio is not None else None
+        ),
+    }
+
+
 def temporal_overlap(first: dict[str, Any], second: dict[str, Any]) -> float:
     return max(0.0, min(float(first["end"]), float(second["end"])) - max(float(first["start"]), float(second["start"])))
 
@@ -301,9 +344,9 @@ def run_asr(video: Path, output_dir: Path, language: str, asr_script: Path) -> P
         str(video),
         "--output-dir",
         str(output_dir),
+        "--language",
+        language or "auto",
     ]
-    if language and language != "auto":
-        command.extend(("--language", language))
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as exc:
@@ -477,6 +520,7 @@ def command_resolve(args: argparse.Namespace) -> None:
     if transcript_path is None and subtitle_path is None:
         raise PipelineError("Provide --transcript or --subtitle, or explicitly use --run-asr")
 
+    transcript_payload = read_json(transcript_path) if transcript_path else None
     transcript, language = parse_json_segments(transcript_path) if transcript_path else (None, "")
     if subtitle_path and subtitle_path.suffix.lower() == ".json":
         subtitles, subtitle_language = parse_json_segments(subtitle_path)
@@ -484,14 +528,22 @@ def command_resolve(args: argparse.Namespace) -> None:
         subtitles = parse_subtitle_segments(subtitle_path) if subtitle_path else None
         subtitle_language = ""
     resolved, conflicts = resolve_segments(transcript, subtitles)
+    quality = transcript_quality(transcript_payload, transcript, language) if transcript_payload and transcript else None
     canonical = []
     for index, item in enumerate(resolved, 1):
         canonical.append({"id": f"s{index:06d}", **item})
     payload = {
         "schema_version": SCHEMA_VERSION,
         "workflow": WORKFLOW,
-        "status": "needs_review" if conflicts else "ready",
+        "status": "needs_review" if conflicts or (quality and quality["issues"]) else "ready",
         "language": language or subtitle_language or args.language,
+        "requested_language": (
+            clean_text(transcript_payload.get("requested_language")) if transcript_payload else args.language
+        ) or args.language,
+        "language_detection_mode": (
+            clean_text(transcript_payload.get("language_detection_mode")) if transcript_payload else "provided"
+        ) or "provided",
+        "quality": quality,
         "inputs": {
             "transcript": (
                 {"name": transcript_path.name, "sha256": sha256(transcript_path)} if transcript_path else None

@@ -43,7 +43,13 @@ If the command, profile, backend, manifest, or copied media is unavailable or in
 
 Use `.agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py resolve`; run its subcommand `--help` for exact flags. Structured subtitles own wording and timing; transcript segments only fill uncovered intervals. Clear same-language disagreement produces `status: needs_review` and must be resolved before selection.
 
-For YouTube, reuse the native-transcript fast path adapted from NousResearch's [youtube-content Skill](https://github.com/NousResearch/hermes-agent/blob/main/skills/media/youtube-content/SKILL.md) before shared ASR. `trendradar-media` remains the only media downloader. Install the optional transcript dependency into the same environment with `uv pip install youtube-transcript-api`, then run:
+For YouTube, reuse the native-transcript fast path adapted from NousResearch's [youtube-content Skill](https://github.com/NousResearch/hermes-agent/blob/main/skills/media/youtube-content/SKILL.md) before shared ASR. `trendradar-media` remains the only media downloader. Install this Skill's declared requirements into the active Python environment before the first run:
+
+```bash
+python3 -m pip install --user --break-system-packages -r .agents/skills/podcast-quote-image/requirements.txt
+```
+
+Then run:
 
 ```bash
 .agents/skills/podcast-quote-image/scripts/podcast_quote_pipeline.py youtube-transcript \
