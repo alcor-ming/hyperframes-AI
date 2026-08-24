@@ -20,6 +20,7 @@ REQUIRED_PACKAGE = [
 REQUIRED_HARNESS = [
     "AGENTS.md",
     "work",
+    ".agents/skills/hyperframes-anti-ppt/SKILL.md",
     ".studio/work.py",
     ".studio/workflow.md",
     ".studio/capabilities.yaml",

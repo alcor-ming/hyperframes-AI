@@ -3,6 +3,7 @@ version: 1
 workflows:
   hyperframes_video:
     skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md
+    anti_ppt_skill: ../.agents/skills/hyperframes-anti-ppt/SKILL.md
   podcast_quote_image:
     planner_skill: ../.agents/skills/podcast-quote-image/SKILL.md
     copy_skill: ../.agents/skills/xiaohongshu-article-copy/SKILL.md

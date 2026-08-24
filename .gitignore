@@ -12,6 +12,8 @@ __pycache__/
 /.agents/skills/*
 !/.agents/skills/hyperframes-codex-workflow/
 !/.agents/skills/hyperframes-codex-workflow/**
+!/.agents/skills/hyperframes-anti-ppt/
+!/.agents/skills/hyperframes-anti-ppt/**
 !/.agents/skills/podcast-quote-image/
 !/.agents/skills/podcast-quote-image/**
 !/.agents/skills/xiaohongshu-article-copy/
