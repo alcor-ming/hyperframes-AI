@@ -19,6 +19,29 @@ import unicodedata
 import uuid
 
 
+try:
+    from component_harness import (
+        ComponentError,
+        install_component,
+        parse_component_ref,
+        validate_component_release,
+        validate_snapshot_closure,
+        validate_work_surface_inventory,
+        verify_installation,
+    )
+except ModuleNotFoundError:  # Loading this file by path from repository tests.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from component_harness import (
+        ComponentError,
+        install_component,
+        parse_component_ref,
+        validate_component_release,
+        validate_snapshot_closure,
+        validate_work_surface_inventory,
+        verify_installation,
+    )
+
+
 WORKFLOWS = {"hyperframes_video", "podcast_quote_image"}
 TEMPLATES = {"talking_head", "pure_hyperframes"}
 PROFILES = {"optical_fluidity", "kami_editorial", "monochrome_atelier"}
@@ -36,6 +59,13 @@ WAIT_REASONS = {
     "source_metadata": ("waiting_user", "Wait for source metadata"),
 }
 SNAPSHOT_ITEMS = ("index.html", "compositions", "DESIGN.md", "project-config.json")
+OPTIONAL_SNAPSHOT_ITEMS = (
+    "vendor",
+    "component-bindings",
+    "COMPONENT_LOCK.json",
+    "scene-slots.json",
+    "assets",
+)
 ID_PATTERN = re.compile(r"^[\w.-]+$", re.UNICODE)
 NUMBERED_TITLE_PATTERN = re.compile(r"^(\d{3})-(.+)$")
 
@@ -100,6 +130,18 @@ def read_frontmatter(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise HarnessError(f"Expected an object in {path} front matter")
     return data
+
+
+def animation_plan_contains_component_ref(path: Path, component_ref: str) -> bool:
+    """Check the approved Plan body for the exact requested Component ref."""
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        end = lines.index("---", 1)
+    except (OSError, ValueError) as exc:
+        raise HarnessError(f"Cannot read Animation Plan body {path}: {exc}") from exc
+    pattern = re.compile(rf"(?<![A-Za-z0-9_.-]){re.escape(component_ref)}(?![A-Za-z0-9_.-])")
+    return any(pattern.search(line) for line in lines[end + 1 :])
 
 
 def work_workflow(work: Path) -> str:
@@ -543,6 +585,63 @@ def command_status(root: Path, args: argparse.Namespace) -> None:
     print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
+def component_release_path(root: Path, value: str) -> Path:
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    if candidate.is_dir():
+        return candidate.resolve()
+    component_id, version = parse_component_ref(value)
+    return (root / ".studio" / "components" / component_id / f"v{version}").resolve()
+
+
+def command_component_validate(root: Path, args: argparse.Namespace) -> None:
+    release = validate_component_release(component_release_path(root, args.component))
+    print(json.dumps({key: release[key] for key in ("component_ref", "profile", "subtemplate", "package_sha256", "files")}, ensure_ascii=False, indent=2))
+
+
+def command_component_install(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
+    variant, _ = selected_variant(root, work, args)
+    plan_path = variant / "ANIMATION_PLAN.md"
+    plan = read_frontmatter(plan_path)
+    if plan.get("status") != "approved":
+        raise HarnessError("ANIMATION_PLAN.md must be approved before Component installation")
+    component_id, version = parse_component_ref(args.component_ref)
+    source = component_release_path(root, args.source or args.component_ref)
+    validate_component_release(source, expected_ref=args.component_ref)
+    if not animation_plan_contains_component_ref(plan_path, args.component_ref):
+        raise HarnessError(f"ANIMATION_PLAN.md does not approve Component {args.component_ref}")
+    project = variant / "project"
+    if not args.binding_file:
+        raise HarnessError("Component installation requires --binding-file/--binding")
+    binding_path = Path(args.binding_file).expanduser()
+    if not binding_path.is_absolute():
+        binding_path = root / binding_path
+    binding = binding_path.resolve()
+    if not binding.is_file():
+        raise HarnessError(f"Binding file is missing: {binding}")
+    result = install_component(
+        source,
+        project,
+        binding,
+        binding_path=args.destination_binding,
+        expected_ref=args.component_ref,
+    )
+    result.update({"component_ref": f"{component_id}@v{version}", "work": work.name, "variant": variant.name})
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def command_component_verify(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
+    variant, _ = selected_variant(root, work, args)
+    result = verify_installation(variant / "project", public_root=root, component_ref=args.component_ref)
+    result.update({"work": work.name, "variant": variant.name})
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def command_variant_add(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
     workflow = work_workflow(work)
@@ -755,11 +854,20 @@ def copy_directory_without_history(source: Path, destination: Path) -> None:
             shutil.copy2(path, target)
 
 
+def snapshot_items(project: Path) -> tuple[str, ...]:
+    """Keep legacy snapshots unchanged while freezing installed Components when present."""
+
+    return SNAPSHOT_ITEMS + tuple(
+        name for name in OPTIONAL_SNAPSHOT_ITEMS if (project / name).exists() or (project / name).is_symlink()
+    )
+
+
 def assert_snapshot_source(project: Path) -> None:
+    items = snapshot_items(project)
     missing = [name for name in SNAPSHOT_ITEMS if not (project / name).exists()]
     if missing:
         raise HarnessError(f"Project snapshot is incomplete: {', '.join(missing)}")
-    for name in SNAPSHOT_ITEMS:
+    for name in items:
         source = project / name
         if source.is_symlink():
             raise HarnessError(f"Snapshot source cannot be a symlink: {source}")
@@ -773,7 +881,7 @@ def assert_snapshot_source(project: Path) -> None:
 
 def snapshot_digest(project: Path) -> str:
     digest = hashlib.sha256()
-    for name in SNAPSHOT_ITEMS:
+    for name in snapshot_items(project):
         source = project / name
         paths = [source]
         if source.is_dir():
@@ -789,7 +897,7 @@ def snapshot_digest(project: Path) -> str:
 
 def copy_snapshot(project: Path, destination: Path) -> None:
     destination.mkdir(parents=True)
-    for name in SNAPSHOT_ITEMS:
+    for name in snapshot_items(project):
         source = project / name
         target = destination / name
         if source.is_dir():
@@ -835,6 +943,10 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError(f"Draft file is missing or empty: {draft}")
     project = variant / "project"
     assert_snapshot_source(project)
+    if (project / "COMPONENT_LOCK.json").is_file():
+        verify_installation(project, public_root=root)
+    elif (project / "scene-slots.json").is_file():
+        validate_work_surface_inventory(project)
     draft_digest = file_sha256(draft)
     source_digest = snapshot_digest(project)
     previews = variant / "previews"
@@ -857,6 +969,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     try:
         shutil.copy2(draft, staging / "draft.mp4")
         copy_snapshot(project, staging / "source-snapshot")
+        validate_snapshot_closure(project, staging / "source-snapshot")
         metadata = {
             "id": draft_id,
             "registered_at": now(),
@@ -1249,6 +1362,27 @@ def build_parser() -> argparse.ArgumentParser:
     use.set_defaults(handler=command_use)
     commands.add_parser("status").set_defaults(handler=command_status)
 
+    component = commands.add_parser("component", help="Validate and install immutable Component Releases")
+    component_commands = component.add_subparsers(dest="component_command", required=True)
+    component_validate = component_commands.add_parser("validate")
+    component_validate.add_argument("component")
+    component_validate.set_defaults(handler=command_component_validate)
+    component_install = component_commands.add_parser("install")
+    component_install.add_argument("component_ref")
+    component_install.add_argument("--source", help="Component package path or component ref")
+    component_install.add_argument(
+        "--binding-file",
+        "--binding",
+        dest="binding_file",
+        required=True,
+        help="Required reviewed Scene Binding JSON; no component-id inference is performed",
+    )
+    component_install.add_argument("--destination-binding")
+    component_install.set_defaults(handler=command_component_install)
+    component_verify = component_commands.add_parser("verify")
+    component_verify.add_argument("component_ref", nargs="?")
+    component_verify.set_defaults(handler=command_component_verify)
+
     variant = commands.add_parser("variant")
     variant_commands = variant.add_subparsers(dest="variant_command", required=True)
     variant_add = variant_commands.add_parser("add")
@@ -1298,7 +1432,7 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
     target_root = (root or repo_root()).resolve()
     try:
         args.handler(target_root, args)
-    except HarnessError as exc:
+    except (HarnessError, ComponentError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return 0

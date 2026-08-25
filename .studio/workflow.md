@@ -27,6 +27,8 @@ Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS �
 
 进入 Animation Plan 时加载 `hyperframes-anti-ppt`，使用当前时间边界、Recipe、Profile、Subtemplate、画幅以及已有的组件候选或组合 Preview，明确或复审视觉状态链。结果合并进同一份 `ANIMATION_PLAN.md`，不新增审批产物。组件的检索、版本、Slots 与安装由视频工作流或组件库能力负责，Anti-PPT 只审查视觉叙事与动效适配。
 
+已批准的 Component Release 直接读取 `.studio/components/**/COMPONENT.md`，需要真实用法证据时再读取对应 `cases/**/CASE.md` 和边界 Fixture；Case 不扩大公共合同。安装前运行 `./work component validate <component-id>@vN`，Plan 批准后用显式 Work/Variant 和已审核的 Binding 文件运行 `./work --work <id> --variant <variant-id> component install <component-id>@vN --binding-file <binding.json>`，随后用 `component verify` 复算公共源、Work vendor、全部 Scene Bindings 和 `COMPONENT_LOCK.json`。语义简报与匹配记录仍写入 `ANIMATION_PLAN.md`，不创建 `SCENE_SEMANTICS.md`。没有匹配组件时失败关闭到 Plan 内的 `custom:<slug>`。
+
 `verbatim` 的 Animation Plan 直接使用字级转录证据聚合出的原时间戳；源视频或音频仍是最终时间权威。`dbs` 在没有正式音频时才估算时间。
 
 ## Talking-head

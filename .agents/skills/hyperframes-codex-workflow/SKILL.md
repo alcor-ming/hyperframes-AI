@@ -22,7 +22,8 @@ This Skill is intentionally thin. The repository root owns the workflow.
 - Once the Script is settled, run `./work --work <work-id> --variant <variant-id> name "<core-topic>"` before Research. The CLI adds the per-workflow three-digit sequence and leaves the Work ID unchanged.
 - Research the settled Script online into `RESEARCH.md`, then require the Animation Plan to target that Research Revision.
 - Before Plan approval, use `hyperframes-anti-ppt` to define or review the motion-native premise and merge the result into the existing `ANIMATION_PLAN.md`; do not create another approval artifact.
-- When component candidates or a combination Preview exist, the video workflow owns discovery, versioning, and installation. `hyperframes-anti-ppt` reviews narrative and motion fit only.
+- When component candidates or a combination Preview exist, the video workflow owns discovery, versioning, and installation. Discover Component Releases from `.studio/components/**/COMPONENT.md`, and inspect only matching Cases from `.studio/components/*/cases/**/CASE.md` plus boundary Fixtures when needed. A Case records an in-contract real use; it never widens the Component contract. `hyperframes-anti-ppt` reviews narrative and motion fit only.
+- Keep the Scene Semantic Brief and Component Match Record in the existing `ANIMATION_PLAN.md`: record the selected Component, matched Case, fit reason, anti-use check, relevant rejected candidates, and `custom:<slug>` fallback. Do not create `SCENE_SEMANTICS.md` or a second semantic source of truth.
 - When creating the Animation Plan, use DBS to write the final title, cover text, and one-line summary to `PACKAGE.md`; do not retain the candidate list there.
 - Use exactly one of `talking_head` or `pure_hyperframes` and exactly one stable Profile.
 - Require one approved `ANIMATION_PLAN.md` before formal HTML work.
