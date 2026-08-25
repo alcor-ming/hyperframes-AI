@@ -3,10 +3,17 @@
 ## 工作边界
 
 - 本仓库公开管理 Harness 规则、模板、Profile 接入、Skill 路由与 Work CLI。
-- 所有作品均位于 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入 Git。
+- 所有作品的当前真源位于外部 WorkStore `D:\AI\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`）的 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入开发仓或 Git。
 - 不公开发布内容、不购买额度。只有用户对准确 Work 与 Variant 明确授权后，才可使用其已登录的 Windows Chrome 保存到小红书创作者平台草稿箱；不得读取 Cookie、调用未公开接口或点击发布。
 - `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
 - v1 默认不生成 AI 图片；仅在用户明确授权、Animation Plan 已批准且存在明确 Asset Brief 时可调用 ImageGen。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。`hyperframes_video` 不生成或烧录底部字幕；`podcast_quote_image` 由工作流在选定视频帧上绘制批准的中英双语字幕。
+
+## 开发仓与 WorkStore 路径
+
+- 当前开发仓真源为 `/home/jym/workspace/hyperframes+AI`；Windows 旧仓 `/mnt/c/Users/Jym/Documents/hyperframes+AI` 仅作为未删除的回滚副本，不继续开发。
+- 当前 WorkStore 真源为 Windows `D:\AI\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`）；`./work root show` 必须返回该路径，其 Current Work、命名锁和后续运行状态位于 WorkStore 的 `.runtime/`。
+- 开发仓通过本地且 Git 忽略的 `.studio/.runtime/work-root` 绑定 WorkStore。切换路径只使用 `./work root set <absolute-path>`，目标必须已经包含 `works/active`、`works/parked` 与 `works/archive`。
+- 旧仓和旧 Work 副本不再具有当前权威；不得在新旧两处同时写入，也不得在没有单独明确授权时删除任一回滚副本。
 
 ## 启动顺序
 

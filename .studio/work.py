@@ -192,12 +192,31 @@ def title_number(title: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def work_root_config_path(root: Path) -> Path:
+    return root / ".studio" / ".runtime" / "work-root"
+
+
+def configured_work_root(root: Path) -> Path | None:
+    path = work_root_config_path(root)
+    if not path.is_file():
+        return None
+    value = path.read_text(encoding="utf-8").strip()
+    candidate = Path(value).expanduser() if value else None
+    if candidate is None or not candidate.is_absolute():
+        raise HarnessError(f"Invalid WorkStore root in {path}: {value!r}")
+    resolved = candidate.resolve()
+    if not resolved.is_dir():
+        raise HarnessError(f"Configured WorkStore root is unavailable: {resolved}")
+    return resolved
+
+
 def works_root(root: Path) -> Path:
-    return root / "works"
+    return (configured_work_root(root) or root) / "works"
 
 
 def runtime_root(root: Path) -> Path:
-    return root / ".studio" / ".runtime"
+    configured = configured_work_root(root)
+    return configured / ".runtime" if configured else root / ".studio" / ".runtime"
 
 
 def ensure_roots(root: Path) -> None:
@@ -512,6 +531,39 @@ def command_current(root: Path, args: argparse.Namespace) -> None:
 def command_list(root: Path, args: argparse.Namespace) -> None:
     ensure_roots(root)
     print(json.dumps(list_work_rows(root), ensure_ascii=False, indent=2))
+
+
+def command_root_show(root: Path, args: argparse.Namespace) -> None:
+    configured = configured_work_root(root)
+    active = configured or root
+    print(
+        json.dumps(
+            {
+                "configured": configured is not None,
+                "work_root": str(active),
+                "works": str(active / "works"),
+                "runtime": str(runtime_root(root)),
+            },
+            ensure_ascii=False,
+        )
+    )
+
+
+def command_root_set(root: Path, args: argparse.Namespace) -> None:
+    target = Path(args.path).expanduser()
+    if not target.is_absolute() or target.is_symlink():
+        raise HarnessError("WorkStore root must be an existing absolute directory, not a symlink")
+    target = target.resolve()
+    required = [target / "works" / name for name in ("active", "parked", "archive")]
+    missing = [str(path) for path in required if not path.is_dir()]
+    if missing:
+        raise HarnessError("WorkStore root is missing required directories: " + ", ".join(missing))
+    try:
+        (target / ".runtime").mkdir(exist_ok=True)
+    except OSError as exc:
+        raise HarnessError(f"WorkStore runtime directory is unavailable: {exc}") from exc
+    atomic_write(work_root_config_path(root), str(target) + "\n")
+    command_root_show(root, args)
 
 
 def command_name(root: Path, args: argparse.Namespace) -> None:
@@ -1354,6 +1406,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("current").set_defaults(handler=command_current)
     commands.add_parser("list").set_defaults(handler=command_list)
+    root_command = commands.add_parser("root", help="Show or set the external WorkStore root")
+    root_commands = root_command.add_subparsers(dest="root_command", required=True)
+    root_commands.add_parser("show").set_defaults(handler=command_root_show)
+    root_set = root_commands.add_parser("set")
+    root_set.add_argument("path")
+    root_set.set_defaults(handler=command_root_set)
     name = commands.add_parser("name")
     name.add_argument("title")
     name.set_defaults(handler=command_name)

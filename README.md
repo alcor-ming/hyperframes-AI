@@ -5,10 +5,13 @@
 ## 快速开始
 
 ```bash
+./work root show
 ./work new "作品标题" --workflow hyperframes_video
 ./work status
 ./work variant add douyin-9x16 --from main --ratio 9:16
 ```
+
+开发仓位于 `/home/jym/workspace/hyperframes+AI`，外部 WorkStore 位于 Windows `D:\AI\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`）。本机绑定保存在 Git 忽略的 `.studio/.runtime/work-root`；只有 `./work root set <absolute-path>` 会切换 WorkStore。
 
 `work new` 必须选择 Workflow。视频工作流创建 `pure_hyperframes`、`optical_fluidity`、`16:9` 的 `main` Variant；Agent 可通过参数选择其他 Template、Profile 和 Ratio。
 
@@ -44,7 +47,7 @@ Draft 与 Final 生命周期：
 ./work finalize /path/to/final.mp4 --qa-passed
 ```
 
-`--qa-passed` 只能在 Agent 已完成 `.studio/spec/hyperframes.md` 规定的 Final QA 后使用。所有 Required Variants 完成 Final 后，Work 自动移入 `works/archive/<year-month>/`。
+`--qa-passed` 只能在 Agent 已完成 `.studio/spec/hyperframes.md` 规定的 Final QA 后使用。所有 Required Variants 完成 Final 后，Work 自动移入外部 WorkStore 的 `works/archive/<year-month>/`。
 
 ## 公开内容
 
@@ -59,6 +62,6 @@ Draft 与 Final 生命周期：
 
 ## 私有内容
 
-`works/`、旧 `tasks/`、媒体、工程、Draft、Final 和运行状态均由 `.gitignore` 排除。Harness 不实现下载后端，而是调用独立的 `trendradar-media`；它不公开发布内容，也不内置 ASR 模型。经用户对准确 Work/Variant 明确授权，可使用其已登录的 Windows Chrome 保存小红书创作者平台草稿，但绝不点击发布。
+外部 WorkStore 的 `works/`、旧 `tasks/`、媒体、工程、Draft、Final 和运行状态不进入开发仓或 Git。Harness 不实现下载后端，而是调用独立的 `trendradar-media`；它不公开发布内容，也不内置 ASR 模型。经用户对准确 Work/Variant 明确授权，可使用其已登录的 Windows Chrome 保存小红书创作者平台草稿，但绝不点击发布。
 
 完整产品契约以 `.studio/` 和 `AGENTS.md` 为准。

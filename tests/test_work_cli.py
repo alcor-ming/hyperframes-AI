@@ -188,6 +188,20 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual("waiting_user", row["status"])
         self.assertEqual("article_selection", row["wait_for"])
 
+    def test_external_work_root_is_persisted_and_used(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            external = Path(temporary)
+            for name in ("active", "parked", "archive"):
+                (external / "works" / name).mkdir(parents=True)
+
+            configured = json.loads(self.invoke("root", "set", str(external)))
+            self.assertTrue(configured["configured"])
+            self.assertEqual(str(external), configured["work_root"])
+            work_id = self.invoke("new", "External", "--workflow", "hyperframes_video")
+            self.assertTrue((external / "works" / "active" / work_id).is_dir())
+            self.assertEqual(work_id, (external / ".runtime" / "current-work").read_text().strip())
+            self.assertFalse((self.root / "works").exists())
+
     def test_work_names_are_numbered_per_workflow_and_sorted(self) -> None:
         first_id, first = self.new_work("Podcast A", "podcast_quote_image")
         second_id, second = self.new_work("Podcast B", "podcast_quote_image")
