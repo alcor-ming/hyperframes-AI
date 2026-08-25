@@ -1,4 +1,6 @@
 # Local task state, personal media, and generated artifacts
+idea.md
+/.playwright-cli/
 /tasks/
 /assets/
 /canvas/
