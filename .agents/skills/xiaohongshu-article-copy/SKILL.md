@@ -29,8 +29,8 @@ Complete `RESEARCH.md` before writing `PACKAGE.md`:
 ## 与本文核心相关的经历
 <only experiences that illuminate the approved viewpoint>
 
-## 可用于开篇的背景故事
-<one concise, sourced story arc>
+## 可用于正文补充的背景信息
+<one concise, sourced context block>
 
 ## 事实边界
 <uncertainty, self-reported claims, and details not safe to use>
@@ -48,7 +48,9 @@ Draft the opening and image sections first. After the title is settled, write `P
 ```text
 <final title, written last>
 
-<summarize the article's core viewpoint and connect it to the guest's verified background story>
+<first paragraph: summarize the approved selected passages only>
+
+<optional second paragraph: add verified guest context only when it helps explain the selected passages>
 
 01｜<summary of the first image's passage>
 
@@ -65,7 +67,7 @@ Draft the opening and image sections first. After the title is settled, write `P
 <topic tags>
 ```
 
-Do not emit Markdown headings or structural labels such as `大标题`, `开篇`, `图片文案`, `播客信息`, or `话题标签`. The first line is the platform title; the remaining copy already uses sequential `01｜小标题` sections and can be pasted directly into the body field. `render` separates the trailing tags into `topics` without otherwise reformatting the body. The title is at most 20 characters; body plus topics is at most 1000 characters; use 1 to 3 unique topics, each at most 30 characters. The opening states the core conclusion immediately, then uses the guest's relevant background story to explain why the viewpoint carries weight. Each numbered section summarizes its approved image passage rather than adding a hook or a new claim. The sections must cover every approved group once, in source order, with no extra section. Write in third person. Attribute viewpoints to the actual speaker; never impersonate the guest, invent first-person experience, or turn a faithful translation into a stronger claim.
+Do not emit Markdown headings or structural labels such as `大标题`, `开篇`, `图片文案`, `播客信息`, or `话题标签`. The first line is the platform title; the remaining copy already uses sequential `01｜小标题` sections and can be pasted directly into the body field. `render` separates the trailing tags into `topics` without otherwise reformatting the body. The title is at most 20 characters; body plus topics is at most 1000 characters; use 1 to 3 unique topics, each at most 30 characters. The opening's first paragraph must distill the shared conclusion, tension, or causal relationship in the approved selected passages only. It must not lead with guest identity, valuation, biography, or any fact that is absent from those passages. Verified guest context may appear from the second paragraph onward only when it clarifies the selected passages. Each numbered section summarizes its approved image passage rather than adding a hook or a new claim. The sections must cover every approved group once, in source order, with no extra section. Write in third person. Attribute viewpoints to the actual speaker; never impersonate the guest, invent first-person experience, or turn a faithful translation into a stronger claim.
 
 For an intentionally designed cover, follow the cited Xiaohongshu image-copy guidance: keep the cover's main title to 3 to 7 Chinese characters and total cover copy within 15 characters, establish a clear title/subtitle/body hierarchy, use high contrast, and confirm readability at feed size. Those are cover rules, not limits for the platform title or note body; this quote-stack workflow does not invent a separate cover or shorten faithful quotes unless the user approves that content change. See [花叔的小红书图片设计调研](https://www.huasheng.ai/insights/xiaohongshu-image-design/) and the [official Creator platform](https://creator.xiaohongshu.com/).
 
@@ -73,7 +75,7 @@ Apply only the expression-efficiency and cognitive-gap checks from `dbs-content`
 
 ## Write The Title Last
 
-After the full article is stable, use `dbs-xhs-title` to generate formula-traceable candidates. The final title must combine the article's core conclusion with the guest's most relevant verified identity or background signal, stay within 20 Chinese characters, and promise no more than the transcript and `RESEARCH.md` support.
+After the full article is stable, use `dbs-xhs-title` to generate formula-traceable candidates from the approved selected passages. The final title must summarize their shared conclusion, tension, or causal relationship, stay within 20 Chinese characters, and promise no more than those passages support. Do not use guest identity, valuation, biography, or external research as the title premise unless that information appears in the approved passages and is essential to their meaning.
 
 Run `dbs-ai-check` on the completed title, opening, subtitles, and third-person copy, then fix only confirmed issues without touching the approved source quotes or translations. Do not use `dbs-hook` or `dbs-script-flow`.
 
