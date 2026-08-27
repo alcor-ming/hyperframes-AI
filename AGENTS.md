@@ -22,7 +22,7 @@
 3. `hyperframes_video` 再读取 `SCRIPT.md`、当前 Template Recipe 与选定 Profile；进入视觉设计时再读取 `RESEARCH.md` 与 `ANIMATION_PLAN.md`，仅在 Plan 构建或复审、Draft 画面复审时加载 `hyperframes-anti-ppt`，进入实现或 QA 时才读取对应 `.studio/spec/`。
 4. `podcast_quote_image` 只读取当前阶段的 Skill 与机器 JSON；文章方案批准后先完成播客专用 `RESEARCH.md`，再生成 `PACKAGE.md`。不得加载视频工作流的 Script、Plan、Recipe 或 Profile。
 
-Work ID 和目录名创建后保持不变。`podcast_quote_image` 在转录可用后、生成文章方案前，自动执行 `./work --work <id> --variant <variant-id> name "<嘉宾名>-<核心主题>"`；`hyperframes_video` 在 Script 稳定后、开始 Research 前执行 `./work --work <id> --variant <variant-id> name "<核心主题>"`。CLI 按 Workflow 自动添加三位递增序号，重复命名保留原序号；语义标题保持简短，不使用来源平台 ID。
+新建 Work 时，CLI 在命名锁内按 Workflow 分配三位递增序号，并以 `work-<workflow>-<序号>` 创建 Work ID 和目录；输入标题、来源标题与 LLM 均不得参与目录命名，创建后也不得改名。`podcast_quote_image` 在转录可用后、生成文章方案前，自动执行 `./work --work <id> --variant <variant-id> name "<嘉宾名>-<核心主题>"`；`hyperframes_video` 在 Script 稳定后、开始 Research 前执行 `./work --work <id> --variant <variant-id> name "<核心主题>"`。`name` 只补充语义标题并保留创建时的序号；语义标题保持简短，不使用来源平台 ID。
 
 不要默认加载全部 Profile、全部 DBS Skill、Examples、Migration、发行文件、全部 QA 历史或全部 Draft 快照。
 

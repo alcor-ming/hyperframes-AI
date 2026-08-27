@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
@@ -202,10 +203,14 @@ class WorkCliTest(unittest.TestCase):
             self.assertEqual(work_id, (external / ".runtime" / "current-work").read_text().strip())
             self.assertFalse((self.root / "works").exists())
 
-    def test_work_names_are_numbered_per_workflow_and_sorted(self) -> None:
+    def test_work_ids_and_names_are_numbered_per_workflow_and_sorted(self) -> None:
         first_id, first = self.new_work("Podcast A", "podcast_quote_image")
         second_id, second = self.new_work("Podcast B", "podcast_quote_image")
 
+        self.assertEqual("work-podcast_quote_image-001", first_id)
+        self.assertEqual("work-podcast_quote_image-002", second_id)
+        self.assertEqual("001-Podcast A", WORK_CLI.read_frontmatter(first / "WORK.md")["title"])
+        self.assertEqual(first_id, WORK_CLI.read_frontmatter(first / "WORK.md")["id"])
         self.assertEqual("001-Lucy Guo-创业", self.invoke("--work", first_id, "name", "Lucy Guo-创业"))
         self.assertEqual("002-李飞飞-AI工作", self.invoke("--work", second_id, "name", "李飞飞-AI工作"))
         self.assertEqual("001-Lucy Guo-转型", self.invoke("--work", first_id, "name", "999-Lucy Guo-转型"))
@@ -216,10 +221,32 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual([first_id, second_id], [row["id"] for row in rows])
         self.assertIn("T", rows[0]["created_at"])
 
-        numbered_id, _ = self.new_work("007-Old video")
+        numbered_id, numbered = self.new_work("007-Old video")
         future_id, _ = self.new_work("Future video")
-        self.assertEqual("008-新主题", self.invoke("--work", future_id, "name", "新主题"))
-        self.assertEqual(numbered_id, next(row["id"] for row in json.loads(self.invoke("list")) if row["title"] == "007-Old video"))
+        self.assertEqual("work-hyperframes_video-001", numbered_id)
+        self.assertEqual("001-Old video", WORK_CLI.read_frontmatter(numbered / "WORK.md")["title"])
+        self.assertEqual("002-新主题", self.invoke("--work", future_id, "name", "新主题"))
+
+    def test_detached_concurrent_work_creation_allocates_unique_ids(self) -> None:
+        def create(title: str) -> None:
+            WORK_CLI.command_new(
+                self.root,
+                mock.Mock(
+                    title=title,
+                    workflow="podcast_quote_image",
+                    template=None,
+                    profile=None,
+                    ratio=None,
+                    subject_position=None,
+                    detached=True,
+                ),
+            )
+
+        with mock.patch("builtins.print"), ThreadPoolExecutor(max_workers=2) as executor:
+            list(executor.map(create, ("Same title", "Same title")))
+
+        ids = {row["id"] for row in json.loads(self.invoke("list"))}
+        self.assertEqual({"work-podcast_quote_image-001", "work-podcast_quote_image-002"}, ids)
 
     def test_legacy_archive_directory_is_ignored(self) -> None:
         (self.root / "works" / "archive" / "tasks" / "001-legacy").mkdir(parents=True)

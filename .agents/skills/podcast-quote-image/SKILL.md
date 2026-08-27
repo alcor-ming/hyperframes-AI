@@ -63,7 +63,7 @@ For transcripts over roughly 50K characters, inspect overlapping windows of abou
 
 `trendradar-media` supplies verified media, not a transcript. Resolution order is: supplied structured transcript/subtitle, native YouTube transcript when applicable, then explicitly authorized shared ASR against `materials/source-video.*`. If none is usable, or ASR is unavailable or fails, run `./work wait transcript_fallback`, explain the failure, and ask whether to use the vendored `native-subtitle-quote-image` fallback. Never switch silently.
 
-After `artifacts/transcript.json` is ready, identify the guest and one concise article-level topic from the full transcript, then run `./work --work <work-id> --variant <variant-id> name "<guest>-<topic>"` before producing candidates. The CLI adds the per-workflow three-digit sequence. Do not rename the Work ID or use a platform video ID as the semantic name.
+After `artifacts/transcript.json` is ready, identify the guest and one concise article-level topic from the full transcript, then run `./work --work <work-id> --variant <variant-id> name "<guest>-<topic>"` before producing candidates. The CLI preserves the per-workflow three-digit sequence allocated by `work new`; this step only supplies the semantic title. Do not rename the Work ID or use a platform video ID as the semantic name.
 
 ## Produce Article Plans
 

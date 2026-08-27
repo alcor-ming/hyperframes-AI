@@ -63,7 +63,7 @@ Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS �
 ```text
 来源 URL -> trendradar-media -> 校验并复制到 materials/
 本地或已下载视频 + 可选原生转录/字幕 -> resolve transcript
--> 自动命名为三位序号 + 嘉宾名 + 核心主题
+-> 保留创建时的三位序号，只补充嘉宾名 + 核心主题
 -> 规划 Skill 通读原文并生成 3 个完整文章方案
 -> DBS 检查核心机制、受众情绪与传播理由 -> 用户批准 1 个方案
 -> 文案 Skill 调研嘉宾背景并完成 RESEARCH.md

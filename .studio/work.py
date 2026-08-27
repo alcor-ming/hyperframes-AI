@@ -180,16 +180,27 @@ def validate_id(value: str, label: str) -> str:
     return value
 
 
-def slugify(title: str) -> str:
-    normalized = unicodedata.normalize("NFKC", title).strip().lower()
-    slug = "".join(char if char.isalnum() else "-" for char in normalized)
-    slug = re.sub(r"-+", "-", slug).strip("-")
-    return slug[:48].rstrip("-") or "untitled"
-
-
 def title_number(title: str) -> int | None:
     match = NUMBERED_TITLE_PATTERN.match(title)
     return int(match.group(1)) if match else None
+
+
+def work_id_number(work_id: str, workflow: str) -> int | None:
+    match = re.fullmatch(rf"work-{re.escape(workflow)}-(\d{{3}})", work_id)
+    return int(match.group(1)) if match else None
+
+
+def next_work_number(rows: Iterable[dict[str, Any]], workflow: str) -> int:
+    numbers: list[int] = []
+    for row in rows:
+        if row["workflow"] != workflow:
+            continue
+        number = work_id_number(row["id"], workflow)
+        if number is None:
+            number = title_number(row["title"])
+        if number is not None:
+            numbers.append(number)
+    return max(numbers, default=0) + 1
 
 
 def work_root_config_path(root: Path) -> Path:
@@ -473,49 +484,56 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
     ):
         raise HarnessError("podcast_quote_image does not accept video Template, Profile, Ratio, or subject options")
     ensure_roots(root)
-    base_id = f"work-{datetime.now().astimezone():%Y%m%d}-{slugify(args.title)}"
-    existing_ids = {row["id"] for row in list_work_rows(root)}
-    suffix = 1
-    while True:
-        work_id = base_id if suffix == 1 else f"{base_id}-{suffix}"
-        if work_id in existing_ids:
-            suffix += 1
-            continue
-        work = works_root(root) / "active" / work_id
-        try:
-            work.mkdir()
-            break
-        except FileExistsError:
-            suffix += 1
-    created_at = now()
-    atomic_write(
-        work / "WORK.md",
-        template_text(
+    with (runtime_root(root) / "naming.lock").open("w", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        rows = list_work_rows(root)
+        existing_ids = {row["id"] for row in rows}
+        number = next_work_number(rows, args.workflow)
+        while True:
+            if number > 999:
+                raise HarnessError("Work name sequence is exhausted")
+            work_id = f"work-{args.workflow}-{number:03d}"
+            if work_id not in existing_ids:
+                work = works_root(root) / "active" / work_id
+                try:
+                    work.mkdir()
+                    break
+                except FileExistsError:
+                    pass
+            number += 1
+
+        semantic_title = unicodedata.normalize("NFKC", args.title).strip()
+        semantic_title = NUMBERED_TITLE_PATTERN.sub(r"\2", semantic_title).strip(" -") or "untitled"
+        title = f"{number:03d}-{semantic_title}"
+        created_at = now()
+        atomic_write(
+            work / "WORK.md",
+            template_text(
+                root,
+                "WORK.template.md",
+                {
+                    "WORK_ID": json_string_content(work_id),
+                    "TITLE": json_string_content(title),
+                    "CREATED_AT": created_at,
+                    "WORKFLOW": json_string_content(args.workflow),
+                },
+            ),
+        )
+        atomic_write(work / "source.md", "# Source\n\n")
+        (work / "materials").mkdir()
+        create_variant(
             root,
-            "WORK.template.md",
-            {
-                "WORK_ID": json_string_content(work_id),
-                "TITLE": json_string_content(args.title),
-                "CREATED_AT": created_at,
-                "WORKFLOW": json_string_content(args.workflow),
-            },
-        ),
-    )
-    atomic_write(work / "source.md", "# Source\n\n")
-    (work / "materials").mkdir()
-    create_variant(
-        root,
-        work,
-        "main",
-        workflow=args.workflow,
-        template=args.template,
-        profile=args.profile,
-        ratio=args.ratio,
-        subject_position=args.subject_position,
-    )
-    if not args.detached:
-        write_pointer(root, "current-work", work_id)
-        write_pointer(root, "current-variant", "main")
+            work,
+            "main",
+            workflow=args.workflow,
+            template=args.template,
+            profile=args.profile,
+            ratio=args.ratio,
+            subject_position=args.subject_position,
+        )
+        if not args.detached:
+            write_pointer(root, "current-work", work_id)
+            write_pointer(root, "current-variant", "main")
     print(work_id)
 
 
@@ -578,15 +596,12 @@ def command_name(root: Path, args: argparse.Namespace) -> None:
         fcntl.flock(lock, fcntl.LOCK_EX)
         metadata_path = work / "WORK.md"
         metadata = read_frontmatter(metadata_path)
-        number = title_number(str(metadata.get("title", "")))
+        workflow = work_workflow(work)
+        number = work_id_number(work.name, workflow)
         if number is None:
-            workflow = work_workflow(work)
-            numbers = [
-                title_number(row["title"])
-                for row in list_work_rows(root)
-                if row["workflow"] == workflow and title_number(row["title"]) is not None
-            ]
-            number = max(numbers, default=0) + 1
+            number = title_number(str(metadata.get("title", "")))
+        if number is None:
+            number = next_work_number(list_work_rows(root), workflow)
         if number > 999:
             raise HarnessError("Work name sequence is exhausted")
         title = f"{number:03d}-{semantic_title}"
