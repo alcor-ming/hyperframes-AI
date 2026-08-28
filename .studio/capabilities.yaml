@@ -36,9 +36,17 @@ copywriting:
   podcast_quote_image:
     candidate_analysis: [dbs-spread, dbs-resonate]
     guest_research: RESEARCH.md
-    package_checks: [dbs-content.expression_efficiency, dbs-content.cognitive_gap]
-    package_title_last: dbs-xhs-title
-    package_qa: dbs-ai-check
+    package_pipeline:
+      - invoke: dbs-content
+        stage: after_body_and_section_heading_draft
+        checks: [title_and_cover, expression_efficiency, cognitive_gap]
+        output: revision_brief
+      - invoke: dbs-xhs-title
+        stage: after_revised_body_is_stable
+        output: formula_traceable_candidates_and_top_3
+      - invoke: dbs-ai-check
+        stage: after_final_title_is_selected
+        output: diagnostic_report
     excluded: [dbs-hook, dbs-script-flow]
 
 packaging:

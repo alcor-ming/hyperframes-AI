@@ -71,13 +71,21 @@ Do not emit Markdown headings or structural labels such as `大标题`, `开篇`
 
 For an intentionally designed cover, follow the cited Xiaohongshu image-copy guidance: keep the cover's main title to 3 to 7 Chinese characters and total cover copy within 15 characters, establish a clear title/subtitle/body hierarchy, use high contrast, and confirm readability at feed size. Those are cover rules, not limits for the platform title or note body; this quote-stack workflow does not invent a separate cover or shorten faithful quotes unless the user approves that content change. See [花叔的小红书图片设计调研](https://www.huasheng.ai/insights/xiaohongshu-image-design/) and the [official Creator platform](https://creator.xiaohongshu.com/).
 
-Apply only the expression-efficiency and cognitive-gap checks from `dbs-content` to the opening, subtitles, and third-person copy; do not rerun format selection or its product-premise flow.
+DBS execution is required here; reading a DBS Skill or silently borrowing its rules does not count as using it.
+
+1. Prepare a working draft without the first-line platform title: opening, every `01｜小标题` section, third-person copy, attribution, original-video title, and topics.
+2. Invoke `dbs-content` as a separate diagnostic pass with the approved article direction, target platform, and the complete working draft. Restrict it to the title/cover, expression-efficiency, and cognitive-gap checks in Phase 3; do not rerun format selection, product-premise questions, or ask it to write the copy.
+3. Require a concrete revision brief covering the opening, every numbered small heading, and its body. Then this Skill, which owns the copy, applies the supported revisions. A small heading must still summarize its approved passage rather than become an independent hook.
+
+Do not write the final `PACKAGE.md` or proceed to the platform title until this `dbs-content` pass has been applied.
 
 ## Write The Title Last
 
-After the full article is stable, use `dbs-xhs-title` to generate formula-traceable candidates from the approved selected passages. The final title must summarize their shared conclusion, tension, or causal relationship, stay within 20 Chinese characters, and promise no more than those passages support. Do not use guest identity, valuation, biography, or external research as the title premise unless that information appears in the approved passages and is essential to their meaning.
+After the opening, small headings, and body are stable, invoke `dbs-xhs-title` as a separate generation pass; reading its formula library does not count. Supply the shared conclusion, tension, or causal relationship from the approved passages as the topic, the article's actual audience/domain as the field, and the stable draft as supporting context. Require 5 to 8 candidates spanning at least 3 formula types, with a formula number for every candidate and a ranked Top 3. Select the strongest supported Top 1, then place only that title on the first line of `PACKAGE.md`.
 
-Run `dbs-ai-check` on the completed title, opening, subtitles, and third-person copy, then fix only confirmed issues without touching the approved source quotes or translations. Do not use `dbs-hook` or `dbs-script-flow`.
+The final title must stay within 20 Chinese characters and promise no more than the approved passages support. Do not use guest identity, valuation, biography, or external research as the title premise unless that information appears in the approved passages and is essential to their meaning. Do not run `dbs-xhs-title` on numbered small headings; those are passage summaries reviewed by `dbs-content`, not feed-click titles.
+
+Finally, invoke `dbs-ai-check` as a separate diagnostic pass on the completed title, opening, small headings, subtitles, and third-person copy. This Skill applies only confirmed issues without touching the approved source quotes or translations. If the platform title needs substantive revision, return to the `dbs-xhs-title` pass instead of free-writing a replacement. Do not use `dbs-hook` or `dbs-script-flow`.
 
 Reuse `materials/acquisition.json` only to verify the source and use the verified research for guest metadata; verify the channel and original video title separately. Add episode or issue only when verified. End the publishable copy with `原视频：<original video title>` and do not include the source URL, because the target audience may not be able to open YouTube. If the channel or original video title is missing, run `./work wait source_metadata` and stop.
 
