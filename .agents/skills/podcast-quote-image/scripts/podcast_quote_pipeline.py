@@ -256,7 +256,10 @@ def dominant_script(text: str) -> str:
 
 
 def transcript_quality(
-    payload: dict[str, Any], segments: list[dict[str, Any]], language: str
+    payload: dict[str, Any],
+    segments: list[dict[str, Any]],
+    language: str,
+    require_character_timestamps: bool = False,
 ) -> dict[str, Any]:
     text = " ".join(item["text"] for item in segments)
     cjk = sum("\u3400" <= character <= "\u9fff" for character in text)
@@ -282,7 +285,7 @@ def transcript_quality(
         issues.append("dominant_script_mismatch")
     if low_confidence_ratio is not None and low_confidence_ratio > MAX_LOW_CONFIDENCE_RATIO:
         issues.append("low_alignment_confidence")
-    if payload.get("timing_granularity") == "character" and not character_rows:
+    if (require_character_timestamps or payload.get("timing_granularity") == "character") and not character_rows:
         issues.append("missing_character_timestamps")
     return {
         "status": "needs_review" if issues else "passed",
@@ -528,7 +531,16 @@ def command_resolve(args: argparse.Namespace) -> None:
         subtitles = parse_subtitle_segments(subtitle_path) if subtitle_path else None
         subtitle_language = ""
     resolved, conflicts = resolve_segments(transcript, subtitles)
-    quality = transcript_quality(transcript_payload, transcript, language) if transcript_payload and transcript else None
+    quality = (
+        transcript_quality(
+            transcript_payload,
+            transcript,
+            language,
+            require_character_timestamps=args.run_asr,
+        )
+        if transcript_payload and transcript
+        else None
+    )
     canonical = []
     for index, item in enumerate(resolved, 1):
         canonical.append({"id": f"s{index:06d}", **item})

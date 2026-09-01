@@ -171,6 +171,8 @@ def command_render(args):
         raise SystemExit("manifest 必须包含非空 images 数组")
 
     out_dir = Path(args.out_dir).resolve()
+    if out_dir.exists() and any(out_dir.iterdir()):
+        raise SystemExit(f"输出目录必须为空: {out_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
     outputs = []
     for index, item in enumerate(items, 1):

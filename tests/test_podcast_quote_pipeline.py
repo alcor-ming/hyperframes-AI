@@ -298,6 +298,27 @@ class PodcastQuotePipelineTest(unittest.TestCase):
             value["quality"]["issues"],
         )
 
+    def test_run_asr_requires_character_timestamps(self) -> None:
+        video = self.root / "source-video.mp4"
+        video.write_bytes(b"video")
+        transcript = self.write_json(
+            "segment-only.json",
+            {"language": "en", "segments": [{"start": 0, "end": 1, "text": "segment only"}]},
+        )
+        resolved = self.root / "resolved.json"
+        with mock.patch.object(PIPELINE, "run_asr", return_value=transcript):
+            self.invoke(
+                "resolve",
+                "--video",
+                str(video),
+                "--run-asr",
+                "--out",
+                str(resolved),
+            )
+        value = json.loads(resolved.read_text(encoding="utf-8"))
+        self.assertEqual("needs_review", value["status"])
+        self.assertIn("missing_character_timestamps", value["quality"]["issues"])
+
     def test_approved_article_flows_through_frames_render_and_qa(self) -> None:
         transcript = self.write_json(
             "transcript.json",
