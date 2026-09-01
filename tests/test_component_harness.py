@@ -70,6 +70,12 @@ class ComponentHarnessTest(unittest.TestCase):
         self.assertEqual(COMPONENT.package_sha256(first), COMPONENT.package_sha256(second))
         self.assertEqual("nested/a.txt", COMPONENT.package_entries(first)[0]["path"])
 
+    def test_gap_first_selection_release_validates(self) -> None:
+        release = COMPONENT.validate_component_release(
+            REPO / ".studio" / "components" / "gap-first-selection" / "v1"
+        )
+        self.assertEqual("gap-first-selection@v1", release["component_ref"])
+
     def test_install_hash_lock_and_tamper_fail_closed(self) -> None:
         project = self.root / "project"
         project.mkdir()
