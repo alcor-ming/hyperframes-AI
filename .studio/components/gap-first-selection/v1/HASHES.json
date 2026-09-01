@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "algorithm": "component-package-sha256-v1",
+  "component_ref": "gap-first-selection@v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "fa6ec1b559a7ec0f5d36e9258c1c09d9439dca20451e5824a89048e1f89188a6"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "641faa4263b051d3dcf7d13519f25f5d2c618a53d0c7aa1b58e574968f1b9789"
+    },
+    {
+      "path": "component.html",
+      "sha256": "e11fdfc9ffea9b4f7a0231617f429ff714fee9ebfd4c002207ca93c6de937064"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "0017372564bb4ada4ce0ae77e349ce45214f7968a1362c7fd64b7006822673fa"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "9cdf359118427309f0acdc0248f74ed4fa5765d202d27298ead64692cd99e660"
+    }
+  ],
+  "package_sha256": "98babce7c30d8e719841f507028d6e0fa3d195d3619fb11ce738df88bdae5f31"
+}

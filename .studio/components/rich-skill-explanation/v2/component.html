@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=1080">
+    <title>rich-skill-explanation@v2</title>
+  </head>
+  <body>
+    <template>
+    <style>
+      @font-face { font-family: "DejaVu Serif"; src: local("DejaVu Serif"); }
+      @font-face { font-family: "DejaVu Sans Mono"; src: local("DejaVu Sans Mono"); }
+      @font-face { font-family: "Noto Sans CJK TC"; src: local("Noto Sans CJK TC"); }
+      :root {
+        --ink: #f5f1ea;
+        --muted: #b9b4ad;
+        --dim: #8b8680;
+        --canvas: #0b0b0f;
+        --warm: #ffb76b;
+        --cool: #7da4ff;
+        --mint: #9bd6bd;
+        --violet: #d6a8ff;
+        --rule: rgba(245, 241, 234, 0.16);
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        width: 1440px;
+        height: 1080px;
+        margin: 0;
+        overflow: hidden;
+        background: var(--canvas);
+      }
+      body {
+        color: var(--ink);
+        font-family: "Noto Sans CJK TC", sans-serif;
+      }
+      [data-composition-id="rich-skill-explanation"] {
+        position: relative;
+        width: 1440px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--canvas);
+      }
+      .clip, .scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .scene { overflow: hidden; background: var(--canvas); }
+      .scene-content {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-rows: 270px 1fr 150px;
+        width: 100%;
+        height: 100%;
+        padding: 54px 88px 48px;
+        gap: 24px;
+      }
+      .ambient {
+        position: absolute;
+        left: 58%;
+        top: 28%;
+        width: 520px;
+        height: 520px;
+        border-radius: 50%;
+        background: radial-gradient(circle, color-mix(in srgb, var(--scene-accent) 13%, transparent), transparent 68%);
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      .grain {
+        position: absolute;
+        inset: 0;
+        opacity: 0.12;
+        background-image: repeating-linear-gradient(90deg, transparent 0 89px, rgba(245, 241, 234, 0.07) 90px);
+        pointer-events: none;
+      }
+      .scene-index {
+        position: absolute;
+        right: 62px;
+        top: 42px;
+        color: var(--scene-accent);
+        font-family: "DejaVu Sans Mono", monospace;
+        font-size: 18px;
+        font-variant-numeric: tabular-nums;
+      }
+      .identity {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        align-items: start;
+        gap: 44px;
+        border-bottom: 1px solid var(--rule);
+        padding-bottom: 28px;
+      }
+      .component-id, .mode-label, .trace-label, .lane-kicker {
+        color: var(--scene-accent);
+        font-family: "DejaVu Sans Mono", monospace;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+      .skill-name {
+        font-family: "DejaVu Serif", serif;
+        max-width: 850px;
+        margin: 18px 0 0;
+        font-size: 76px;
+        font-weight: 800;
+        line-height: 0.98;
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+      }
+      .skill-gloss {
+        align-self: end;
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 27px;
+        font-weight: 350;
+        line-height: 1.45;
+        letter-spacing: 0;
+      }
+      .explanation {
+        display: grid;
+        grid-template-columns: 420px minmax(0, 1fr);
+        gap: 54px;
+        min-height: 0;
+      }
+      .copy-stack {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 30px;
+        min-height: 0;
+      }
+      .copy-block {
+        position: relative;
+        margin: 0;
+        padding-left: 28px;
+        color: var(--ink);
+        font-size: 29px;
+        font-weight: 350;
+        line-height: 1.58;
+        letter-spacing: 0;
+        transform-origin: left center;
+      }
+      .copy-block::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 14px;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--scene-accent);
+      }
+      .mode-lane {
+        position: relative;
+        min-height: 0;
+        border-top: 1px solid var(--rule);
+        border-bottom: 1px solid var(--rule);
+        padding: 28px 0;
+        overflow: hidden;
+      }
+      .lane-kicker { margin-bottom: 22px; }
+      .lane-grid {
+        display: grid;
+        height: calc(100% - 44px);
+        align-items: center;
+      }
+      .trace {
+        display: grid;
+        grid-template-columns: 420px minmax(0, 1fr);
+        align-items: center;
+        gap: 54px;
+        border-top: 1px solid var(--rule);
+      }
+      .trace-line { display: flex; align-items: baseline; gap: 16px; min-width: 0; }
+      .trace-value { color: var(--muted); font-size: 23px; line-height: 1.45; }
+
+      .input-grid { grid-template-columns: 190px 1fr 210px; gap: 22px; }
+      .input-stack, .output-stack { display: flex; flex-direction: column; gap: 16px; }
+      .input-tag, .output-item {
+        color: var(--muted);
+        font-family: "DejaVu Sans Mono", monospace;
+        font-size: 20px;
+        line-height: 1.3;
+      }
+      .input-tag { padding-bottom: 9px; border-bottom: 1px solid var(--rule); }
+      .transform-path { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
+      .path-track { position: relative; }
+      .path-rule { height: 2px; background: var(--scene-accent); transform-origin: left center; }
+      .path-runner {
+        position: absolute;
+        left: 0;
+        top: -6px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--scene-accent);
+        box-shadow: 0 0 24px color-mix(in srgb, var(--scene-accent) 72%, transparent);
+      }
+      .path-sentence { color: var(--ink); font-size: 27px; font-weight: 650; text-align: center; }
+      .path-detail { color: var(--dim); font-size: 18px; text-align: center; }
+
+      .distill-grid { grid-template-columns: 1.1fr 170px 1fr; gap: 30px; }
+      .raw-stream { display: flex; flex-direction: column; gap: 11px; }
+      .raw-row {
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.25;
+        white-space: nowrap;
+        transform-origin: right center;
+      }
+      .raw-row::before { content: "— "; color: var(--dim); }
+      .ratio {
+        color: var(--ink);
+        font-family: "DejaVu Sans Mono", monospace;
+        font-size: 46px;
+        font-weight: 700;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+      .ratio small { display: block; margin-top: 12px; color: var(--scene-accent); font-size: 17px; }
+      .distilled { display: flex; flex-direction: column; gap: 20px; }
+      .distilled-item { color: var(--ink); font-size: 23px; line-height: 1.35; }
+      .distilled-item strong { color: var(--scene-accent); font-family: "DejaVu Sans Mono", monospace; font-size: 18px; }
+
+      .roundtrip-grid { grid-template-columns: 1fr 1.25fr; gap: 42px; }
+      .roundtrip-copy { align-self: center; color: var(--muted); font-size: 25px; line-height: 1.55; }
+      .orbit { position: relative; width: 420px; height: 300px; justify-self: center; }
+      .orbit-ring {
+        position: absolute;
+        left: 60px;
+        top: 0;
+        width: 300px;
+        height: 300px;
+        border: 2px solid var(--rule);
+        border-radius: 50%;
+      }
+      .orbit-core {
+        position: absolute;
+        left: 130px;
+        top: 105px;
+        width: 160px;
+        text-align: center;
+        color: var(--ink);
+        font-size: 27px;
+        font-weight: 700;
+      }
+      .orbit-node { position: absolute; color: var(--muted); font-size: 21px; }
+      .orbit-node.read { left: 0; top: 134px; }
+      .orbit-node.search { right: 0; top: 134px; }
+      .orbit-node.write { left: 178px; bottom: -8px; }
+      .orbit-runner {
+        position: absolute;
+        left: 200px;
+        top: 0;
+        width: 20px;
+        height: 300px;
+        transform-origin: 10px 150px;
+      }
+      .orbit-runner::before {
+        content: "";
+        display: block;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--scene-accent);
+        box-shadow: 0 0 28px color-mix(in srgb, var(--scene-accent) 70%, transparent);
+      }
+
+      .persist-grid {
+        position: relative;
+        grid-template-columns: 1fr;
+        padding: 0 18px;
+        background: linear-gradient(90deg, rgba(245, 241, 234, 0.01) 0 49.5%, rgba(214, 168, 255, 0.035) 50.5% 100%);
+      }
+      .session-timeline {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: 1fr 100px 1fr;
+        align-items: center;
+        width: 100%;
+      }
+      .session-side {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+        min-height: 250px;
+        padding: 44px 28px 0;
+      }
+      .session-side.right { align-items: flex-end; text-align: right; }
+      .session-label { color: var(--muted); font-family: "DejaVu Sans Mono", monospace; font-size: 18px; }
+      .session-raw { margin-top: 20px; color: var(--muted); font-size: 20px; line-height: 1.45; }
+      .memory-rule {
+        margin-top: 12px;
+        color: var(--scene-accent);
+        font-size: 23px;
+        font-weight: 700;
+        line-height: 1.4;
+      }
+      .memory-source {
+        margin-top: 12px;
+        color: var(--muted);
+        font-family: "DejaVu Sans Mono", monospace;
+        font-size: 19px;
+      }
+      .boundary {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        align-self: stretch;
+        justify-content: flex-start;
+        gap: 14px;
+        color: var(--scene-accent);
+        font-family: "DejaVu Sans Mono", monospace;
+        font-size: 15px;
+      }
+      .boundary-chip {
+        padding: 7px 10px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--scene-accent) 16%, transparent);
+        color: var(--scene-accent);
+        white-space: nowrap;
+      }
+      .boundary-line {
+        width: 2px;
+        height: 190px;
+        background: repeating-linear-gradient(to bottom, var(--scene-accent) 0 10px, transparent 10px 19px);
+        transform-origin: center bottom;
+      }
+      .memory-rail {
+        position: absolute;
+        z-index: 1;
+        left: 58px;
+        right: 58px;
+        top: 94px;
+        border-top: 1px dashed color-mix(in srgb, var(--scene-accent) 55%, transparent);
+        transform-origin: left center;
+      }
+      .memory-token {
+        position: absolute;
+        z-index: 3;
+        left: 58px;
+        top: 76px;
+        color: var(--scene-accent);
+        font-family: "DejaVu Sans Mono", monospace;
+        font-size: 20px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .memory-token::before { content: "●"; margin-right: 9px; font-size: 12px; }
+      .applied-label {
+        margin-top: 14px;
+        color: var(--scene-accent);
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .reuse-stamp {
+        margin-top: 18px;
+        padding: 7px 11px;
+        color: var(--scene-accent);
+        border: 1px solid currentColor;
+        font-family: "DejaVu Sans Mono", monospace;
+        font-size: 17px;
+        line-height: 1;
+        transform-origin: center;
+      }
+      .boundary-note {
+        margin-top: 14px;
+        max-width: 280px;
+        color: var(--muted);
+        font-size: 19px;
+        line-height: 1.4;
+      }
+      #scene-input { --scene-accent: var(--warm); z-index: 1; }
+      #scene-distill { --scene-accent: var(--cool); z-index: 2; }
+      #scene-roundtrip { --scene-accent: var(--mint); z-index: 3; }
+      #scene-persist { --scene-accent: var(--violet); z-index: 4; }
+      #transition {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        background: var(--canvas);
+        opacity: 0;
+        pointer-events: none;
+      }
+      .path-runner, .raw-row, .output-item, .orbit-node, .memory-token { will-change: transform, opacity; }
+      @media (prefers-reduced-motion: reduce) {
+        .scene-content, .scene-content *, .ambient, #transition {
+          animation: none !important;
+          transition: none !important;
+          transform: none !important;
+        }
+        .scene-content * { opacity: 1 !important; }
+        .ambient { opacity: 0.45 !important; }
+        .raw-row { opacity: 0.4 !important; }
+        #transition { opacity: 0 !important; }
+        .path-runner { left: auto; right: 0; }
+        .memory-token { left: auto; right: 116px; }
+      }
+    </style>
+    <div data-hf-id="hf-ufzt" id="rich-skill-explanation-v2-root" data-composition-id="rich-skill-explanation" data-composition-variables='[{"id":"mode","type":"enum","label":"Mode","default":"input-transform","options":[{"value":"input-transform","label":"Input transform"},{"value":"retrieve-distill","label":"Retrieve distill"},{"value":"knowledge-roundtrip","label":"Knowledge roundtrip"},{"value":"persist-reuse","label":"Persist reuse"}]},{"id":"sequence_index","type":"number","label":"Sequence index","default":1},{"id":"sequence_total","type":"number","label":"Sequence total","default":4},{"id":"title","type":"string","label":"Title","default":"Local Whisper"},{"id":"subtitle","type":"string","label":"Subtitle","default":"让本机录音成为可继续处理的文字"},{"id":"statement_1","type":"string","label":"Statement 1","default":"先把访谈、会议或语音备忘录转成可搜索的逐字文字。"},{"id":"statement_2","type":"string","label":"Statement 2","default":"文字不在这里停止；它会继续进入摘要、改写或整理流程，输入与输出始终可追溯。"},{"id":"trace_label","type":"string","label":"Trace label","default":"输出物"},{"id":"trace_value","type":"string","label":"Trace value","default":"逐字稿 / 摘要 / 可编辑文字"},{"id":"lane_kicker","type":"string","label":"Lane kicker","default":"多种输入，沿同一路径被转换"},{"id":"source_items","type":"array","label":"Source items","default":["录音 .m4a","访谈 .wav","语音备忘 .mp3"]},{"id":"result_items","type":"array","label":"Result items","default":["逐字文字","段落摘要","可编辑内容"]},{"id":"mode_details","type":"object","label":"Mode details","default":{"path_title":"录音 → 文字 → 后续处理","path_detail":"转录不是终点，而是下一个文字动作的起点"}},{"id":"explanation_lane_mode","type":"enum","label":"Explanation lane mode","default":"none","options":[{"value":"none","label":"Programmatic fallback"}]},{"id":"explanation_lane_path","type":"string","label":"Explanation lane path","default":""},{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-start="0" data-duration="12" data-width="1440" data-height="1080">
+      <div data-hf-id="hf-nih1" id="review-reel" class="clip" data-start="0" data-duration="12" data-track-index="0">
+        <div data-hf-id="hf-nom6" id="scenes" data-visual-surface="explanation_lane" data-surface-kind="active_media_card" data-surface-modes="none" data-surface-fallback="programmatic" data-surface-mode="none"></div>
+        <div data-hf-id="hf-zb15" id="transition" data-layout-ignore=""></div>
+      </div>
+    </div>
+
+    <script src="assets/vendor/gsap/gsap.min.js"></script>
+    <script>
+      const MODES = [
+        {
+          id: "input",
+          mode: "input-transform",
+          index: "01 / 04",
+          skill: "Local Whisper",
+          gloss: "讓本機錄音成為可繼續處理的文字",
+          copy: [
+            "先把訪談、會議或語音備忘錄轉成可搜尋的逐字文字。",
+            "文字不在這裡停止；它會繼續進入摘要、改寫或整理流程，輸入與輸出始終可追溯。"
+          ],
+          trace: ["輸出物", "逐字稿 / 摘要 / 可編輯文字"],
+          lane: `
+            <div class="lane-kicker">多種輸入，沿同一路徑被轉換</div>
+            <div class="lane-grid input-grid">
+              <div class="input-stack">
+                <span class="input-tag">錄音 .m4a</span><span class="input-tag">訪談 .wav</span><span class="input-tag">語音備忘 .mp3</span>
+              </div>
+              <div class="transform-path">
+                <div class="path-track"><div class="path-rule"></div><div class="path-runner"></div></div><div class="path-sentence">錄音 → 文字 → 後續處理</div><div class="path-detail">轉錄不是終點，而是下一個文字動作的起點</div>
+              </div>
+              <div class="output-stack">
+                <span class="output-item">逐字文字</span><span class="output-item">段落摘要</span><span class="output-item">可編輯內容</span>
+              </div>
+            </div>`
+        },
+        {
+          id: "distill",
+          mode: "retrieve-distill",
+          index: "02 / 04",
+          skill: "Web Search",
+          gloss: "把檢索結果壓縮成可追溯的重點",
+          copy: [
+            "先取得一批互相重疊、品質不一的檢索結果，再排除重複、過時與缺少脈絡的內容。",
+            "最後留下少量可核對的要點；壓縮了數量，但沒有把來源與關鍵資料一起刪掉。"
+          ],
+          trace: ["來源與資料", "保留 3 / 12 · 日期 / 作者 / 原文連結"],
+          lane: `
+            <div class="lane-kicker">量級真的改變，不用裝飾性淡入代替壓縮</div>
+            <div class="lane-grid distill-grid">
+              <div class="raw-stream">
+                <span class="raw-row">同題重複內容</span><span class="raw-row">較舊資料</span><span class="raw-row">官方說明</span><span class="raw-row">使用者回報</span><span class="raw-row">無日期摘錄</span><span class="raw-row">原文連結</span><span class="raw-row">次級引用</span><span class="raw-row">版本差異</span>
+              </div>
+              <div class="ratio">12 → 3<small>篩選 / 去重 / 保留來源</small></div>
+              <div class="distilled">
+                <div class="distilled-item"><strong>01</strong> 官方版本差異</div><div class="distilled-item"><strong>02</strong> 使用條件與限制</div><div class="distilled-item"><strong>03</strong> 原文出處與日期</div>
+              </div>
+            </div>`
+        },
+        {
+          id: "roundtrip",
+          mode: "knowledge-roundtrip",
+          index: "03 / 04",
+          skill: "Obsidian",
+          gloss: "讓本機知識在讀取、檢索與回寫之間循環",
+          copy: [
+            "先讀取既有筆記，再從本機資料中找出相關段落與連結。",
+            "新的結論會回寫到原本的知識庫；下一次檢索，便從更新後的內容重新出發。"
+          ],
+          trace: ["讀寫對象", "本機 Markdown / 雙向連結 / 索引"],
+          lane: `
+            <div class="lane-kicker">不是單向流水線，狀態能回到起點</div>
+            <div class="lane-grid roundtrip-grid">
+              <div class="roundtrip-copy">每次回寫都改變下一次讀取的起點。知識反覆進出，但路徑與對象保持可辨。</div>
+              <div class="orbit">
+                <div class="orbit-ring"></div><div class="orbit-core">本機筆記</div><div class="orbit-node read">讀取</div><div class="orbit-node search">檢索</div><div class="orbit-node write">回寫</div><div class="orbit-runner"></div>
+              </div>
+            </div>`
+        },
+        {
+          id: "persist",
+          mode: "persist-reuse",
+          index: "04 / 04",
+          skill: "Self-Improving Agent",
+          gloss: "把這次修正帶進下一個相似任務",
+          copy: [
+            "把這次被糾正的規則整理成可重用記錄，而不是只在當下回覆裡短暫生效。",
+            "當後續會話遇到相似任務，系統重新取用這條記錄，讓「下次還記得」成為可見的時間結構。"
+          ],
+          trace: ["復用條件", "相似任務 + 已啟用記憶"],
+          lane: `
+            <div class="lane-kicker">時間越過會話邊界，記錄在另一側重新被使用</div>
+            <div class="lane-grid persist-grid">
+              <div class="memory-rail"></div>
+              <div class="session-timeline">
+                <div class="session-side">
+                  <div class="session-label">本次會話</div>
+                  <div class="session-raw">原文 ·「請整理這份會議紀錄」</div>
+                  <div class="memory-rule">規則 ×3 · 保留原文 / 分組 / 標記待辦</div>
+                </div>
+                <div class="boundary"><span class="boundary-chip" data-layout-allow-overlap>會話邊界</span><div class="boundary-line"></div></div>
+                <div class="session-side right">
+                  <div class="session-label">相似任務 · 會議紀要整理</div>
+                  <div class="applied-label">已套用</div>
+                  <div class="memory-source">來自 08-12 會話</div>
+                  <div class="reuse-stamp">REUSED · NEXT SESSION</div>
+                  <div class="boundary-note">適用邊界 · 不代表所有專案自動共用</div>
+                </div>
+              </div>
+              <div class="memory-token">規則 ×3</div>
+            </div>`
+        }
+      ];
+
+      const RUNTIME_VALUES = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+        ? window.__hyperframes.getVariables()
+        : {};
+      const ALLOWED_MODES = MODES.map((item) => item.mode);
+      const esc = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[character]));
+      const textSlot = (name, fallback) => typeof RUNTIME_VALUES[name] === "string" ? RUNTIME_VALUES[name] : fallback;
+      const listSlot = (name, fallback, limit) => {
+        const value = Array.isArray(RUNTIME_VALUES[name]) ? RUNTIME_VALUES[name] : fallback;
+        const cleaned = value.filter((item) => typeof item === "string" && item.length).slice(0, limit);
+        return cleaned.length ? cleaned : fallback;
+      };
+      const detailSlot = (fallback) => {
+        const value = RUNTIME_VALUES.mode_details;
+        return value && typeof value === "object" && !Array.isArray(value) ? { ...fallback, ...value } : fallback;
+      };
+      const itemStack = (items, className, tagName = "span") => items.map((item) => `<${tagName} class="${className}">${esc(item)}</${tagName}>`).join("");
+
+      function laneMarkup(mode, kicker, sourceItems, resultItems) {
+        if (mode === "retrieve-distill") {
+          const details = detailSlot({ ratio: "12 → 3", process: "筛选 / 去重 / 保留来源" });
+          return `<div class="lane-kicker">${esc(kicker)}</div><div class="lane-grid distill-grid">
+            <div class="raw-stream">${itemStack(sourceItems, "raw-row")}</div>
+            <div class="ratio">${esc(details.ratio)}<small>${esc(details.process)}</small></div>
+            <div class="distilled">${resultItems.map((item, index) => `<div class="distilled-item"><strong>${String(index + 1).padStart(2, "0")}</strong> ${esc(item)}</div>`).join("")}</div>
+          </div>`;
+        }
+        if (mode === "knowledge-roundtrip") {
+          const details = detailSlot({ body: "每次回写都改变下一次读取的起点。知识反复进出，但路径与对象保持可辨。", core: "本机笔记" });
+          const labels = [...sourceItems, "读取", "检索", "回写"];
+          return `<div class="lane-kicker">${esc(kicker)}</div><div class="lane-grid roundtrip-grid">
+            <div class="roundtrip-copy">${esc(details.body)}</div><div class="orbit"><div class="orbit-ring"></div><div class="orbit-core">${esc(details.core)}</div>
+            <div class="orbit-node read">${esc(labels[0])}</div><div class="orbit-node search">${esc(labels[1])}</div><div class="orbit-node write">${esc(labels[2])}</div><div class="orbit-runner"></div></div>
+          </div>`;
+        }
+        if (mode === "persist-reuse") {
+          const details = detailSlot({ boundary: "会话边界", reuse: "REUSED · NEXT SESSION", note: "适用边界 · 不代表所有项目自动共用", token: "规则 ×3" });
+          const source = [...sourceItems, "本次会话", "原文 ·「请整理这份会议记录」", "规则 ×3 · 保留原文 / 分组 / 标记待办"];
+          const result = [...resultItems, "相似任务 · 会议纪要整理", "已套用", "来自上次会话"];
+          return `<div class="lane-kicker">${esc(kicker)}</div><div class="lane-grid persist-grid"><div class="memory-rail"></div><div class="session-timeline">
+            <div class="session-side"><div class="session-label">${esc(source[0])}</div><div class="session-raw">${esc(source[1])}</div><div class="memory-rule">${esc(source[2])}</div></div>
+            <div class="boundary"><span class="boundary-chip" data-layout-allow-overlap>${esc(details.boundary)}</span><div class="boundary-line"></div></div>
+            <div class="session-side right"><div class="session-label">${esc(result[0])}</div><div class="applied-label">${esc(result[1])}</div><div class="memory-source">${esc(result[2])}</div>
+            <div class="reuse-stamp">${esc(details.reuse)}</div><div class="boundary-note">${esc(details.note)}</div></div></div><div class="memory-token">${esc(details.token)}</div></div>`;
+        }
+        const details = detailSlot({ path_title: "录音 → 文字 → 后续处理", path_detail: "转录不是终点，而是下一个文字动作的起点" });
+        return `<div class="lane-kicker">${esc(kicker)}</div><div class="lane-grid input-grid"><div class="input-stack">${itemStack(sourceItems, "input-tag")}</div>
+          <div class="transform-path"><div class="path-track"><div class="path-rule"></div><div class="path-runner"></div></div><div class="path-sentence">${esc(details.path_title)}</div><div class="path-detail">${esc(details.path_detail)}</div></div>
+          <div class="output-stack">${itemStack(resultItems, "output-item")}</div></div>`;
+      }
+
+      function sceneMarkup(item, index) {
+        const trace = `<div class="trace-line"><span class="trace-label">${item.trace[0]}</span><span class="trace-value">${item.trace[1]}</span></div>`;
+        return `<section class="scene clip" id="scene-${item.id}" data-mode="${item.mode}" data-start="${index * 12}" data-duration="12" data-track-index="1">
+          <div class="ambient" data-layout-ignore></div><div class="grain" data-layout-ignore></div><div class="scene-index">${item.index}</div>
+          <div class="scene-content">
+            <header class="identity"><div><div class="component-id">rich-skill-explanation@v2</div><h1 class="skill-name">${item.skill}</h1></div><p class="skill-gloss">${item.gloss}</p></header>
+            <main class="explanation"><div class="copy-stack"><p class="copy-block">${item.copy[0]}</p><p class="copy-block">${item.copy[1]}</p></div><div class="mode-lane">${item.lane}</div></main>
+            <footer class="trace"><div class="mode-label">mode / ${item.mode}</div>${trace}</footer>
+          </div>
+        </section>`;
+      }
+
+      const SELECTED_MODE = ALLOWED_MODES.includes(RUNTIME_VALUES.mode) ? RUNTIME_VALUES.mode : "input-transform";
+      const selected = MODES.find((item) => item.mode === SELECTED_MODE);
+      const total = Math.max(1, Math.min(20, Math.trunc(Number(RUNTIME_VALUES.sequence_total)) || 4));
+      const index = Math.max(1, Math.min(total, Math.trunc(Number(RUNTIME_VALUES.sequence_index)) || 1));
+      const modeDefaults = {
+        "input-transform": { source: ["录音 .m4a", "访谈 .wav", "语音备忘 .mp3"], result: ["逐字文字", "段落摘要", "可编辑内容"] },
+        "retrieve-distill": { source: ["同题重复内容", "较旧资料", "官方说明", "使用者回报", "无日期摘录", "原文链接", "次级引用", "版本差异"], result: ["官方版本差异", "使用条件与限制", "原文出处与日期"] },
+        "knowledge-roundtrip": { source: ["读取", "检索", "回写"], result: [] },
+        "persist-reuse": { source: ["本次会话", "原文 ·「请整理这份会议记录」", "规则 ×3 · 保留原文 / 分组 / 标记待办"], result: ["相似任务 · 会议纪要整理", "已套用", "来自上次会话"] }
+      }[SELECTED_MODE];
+      const modeKicker = {
+        "input-transform": "多种输入，沿同一路径被转换",
+        "retrieve-distill": "量级真的改变，不用装饰性淡入代替压缩",
+        "knowledge-roundtrip": "不是单向流水线，状态能回到起点",
+        "persist-reuse": "时间越过会话边界，记录在另一侧重新被使用"
+      }[SELECTED_MODE];
+      const sourceItems = listSlot("source_items", modeDefaults.source, SELECTED_MODE === "retrieve-distill" ? 8 : 3);
+      const resultItems = listSlot("result_items", modeDefaults.result, 3);
+      selected.index = `${String(index).padStart(2, "0")} / ${String(total).padStart(2, "0")}`;
+      selected.skill = esc(textSlot("title", selected.skill));
+      selected.gloss = esc(textSlot("subtitle", selected.gloss));
+      selected.copy = [esc(textSlot("statement_1", selected.copy[0])), esc(textSlot("statement_2", selected.copy[1]))];
+      selected.trace = [esc(textSlot("trace_label", selected.trace[0])), esc(textSlot("trace_value", selected.trace[1]))];
+      selected.lane = laneMarkup(SELECTED_MODE, textSlot("lane_kicker", modeKicker), sourceItems, resultItems);
+      document.querySelector("#scenes").innerHTML = sceneMarkup(selected, 0);
+      document.querySelector('[data-visual-surface="explanation_lane"]').setAttribute("data-surface-mode", "none");
+
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      function animateBase(scene, start) {
+        const q = (selector) => `${scene} ${selector}`;
+        tl.from(q(".component-id"), { x: -36, opacity: 0, duration: 0.52, ease: "expo.out" }, start + 0.18)
+          .from(q(".skill-name"), { y: 46, duration: 0.76, ease: "power4.out" }, start + 0.3)
+          .from(q(".skill-gloss"), { x: 34, opacity: 0, duration: 0.58, ease: "back.out(1.15)" }, start + 0.62)
+          .from(q(".identity"), { borderColor: "rgba(245,241,234,0)", duration: 0.66, ease: "sine.out" }, start + 0.44)
+          .from(q(".copy-block:first-child"), { y: 32, opacity: 0, duration: 0.7, ease: "power3.out" }, start + 1.18)
+          .to(q(".copy-block:first-child"), { opacity: 0.42, scale: 0.94, y: -8, duration: 0.55, ease: "sine.inOut" }, start + 2.62)
+          .from(q(".copy-block:last-child"), { x: -28, opacity: 0, duration: 0.64, ease: "expo.out" }, start + 2.48)
+          .from(q(".lane-kicker"), { y: 18, opacity: 0, duration: 0.42, ease: "power2.out" }, start + 3.72)
+          .from(q(".mode-lane"), { borderColor: "rgba(245,241,234,0)", duration: 0.7, ease: "sine.out" }, start + 3.58)
+          .from(q(".mode-label"), { x: -24, opacity: 0, duration: 0.44, ease: "power3.out" }, start + 8.92)
+          .from(q(".trace-line"), { y: 22, opacity: 0, duration: 0.54, stagger: 0.12, ease: "back.out(1.05)" }, start + 9.02)
+          .from(q(".trace"), { borderColor: "rgba(245,241,234,0)", duration: 0.62, ease: "sine.out" }, start + 8.86)
+          .to(q(".ambient"), { scale: 1.08, opacity: 0.72, duration: 1.8, repeat: 4, yoyo: true, ease: "sine.inOut" }, start + 0.2);
+      }
+
+      function animateInput(start) {
+        const s = "#scene-input";
+        tl.from(`${s} .input-tag`, { x: -34, opacity: 0, duration: 0.46, stagger: 0.13, ease: "power3.out" }, start + 4.2)
+          .from(`${s} .path-rule`, { scaleX: 0, duration: 0.78, ease: "expo.inOut" }, start + 4.68)
+          .from(`${s} .path-runner`, { scale: 0.76, opacity: 0, duration: 0.34, ease: "back.out(1.2)" }, start + 5.02)
+          .from(`${s} .path-sentence`, { scale: 0.88, opacity: 0, duration: 0.6, ease: "back.out(1.2)" }, start + 5.08)
+          .from(`${s} .path-detail`, { y: 18, opacity: 0, duration: 0.46, ease: "power2.out" }, start + 5.64)
+          .to(`${s} .path-runner`, { x: 342, duration: 1.08, ease: "power3.inOut" }, start + 5.36)
+          .to(`${s} .input-tag`, { x: 30, opacity: 0.38, duration: 0.66, stagger: 0.1, ease: "power2.inOut" }, start + 6.12)
+          .to(`${s} .path-runner`, { scale: 1.25, duration: 0.15, repeat: 1, yoyo: true, ease: "power2.out" }, start + 6.42)
+          .from(`${s} .output-item`, { x: -28, scale: 0.96, opacity: 0, duration: 0.5, stagger: 0.16, ease: "back.out(1.08)" }, start + 6.56);
+      }
+
+      function animateDistill(start) {
+        const s = "#scene-distill";
+        tl.from(`${s} .raw-row`, { x: -38, opacity: 0, duration: 0.34, stagger: 0.07, ease: "power3.out" }, start + 4.12)
+          .to(`${s} .raw-row`, { x: 76, y: (index) => (3.5 - index) * 8, scale: 0.82, opacity: 0.4, duration: 0.82, stagger: 0.04, ease: "power3.inOut" }, start + 5.28)
+          .from(`${s} .ratio`, { scale: 1.24, opacity: 0, duration: 0.54, ease: "back.out(1.25)" }, start + 5.72)
+          .to(`${s} .ratio`, { scale: 1.06, duration: 0.15, repeat: 1, yoyo: true, ease: "power2.out" }, start + 6.28)
+          .from(`${s} .distilled-item`, { x: -42, opacity: 0, duration: 0.5, stagger: 0.18, ease: "expo.out" }, start + 6.32);
+      }
+
+      function animateRoundtrip(start) {
+        const s = "#scene-roundtrip";
+        tl.from(`${s} .roundtrip-copy`, { x: -34, opacity: 0, duration: 0.6, ease: "power3.out" }, start + 4.1)
+          .from(`${s} .orbit-ring`, { scale: 0.72, opacity: 0, duration: 0.72, ease: "expo.out" }, start + 4.34)
+          .from(`${s} .orbit-core`, { scale: 0.84, opacity: 0, duration: 0.48, ease: "back.out(1.3)" }, start + 4.72)
+          .from(`${s} .orbit-node`, { opacity: 0, duration: 0.38, stagger: 0.18, ease: "sine.out" }, start + 5.08)
+          .from(`${s} .orbit-runner`, { opacity: 0, duration: 0.3, ease: "power2.out" }, start + 5.42)
+          .to(`${s} .orbit-runner`, { rotation: 360, duration: 3.25, ease: "none" }, start + 5.58)
+          .to(`${s} .orbit-node.search`, { color: "#9bd6bd", scale: 1.14, duration: 0.15, repeat: 1, yoyo: true, ease: "power2.out" }, start + 6.38)
+          .to(`${s} .orbit-node.write`, { color: "#9bd6bd", scale: 1.14, duration: 0.15, repeat: 1, yoyo: true, ease: "power2.out" }, start + 7.18)
+          .to(`${s} .orbit-node.read`, { color: "#9bd6bd", scale: 1.14, duration: 0.15, repeat: 1, yoyo: true, ease: "power2.out" }, start + 7.98);
+      }
+
+      function animatePersist(start) {
+        const s = "#scene-persist";
+        tl.from(`${s} .session-side:first-child .session-label`, { x: -34, opacity: 0, duration: 0.46, ease: "expo.out" }, start + 4.02)
+          .from(`${s} .session-raw`, { y: 20, opacity: 0, duration: 0.5, ease: "power3.out" }, start + 4.32)
+          .from(`${s} .memory-rule`, { x: -26, opacity: 0, duration: 0.56, ease: "back.out(1.12)" }, start + 4.68)
+          .from(`${s} .boundary-line`, { scaleY: 0, opacity: 0, duration: 0.66, ease: "power4.out" }, start + 5.02)
+          .from(`${s} .boundary-chip`, { y: -16, opacity: 0, duration: 0.4, ease: "back.out(1.2)" }, start + 5.48)
+          .from(`${s} .memory-rail`, { scaleX: 0, duration: 0.72, ease: "expo.inOut" }, start + 5.62)
+          .from(`${s} .memory-token`, { x: -30, opacity: 0, duration: 0.42, ease: "power3.out" }, start + 5.78)
+          .to(`${s} .memory-rule`, { opacity: 0.42, duration: 0.4, ease: "sine.inOut" }, start + 6.1)
+          .to(`${s} .memory-token`, { x: 330, duration: 0.78, ease: "power3.inOut" }, start + 6.06)
+          .to(`${s} .boundary-chip`, { color: "#0b0b0f", backgroundColor: "#d6a8ff", boxShadow: "0 0 30px rgba(214,168,255,0.62)", duration: 0.1, repeat: 1, yoyo: true, ease: "power2.inOut" }, start + 6.88)
+          .to(`${s} .boundary-line`, { scaleX: 3, duration: 0.1, repeat: 1, yoyo: true, ease: "power2.inOut" }, start + 6.88)
+          .to(`${s} .memory-token`, { scale: 1.08, duration: 0.1, repeat: 1, yoyo: true, ease: "power2.inOut" }, start + 6.88)
+          .from(`${s} .session-side.right`, { x: 36, opacity: 0, duration: 0.54, ease: "expo.out" }, start + 7.08)
+          .to(`${s} .memory-token`, { x: 510, duration: 0.76, ease: "power3.inOut" }, start + 7.1)
+          .from(`${s} .applied-label`, { y: 16, opacity: 0, duration: 0.36, ease: "power2.out" }, start + 7.88)
+          .from(`${s} .memory-source`, { y: 14, opacity: 0, duration: 0.38, ease: "sine.out" }, start + 8.12)
+          .from(`${s} .reuse-stamp`, { scale: 1.15, duration: 0.3, ease: "power3.out" }, start + 8.42)
+          .from(`${s} .boundary-note`, { y: 14, opacity: 0, duration: 0.42, ease: "power2.out" }, start + 8.66);
+      }
+
+      const scene = `#scene-${selected.id}`;
+      animateBase(scene, 0);
+      if (selected.mode === "input-transform") animateInput(0);
+      if (selected.mode === "retrieve-distill") animateDistill(0);
+      if (selected.mode === "knowledge-roundtrip") animateRoundtrip(0);
+      if (selected.mode === "persist-reuse") animatePersist(0);
+
+      const timeScale = Number(RUNTIME_VALUES.time_scale);
+      if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+
+      window.__timelines["rich-skill-explanation"] = tl;
+    </script>
+    </template>
+  </body>
+</html>

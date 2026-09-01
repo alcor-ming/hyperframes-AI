@@ -35,6 +35,23 @@ Precise, calm, contemporary, responsive and spatially coherent. The viewer shoul
 
 Avoid for nostalgic, literary, archival or intentionally tactile subjects unless the user explicitly requests a contrast.
 
+## Pure HyperFrames subtemplates
+
+For `pure_hyperframes`, select exactly one presentation structure, state it in the Animation Plan, and load only its file:
+
+- `hero_flow`｜主视觉叙事流：read [`subtemplates/hero-flow.md`](subtemplates/hero-flow.md).
+- `module_stage`｜模块讲解台：read [`subtemplates/module-stage.md`](subtemplates/module-stage.md).
+
+Do not load both subtemplate files.
+
+Select from the information structure, not the canvas ratio alone:
+
+- Use `hero_flow` for a story, claim, case or process whose visual mechanism changes with each semantic turn.
+- Use `module_stage` for a list, tool set, course or repeated comparison whose peer items share one explanation pattern.
+- Do not combine both structures in one Variant. Changing the selected subtemplate after Plan approval requires a revised Animation Plan and user approval.
+
+The subtemplate defines presentation architecture only. Component selection, component appearance, measurements and motion choreography belong to the Animation Plan and the separate component Skill/library.
+
 ## Color language
 
 Use `tokens.json` as authority.
@@ -45,6 +62,7 @@ Use `tokens.json` as authority.
 - Active blue carries the current decision or selected object.
 - Only one of cyan/blue may be the dominant accent in a frame.
 - Accent coverage target: under 5% of the frame.
+- Additional tokenized accents may distinguish semantic states or peer chapters, but each frame keeps one dominant accent.
 
 ## Typography
 
@@ -170,6 +188,7 @@ At 60fps:
 - Use image, diagram or data objects as depth anchors.
 - The scene may use more pronounced Focus → Connect → Resolve choreography.
 - Ambient light may drift slowly, but it must not become a visible loop competing with speech.
+- Apply exactly one of `hero_flow` or `module_stage`; their composition rules override this baseline where they are more specific.
 
 ## Hard bans
 
@@ -186,6 +205,8 @@ At 60fps:
 
 ## Scene QA
 
+- Does the Animation Plan name exactly one Pure HyperFrames subtemplate?
+- Does the Scene follow the selected subtemplate rather than borrowing the other structure?
 - Is glass solving hierarchy or merely adding style?
 - Does every path connect two meaningful anchors?
 - Does the focal object remain obvious after motion stops?

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "type": "object",
+  "component_ref": "chapter-intro@v1",
+  "profile": "optical_fluidity",
+  "subtemplate": "module_stage",
+  "slots": {
+    "required": [
+      "chapter_index",
+      "chapter_total",
+      "title",
+      "summary",
+      "progress"
+    ],
+    "properties": {
+      "chapter_index": {
+        "type": "string",
+        "pattern": "^[0-9]{2}$",
+        "minLength": 2,
+        "maxLength": 2
+      },
+      "chapter_total": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 99
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 24
+      },
+      "summary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 48
+      },
+      "progress": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "icon": {
+        "type": "string",
+        "nullable": true
+      },
+      "evidence": {
+        "type": "string",
+        "nullable": true
+      },
+      "source_label": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 80
+      },
+      "previous_context": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 48
+      }
+    }
+  },
+  "visual_surfaces": [
+    {
+      "surface_id": "evidence_primary",
+      "kind": "active_media_card",
+      "modes": ["none", "image", "video"],
+      "required": true,
+      "fallback": "programmatic"
+    }
+  ],
+  "timing": {
+    "default_duration_seconds": 1.6,
+    "allowed_time_scale": {
+      "minimum": 0.5,
+      "maximum": 1.5
+    },
+    "key_times_seconds": [
+      0.0,
+      0.7,
+      1.49,
+      1.6
+    ]
+  },
+  "assets": {
+    "required": false,
+    "allowed_types": [
+      "local_image",
+      "local_video",
+      "inline_svg"
+    ],
+    "runtime_network": false
+  }
+}

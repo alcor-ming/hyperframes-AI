@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "component_ref": "chapter-intro@v1",
+  "fixture_id": "default",
+  "description": "Asset-free representative chapter identity with a short summary.",
+  "slots": {
+    "chapter_index": "03",
+    "chapter_total": 10,
+    "title": "选题罗盘",
+    "summary": "把一周的零散灵感，整理成一张可发布的选题清单",
+    "progress": 0.3,
+    "icon": null,
+    "evidence": null,
+    "source_label": "local preview fixture",
+    "previous_context": "02 · 词云已生成"
+  },
+  "surfaces": {
+    "evidence_primary": {
+      "kind": "active_media_card",
+      "mode": "none",
+      "fallback": "programmatic"
+    }
+  }
+}

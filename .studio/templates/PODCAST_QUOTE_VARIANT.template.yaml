@@ -1,0 +1,8 @@
+{
+  "id": "__VARIANT_ID__",
+  "ratio": "3:4",
+  "status": "active",
+  "wait_for": "none",
+  "next_action": "提供本地视频、来源 URL 或结构化转录",
+  "current_final": null
+}

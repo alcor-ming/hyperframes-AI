@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
@@ -36,9 +37,49 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual(expected, result, stderr.getvalue())
         return stdout.getvalue().strip() or stderr.getvalue().strip()
 
-    def new_work(self, title: str = "Test Work") -> tuple[str, Path]:
-        work_id = self.invoke("new", title)
+    def new_work(self, title: str = "Test Work", workflow: str = "hyperframes_video") -> tuple[str, Path]:
+        work_id = self.invoke("new", title, "--workflow", workflow)
         return work_id, self.root / "works" / "active" / work_id
+
+    def prepare_package_final(self, name: str = "quote-final", marker: bytes = b"one") -> Path:
+        directory = self.root / name
+        directory.mkdir()
+        artifacts = []
+        for index in range(1, 9):
+            path = directory / f"{index:02d}.jpg"
+            path.write_bytes(marker + str(index).encode())
+            artifacts.append({"path": path.name, "role": "image", "sha256": WORK_CLI.file_sha256(path)})
+        contact = directory / "final_contact_sheet.jpg"
+        contact.write_bytes(b"contact-" + marker)
+        artifacts.append({"path": contact.name, "role": "contact_sheet", "sha256": WORK_CLI.file_sha256(contact)})
+        package = directory / "PACKAGE.md"
+        package.write_text("# Package\n", encoding="utf-8")
+        artifacts.append({"path": package.name, "role": "package", "sha256": WORK_CLI.file_sha256(package)})
+        publish_payload = directory / "xiaohongshu.json"
+        publish_payload.write_text('{"destination":"creator_draft"}\n', encoding="utf-8")
+        artifacts.append(
+            {
+                "path": publish_payload.name,
+                "role": "publish_payload",
+                "sha256": WORK_CLI.file_sha256(publish_payload),
+            }
+        )
+        (directory / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow": "podcast_quote_image",
+                    "qa": "passed",
+                    "publish_contract": "xiaohongshu_creator_draft_v1",
+                    "artifacts": artifacts,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return directory
 
     @staticmethod
     def update_frontmatter(path: Path, **updates: object) -> None:
@@ -71,7 +112,14 @@ class WorkCliTest(unittest.TestCase):
         work_id, work = self.new_work("中文标题")
         self.assertTrue((work / "variants" / "main" / "SCRIPT.md").is_file())
         self.assertTrue((work / "variants" / "main" / "RESEARCH.md").is_file())
+        self.assertEqual("16:9", json.loads((work / "variants" / "main" / "variant.yaml").read_text())["ratio"])
+        package = (work / "variants" / "main" / "PACKAGE.md").read_text(encoding="utf-8")
+        self.assertIn("## 标题", package)
+        self.assertIn("## 封面文字", package)
+        self.assertIn("## 一句话", package)
+        self.assertIn("## 内容概括", package)
         self.assertEqual(work_id, (self.root / ".studio" / ".runtime" / "current-work").read_text().strip())
+        self.assertEqual("hyperframes_video", WORK_CLI.read_frontmatter(work / "WORK.md")["workflow"])
 
         script = work / "variants" / "main" / "SCRIPT.md"
         script.write_text(script.read_text(encoding="utf-8") + "正文\n", encoding="utf-8")
@@ -86,6 +134,120 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual("ready", WORK_CLI.read_frontmatter(copied_variant / "RESEARCH.md")["status"])
         status = json.loads(self.invoke("status"))
         self.assertEqual("douyin-9x16", status["variant"]["id"])
+
+    def test_workflow_is_required_and_podcast_init_is_content_specific(self) -> None:
+        with self.assertRaises(SystemExit):
+            WORK_CLI.main(["new", "Missing workflow"], root=self.root)
+
+        work_id, work = self.new_work("Podcast quotes", "podcast_quote_image")
+        variant = work / "variants" / "main"
+        self.assertEqual("podcast_quote_image", WORK_CLI.read_frontmatter(work / "WORK.md")["workflow"])
+        self.assertEqual("3:4", json.loads((variant / "variant.yaml").read_text())["ratio"])
+        self.assertTrue((variant / "materials").is_dir())
+        self.assertTrue((variant / "artifacts").is_dir())
+        self.assertTrue((variant / "frames").is_dir())
+        self.assertTrue((variant / "render").is_dir())
+        research = (variant / "RESEARCH.md").read_text(encoding="utf-8")
+        self.assertIn("## 嘉宾身份", research)
+        self.assertIn("## 与本文核心相关的经历", research)
+        self.assertIn("## 来源", research)
+        self.assertTrue((variant / "PACKAGE.md").is_file())
+        self.assertFalse((variant / "SCRIPT.md").exists())
+        self.assertFalse((variant / "ANIMATION_PLAN.md").exists())
+        self.assertEqual(work_id, json.loads(self.invoke("list"))[0]["id"])
+
+        result = self.invoke("preview", "register", str(self.root / "missing.mp4"), expected=2)
+        self.assertIn("requires workflow hyperframes_video", result)
+
+    def test_podcast_workflow_rejects_video_options_before_creation(self) -> None:
+        result = self.invoke(
+            "new",
+            "Wrong options",
+            "--workflow",
+            "podcast_quote_image",
+            "--ratio",
+            "9:16",
+            expected=2,
+        )
+        self.assertIn("does not accept video", result)
+        self.assertFalse((self.root / "works").exists())
+
+    def test_detached_work_keeps_foreground_and_explicit_binding_is_isolated(self) -> None:
+        foreground_id, _ = self.new_work("Foreground")
+        self.invoke("variant", "add", "wide", "--from", "main")
+
+        background_id = self.invoke(
+            "new", "Background", "--workflow", "podcast_quote_image", "--detached"
+        )
+        runtime = self.root / ".studio" / ".runtime"
+        self.assertEqual(foreground_id, (runtime / "current-work").read_text().strip())
+        self.assertEqual("wide", (runtime / "current-variant").read_text().strip())
+
+        status = json.loads(self.invoke("--work", background_id, "status"))
+        self.assertEqual("main", status["variant"]["id"])
+        self.invoke("--work", background_id, "--variant", "main", "wait", "article_selection")
+        row = next(item for item in json.loads(self.invoke("list")) if item["id"] == background_id)
+        self.assertEqual("waiting_user", row["status"])
+        self.assertEqual("article_selection", row["wait_for"])
+
+    def test_external_work_root_is_persisted_and_used(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            external = Path(temporary)
+            for name in ("active", "parked", "archive"):
+                (external / "works" / name).mkdir(parents=True)
+
+            configured = json.loads(self.invoke("root", "set", str(external)))
+            self.assertTrue(configured["configured"])
+            self.assertEqual(str(external), configured["work_root"])
+            work_id = self.invoke("new", "External", "--workflow", "hyperframes_video")
+            self.assertTrue((external / "works" / "active" / work_id).is_dir())
+            self.assertEqual(work_id, (external / ".runtime" / "current-work").read_text().strip())
+            self.assertFalse((self.root / "works").exists())
+
+    def test_work_ids_and_names_are_numbered_per_workflow_and_sorted(self) -> None:
+        first_id, first = self.new_work("Podcast A", "podcast_quote_image")
+        second_id, second = self.new_work("Podcast B", "podcast_quote_image")
+
+        self.assertEqual("work-podcast_quote_image-001", first_id)
+        self.assertEqual("work-podcast_quote_image-002", second_id)
+        self.assertEqual("001-Podcast A", WORK_CLI.read_frontmatter(first / "WORK.md")["title"])
+        self.assertEqual(first_id, WORK_CLI.read_frontmatter(first / "WORK.md")["id"])
+        self.assertEqual("001-Lucy Guo-创业", self.invoke("--work", first_id, "name", "Lucy Guo-创业"))
+        self.assertEqual("002-李飞飞-AI工作", self.invoke("--work", second_id, "name", "李飞飞-AI工作"))
+        self.assertEqual("001-Lucy Guo-转型", self.invoke("--work", first_id, "name", "999-Lucy Guo-转型"))
+        self.assertEqual("001-Lucy Guo-转型", WORK_CLI.read_frontmatter(first / "WORK.md")["title"])
+        self.assertIn("# 002-李飞飞-AI工作", (second / "WORK.md").read_text(encoding="utf-8"))
+
+        rows = json.loads(self.invoke("list"))
+        self.assertEqual([first_id, second_id], [row["id"] for row in rows])
+        self.assertIn("T", rows[0]["created_at"])
+
+        numbered_id, numbered = self.new_work("007-Old video")
+        future_id, _ = self.new_work("Future video")
+        self.assertEqual("work-hyperframes_video-001", numbered_id)
+        self.assertEqual("001-Old video", WORK_CLI.read_frontmatter(numbered / "WORK.md")["title"])
+        self.assertEqual("002-新主题", self.invoke("--work", future_id, "name", "新主题"))
+
+    def test_detached_concurrent_work_creation_allocates_unique_ids(self) -> None:
+        def create(title: str) -> None:
+            WORK_CLI.command_new(
+                self.root,
+                mock.Mock(
+                    title=title,
+                    workflow="podcast_quote_image",
+                    template=None,
+                    profile=None,
+                    ratio=None,
+                    subject_position=None,
+                    detached=True,
+                ),
+            )
+
+        with mock.patch("builtins.print"), ThreadPoolExecutor(max_workers=2) as executor:
+            list(executor.map(create, ("Same title", "Same title")))
+
+        ids = {row["id"] for row in json.loads(self.invoke("list"))}
+        self.assertEqual({"work-podcast_quote_image-001", "work-podcast_quote_image-002"}, ids)
 
     def test_legacy_archive_directory_is_ignored(self) -> None:
         (self.root / "works" / "archive" / "tasks" / "001-legacy").mkdir(parents=True)
@@ -172,7 +334,15 @@ class WorkCliTest(unittest.TestCase):
         self.assertTrue(archived_final.is_file())
         self.assertIn("/archive/", archived_final.as_posix())
         self.assertEqual(first_manifest, (archived_final.parent / "manifest.json").read_bytes())
+        archived_variant = archived_final.parent.parent
+        (archived_variant / ".runtime" / "finalize.json").write_text(
+            json.dumps({"state": "archive_pending"}), encoding="utf-8"
+        )
+        (self.root / ".studio" / ".runtime" / "current-work").write_text(work_id, encoding="utf-8")
+        (self.root / ".studio" / ".runtime" / "current-variant").write_text("main", encoding="utf-8")
         self.assertEqual(str(archived_final), self.invoke("--work", work_id, "finalize", str(final_one), "--qa-passed"))
+        self.assertEqual("complete", json.loads((archived_variant / ".runtime" / "finalize.json").read_text())["state"])
+        self.assertFalse((self.root / ".studio" / ".runtime" / "current-work").exists())
 
         self.invoke("reopen", work_id)
         final_two = self.root / "final-two.mp4"
@@ -203,6 +373,27 @@ class WorkCliTest(unittest.TestCase):
         archived, location = WORK_CLI.locate_work(self.root, work_id)
         self.assertEqual("archive", location)
         self.assertTrue((archived / "variants" / "main" / "final" / "final.mp4").is_file())
+
+    def test_podcast_final_promotes_manifest_directory_and_archives(self) -> None:
+        work_id, _ = self.new_work("Podcast quotes", "podcast_quote_image")
+        candidate = self.prepare_package_final()
+        result = self.invoke("finalize", str(candidate), expected=2)
+        self.assertIn("Final QA must pass", result)
+
+        archived_final = Path(self.invoke("finalize", str(candidate), "--qa-passed"))
+        self.assertTrue((archived_final / "manifest.json").is_file())
+        self.assertIn("/archive/", archived_final.as_posix())
+        self.assertEqual(
+            "manifest.json",
+            json.loads((archived_final.parent / "variant.yaml").read_text(encoding="utf-8"))["current_final"],
+        )
+        self.assertEqual(str(archived_final), self.invoke("--work", work_id, "finalize", str(candidate), "--qa-passed"))
+
+        self.invoke("reopen", work_id)
+        replacement = self.prepare_package_final("quote-final-two", b"two")
+        replaced_final = Path(self.invoke("finalize", str(replacement), "--qa-passed"))
+        self.assertEqual(b"two1", (replaced_final / "01.jpg").read_bytes())
+        self.assertEqual(b"one1", (replaced_final / "history" / "final-v001" / "01.jpg").read_bytes())
 
 
 if __name__ == "__main__":

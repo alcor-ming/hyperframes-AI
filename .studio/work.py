@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+import fcntl
 import hashlib
 import json
 import os
@@ -18,6 +19,30 @@ import unicodedata
 import uuid
 
 
+try:
+    from component_harness import (
+        ComponentError,
+        install_component,
+        parse_component_ref,
+        validate_component_release,
+        validate_snapshot_closure,
+        validate_work_surface_inventory,
+        verify_installation,
+    )
+except ModuleNotFoundError:  # Loading this file by path from repository tests.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from component_harness import (
+        ComponentError,
+        install_component,
+        parse_component_ref,
+        validate_component_release,
+        validate_snapshot_closure,
+        validate_work_surface_inventory,
+        verify_installation,
+    )
+
+
+WORKFLOWS = {"hyperframes_video", "podcast_quote_image"}
 TEMPLATES = {"talking_head", "pure_hyperframes"}
 PROFILES = {"optical_fluidity", "kami_editorial", "monochrome_atelier"}
 RATIOS = {"16:9", "9:16", "source"}
@@ -29,9 +54,20 @@ WAIT_REASONS = {
     "draft_feedback": ("waiting_user", "Wait for Draft feedback or acceptance"),
     "voiceover": ("waiting_asset", "Wait for the final voiceover"),
     "external_asset": ("waiting_asset", "Wait for an external media asset"),
+    "article_selection": ("waiting_user", "Wait for one article plan selection"),
+    "transcript_fallback": ("waiting_user", "Wait for the transcript fallback decision"),
+    "source_metadata": ("waiting_user", "Wait for source metadata"),
 }
 SNAPSHOT_ITEMS = ("index.html", "compositions", "DESIGN.md", "project-config.json")
+OPTIONAL_SNAPSHOT_ITEMS = (
+    "vendor",
+    "component-bindings",
+    "COMPONENT_LOCK.json",
+    "scene-slots.json",
+    "assets",
+)
 ID_PATTERN = re.compile(r"^[\w.-]+$", re.UNICODE)
+NUMBERED_TITLE_PATTERN = re.compile(r"^(\d{3})-(.+)$")
 
 
 class HarnessError(RuntimeError):
@@ -96,6 +132,31 @@ def read_frontmatter(path: Path) -> dict[str, Any]:
     return data
 
 
+def animation_plan_contains_component_ref(path: Path, component_ref: str) -> bool:
+    """Check the approved Plan body for the exact requested Component ref."""
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        end = lines.index("---", 1)
+    except (OSError, ValueError) as exc:
+        raise HarnessError(f"Cannot read Animation Plan body {path}: {exc}") from exc
+    pattern = re.compile(rf"(?<![A-Za-z0-9_.-]){re.escape(component_ref)}(?![A-Za-z0-9_.-])")
+    return any(pattern.search(line) for line in lines[end + 1 :])
+
+
+def work_workflow(work: Path) -> str:
+    value = read_frontmatter(work / "WORK.md").get("workflow", "hyperframes_video")
+    if value not in WORKFLOWS:
+        raise HarnessError(f"Unknown workflow: {value}")
+    return str(value)
+
+
+def require_workflow(work: Path, expected: str) -> None:
+    actual = work_workflow(work)
+    if actual != expected:
+        raise HarnessError(f"Command requires workflow {expected}; current Work uses {actual}")
+
+
 def template_text(root: Path, name: str, values: dict[str, str]) -> str:
     path = root / ".studio" / "templates" / name
     try:
@@ -119,19 +180,54 @@ def validate_id(value: str, label: str) -> str:
     return value
 
 
-def slugify(title: str) -> str:
-    normalized = unicodedata.normalize("NFKC", title).strip().lower()
-    slug = "".join(char if char.isalnum() else "-" for char in normalized)
-    slug = re.sub(r"-+", "-", slug).strip("-")
-    return slug[:48].rstrip("-") or "untitled"
+def title_number(title: str) -> int | None:
+    match = NUMBERED_TITLE_PATTERN.match(title)
+    return int(match.group(1)) if match else None
+
+
+def work_id_number(work_id: str, workflow: str) -> int | None:
+    match = re.fullmatch(rf"work-{re.escape(workflow)}-(\d{{3}})", work_id)
+    return int(match.group(1)) if match else None
+
+
+def next_work_number(rows: Iterable[dict[str, Any]], workflow: str) -> int:
+    numbers: list[int] = []
+    for row in rows:
+        if row["workflow"] != workflow:
+            continue
+        number = work_id_number(row["id"], workflow)
+        if number is None:
+            number = title_number(row["title"])
+        if number is not None:
+            numbers.append(number)
+    return max(numbers, default=0) + 1
+
+
+def work_root_config_path(root: Path) -> Path:
+    return root / ".studio" / ".runtime" / "work-root"
+
+
+def configured_work_root(root: Path) -> Path | None:
+    path = work_root_config_path(root)
+    if not path.is_file():
+        return None
+    value = path.read_text(encoding="utf-8").strip()
+    candidate = Path(value).expanduser() if value else None
+    if candidate is None or not candidate.is_absolute():
+        raise HarnessError(f"Invalid WorkStore root in {path}: {value!r}")
+    resolved = candidate.resolve()
+    if not resolved.is_dir():
+        raise HarnessError(f"Configured WorkStore root is unavailable: {resolved}")
+    return resolved
 
 
 def works_root(root: Path) -> Path:
-    return root / "works"
+    return (configured_work_root(root) or root) / "works"
 
 
 def runtime_root(root: Path) -> Path:
-    return root / ".studio" / ".runtime"
+    configured = configured_work_root(root)
+    return configured / ".runtime" if configured else root / ".studio" / ".runtime"
 
 
 def ensure_roots(root: Path) -> None:
@@ -183,18 +279,55 @@ def locate_work(root: Path, work_id: str) -> tuple[Path, str]:
     raise HarnessError(f"Unknown work: {work_id}")
 
 
-def list_work_rows(root: Path) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
+def list_work_rows(root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     for location in ("active", "parked"):
         parent = works_root(root) / location
         if parent.is_dir():
             for path in sorted(parent.iterdir()):
                 if path.is_dir():
                     metadata = read_frontmatter(path / "WORK.md")
-                    rows.append({"id": path.name, "title": str(metadata.get("title", "")), "location": location})
+                    state_path = path / "variants" / "main" / "variant.yaml"
+                    state = read_json(state_path) if state_path.is_file() else {}
+                    rows.append(
+                        {
+                            "id": path.name,
+                            "title": str(metadata.get("title", "")),
+                            "created_at": str(metadata.get("created_at", "")),
+                            "workflow": str(metadata.get("workflow", "hyperframes_video")),
+                            "location": location,
+                            "status": state.get("status"),
+                            "wait_for": state.get("wait_for"),
+                            "next_action": state.get("next_action"),
+                        }
+                    )
     for path in archived_work_paths(root):
         metadata = read_frontmatter(path / "WORK.md")
-        rows.append({"id": path.name, "title": str(metadata.get("title", "")), "location": "archive"})
+        state_path = path / "variants" / "main" / "variant.yaml"
+        state = read_json(state_path) if state_path.is_file() else {}
+        rows.append(
+            {
+                "id": path.name,
+                "title": str(metadata.get("title", "")),
+                "created_at": str(metadata.get("created_at", "")),
+                "workflow": str(metadata.get("workflow", "hyperframes_video")),
+                "location": "archive",
+                "status": state.get("status"),
+                "wait_for": state.get("wait_for"),
+                "next_action": state.get("next_action"),
+            }
+        )
+    location_order = {"active": 0, "parked": 1, "archive": 2}
+    rows.sort(
+        key=lambda row: (
+            location_order[row["location"]],
+            row["workflow"],
+            title_number(row["title"]) is None,
+            title_number(row["title"]) or 0,
+            row["created_at"],
+            row["id"],
+        )
+    )
     return rows
 
 
@@ -217,7 +350,9 @@ def variant_paths(work: Path) -> list[Path]:
 
 
 def selected_variant(root: Path, work: Path, args: argparse.Namespace) -> tuple[Path, dict[str, Any]]:
-    variant_id = args.variant_override or read_pointer(root, "current-variant")
+    variant_id = args.variant_override
+    if not variant_id and not args.work_override:
+        variant_id = read_pointer(root, "current-variant")
     if not variant_id or not (work / "variants" / variant_id).is_dir():
         variant_id = "main" if (work / "variants" / "main").is_dir() else None
     if not variant_id:
@@ -234,7 +369,7 @@ def write_variant(path: Path, data: dict[str, Any]) -> None:
     write_json(path / "variant.yaml", data)
 
 
-def create_variant(
+def create_video_variant(
     root: Path,
     work: Path,
     variant_id: str,
@@ -290,7 +425,7 @@ def create_variant(
         shutil.copy2(source_research, path / "RESEARCH.md")
     else:
         atomic_write(path / "RESEARCH.md", template_text(root, "RESEARCH.template.md", values))
-    atomic_write(path / "PACKAGE.md", "# Package\n\n")
+    atomic_write(path / "PACKAGE.md", "# Package\n\n## 标题\n\n## 封面文字\n\n## 一句话\n\n## 内容概括\n\n")
     atomic_write(
         path / "ANIMATION_PLAN.md",
         template_text(root, "ANIMATION_PLAN.template.md", values),
@@ -298,42 +433,107 @@ def create_variant(
     return path
 
 
-def command_new(root: Path, args: argparse.Namespace) -> None:
-    ensure_roots(root)
-    base_id = f"work-{datetime.now().astimezone():%Y%m%d}-{slugify(args.title)}"
-    work_id = base_id
-    suffix = 2
-    while any(row["id"] == work_id for row in list_work_rows(root)):
-        work_id = f"{base_id}-{suffix}"
-        suffix += 1
-    work = works_root(root) / "active" / work_id
-    work.mkdir(parents=True)
-    created_at = datetime.now().astimezone().date().isoformat()
-    atomic_write(
-        work / "WORK.md",
-        template_text(
-            root,
-            "WORK.template.md",
-            {
-                "WORK_ID": json_string_content(work_id),
-                "TITLE": json_string_content(args.title),
-                "CREATED_AT": created_at,
-            },
-        ),
-    )
-    atomic_write(work / "source.md", "# Source\n\n")
-    (work / "materials").mkdir()
-    create_variant(
+def create_podcast_quote_variant(root: Path, work: Path, variant_id: str) -> Path:
+    validate_id(variant_id, "variant id")
+    path = work / "variants" / variant_id
+    if path.exists():
+        raise HarnessError(f"Variant already exists: {variant_id}")
+    path.mkdir(parents=True)
+    for directory in ("materials", "artifacts", "frames", "render", "final/history", ".runtime/qa"):
+        (path / directory).mkdir(parents=True, exist_ok=True)
+    values = {"VARIANT_ID": json_string_content(variant_id)}
+    atomic_write(path / "variant.yaml", template_text(root, "PODCAST_QUOTE_VARIANT.template.yaml", values))
+    atomic_write(path / "RESEARCH.md", template_text(root, "PODCAST_QUOTE_RESEARCH.template.md", {}))
+    atomic_write(path / "PACKAGE.md", template_text(root, "PODCAST_QUOTE_PACKAGE.template.md", {}))
+    return path
+
+
+def create_variant(
+    root: Path,
+    work: Path,
+    variant_id: str,
+    *,
+    workflow: str,
+    template: str | None = None,
+    profile: str | None = None,
+    ratio: str | None = None,
+    subject_position: str | None = None,
+    copy_script_from: Path | None = None,
+) -> Path:
+    if workflow == "podcast_quote_image":
+        if any(value is not None for value in (template, profile, ratio, subject_position, copy_script_from)):
+            raise HarnessError("podcast_quote_image does not accept video Template, Profile, Ratio, subject, or --from options")
+        return create_podcast_quote_variant(root, work, variant_id)
+    if workflow != "hyperframes_video":
+        raise HarnessError(f"Unknown workflow: {workflow}")
+    return create_video_variant(
         root,
         work,
-        "main",
-        template=args.template,
-        profile=args.profile,
-        ratio=args.ratio,
-        subject_position=args.subject_position,
+        variant_id,
+        template=template or "pure_hyperframes",
+        profile=profile or "optical_fluidity",
+        ratio=ratio or "16:9",
+        subject_position=subject_position,
+        copy_script_from=copy_script_from,
     )
-    write_pointer(root, "current-work", work_id)
-    write_pointer(root, "current-variant", "main")
+
+
+def command_new(root: Path, args: argparse.Namespace) -> None:
+    if args.workflow == "podcast_quote_image" and any(
+        value is not None for value in (args.template, args.profile, args.ratio, args.subject_position)
+    ):
+        raise HarnessError("podcast_quote_image does not accept video Template, Profile, Ratio, or subject options")
+    ensure_roots(root)
+    with (runtime_root(root) / "naming.lock").open("w", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        rows = list_work_rows(root)
+        existing_ids = {row["id"] for row in rows}
+        number = next_work_number(rows, args.workflow)
+        while True:
+            if number > 999:
+                raise HarnessError("Work name sequence is exhausted")
+            work_id = f"work-{args.workflow}-{number:03d}"
+            if work_id not in existing_ids:
+                work = works_root(root) / "active" / work_id
+                try:
+                    work.mkdir()
+                    break
+                except FileExistsError:
+                    pass
+            number += 1
+
+        semantic_title = unicodedata.normalize("NFKC", args.title).strip()
+        semantic_title = NUMBERED_TITLE_PATTERN.sub(r"\2", semantic_title).strip(" -") or "untitled"
+        title = f"{number:03d}-{semantic_title}"
+        created_at = now()
+        atomic_write(
+            work / "WORK.md",
+            template_text(
+                root,
+                "WORK.template.md",
+                {
+                    "WORK_ID": json_string_content(work_id),
+                    "TITLE": json_string_content(title),
+                    "CREATED_AT": created_at,
+                    "WORKFLOW": json_string_content(args.workflow),
+                },
+            ),
+        )
+        atomic_write(work / "source.md", "# Source\n\n")
+        (work / "materials").mkdir()
+        create_variant(
+            root,
+            work,
+            "main",
+            workflow=args.workflow,
+            template=args.template,
+            profile=args.profile,
+            ratio=args.ratio,
+            subject_position=args.subject_position,
+        )
+        if not args.detached:
+            write_pointer(root, "current-work", work_id)
+            write_pointer(root, "current-variant", "main")
     print(work_id)
 
 
@@ -349,6 +549,80 @@ def command_current(root: Path, args: argparse.Namespace) -> None:
 def command_list(root: Path, args: argparse.Namespace) -> None:
     ensure_roots(root)
     print(json.dumps(list_work_rows(root), ensure_ascii=False, indent=2))
+
+
+def command_root_show(root: Path, args: argparse.Namespace) -> None:
+    configured = configured_work_root(root)
+    active = configured or root
+    print(
+        json.dumps(
+            {
+                "configured": configured is not None,
+                "work_root": str(active),
+                "works": str(active / "works"),
+                "runtime": str(runtime_root(root)),
+            },
+            ensure_ascii=False,
+        )
+    )
+
+
+def command_root_set(root: Path, args: argparse.Namespace) -> None:
+    target = Path(args.path).expanduser()
+    if not target.is_absolute() or target.is_symlink():
+        raise HarnessError("WorkStore root must be an existing absolute directory, not a symlink")
+    target = target.resolve()
+    required = [target / "works" / name for name in ("active", "parked", "archive")]
+    missing = [str(path) for path in required if not path.is_dir()]
+    if missing:
+        raise HarnessError("WorkStore root is missing required directories: " + ", ".join(missing))
+    try:
+        (target / ".runtime").mkdir(exist_ok=True)
+    except OSError as exc:
+        raise HarnessError(f"WorkStore runtime directory is unavailable: {exc}") from exc
+    atomic_write(work_root_config_path(root), str(target) + "\n")
+    command_root_show(root, args)
+
+
+def command_name(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args)
+    semantic_title = unicodedata.normalize("NFKC", args.title).strip()
+    semantic_title = NUMBERED_TITLE_PATTERN.sub(r"\2", semantic_title).strip(" -")
+    if not semantic_title or any(char in semantic_title for char in "\r\n") or len(semantic_title) > 40:
+        raise HarnessError("Work name must contain 1-40 characters on one line")
+
+    ensure_roots(root)
+    with (runtime_root(root) / "naming.lock").open("w", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        metadata_path = work / "WORK.md"
+        metadata = read_frontmatter(metadata_path)
+        workflow = work_workflow(work)
+        number = work_id_number(work.name, workflow)
+        if number is None:
+            number = title_number(str(metadata.get("title", "")))
+        if number is None:
+            number = next_work_number(list_work_rows(root), workflow)
+        if number > 999:
+            raise HarnessError("Work name sequence is exhausted")
+        title = f"{number:03d}-{semantic_title}"
+
+        lines = metadata_path.read_text(encoding="utf-8").splitlines()
+        frontmatter_end = lines.index("---", 1)
+        metadata["title"] = title
+        body = lines[frontmatter_end + 1 :]
+        for index, line in enumerate(body):
+            if line.startswith("# "):
+                body[index] = f"# {title}"
+                break
+        atomic_write(
+            metadata_path,
+            "---\n"
+            + json.dumps(metadata, ensure_ascii=False, separators=(",", ":"))
+            + "\n---\n"
+            + "\n".join(body)
+            + "\n",
+        )
+    print(title)
 
 
 def command_use(root: Path, args: argparse.Namespace) -> None:
@@ -378,10 +652,70 @@ def command_status(root: Path, args: argparse.Namespace) -> None:
     print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
+def component_release_path(root: Path, value: str) -> Path:
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    if candidate.is_dir():
+        return candidate.resolve()
+    component_id, version = parse_component_ref(value)
+    return (root / ".studio" / "components" / component_id / f"v{version}").resolve()
+
+
+def command_component_validate(root: Path, args: argparse.Namespace) -> None:
+    release = validate_component_release(component_release_path(root, args.component))
+    print(json.dumps({key: release[key] for key in ("component_ref", "profile", "subtemplate", "package_sha256", "files")}, ensure_ascii=False, indent=2))
+
+
+def command_component_install(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
+    variant, _ = selected_variant(root, work, args)
+    plan_path = variant / "ANIMATION_PLAN.md"
+    plan = read_frontmatter(plan_path)
+    if plan.get("status") != "approved":
+        raise HarnessError("ANIMATION_PLAN.md must be approved before Component installation")
+    component_id, version = parse_component_ref(args.component_ref)
+    source = component_release_path(root, args.source or args.component_ref)
+    validate_component_release(source, expected_ref=args.component_ref)
+    if not animation_plan_contains_component_ref(plan_path, args.component_ref):
+        raise HarnessError(f"ANIMATION_PLAN.md does not approve Component {args.component_ref}")
+    project = variant / "project"
+    if not args.binding_file:
+        raise HarnessError("Component installation requires --binding-file/--binding")
+    binding_path = Path(args.binding_file).expanduser()
+    if not binding_path.is_absolute():
+        binding_path = root / binding_path
+    binding = binding_path.resolve()
+    if not binding.is_file():
+        raise HarnessError(f"Binding file is missing: {binding}")
+    result = install_component(
+        source,
+        project,
+        binding,
+        binding_path=args.destination_binding,
+        expected_ref=args.component_ref,
+    )
+    result.update({"component_ref": f"{component_id}@v{version}", "work": work.name, "variant": variant.name})
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def command_component_verify(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
+    variant, _ = selected_variant(root, work, args)
+    result = verify_installation(variant / "project", public_root=root, component_ref=args.component_ref)
+    result.update({"work": work.name, "variant": variant.name})
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def command_variant_add(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
+    workflow = work_workflow(work)
     source = None
     if args.copy_from:
+        if workflow != "hyperframes_video":
+            raise HarnessError("--from is only available for hyperframes_video")
         source_path = work / "variants" / validate_id(args.copy_from, "source variant")
         if not source_path.is_dir():
             raise HarnessError(f"Unknown source variant: {args.copy_from}")
@@ -390,13 +724,15 @@ def command_variant_add(root: Path, args: argparse.Namespace) -> None:
         root,
         work,
         args.variant_id,
+        workflow=workflow,
         template=args.template,
         profile=args.profile,
         ratio=args.ratio,
         subject_position=args.subject_position,
         copy_script_from=source,
     )
-    write_pointer(root, "current-variant", path.name)
+    if not args.work_override:
+        write_pointer(root, "current-variant", path.name)
     print(path.name)
 
 
@@ -453,7 +789,8 @@ def command_resume(root: Path, args: argparse.Namespace) -> None:
     restored_from_park = location == "parked"
     if location == "parked":
         work = restore_parked_work(root, work)
-        write_pointer(root, "current-work", work.name)
+        if not args.work_override:
+            write_pointer(root, "current-work", work.name)
     variant, state = selected_variant(root, work, args)
     if not restored_from_park and state.get("status") != "active":
         state.update(status="active", wait_for="none", next_action=args.next_action or "Continue current production")
@@ -490,11 +827,114 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _manifest_artifact(root: Path, relative: str) -> Path:
+    candidate = Path(relative)
+    if candidate.is_absolute() or not relative or ".." in candidate.parts:
+        raise HarnessError(f"Invalid Final artifact path: {relative!r}")
+    path = root / candidate
+    if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
+        raise HarnessError(f"Final artifact is missing, empty, or a symlink: {relative}")
+    return path
+
+
+def validate_deliverable_manifest(directory: Path, expected_workflow: str) -> dict[str, Any]:
+    if directory.is_symlink() or not directory.is_dir():
+        raise HarnessError(f"Final candidate must be a regular directory: {directory}")
+    manifest_path = directory / "manifest.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise HarnessError("Final candidate is missing manifest.json")
+    manifest = read_json(manifest_path)
+    if manifest.get("schema_version") != 1:
+        raise HarnessError("Final manifest schema_version must be 1")
+    if manifest.get("workflow") != expected_workflow:
+        raise HarnessError(f"Final manifest workflow must be {expected_workflow}")
+    if manifest.get("qa") != "passed":
+        raise HarnessError("Final manifest QA must be passed")
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        raise HarnessError("Final manifest requires a non-empty artifacts array")
+
+    roles: dict[str, int] = {}
+    paths: set[str] = set()
+    for item in artifacts:
+        if not isinstance(item, dict):
+            raise HarnessError("Final manifest artifacts must be objects")
+        relative = item.get("path")
+        digest = item.get("sha256")
+        role = item.get("role")
+        if not isinstance(relative, str) or relative in paths:
+            raise HarnessError(f"Final manifest has an invalid or duplicate path: {relative!r}")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise HarnessError(f"Final manifest has an invalid sha256 for {relative}")
+        if not isinstance(role, str) or not role:
+            raise HarnessError(f"Final manifest has an invalid role for {relative}")
+        path = _manifest_artifact(directory, relative)
+        if file_sha256(path) != digest:
+            raise HarnessError(f"Final artifact digest mismatch: {relative}")
+        paths.add(relative)
+        roles[role] = roles.get(role, 0) + 1
+
+    if expected_workflow == "podcast_quote_image":
+        if roles.get("image", 0) not in range(8, 13):
+            raise HarnessError("podcast_quote_image Final requires 8 to 12 image artifacts")
+        if roles.get("contact_sheet") != 1 or roles.get("package") != 1:
+            raise HarnessError("podcast_quote_image Final requires one contact sheet and one package")
+        publish_payloads = roles.get("publish_payload", 0)
+        if manifest.get("publish_contract") == "xiaohongshu_creator_draft_v1" and publish_payloads != 1:
+            raise HarnessError("Xiaohongshu Creator draft Final requires one publish payload")
+        if publish_payloads not in (0, 1) or len(artifacts) != roles["image"] + 2 + publish_payloads:
+            raise HarnessError("podcast_quote_image Final contains unsupported artifact roles")
+    actual_files: set[str] = set()
+    for path in directory.rglob("*"):
+        relative = path.relative_to(directory)
+        if relative.parts and relative.parts[0] == "history":
+            continue
+        if path.is_symlink():
+            raise HarnessError(f"Final candidate contains a symlink: {relative.as_posix()}")
+        if path.is_file():
+            actual_files.add(relative.as_posix())
+    expected_files = paths | {"manifest.json"}
+    if actual_files != expected_files:
+        extras = sorted(actual_files - expected_files)
+        missing = sorted(expected_files - actual_files)
+        raise HarnessError(f"Final manifest file set mismatch: extras={extras}, missing={missing}")
+    return manifest
+
+
+def next_directory_history_path(final_dir: Path) -> Path:
+    versions = []
+    for path in (final_dir / "history").glob("final-v[0-9][0-9][0-9]"):
+        if path.is_dir():
+            versions.append(int(path.name.removeprefix("final-v")))
+    return final_dir / "history" / f"final-v{max(versions, default=0) + 1:03d}"
+
+
+def copy_directory_without_history(source: Path, destination: Path) -> None:
+    destination.mkdir(parents=True)
+    for path in source.iterdir():
+        if path.name == "history":
+            continue
+        target = destination / path.name
+        if path.is_dir():
+            shutil.copytree(path, target)
+        else:
+            shutil.copy2(path, target)
+
+
+def snapshot_items(project: Path) -> tuple[str, ...]:
+    """Keep legacy snapshots unchanged while freezing installed Components when present."""
+
+    return SNAPSHOT_ITEMS + tuple(
+        name for name in OPTIONAL_SNAPSHOT_ITEMS if (project / name).exists() or (project / name).is_symlink()
+    )
+
+
 def assert_snapshot_source(project: Path) -> None:
+    items = snapshot_items(project)
     missing = [name for name in SNAPSHOT_ITEMS if not (project / name).exists()]
     if missing:
         raise HarnessError(f"Project snapshot is incomplete: {', '.join(missing)}")
-    for name in SNAPSHOT_ITEMS:
+    for name in items:
         source = project / name
         if source.is_symlink():
             raise HarnessError(f"Snapshot source cannot be a symlink: {source}")
@@ -508,7 +948,7 @@ def assert_snapshot_source(project: Path) -> None:
 
 def snapshot_digest(project: Path) -> str:
     digest = hashlib.sha256()
-    for name in SNAPSHOT_ITEMS:
+    for name in snapshot_items(project):
         source = project / name
         paths = [source]
         if source.is_dir():
@@ -524,7 +964,7 @@ def snapshot_digest(project: Path) -> str:
 
 def copy_snapshot(project: Path, destination: Path) -> None:
     destination.mkdir(parents=True)
-    for name in SNAPSHOT_ITEMS:
+    for name in snapshot_items(project):
         source = project / name
         target = destination / name
         if source.is_dir():
@@ -562,6 +1002,7 @@ def preview_metadata(path: Path) -> dict[str, Any]:
 
 def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
     variant, state = selected_variant(root, work, args)
     assert_preview_ready(variant, state)
     draft = Path(args.draft_file).expanduser().resolve()
@@ -569,6 +1010,10 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError(f"Draft file is missing or empty: {draft}")
     project = variant / "project"
     assert_snapshot_source(project)
+    if (project / "COMPONENT_LOCK.json").is_file():
+        verify_installation(project, public_root=root)
+    elif (project / "scene-slots.json").is_file():
+        validate_work_surface_inventory(project)
     draft_digest = file_sha256(draft)
     source_digest = snapshot_digest(project)
     previews = variant / "previews"
@@ -591,6 +1036,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     try:
         shutil.copy2(draft, staging / "draft.mp4")
         copy_snapshot(project, staging / "source-snapshot")
+        validate_snapshot_closure(project, staging / "source-snapshot")
         metadata = {
             "id": draft_id,
             "registered_at": now(),
@@ -614,6 +1060,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
 
 def command_preview_accept(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
     variant, state = selected_variant(root, work, args)
     draft_id = validate_id(args.draft_id, "draft id")
     preview = variant / "previews" / draft_id
@@ -644,14 +1091,20 @@ def required_variants(work: Path) -> list[str]:
 
 
 def all_required_finals_exist(work: Path) -> bool:
+    workflow = work_workflow(work)
     for variant_id in required_variants(work):
         variant = work / "variants" / variant_id
         if not variant.is_dir():
             raise HarnessError(f"Required variant does not exist: {variant_id}")
         state = read_json(variant / "variant.yaml")
         current = state.get("current_final")
-        if current != "final.mp4" or not (variant / "final" / "final.mp4").is_file():
+        if workflow == "hyperframes_video":
+            if current != "final.mp4" or not (variant / "final" / "final.mp4").is_file():
+                return False
+        elif current != "manifest.json":
             return False
+        else:
+            validate_deliverable_manifest(variant / "final", workflow)
     return True
 
 
@@ -682,8 +1135,121 @@ def clear_current_if(root: Path, work_id: str) -> None:
         clear_pointer(root, "current-variant")
 
 
+def promote_final_directory(candidate: Path, final_dir: Path, workflow: str) -> str:
+    validate_deliverable_manifest(candidate, workflow)
+    candidate_digest = file_sha256(candidate / "manifest.json")
+    existing_manifest = final_dir / "manifest.json"
+    if existing_manifest.is_file() and file_sha256(existing_manifest) == candidate_digest:
+        validate_deliverable_manifest(final_dir, workflow)
+        return candidate_digest
+    if candidate == final_dir or final_dir in candidate.parents:
+        raise HarnessError("Final candidate cannot be the target Final directory or one of its children")
+
+    staging = final_dir.parent / f".final.staging-{uuid.uuid4().hex}"
+    backup = final_dir.parent / f".final.backup-{uuid.uuid4().hex}"
+    try:
+        copy_directory_without_history(candidate, staging)
+        validate_deliverable_manifest(staging, workflow)
+        if final_dir.is_dir():
+            existing_history = final_dir / "history"
+            if existing_history.is_dir():
+                shutil.copytree(existing_history, staging / "history")
+            if existing_manifest.is_file():
+                history_path = next_directory_history_path(staging)
+                copy_directory_without_history(final_dir, history_path)
+            os.replace(final_dir, backup)
+        os.replace(staging, final_dir)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        if backup.exists() and not final_dir.exists():
+            os.replace(backup, final_dir)
+        raise
+    finally:
+        shutil.rmtree(backup, ignore_errors=True)
+    return candidate_digest
+
+
+def command_finalize_package(
+    root: Path,
+    args: argparse.Namespace,
+    work: Path,
+    location: str,
+) -> None:
+    candidate = Path(args.final_file).expanduser().resolve()
+    workflow = work_workflow(work)
+    if workflow != "podcast_quote_image":
+        raise HarnessError(f"Unsupported packaged Final workflow: {workflow}")
+    validate_deliverable_manifest(candidate, workflow)
+    candidate_digest = file_sha256(candidate / "manifest.json")
+    variant, state = selected_variant(root, work, args)
+    final_dir = variant / "final"
+
+    if location == "archive":
+        archived_manifest = final_dir / "manifest.json"
+        if archived_manifest.is_file() and file_sha256(archived_manifest) == candidate_digest:
+            validate_deliverable_manifest(final_dir, workflow)
+            write_json(
+                variant / ".runtime" / "finalize.json",
+                {"state": "complete", "final_manifest_sha256": candidate_digest},
+            )
+            clear_current_if(root, work.name)
+            print(str(final_dir))
+            return
+        raise HarnessError("Archived work has a different Final; reopen it before finalizing")
+    if not args.qa_passed:
+        raise HarnessError("Final QA must pass before finalize; use --qa-passed after the required checks")
+
+    candidate_digest = promote_final_directory(candidate, final_dir, workflow)
+    write_json(
+        variant / ".runtime" / "qa" / "final.json",
+        {
+            "passed": True,
+            "workflow": workflow,
+            "final_manifest_sha256": candidate_digest,
+            "recorded_at": now(),
+        },
+    )
+    state.update(current_final="manifest.json", status="active", wait_for="none", next_action="Finalize complete")
+    write_variant(variant, state)
+    write_json(
+        variant / ".runtime" / "finalize.json",
+        {"state": "promoted", "final_manifest_sha256": candidate_digest},
+    )
+
+    if all_required_finals_exist(work):
+        write_json(
+            variant / ".runtime" / "finalize.json",
+            {"state": "archive_pending", "final_manifest_sha256": candidate_digest},
+        )
+        try:
+            archived = move_to_archive(root, work, "completed")
+        except (OSError, HarnessError) as exc:
+            raise HarnessError(f"Final is safe but archive is pending: {exc}") from exc
+        archived_variant = archived / "variants" / variant.name
+        write_json(
+            archived_variant / ".runtime" / "finalize.json",
+            {"state": "complete", "final_manifest_sha256": candidate_digest},
+        )
+        clear_current_if(root, work.name)
+        print(str(archived_variant / "final"))
+        return
+    print(str(final_dir))
+
+
 def command_finalize(root: Path, args: argparse.Namespace) -> None:
     work, location = selected_work(root, args, allow_archive=True)
+    if work_workflow(work) == "podcast_quote_image":
+        command_finalize_package(root, args, work, location)
+        return
+    command_finalize_video(root, args, work, location)
+
+
+def command_finalize_video(
+    root: Path,
+    args: argparse.Namespace,
+    work: Path,
+    location: str,
+) -> None:
     candidate = Path(args.final_file).expanduser().resolve()
     if not candidate.is_file() or candidate.stat().st_size == 0:
         raise HarnessError(f"Final file is missing or empty: {candidate}")
@@ -695,6 +1261,8 @@ def command_finalize(root: Path, args: argparse.Namespace) -> None:
 
     if location == "archive":
         if final_file.is_file() and file_sha256(final_file) == candidate_digest:
+            write_json(variant / ".runtime" / "finalize.json", {"state": "complete", "final_sha256": candidate_digest})
+            clear_current_if(root, work.name)
             print(str(final_file))
             return
         raise HarnessError("Archived work has a different Final; reopen it before finalizing")
@@ -734,7 +1302,10 @@ def command_finalize(root: Path, args: argparse.Namespace) -> None:
 
     manifest = read_json(manifest_path) if manifest_path.is_file() else {}
     registered = (
-        manifest.get("final_sha256") == candidate_digest
+        manifest.get("schema_version") == 1
+        and manifest.get("workflow") == "hyperframes_video"
+        and manifest.get("artifacts") == [{"path": "final.mp4", "role": "video", "sha256": candidate_digest}]
+        and manifest.get("final_sha256") == candidate_digest
         and manifest.get("source_preview") == accepted
         and manifest.get("script_revision") == state.get("script_revision")
         and manifest.get("plan_revision") == state.get("plan_revision")
@@ -742,6 +1313,9 @@ def command_finalize(root: Path, args: argparse.Namespace) -> None:
     )
     if not registered:
         manifest = {
+            "schema_version": 1,
+            "workflow": "hyperframes_video",
+            "artifacts": [{"path": "final.mp4", "role": "video", "sha256": candidate_digest}],
             "final_sha256": candidate_digest,
             "source_preview": accepted,
             "script_revision": state.get("script_revision"),
@@ -826,29 +1400,61 @@ def command_reopen(root: Path, args: argparse.Namespace) -> None:
 
 
 def add_variant_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--template", choices=sorted(TEMPLATES), default="pure_hyperframes")
-    parser.add_argument("--profile", choices=sorted(PROFILES), default="optical_fluidity")
-    parser.add_argument("--ratio", choices=sorted(RATIOS), default="9:16")
+    parser.add_argument("--template", choices=sorted(TEMPLATES))
+    parser.add_argument("--profile", choices=sorted(PROFILES))
+    parser.add_argument("--ratio", choices=sorted(RATIOS))
     parser.add_argument("--subject-position", choices=sorted(SUBJECT_POSITIONS))
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="work", description="HyperFrames AI local Work lifecycle")
+    parser = argparse.ArgumentParser(prog="work", description="Local creative Work lifecycle")
     parser.add_argument("--work", dest="work_override", help="temporarily select a Work")
     parser.add_argument("--variant", dest="variant_override", help="temporarily select a Variant")
     commands = parser.add_subparsers(dest="command", required=True)
 
     new = commands.add_parser("new")
     new.add_argument("title")
+    new.add_argument("--workflow", choices=sorted(WORKFLOWS), required=True)
+    new.add_argument("--detached", action="store_true", help="create without changing the foreground Current Work")
     add_variant_options(new)
     new.set_defaults(handler=command_new)
 
     commands.add_parser("current").set_defaults(handler=command_current)
     commands.add_parser("list").set_defaults(handler=command_list)
+    root_command = commands.add_parser("root", help="Show or set the external WorkStore root")
+    root_commands = root_command.add_subparsers(dest="root_command", required=True)
+    root_commands.add_parser("show").set_defaults(handler=command_root_show)
+    root_set = root_commands.add_parser("set")
+    root_set.add_argument("path")
+    root_set.set_defaults(handler=command_root_set)
+    name = commands.add_parser("name")
+    name.add_argument("title")
+    name.set_defaults(handler=command_name)
     use = commands.add_parser("use")
     use.add_argument("work_id")
     use.set_defaults(handler=command_use)
     commands.add_parser("status").set_defaults(handler=command_status)
+
+    component = commands.add_parser("component", help="Validate and install immutable Component Releases")
+    component_commands = component.add_subparsers(dest="component_command", required=True)
+    component_validate = component_commands.add_parser("validate")
+    component_validate.add_argument("component")
+    component_validate.set_defaults(handler=command_component_validate)
+    component_install = component_commands.add_parser("install")
+    component_install.add_argument("component_ref")
+    component_install.add_argument("--source", help="Component package path or component ref")
+    component_install.add_argument(
+        "--binding-file",
+        "--binding",
+        dest="binding_file",
+        required=True,
+        help="Required reviewed Scene Binding JSON; no component-id inference is performed",
+    )
+    component_install.add_argument("--destination-binding")
+    component_install.set_defaults(handler=command_component_install)
+    component_verify = component_commands.add_parser("verify")
+    component_verify.add_argument("component_ref", nargs="?")
+    component_verify.set_defaults(handler=command_component_verify)
 
     variant = commands.add_parser("variant")
     variant_commands = variant.add_subparsers(dest="variant_command", required=True)
@@ -899,7 +1505,7 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
     target_root = (root or repo_root()).resolve()
     try:
         args.handler(target_root, args)
-    except HarnessError as exc:
+    except (HarnessError, ComponentError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return 0

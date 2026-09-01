@@ -4,6 +4,7 @@
 
 - 下载视频新增 `dbs` 与 `verbatim` 两条 Script 路径，逐字模式保留原时间戳。
 - 新增与 Script Revision 对齐的 `RESEARCH.md`，Animation Plan 必须引用当前 Research Revision。
+- Animation Plan 创建时同步调用 DBS 生成 `PACKAGE.md` 的标题、封面文字和一句话简介。
 - 固化丰富 GSAP 组件、统一入场、结束前 0.4 秒收束、progress/counter/pulse、多色进度与 Skill GitHub 介绍页规则。
 
 ## 2.0.0 - 2026-08-08

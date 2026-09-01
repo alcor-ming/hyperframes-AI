@@ -1,5 +1,20 @@
 version: 1
 
+workflows:
+  hyperframes_video:
+    skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md
+    anti_ppt_skill: ../.agents/skills/hyperframes-anti-ppt/SKILL.md
+  podcast_quote_image:
+    planner_skill: ../.agents/skills/podcast-quote-image/SKILL.md
+    copy_skill: ../.agents/skills/xiaohongshu-article-copy/SKILL.md
+    fallback: ../.agents/skills/native-subtitle-quote-image/SKILL.md
+    downloader: trendradar-media
+    downloader_contract: "2.0"
+    youtube_transcript: youtube-transcript-api
+    youtube_transcript_optional: true
+    publish_payload: xiaohongshu_creator_draft_v1
+    creator_draft: explicit_authorization
+
 templates:
   talking_head: recipes/talking-head.md
   pure_hyperframes: recipes/pure-hyperframes.md
@@ -18,5 +33,26 @@ profiles:
 copywriting:
   default: [dbs-content, dbs-hook, dbs-script-flow, dbs-ai-check]
   optional: [dbs-xhs-title, media-publish-check]
+  podcast_quote_image:
+    candidate_analysis: [dbs-spread, dbs-resonate]
+    guest_research: RESEARCH.md
+    package_pipeline:
+      - invoke: dbs-content
+        stage: after_body_and_section_heading_draft
+        checks: [title_and_cover, expression_efficiency, cognitive_gap]
+        output: revision_brief
+      - invoke: dbs-xhs-title
+        stage: after_revised_body_is_stable
+        output: formula_traceable_candidates_and_top_3
+      - invoke: dbs-ai-check
+        stage: after_final_title_is_selected
+        output: diagnostic_report
+    excluded: [dbs-hook, dbs-script-flow]
 
-excluded_v1: [image_generation, prompt_library, design-taste-frontend, subtitles, publishing]
+packaging:
+  required: [dbs-xhs-title]
+
+excluded_v1:
+  global: [prompt_library, public_publishing]
+  hyperframes_video: [bottom_subtitles]
+  podcast_quote_image: [bundled_asr, image_generation]

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "component_ref": "rich-skill-explanation@v2",
+  "profile": "optical_fluidity",
+  "subtemplate": "module_stage",
+  "slots": {
+    "required": ["mode", "sequence_index", "sequence_total", "title", "subtitle", "statement_1", "statement_2", "trace_label", "trace_value", "lane_kicker", "source_items", "result_items", "mode_details"],
+    "properties": {
+      "mode": {"type": "string", "pattern": "^(input-transform|retrieve-distill|knowledge-roundtrip|persist-reuse)$"},
+      "sequence_index": {"type": "integer", "minimum": 1, "maximum": 20},
+      "sequence_total": {"type": "integer", "minimum": 1, "maximum": 20},
+      "title": {"type": "string", "minLength": 1, "maxLength": 24},
+      "subtitle": {"type": "string", "minLength": 1, "maxLength": 32},
+      "statement_1": {"type": "string", "minLength": 1, "maxLength": 70},
+      "statement_2": {"type": "string", "minLength": 1, "maxLength": 70},
+      "trace_label": {"type": "string", "minLength": 1, "maxLength": 16},
+      "trace_value": {"type": "string", "minLength": 1, "maxLength": 42},
+      "lane_kicker": {"type": "string", "minLength": 1, "maxLength": 36},
+      "source_items": {"type": "array", "minItems": 3, "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 28}},
+      "result_items": {"type": "array", "minItems": 0, "maxItems": 3, "items": {"type": "string", "minLength": 1, "maxLength": 28}},
+      "mode_details": {"type": "object"}
+    }
+  },
+  "visual_surfaces": [
+    {"surface_id": "explanation_lane", "kind": "active_media_card", "modes": ["none"], "required": true, "fallback": "programmatic"}
+  ],
+  "assets": {"allowed_types": [], "runtime_network": false},
+  "timing": {"duration_seconds": 12, "allowed_time_scale": {"min": 0.8, "max": 1.2}}
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "component_ref": "rich-skill-explanation@v2",
+  "slots": {
+    "mode": "input-transform",
+    "sequence_index": 1,
+    "sequence_total": 4,
+    "title": "Local Whisper",
+    "subtitle": "让本机录音成为可继续处理的文字",
+    "statement_1": "先把访谈、会议或语音备忘录转成可搜索的逐字文字。",
+    "statement_2": "文字不在这里停止；它会继续进入摘要、改写或整理流程，输入与输出始终可追溯。",
+    "trace_label": "输出物",
+    "trace_value": "逐字稿 / 摘要 / 可编辑文字",
+    "lane_kicker": "多种输入，沿同一路径被转换",
+    "source_items": ["录音 .m4a", "访谈 .wav", "语音备忘 .mp3"],
+    "result_items": ["逐字文字", "段落摘要", "可编辑内容"],
+    "mode_details": {"path_title": "录音 → 文字 → 后续处理", "path_detail": "转录不是终点，而是下一个文字动作的起点"}
+  },
+  "surfaces": {
+    "explanation_lane": {"kind": "active_media_card", "mode": "none", "fallback": "programmatic"}
+  }
+}

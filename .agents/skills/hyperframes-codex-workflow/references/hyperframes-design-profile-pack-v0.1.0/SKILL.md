@@ -14,7 +14,8 @@ Determine or infer:
 
 - `mode`: `talking_head` or `pure_hyperframes`
 - `profile`: `optical_fluidity`, `kami_editorial`, or `monochrome_atelier`
-- `ratio`: `16:9` or `9:16`
+- `ratio`: `16:9` or `9:16`; `optical_fluidity` also has an approved `4:3` mapping
+- `subtemplate` when `profile` is `optical_fluidity` and `mode` is `pure_hyperframes`: `hero_flow` or `module_stage`
 - authoritative duration/audio source
 - whether original captions already exist
 - protected subject/face regions when video footage exists
@@ -48,6 +49,7 @@ Do not combine their palettes, fonts, materials, signature motion, or compositio
 The plan must name:
 
 - selected profile and reason;
+- selected subtemplate and reason when the Profile requires one;
 - visual thesis in one sentence;
 - authoritative palette and fonts/fallbacks;
 - information hierarchy;
