@@ -29,6 +29,9 @@ class ComponentHarnessTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.public = REPO / ".studio" / "components" / "chapter-intro" / "v1"
+        self.rich = REPO / ".studio" / "components" / "rich-skill-explanation" / "v1"
+        self.rich_v2 = REPO / ".studio" / "components" / "rich-skill-explanation" / "v2"
+        self.convergence = REPO / ".studio" / "components" / "capability-convergence" / "v1"
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -70,11 +73,38 @@ class ComponentHarnessTest(unittest.TestCase):
         self.assertEqual(COMPONENT.package_sha256(first), COMPONENT.package_sha256(second))
         self.assertEqual("nested/a.txt", COMPONENT.package_entries(first)[0]["path"])
 
+    def test_rich_skill_explanation_release_validates(self) -> None:
+        release = COMPONENT.validate_component_release(self.rich)
+        self.assertEqual("rich-skill-explanation@v1", release["component_ref"])
+
+    def test_open_design_text_component_releases_validate(self) -> None:
+        rich = COMPONENT.validate_component_release(self.rich_v2)
+        convergence = COMPONENT.validate_component_release(self.convergence)
+        self.assertEqual("rich-skill-explanation@v2", rich["component_ref"])
+        self.assertEqual("capability-convergence@v1", convergence["component_ref"])
+
     def test_gap_first_selection_release_validates(self) -> None:
         release = COMPONENT.validate_component_release(
             REPO / ".studio" / "components" / "gap-first-selection" / "v1"
         )
         self.assertEqual("gap-first-selection@v1", release["component_ref"])
+
+    def test_binding_rejects_invalid_nested_component_slots(self) -> None:
+        release = COMPONENT.validate_component_release(self.convergence)
+        binding = {
+            "schema_version": 1,
+            "component_ref": release["component_ref"],
+            "scene": "capability-convergence",
+            "slots": dict(release["fixture"]["slots"]),
+            "placement": {"width": 1440, "height": 1080},
+            "timing": {"offset": 0, "time_scale": 1, "hero_hold": 0, "handoff_hold": 0},
+            "surfaces": dict(release["fixture"]["surfaces"]),
+            "assets": {},
+        }
+        COMPONENT.validate_binding(binding, release)
+        binding["slots"]["items"] = binding["slots"]["items"][:4]
+        with self.assertRaisesRegex(COMPONENT.ComponentError, "fewer items"):
+            COMPONENT.validate_binding(binding, release)
 
     def test_install_hash_lock_and_tamper_fail_closed(self) -> None:
         project = self.root / "project"

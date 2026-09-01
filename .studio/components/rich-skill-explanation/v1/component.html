@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>rich-skill-explanation@v1</title>
+<!-- Production translation of Open Design Hyperframes / rich-skill-explanation-prototype.html rev.3. -->
+</head>
+<body>
+<template>
+<style>
+
+  @font-face { font-family: "PingFang SC"; src: local("PingFang SC"); }
+  @font-face { font-family: "Microsoft YaHei"; src: local("Microsoft YaHei"); }
+  @font-face { font-family: "Noto Sans CJK SC"; src: local("Noto Sans CJK SC"); }
+
+  :root {
+    --canvas: #071018;
+    --elevated: #0B1720;
+    --text-1: #F7FBFF;
+    --text-2: #A8BBC8;
+    --text-3: #768D9A;
+    --relation: #54D7FF;
+    --active: #0A84FF;
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body { margin: 0; padding: 0; background: #04090E; }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  #rich-skill-explanation-root {
+    width: 1440px;
+    height: 1080px;
+    overflow: hidden;
+    position: relative;
+    background: var(--canvas);
+    color: var(--text-1);
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    margin: 0;
+  }
+
+  .rs-stage {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  /* --- 顶部左：面包屑 --- */
+  .rs-context {
+    position: absolute;
+    left: 88px;
+    top: 64px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  /* --- 顶部右：13 段刻度进度条 + 数字 --- */
+  .rs-progress {
+    position: absolute;
+    right: 88px;
+    top: 66px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .rs-tick {
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .rs-tick.is-done { background: rgba(84, 215, 255, 0.45); }
+  .rs-tick.is-current { background: var(--active); }
+  .rs-progress-num {
+    margin-left: 10px;
+    font-size: 15px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+
+  /* ============ 左区（40%，信息层） ============ */
+
+  .rs-left {
+    position: absolute;
+    left: 88px;
+    top: 150px;
+    width: 460px;
+  }
+
+  .rs-title-en {
+    font-size: 44px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    color: var(--text-1);
+  }
+  .rs-title-en .rs-ch { display: inline-block; }
+  .rs-gloss-zh {
+    margin-top: 14px;
+    font-size: 22px;
+    color: var(--text-2);
+    letter-spacing: 0.02em;
+  }
+
+  /* 生长时间线：每段自带一段竖线，逐段向下接续 */
+  .rs-segs {
+    margin-top: 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+  }
+  .rs-seg {
+    position: relative;
+    padding-left: 40px;
+  }
+  .rs-seg-line {
+    position: absolute;
+    left: 5px;
+    top: 22px;
+    bottom: -36px; /* 延入段间距，与下一段接续成整线 */
+    width: 1px;
+    background: rgba(255, 255, 255, 0.20);
+    transform-origin: top center;
+  }
+  .rs-seg.is-last .rs-seg-line { bottom: 10px; }
+  .rs-node {
+    position: absolute;
+    left: 0;
+    top: 6px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-3);
+    background: var(--canvas);
+    box-sizing: border-box;
+  }
+  .rs-seg-label {
+    font-size: 15px;
+    letter-spacing: 0.10em;
+    font-weight: 600;
+    color: var(--text-3);
+    margin-bottom: 10px;
+  }
+  .rs-seg-text {
+    font-size: 24px;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+    color: var(--text-1);
+  }
+
+  /* 条件骨架槽：证明限定条件不可删 */
+  .rs-seg-skel {
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .rs-seg-skel .bar {
+    height: 13px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .rs-seg-skel .bar.b1 { width: 380px; }
+  .rs-seg-skel .bar.b2 { width: 240px; background: rgba(255, 255, 255, 0.07); }
+  .rs-seg-skel .note {
+    font-size: 13px;
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+    line-height: 1.5;
+  }
+
+  /* --- 产出物缩略卡（迷你网页样式，底部滑入 + 标签打字机） --- */
+  .rs-result-card {
+    position: absolute;
+    left: 88px;
+    top: 850px;
+    width: 320px;
+    z-index: 5;
+    transform-origin: top left;
+  }
+  .rs-thumb {
+    width: 300px;
+    height: 160px;
+    border-radius: 14px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+  }
+  .rs-thumb-chrome {
+    height: 26px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .rs-thumb-chrome i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.22);
+  }
+  .rs-thumb-body {
+    padding: 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .rs-thumb-body .bar {
+    height: 11px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .rs-thumb-body .bar.w1 { width: 62%; background: rgba(255, 255, 255, 0.18); }
+  .rs-thumb-body .bar.w2 { width: 88%; }
+  .rs-thumb-body .bar.w3 { width: 74%; }
+  .rs-thumb-body .block {
+    margin-top: 3px;
+    width: 46%;
+    height: 30px;
+    border-radius: 7px;
+    background: rgba(84, 215, 255, 0.14);
+    border: 1px solid rgba(84, 215, 255, 0.30);
+  }
+  .rs-result-label {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    color: var(--text-1);
+  }
+  .rs-result-label .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+    flex: none;
+  }
+  .rs-result-label .rs-rc-ch { display: inline-block; }
+
+  /* ============ 右区（60%，证据层）：模拟浏览器 ============ */
+
+  .rs-browser {
+    position: absolute;
+    left: 596px;
+    top: 170px;
+    width: 756px;
+    height: 680px;
+  }
+  .rs-browser-float { width: 100%; height: 100%; }
+  .rs-browser-frame {
+    width: 100%;
+    height: 100%;
+    border-radius: 18px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 28px 72px rgba(0, 0, 0, 0.40);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .rs-chrome {
+    height: 48px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .rs-chrome .cdot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+  }
+  .rs-addr {
+    margin-left: 14px;
+    flex: 1;
+    max-width: 420px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    font-size: 14px;
+    color: var(--text-3);
+    letter-spacing: 0.03em;
+  }
+  .rs-demo {
+    position: relative;
+    flex: 1;
+  }
+
+  /* --- 演示通用件 --- */
+  .dm-bar {
+    position: absolute;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .dm-cursor {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+    will-change: transform;
+  }
+
+  /* P002 演示：按钮 + 下拉 + 内容加载 */
+  .dm-btn {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    font-size: 15px;
+    color: var(--text-1);
+    background: rgba(10, 132, 255, 0.18);
+    border: 1px solid rgba(10, 132, 255, 0.50);
+  }
+  .dm-drop {
+    position: absolute;
+    border-radius: 12px;
+    background: #0E1C26;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+    padding: 14px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transform-origin: top center;
+  }
+  .dm-row { display: flex; align-items: center; gap: 10px; }
+  .dm-row .d {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25); flex: none;
+  }
+  .dm-row .b { height: 10px; border-radius: 3px; background: rgba(255, 255, 255, 0.13); }
+
+  .dm-cursor { offset-rotate: 0deg; offset-anchor: 0px 0px; z-index: 8; }
+  .dm-ripple {
+    position: absolute; width: 44px; height: 44px; border-radius: 50%;
+    border: 2px solid var(--relation); pointer-events: none; z-index: 7;
+  }
+  .dm-row { min-height: 24px; padding: 4px 6px; border-radius: 4px; font-size: 15px; color: var(--text-2); }
+  .dm-fold {
+    position: absolute; left: 36px; top: 360px; width: 570px;
+    border-top: 1px solid rgba(255,255,255,.16); padding-top: 18px;
+  }
+  .dm-fold-head { height: 40px; display: flex; gap: 12px; align-items: center; font-size: 17px; }
+  .dm-chevron { display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; color: var(--relation); flex: none; }
+  .dm-article { height: 0; overflow: hidden; position: relative; }
+  .dm-copy { padding-top: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .dm-copy .dm-bar { position: static; height: 12px; }
+  .dm-loading { position: absolute; inset: 20px 0 0; }
+  .dm-loading i { display: block; height: 12px; margin-bottom: 16px; background: rgba(255,255,255,.22); border-radius: 4px; }
+  .dm-page-footer { height: 10px; width: 180px; margin-top: 18px; background: rgba(255,255,255,.07); border-radius: 4px; }
+  .rs-flash { position: absolute; inset: 0; border-radius: 18px; background: white; pointer-events: none; z-index: 9; }
+  .rs-thumb-capture {
+    position: absolute; left: 61px; top: 0; width: 756px; height: 680px;
+    transform: scale(0.235294); transform-origin: top left; pointer-events: none;
+  }
+  .rs-thumb { position: relative; }
+  .rs-thumb-capture .rs-browser-frame { box-shadow: none; }
+  .rs-thumb-capture .dm-article { height: 144px; }
+  .rs-thumb-capture .dm-chevron { transform: rotate(90deg); }
+
+  /* P010 演示：输入 + 生成 + Skill 卡 */
+  .dm-input {
+    position: absolute;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .dm-type {
+    position: absolute;
+    height: 12px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.22);
+    transform-origin: left center;
+  }
+  .dm-card {
+    position: absolute;
+    border-radius: 16px;
+    background: #0E1C26;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+  }
+  .dm-card .t { height: 16px; width: 46%; border-radius: 5px; background: rgba(255, 255, 255, 0.20); }
+  .dm-card .b { height: 11px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); }
+  .dm-check {
+    position: absolute;
+    right: 18px;
+    top: 18px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--relation);
+    opacity: 0.85;
+  }
+
+  /* P005 演示：三条下载进度 + 笔记卡 */
+  .dm-dl-label {
+    position: absolute;
+    font-size: 17px;
+    color: var(--text-2);
+    letter-spacing: 0.04em;
+  }
+  .dm-dl-track {
+    position: absolute;
+    height: 10px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .dm-dl-fill {
+    position: absolute;
+    height: 10px;
+    border-radius: 5px;
+    background: rgba(84, 215, 255, 0.55);
+    transform-origin: left center;
+  }
+</style>
+
+<!-- ==================== 组件本体 ==================== -->
+<div id="rich-skill-explanation-root" data-composition-id="rich-skill-explanation"
+     data-composition-variables='[{"id":"context","type":"string","label":"Context","default":"能力详解 · 多文字组件"},{"id":"sequence_index","type":"number","label":"Sequence index","default":2},{"id":"sequence_total","type":"number","label":"Sequence total","default":13},{"id":"title","type":"string","label":"Title","default":"Agent Browser"},{"id":"subtitle","type":"string","label":"Subtitle","default":"通过实际网页操作获得完整内容"},{"id":"address","type":"string","label":"Address","default":"example.com/article"},{"id":"result_label","type":"string","label":"Result label","default":"产出 · 完整网页内容"},{"id":"demo_type","type":"enum","label":"Demo type","default":"browser-click","options":[{"value":"browser-click","label":"Browser click"},{"value":"skill-create","label":"Skill create"},{"value":"file-download","label":"File download"}]},{"id":"duration_seconds","type":"number","label":"Duration seconds","default":12.27},{"id":"segment_1_label","type":"string","label":"Segment 1 label","default":"它会做什么"},{"id":"segment_1_text","type":"string","label":"Segment 1 text","default":"它会真的去点按钮、展开下拉菜单、点开折叠内容，需要时还能截图留存"},{"id":"segment_2_label","type":"string","label":"Segment 2 label","default":"什么时候用它"},{"id":"segment_2_text","type":"string","label":"Segment 2 text","default":"普通抓取拿不到完整内容的网页，就交给它实际打开再读"},{"id":"segment_3_mode","type":"enum","label":"Segment 3 mode","default":"none","options":[{"value":"none","label":"None"},{"value":"text","label":"Text"},{"value":"skeleton","label":"Skeleton"}]},{"id":"segment_3_label","type":"string","label":"Segment 3 label","default":""},{"id":"segment_3_text","type":"string","label":"Segment 3 text","default":""},{"id":"segment_3_note","type":"string","label":"Segment 3 note","default":""},{"id":"demo_primary_mode","type":"enum","label":"Demo primary mode","default":"none","options":[{"value":"none","label":"Programmatic fallback"}]},{"id":"demo_primary_path","type":"string","label":"Demo primary path","default":""},{"id":"time_scale","type":"number","label":"Time scale","default":1}]'
+     data-width="1440" data-height="1080"
+     data-start="0" data-duration="12.270" data-track-index="0">
+  <div class="rs-stage">
+
+    <div class="rs-context" id="rs-context">能力详解 · 多文字组件测试</div>
+    <div class="rs-progress" id="rs-progress"></div>
+
+    <!-- 左区：信息层 -->
+    <div class="rs-left">
+      <div class="rs-title-en" id="rs-title-en"></div>
+      <div class="rs-gloss-zh" id="rs-gloss-zh"></div>
+      <div class="rs-segs" id="rs-segs"></div>
+    </div>
+
+    <!-- 产出物缩略卡 -->
+    <div class="rs-result-card" id="rs-result-card">
+      <div class="rs-thumb" id="rs-thumb">
+        <div class="rs-thumb-chrome"><i></i><i></i><i></i></div>
+        <div class="rs-thumb-body">
+          <div class="bar w1"></div>
+          <div class="bar w2"></div>
+          <div class="bar w3"></div>
+          <div class="block"></div>
+        </div>
+      </div>
+      <div class="rs-result-label">
+        <span class="dot"></span><span id="rs-result-t"></span>
+      </div>
+    </div>
+
+    <!-- 右区：证据层（模拟浏览器 + 单次操作链） -->
+    <div class="rs-browser" id="rs-browser">
+      <div class="rs-browser-float" id="rs-browser-float">
+        <div class="rs-browser-frame">
+          <div class="rs-chrome">
+            <span class="cdot"></span><span class="cdot"></span><span class="cdot"></span>
+            <span class="rs-addr" id="rs-addr"></span>
+          </div>
+          <div class="rs-demo" id="rs-demo"
+               data-visual-surface="demo_primary"
+               data-surface-kind="active_media_card"
+               data-surface-modes="none"
+               data-surface-fallback="programmatic"
+               data-surface-mode="none"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+/* Work-specific copy arrives through HyperFrames variables; defaults keep standalone preview useful. */
+var DEFAULTS = {
+  context: "能力详解 · 多文字组件",
+  sequence_index: 2,
+  sequence_total: 13,
+  title: "Agent Browser",
+  subtitle: "通过实际网页操作获得完整内容",
+  address: "example.com/article",
+  result_label: "产出 · 完整网页内容",
+  demo_type: "browser-click",
+  duration_seconds: 12.27,
+  segment_1_label: "它会做什么",
+  segment_1_text: "它会真的去点按钮、展开下拉菜单、点开折叠内容，需要时还能截图留存",
+  segment_2_label: "什么时候用它",
+  segment_2_text: "普通抓取拿不到完整内容的网页，就交给它实际打开再读",
+  segment_3_mode: "none",
+  segment_3_label: "",
+  segment_3_text: "",
+  segment_3_note: "",
+  demo_primary_mode: "none",
+  demo_primary_path: "",
+  time_scale: 1
+};
+var RUNTIME_VALUES = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+function runtimeString(name) {
+  return String(RUNTIME_VALUES[name] ?? DEFAULTS[name]);
+}
+var total = Math.max(1, Math.min(20, Math.trunc(Number(RUNTIME_VALUES.sequence_total ?? DEFAULTS.sequence_total)) || DEFAULTS.sequence_total));
+var index = Math.max(1, Math.min(total, Math.trunc(Number(RUNTIME_VALUES.sequence_index ?? DEFAULTS.sequence_index)) || DEFAULTS.sequence_index));
+var demoType = runtimeString("demo_type");
+if (["browser-click", "skill-create", "file-download"].indexOf(demoType) === -1) demoType = DEFAULTS.demo_type;
+var segment3Mode = runtimeString("segment_3_mode");
+if (["none", "text", "skeleton"].indexOf(segment3Mode) === -1) segment3Mode = "none";
+var SLOT_DATA = {
+  context: runtimeString("context"),
+  index: index,
+  total: total,
+  title_en: runtimeString("title"),
+  gloss_zh: runtimeString("subtitle"),
+  addr: runtimeString("address"),
+  result_tag: runtimeString("result_label"),
+  demo: demoType,
+  duration: Number(RUNTIME_VALUES.duration_seconds ?? DEFAULTS.duration_seconds),
+  segments: [
+    { tag: runtimeString("segment_1_label"), text: runtimeString("segment_1_text") },
+    { tag: runtimeString("segment_2_label"), text: runtimeString("segment_2_text") }
+  ],
+  demo_primary_mode: runtimeString("demo_primary_mode"),
+  time_scale: Number(RUNTIME_VALUES.time_scale ?? DEFAULTS.time_scale)
+};
+if (segment3Mode !== "none") {
+  SLOT_DATA.segments.push({
+    tag: runtimeString("segment_3_label"),
+    text: runtimeString("segment_3_text"),
+    note: runtimeString("segment_3_note"),
+    skeleton: segment3Mode === "skeleton"
+  });
+}
+
+/* ==================== Easing（optical_fluidity） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* 主进场尊重 reduced-motion；原型操作仍由可暂停的时间轴控制。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* ==================== 组件 Timeline（paused · seek-safe · 有限 repeat） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+var DUR = 12.270;
+var OPEN_END = 1.5;
+var CUES;
+
+function buildEnd()  { return CUES.capture; }
+function heroStart() { return CUES.landed; }
+function endStart()  { return CUES.exit; }
+
+/* Only these cursor/hover windows absorb retiming; contact beats keep their duration. */
+function timingFor(duration) {
+  if (!Number.isFinite(duration) || duration < 10 || duration > 14.27) {
+    throw new RangeError("Browser prototype duration must be 10..14.27 seconds");
+  }
+  var elastic = [[1.5, 2.7], [4.7, 5.6], [7.2, 8.5], [8.65, 10.5]];
+  var total = elastic.reduce(function (sum, r) { return sum + r[1] - r[0]; }, 0);
+  return function (t) {
+    var used = elastic.reduce(function (sum, r) {
+      return sum + Math.max(0, Math.min(t, r[1]) - r[0]);
+    }, 0);
+    return t + (duration - 12) * used / total;
+  };
+}
+
+/* A native cubic Bezier path keeps cursor contact and reverse seeks exact. */
+function cursorMove(d, path, start, end) {
+  d.set("#dm-cursor", { offsetPath: 'path("' + path + '")', offsetDistance: "0%" }, start);
+  d.to("#dm-cursor", { offsetDistance: "100%", duration: end - start, ease: "power2.out" }, start);
+}
+function clickAt(d, target, ripple, time) {
+  d.to(target, { scale: 0.94, duration: 0.10 }, time);
+  d.to(target, { scale: 1, duration: 0.12 }, time + 0.10);
+  d.to("#dm-cursor", { scale: 0.82, duration: 0.10 }, time);
+  d.to("#dm-cursor", { scale: 1, duration: 0.12 }, time + 0.10);
+  d.fromTo(ripple, { scale: 0.15, opacity: 0.8 },
+    { scale: 1.35, opacity: 0, duration: 0.42, ease: "power2.out", immediateRender: false }, time);
+}
+
+/* ---------- 工具 ---------- */
+function splitChars(el, text, cls) {
+  el.innerHTML = "";
+  Array.from(text).forEach(function (ch) {
+    var sp = document.createElement("span");
+    sp.className = cls;
+    sp.textContent = ch === " " ? " " : ch;
+    el.appendChild(sp);
+  });
+}
+
+/* ---------- Single-use demos; all beats belong to the parent timeline. ---------- */
+var DEMOS = {
+  "browser-click": {
+    build: function (box) {
+      box.innerHTML =
+        '<div class="dm-bar" style="left:36px;top:28px;width:300px;height:12px"></div>' +
+        '<div class="dm-bar" style="left:36px;top:64px;width:420px;height:18px;background:rgba(255,255,255,0.18)"></div>' +
+        '<div class="dm-bar" style="left:36px;top:96px;width:300px;height:12px"></div>' +
+        '<div class="dm-btn" id="dm-btn" style="left:36px;top:170px;width:132px;height:42px">展开更多</div>' +
+        '<div class="dm-drop" id="dm-drop" style="left:36px;top:224px;width:280px">' +
+          '<div class="dm-row" id="dm-row-0"><span class="d"></span>最新内容</div>' +
+          '<div class="dm-row" id="dm-row-1"><span class="d"></span>完整文章</div>' +
+          '<div class="dm-row" id="dm-row-2"><span class="d"></span>相关资料</div>' +
+        '</div>' +
+        '<div class="dm-fold" id="dm-fold"><div class="dm-fold-head" id="dm-fold-head">' +
+          '<span class="dm-chevron">&#8250;</span><span>文章详情</span></div>' +
+          '<div class="dm-article" id="dm-article">' +
+            '<div class="dm-loading" id="dm-loading"><i style="width:92%"></i><i style="width:78%"></i><i style="width:86%"></i></div>' +
+            '<div class="dm-copy" id="dm-copy" data-layout-allow-overflow><div class="dm-bar" style="width:92%"></div>' +
+              '<div class="dm-bar" style="width:78%"></div><div class="dm-bar" style="width:86%"></div>' +
+              '<div class="dm-bar" style="width:64%;background:rgba(84,215,255,.38)"></div></div>' +
+          '</div><div class="dm-page-footer"></div></div>' +
+        '<div class="dm-ripple" id="dm-ripple-button" style="left:80px;top:169px"></div>' +
+        '<div class="dm-ripple" id="dm-ripple-option" style="left:128px;top:278px"></div>' +
+        '<div class="dm-ripple" id="dm-ripple-fold" style="left:138px;top:376px"></div>' +
+        '<div class="dm-cursor" id="dm-cursor"><svg width="22" height="22" viewBox="0 0 24 24">' +
+          '<path d="M0 0 L15 11 L8.5 12.5 L11.5 19.5 L8.8 20.5 L6 13.5 L0 17.5 Z" fill="#F7FBFF"/></svg></div>';
+    },
+    schedule: function (d, D) {
+      var at = timingFor(D);
+      d.set("#dm-cursor, #dm-drop, .dm-row, #dm-copy, #dm-loading, .dm-ripple", { opacity: 0 }, 0);
+      d.set("#dm-article", { height: 0 }, 0);
+      d.set("#dm-drop", { scaleY: 0.85 }, 0);
+      d.set("#dm-btn, #dm-fold-head", { scale: 1 }, 0);
+      d.set("#dm-fold-head .dm-chevron", { rotation: 0 }, 0);
+      d.set("#dm-cursor", { scale: 1 }, 0);
+      d.to("#dm-cursor", { opacity: 1, duration: 0.25 }, at(1.5));
+      cursorMove(d, "M480 520 C510 310 140 130 102 191", at(1.5), at(2.7));
+      clickAt(d, "#dm-btn", "#dm-ripple-button", at(3));
+      d.to("#dm-drop", { scaleY: 1, opacity: 1, duration: 0.30, ease: E_ENTER }, at(4));
+      d.to(".dm-row", { opacity: 1, duration: 0.18, stagger: 0.12 }, at(4.15));
+      cursorMove(d, "M102 191 C210 205 215 295 150 300", at(4.7), at(5.6));
+      d.to("#dm-row-1", { backgroundColor: "rgba(10,132,255,.26)", color: "#F7FBFF", duration: 0.12 }, at(5.6));
+      clickAt(d, "#dm-row-1", "#dm-ripple-option", at(5.7));
+      d.to("#dm-drop", { opacity: 0, duration: 0.15 }, at(5.88));
+      cursorMove(d, "M150 300 C225 320 198 378 160 398", at(5.9), at(6.2));
+      clickAt(d, "#dm-fold-head", "#dm-ripple-fold", at(6.3));
+      d.to("#dm-fold-head .dm-chevron", { rotation: 90, duration: 0.25 }, at(6.4));
+      d.to("#dm-article", { height: 144, duration: 0.60, ease: "power2.inOut" }, at(6.45));
+      d.to("#dm-loading", { opacity: 0.8, duration: 0.15 }, at(6.5));
+      d.to("#dm-loading", { opacity: 0.35, duration: 0.20 }, at(6.65));
+      d.to("#dm-loading", { opacity: 0.65, duration: 0.15 }, at(6.85));
+      d.to("#dm-loading", { opacity: 0, duration: 0.15 }, at(7.02));
+      d.to("#dm-copy", { opacity: 1, duration: 0.18 }, at(7.02));
+      d.to("#dm-cursor", { opacity: 0, duration: 0.25 }, at(8.5));
+      d.to("#dm-copy", { y: -3, duration: D - at(8.65), ease: "sine.inOut" }, at(8.65));
+      return {
+        operation: at(3), operationText: at(4), next: at(6.3), nextText: at(8.5),
+        capture: at(8.5), thumbnail: at(10.5), landed: at(11.35), exit: at(11.35)
+      };
+    }
+  },
+  /* P010：大白话输入 → 点生成 → Skill 卡弹出 */
+  "skill-create": {
+    build: function (box) {
+      box.innerHTML =
+        '<div class="dm-input" style="left:36px;top:200px;width:460px;height:56px"></div>' +
+        '<div class="dm-type" id="dm-type" style="left:56px;top:222px;width:320px"></div>' +
+        '<div class="dm-btn" id="dm-send" style="left:524px;top:200px;width:104px;height:56px">生成</div>' +
+        '<div class="dm-card" id="dm-card" style="left:36px;top:300px;width:400px;height:150px">' +
+          '<div class="t"></div><div class="b" style="width:88%"></div><div class="b" style="width:64%"></div>' +
+          '<div class="dm-check" id="dm-check"></div>' +
+        '</div>';
+    },
+    schedule: function (d, D) {
+      var generate = 3 + (D - 9.647) * 0.35;
+      var result = D - 3.4;
+      d.fromTo("#dm-type", { scaleX: 0, opacity: 1 },
+        { scaleX: 1, duration: generate - 1.5, ease: "none" }, 1.5);
+      d.fromTo("#dm-send", { opacity: 0.55 }, { opacity: 1, duration: 0.20 }, generate - 0.2);
+      d.to("#dm-send", { scale: 0.94, duration: 0.10 }, generate);
+      d.to("#dm-send", { scale: 1, duration: 0.12 }, generate + 0.10);
+      d.fromTo("#dm-card", { y: 26, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.50, ease: E_ENTER }, result);
+      d.fromTo("#dm-check", { scale: 0 }, { scale: 1, duration: 0.30, ease: "back.out(2)" }, result + 0.40);
+      d.to("#dm-check", { opacity: 0.6, duration: D - result - 0.7, ease: "sine.inOut" }, result + 0.7);
+      return { operation: 1.5, operationText: 1.7, next: generate, nextText: result,
+        capture: result + 0.7, thumbnail: D - 1.5, landed: D - 0.65, exit: D - 0.65 };
+    }
+  },
+  /* P005：视频/音频/字幕三条分别下载 → 笔记卡 */
+  "file-download": {
+    build: function (box) {
+      var labels = ["视频", "音频", "字幕"];
+      var html = "";
+      for (var i = 0; i < 3; i++) {
+        var y = 130 + i * 64;
+        html += '<div class="dm-dl-label" id="dm-dl-label-' + i + '" style="left:36px;top:' + y + 'px">' + labels[i] + '</div>'
+              + '<div class="dm-dl-track" style="left:116px;top:' + (y + 5) + 'px;width:420px"></div>'
+              + '<div class="dm-dl-fill" id="dm-dl-fill-' + i + '" style="left:116px;top:' + (y + 5) + 'px;width:420px"></div>';
+      }
+      html += '<div class="dm-card" id="dm-note" style="left:36px;top:350px;width:420px;height:130px">'
+            + '<div class="t"></div><div class="b" style="width:90%"></div><div class="b" style="width:58%"></div></div>';
+      box.innerHTML = html;
+    },
+    schedule: function (d, D) {
+      var span = (D - 6.4) / 3;
+      for (var i = 0; i < 3; i++) {
+        d.fromTo("#dm-dl-fill-" + i, { scaleX: 0 },
+          { scaleX: 1, duration: span - 0.15, ease: "power1.inOut" }, 1.5 + i * span);
+        d.fromTo("#dm-dl-label-" + i, { opacity: 0.5 }, { opacity: 1, duration: 0.30 }, 1.5 + i * span);
+      }
+      var result = D - 4.2;
+      d.fromTo("#dm-note", { y: 24, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.50, ease: E_ENTER }, result);
+      d.to("#dm-note .b", { opacity: 0.75, duration: D - result - 0.5, ease: "sine.inOut" }, result + 0.5);
+      return { operation: 1.5, operationText: 1.7, next: result, nextText: result + 0.15,
+        condition: result + 0.65, capture: result + 0.65, thumbnail: D - 1.5,
+        landed: D - 0.65, exit: D - 0.65 };
+    }
+  }
+};
+
+/* ---------- 样本构建：注入 DOM + 重排 timeline（同步，渲染前就绪） ---------- */
+function buildComponent() {
+  var s = SLOT_DATA;
+  DUR = Number.isFinite(s.duration) ? Math.max(9.6, Math.min(14.27, s.duration)) : DEFAULTS.duration_seconds;
+  if (s.demo === "browser-click") DUR = Math.max(10, DUR);
+  var titleChars = Array.from(s.title_en);
+  OPEN_END = 1.5;
+  tl.seek(0, true);
+  tl.clear();
+  gsap.set("#rs-title-en, #rs-gloss-zh, #rs-context, #rs-progress, #rs-browser-float", { clearProps: "all" });
+
+  /* 面包屑 / 进度刻度（13 段，当前段呼吸） */
+  document.getElementById("rs-context").textContent = s.context;
+  var prog = document.getElementById("rs-progress");
+  prog.innerHTML = "";
+  for (var i = 1; i <= s.total; i++) {
+    var tk = document.createElement("span");
+    tk.className = "rs-tick" + (i < s.index ? " is-done" : i === s.index ? " is-current" : "");
+    prog.appendChild(tk);
+  }
+  var num = document.createElement("span");
+  num.className = "rs-progress-num";
+  num.textContent = (s.index < 10 ? "0" : "") + s.index + " / " + s.total;
+  prog.appendChild(num);
+
+  /* 身份：标题逐字 + 释义 */
+  splitChars(document.getElementById("rs-title-en"), s.title_en, "rs-ch");
+  document.getElementById("rs-gloss-zh").textContent = s.gloss_zh;
+  document.getElementById("rs-addr").textContent = s.addr;
+  splitChars(document.getElementById("rs-result-t"), s.result_tag, "rs-rc-ch");
+  document.querySelector('[data-composition-id="rich-skill-explanation"]')
+    .setAttribute("data-duration", String(DUR));
+
+  /* 生长时间线分段 */
+  var box = document.getElementById("rs-segs");
+  box.innerHTML = "";
+  s.segments.forEach(function (seg, i) {
+    var el = document.createElement("div");
+    el.className = "rs-seg" + (i === s.segments.length - 1 ? " is-last" : "");
+    var html = '<div class="rs-seg-line" id="rs-line-' + i + '"></div>'
+             + '<span class="rs-node" id="rs-node-' + i + '"></span>'
+             + '<div class="rs-seg-label" id="rs-label-' + i + '"></div>';
+    if (seg.skeleton) {
+      html += '<div class="rs-seg-skel" id="rs-skel-' + i + '">'
+            + '<div class="bar b1"></div><div class="bar b2"></div>'
+            + '<div class="note"></div></div>';
+    } else {
+      html += '<div class="rs-seg-text" id="rs-text-' + i + '"></div>';
+    }
+    el.innerHTML = html;
+    el.querySelector(".rs-seg-label").textContent = seg.tag;
+    var copy = el.querySelector(seg.skeleton ? ".note" : ".rs-seg-text");
+    copy.textContent = seg.skeleton ? seg.note : seg.text;
+    box.appendChild(el);
+  });
+
+  /* 右侧演示 DOM */
+  var demo = DEMOS[s.demo];
+  var demoBox = document.getElementById("rs-demo");
+  demo.build(demoBox);
+
+  /* Snapshot the same final page once; only this result element travels left. */
+  var thumb = document.getElementById("rs-thumb");
+  thumb.innerHTML = "";
+  var capture = document.createElement("div");
+  capture.className = "rs-thumb-capture";
+  capture.setAttribute("aria-hidden", "true");
+  capture.appendChild(document.querySelector(".rs-browser-frame").cloneNode(true));
+  capture.querySelectorAll("[id]").forEach(function (el) { el.removeAttribute("id"); });
+  capture.querySelectorAll(".dm-cursor, .dm-drop, .dm-loading, .dm-ripple").forEach(function (el) { el.remove(); });
+  thumb.appendChild(capture);
+  var frame = document.querySelector("#rs-browser .rs-browser-frame");
+  var oldFlash = frame.querySelector(".rs-flash");
+  if (oldFlash) oldFlash.remove();
+  var flash = document.createElement("div");
+  flash.className = "rs-flash";
+  flash.id = "rs-flash";
+  frame.appendChild(flash);
+  capture.querySelectorAll(".rs-flash").forEach(function (el) { el.remove(); });
+
+  CUES = demo.schedule(tl, DUR);
+  Object.keys(CUES).forEach(function (name) { tl.addLabel(name, CUES[name]); });
+  tl.addLabel("sceneEnd", DUR);
+
+  tl.fromTo("#rs-context", { opacity: 0 }, { opacity: 1, duration: 0.20 }, 0.05);
+  tl.fromTo("#rs-progress", { opacity: 0 }, { opacity: 1, duration: 0.20 }, 0.10);
+  tl.fromTo("#rs-browser", { x: R(160, 0), y: 0, opacity: 0, scale: R(0.96, 1) },
+    { x: 0, y: 0, opacity: 1, scale: 1, duration: 1.35, ease: "back.out(1.15)" }, 0.10);
+  tl.fromTo("#rs-addr", { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.45);
+  tl.fromTo(".rs-ch", { y: R(18, 0), opacity: 0 },
+    { y: 0, opacity: 1, duration: 0.30, stagger: Math.min(0.05, 0.85 / titleChars.length), ease: E_ENTER }, 0.15);
+  tl.fromTo("#rs-gloss-zh", { y: R(12, 0), opacity: 0 },
+    { y: 0, opacity: 1, duration: 0.35, ease: E_ENTER }, OPEN_END);
+
+  /* Left copy reads the operation cues, never character-weight timing. */
+  s.segments.forEach(function (seg, i) {
+    var conditionAt = Number.isFinite(CUES.condition) ? CUES.condition : CUES.nextText;
+    var nodeAt = i === 0 ? CUES.operation : i === 1 ? CUES.next : conditionAt;
+    var textAt = i === 0 ? CUES.operationText : i === 1 ? CUES.nextText : conditionAt + 0.12;
+    var textTarget = seg.skeleton ? "#rs-skel-" + i : "#rs-text-" + i;
+    tl.fromTo("#rs-line-" + i, { scaleY: 0 }, { scaleY: 1,
+      duration: i === 0 ? CUES.next - nodeAt : 0.4, ease: "none" }, nodeAt);
+    tl.fromTo("#rs-node-" + i, { backgroundColor: "#071018", borderColor: "#768D9A" },
+      { backgroundColor: "#0A84FF", borderColor: "#0A84FF", duration: 0.20 }, nodeAt);
+    tl.fromTo("#rs-label-" + i, { opacity: 0, color: "#768D9A" },
+      { opacity: 1, color: "#F7FBFF", duration: 0.25 }, nodeAt);
+    tl.fromTo(textTarget, { y: R(14, 0), opacity: 0, color: "#F7FBFF" },
+      { y: 0, opacity: 1, duration: 0.40, ease: E_ENTER }, textAt);
+    if (i === 0) {
+      tl.to("#rs-label-0, #rs-text-0", { color: "#A8BBC8", duration: 0.3 }, CUES.nextText);
+      tl.to("#rs-node-0", { backgroundColor: "#54D7FF", duration: 0.24 }, CUES.nextText);
+    }
+  });
+
+  tl.set("#rs-flash", { opacity: 0 }, 0);
+  if (s.demo === "browser-click") {
+    tl.to("#rs-flash", { opacity: R(0.96, 0.25), duration: 0.03 }, CUES.capture);
+    tl.to("#rs-flash", { opacity: 0, duration: 0.12 }, CUES.capture + 0.03);
+  }
+  tl.fromTo("#rs-result-card", { x: 918, y: -190, scale: 1.08, opacity: 0 },
+    { x: 918, y: -190, scale: 1, opacity: 1, duration: 0.20, ease: E_ENTER }, CUES.thumbnail);
+  tl.to("#rs-result-card", { x: 0, y: 0, duration: 0.65, ease: "power3.inOut" }, CUES.thumbnail + 0.20);
+  tl.fromTo(".rs-result-label", { opacity: 0 }, { opacity: 1, duration: 0.25 }, CUES.landed);
+  tl.fromTo(".rs-rc-ch", { opacity: 0 },
+    { opacity: 1, duration: 0.05, stagger: 0.018, ease: "none" }, CUES.landed);
+
+  /* Landing is the handoff signal; result stays put while the machine closes. */
+  tl.to("#rs-browser", { y: R(-28, 0), scale: R(0.96, 1), opacity: 0,
+    duration: 0.55, ease: E_MOVE }, CUES.exit);
+  tl.to(".rs-seg-line", { scaleY: 0, duration: 0.35, stagger: 0.05 }, CUES.exit);
+  tl.to(".rs-node, .rs-seg-label, .rs-seg-text, .rs-seg-skel",
+    { opacity: 0.4, duration: 0.30 }, CUES.exit);
+  tl.to("#rs-title-en, #rs-gloss-zh", { opacity: 0.7, duration: 0.30 }, CUES.exit);
+  tl.to(".rs-result-label .dot", { opacity: 0.65, duration: DUR - CUES.landed, ease: "sine.inOut" }, CUES.landed);
+  tl.set("#rs-result-card", { opacity: 1 }, DUR);
+
+  // Resolve lazy tween start values before exposing the seekable sample.
+  tl.progress(1, true);
+  tl.seek(0, true);
+}
+
+document.querySelector('[data-visual-surface="demo_primary"]').setAttribute("data-surface-mode", "none");
+buildComponent();
+if (Number.isFinite(SLOT_DATA.time_scale) && SLOT_DATA.time_scale > 0) {
+  tl.timeScale(SLOT_DATA.time_scale);
+}
+window.__timelines["rich-skill-explanation"] = tl;
+
+</script>
+</template>
+</body>
+</html>

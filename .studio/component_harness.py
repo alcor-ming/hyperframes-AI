@@ -258,6 +258,9 @@ def _check_value(value: Any, rule: dict[str, Any], path: str) -> None:
     }.get(kind, True)
     if not type_ok:
         raise ComponentError(f"{path} must have type {kind}")
+    choices = rule.get("enum")
+    if isinstance(choices, list) and value not in choices:
+        raise ComponentError(f"{path} is not one of its allowed values")
     if isinstance(value, str):
         pattern = rule.get("pattern")
         if isinstance(pattern, str) and re.fullmatch(pattern, value) is None:
@@ -271,6 +274,31 @@ def _check_value(value: Any, rule: dict[str, Any], path: str) -> None:
             raise ComponentError(f"{path} is below its contract minimum")
         if isinstance(rule.get("maximum"), (int, float)) and value > rule["maximum"]:
             raise ComponentError(f"{path} is above its contract maximum")
+    if isinstance(value, list):
+        if isinstance(rule.get("minItems"), int) and len(value) < rule["minItems"]:
+            raise ComponentError(f"{path} has fewer items than its contract")
+        if isinstance(rule.get("maxItems"), int) and len(value) > rule["maxItems"]:
+            raise ComponentError(f"{path} has more items than its contract")
+        item_rule = rule.get("items")
+        if isinstance(item_rule, dict):
+            for index, item in enumerate(value):
+                _check_value(item, item_rule, f"{path}[{index}]")
+    if isinstance(value, dict):
+        required = rule.get("required", [])
+        properties = rule.get("properties", {})
+        if isinstance(required, list):
+            missing = sorted(name for name in required if name not in value)
+            if missing:
+                raise ComponentError(f"{path} is missing required fields: {missing}")
+        if isinstance(properties, dict):
+            if rule.get("additionalProperties") is False:
+                unknown = sorted(set(value) - set(properties))
+                if unknown:
+                    raise ComponentError(f"{path} has unsupported fields: {unknown}")
+            for name, child in value.items():
+                child_rule = properties.get(name)
+                if isinstance(child_rule, dict):
+                    _check_value(child, child_rule, f"{path}.{name}")
 
 
 def validate_component_release(directory: Path, expected_ref: str | None = None) -> dict[str, Any]:

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "algorithm": "component-package-sha256-v1",
+  "component_ref": "rich-skill-explanation@v2",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "1d191fc83821e3243264f53aa43bda1f2a6ade35603ae12387ab5600af02c085"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "a598c39104ce4efecb5da47fc6fc003991bb70f2c2166d339645da317e6c5385"
+    },
+    {
+      "path": "component.html",
+      "sha256": "1f900e51ebca0259d97c1abd21deb3248409fc7357e63fcf4de406722d9a3678"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "4c9a1ab8ae52382eeb45faf545d275f68d365f758446bdb9180c76b26c7a9e67"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "c1a3399e19d4be311ac200787b3fad95d275478d096ecb3cc01006e03f394ec3"
+    }
+  ],
+  "package_sha256": "a361521687221e0676f71cc5de26f44704f6fc3d12b4d862c8ed1bd352dee395"
+}
