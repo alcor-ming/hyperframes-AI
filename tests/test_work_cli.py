@@ -117,6 +117,7 @@ class WorkCliTest(unittest.TestCase):
         self.assertIn("## 标题", package)
         self.assertIn("## 封面文字", package)
         self.assertIn("## 一句话", package)
+        self.assertIn("## 内容概括", package)
         self.assertEqual(work_id, (self.root / ".studio" / ".runtime" / "current-work").read_text().strip())
         self.assertEqual("hyperframes_video", WORK_CLI.read_frontmatter(work / "WORK.md")["workflow"])
 

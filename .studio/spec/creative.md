@@ -4,8 +4,8 @@
 
 - `source.md` 保存主要原始基线，任何改写不得覆盖它。
 - `SCRIPT.md` 只包含当前 Variant 的口播正文。使用 `<!-- P001 -->` 形式的稳定 Anchor；批准后新增 Anchor，不重排全部编号。Frontmatter 的 `mode` 只使用 `dbs` 或 `verbatim`。
-- `hyperframes_video` 的 `PACKAGE.md` 在 Research 完成、Animation Plan 创建时同步生成，只保存一个最终标题、一条封面文字和一句话简介，不进入口播正文。
-- 标题必须调用 `dbs-xhs-title` 生成候选并选择 Top 1；封面文字与一句话简介基于最终 Script 和 Research，不编造正文没有支撑的承诺。
+- `hyperframes_video` 的 `PACKAGE.md` 在 Research 完成、Animation Plan 创建时同步生成，只保存一个最终标题、一条封面文字、一句话简介和内容概括，不进入口播正文。
+- 标题必须调用 `dbs-xhs-title` 生成候选并选择 Top 1；封面文字、一句话简介与内容概括基于最终 Script 和 Research，不编造正文没有支撑的承诺。内容概括按主要对象或主题简短分项；介绍多个 Skill、工具、功能或案例时逐项单独说明。
 - `dbs` 允许多轮正文修改；DBS 只有在实际修改口播时才把 Script 状态设为 `pending` 并等待用户批准。
 - `verbatim` 必须保留转录文字、Anchor 和由 `characters[]` 聚合出的原时间戳，`approval` 为 `not_required`；DBS 不改正文，只可诊断或处理包装文案。
 - `podcast_quote_image` 先在 `RESEARCH.md` 中记录与获批观点相关的嘉宾身份、经历、背景故事、事实边界和来源，再生成可直接复制的纯文本 `PACKAGE.md`。第一行为不超过 20 字的标题，其后只使用开篇、`01｜小标题` 形式的顺序分节、正文、署名、`原视频：<视频原标题>` 和标签，不放来源地址、Markdown 标记或结构说明。render 另生成 `xiaohongshu.json`，正文连同 1 至 3 个话题不超过 1000 字，每个话题不超过 30 字。开篇第一段与每图小标题都只归纳获批文段，已核实的嘉宾背景最早从第二段开始补充。文案 Skill 先完成不含大标题的草稿，必须单独调用 `dbs-content` 对开篇、每个小标题和正文进行表达效率、认知落差与标题诊断，再由文案 Skill 应用修订。全文稳定后，必须单独调用 `dbs-xhs-title` 仅根据获批文段生成带公式编号的候选与 Top 3，再选定 Top 1 大标题；最后单独调用 `dbs-ai-check` 诊断完整成稿。仅读取 DBS Skill 或借用规则不算完成调用。DBS 不得改写批准方案中的原文金句或忠实翻译。

@@ -425,7 +425,7 @@ def create_video_variant(
         shutil.copy2(source_research, path / "RESEARCH.md")
     else:
         atomic_write(path / "RESEARCH.md", template_text(root, "RESEARCH.template.md", values))
-    atomic_write(path / "PACKAGE.md", "# Package\n\n## 标题\n\n## 封面文字\n\n## 一句话\n\n")
+    atomic_write(path / "PACKAGE.md", "# Package\n\n## 标题\n\n## 封面文字\n\n## 一句话\n\n## 内容概括\n\n")
     atomic_write(
         path / "ANIMATION_PLAN.md",
         template_text(root, "ANIMATION_PLAN.template.md", values),

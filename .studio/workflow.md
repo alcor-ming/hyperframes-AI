@@ -23,7 +23,7 @@
 
 两条路径汇合后，先用最终 Script 的核心主题执行 `./work --work <id> --variant <variant-id> name "<核心主题>"`，再按最终 `SCRIPT.md` 联网研究一手资料并完成同一 Variant 的 `RESEARCH.md`。研究按 Anchor 提供补充事实、可视化机制、边界和来源链接，不替代或反向改写口播。Script Revision 变化时必须刷新 Research Revision，之后才能设计 Animation Plan。
 
-Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS 完成 `PACKAGE.md`：使用 `dbs-xhs-title` 生成候选并选择 Top 1，再根据最终 Script 与 Research 写一条封面文字和一句话简介。文档只保留这三项最终结果，不附公式分析或候选清单，也不新增审批门。
+Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS 完成 `PACKAGE.md`：使用 `dbs-xhs-title` 生成候选并选择 Top 1，再根据最终 Script 与 Research 写一条封面文字、一句话简介和内容概括。内容概括按主要对象或主题简短分项；介绍多个 Skill、工具、功能或案例时逐项单独说明。文档只保留这四项最终结果，不附公式分析或候选清单，也不新增审批门。
 
 进入 Animation Plan 时加载 `hyperframes-anti-ppt`，使用当前时间边界、Recipe、Profile、Subtemplate、画幅以及已有的组件候选或组合 Preview，明确或复审视觉状态链。结果合并进同一份 `ANIMATION_PLAN.md`，不新增审批产物。组件的检索、版本、Slots 与安装由视频工作流或组件库能力负责，Anti-PPT 只审查视觉叙事与动效适配。
 
@@ -50,7 +50,7 @@ Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS �
 
 1. DBS 修改口播正文时批准 `SCRIPT.md`。
 2. `RESEARCH.md` 必须与当前 Script Revision 对齐并标记为 `ready`。
-3. 创建 Animation Plan 时同步用 DBS 完成 `PACKAGE.md` 的标题、封面文字和一句话简介。
+3. 创建 Animation Plan 时同步用 DBS 完成 `PACKAGE.md` 的标题、封面文字、一句话简介和内容概括。
 4. Plan 批准前用 `hyperframes-anti-ppt` 形成或复审视觉状态链；结果只进入现有 Plan。
 5. 正式 HTML 制作前批准一份引用当前 Research Revision 的 `ANIMATION_PLAN.md`。
 6. Draft 提交用户前用 `hyperframes-anti-ppt` 复审成片或代表性关键帧，再按现有流程注册和接受 Draft。
