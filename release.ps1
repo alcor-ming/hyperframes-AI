@@ -17,6 +17,17 @@ function Assert-Junction([string]$Path) {
     }
 }
 
+function Get-Sha256([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($sha.ComputeHash($stream))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Test-Release([string]$Root) {
     $manifestPath = Join-Path $Root ".release.json"
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
@@ -31,7 +42,7 @@ function Test-Release([string]$Root) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
             throw "Release file is missing: $($entry.Name)"
         }
-        if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $entry.Value) {
+        if ((Get-Sha256 $path) -ne $entry.Value) {
             throw "Release file failed SHA256 verification: $($entry.Name)"
         }
     }
