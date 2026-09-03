@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "target": "windows-x64",
+  "python": "3.14.0",
+  "assets": [
+    {"kind": "python", "file": "python-3.14.0-embed-amd64.zip", "sha256": "8d4d3590c10449d78aa4375f534e6d5f3027d67fdc362dd1a882279db6f90fdf"},
+    {"kind": "wheel", "file": "pillow-12.3.0-cp314-cp314-win_amd64.whl", "sha256": "fdafc9cce40277e0f7a0feabce0ee50dd2fa1800f3b38015e51296b5e814048d"},
+    {"kind": "wheel", "file": "youtube_transcript_api-1.2.4-py3-none-any.whl", "sha256": "03878759356da5caf5edac77431780b91448fb3d8c21d4496015bdc8a7bc43ff"},
+    {"kind": "wheel", "file": "imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl", "sha256": "02fa47c83703c37df6bfe4896aab339013f62bf02c5ebf2dce6da56af04ffc0a"},
+    {"kind": "wheel", "file": "defusedxml-0.7.1-py2.py3-none-any.whl", "sha256": "a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61"},
+    {"kind": "wheel", "file": "requests-2.34.2-py3-none-any.whl", "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"},
+    {"kind": "wheel", "file": "certifi-2026.7.22-py3-none-any.whl", "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"},
+    {"kind": "wheel", "file": "charset_normalizer-3.5.1-cp314-cp314-win_amd64.whl", "sha256": "c658c50ac0c98cd755a2dd50b7977d3bca7df401dcc47fbdfa87db53ef7d4e8b"},
+    {"kind": "wheel", "file": "idna-3.19-py3-none-any.whl", "sha256": "815e7be7a7806d54abb586dc943addc79e8b2ee16915059658cbeff4b1b43bf4"},
+    {"kind": "wheel", "file": "urllib3-2.7.0-py3-none-any.whl", "sha256": "9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897"}
+  ]
+}

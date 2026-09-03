@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Build and activate immutable local Harness releases."""
+"""Build the immutable Windows Harness release consumed by Codex App."""
 
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-import gzip
 import hashlib
 import json
 import os
@@ -16,11 +15,11 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import zipfile
 
 
 REPO = Path(__file__).resolve().parent
-DEFAULT_RELEASE_ROOT = Path.home() / ".local" / "share" / "hyperframes-ai"
-DEFAULT_WORK_ROOT = Path("/mnt/d/AI/AI+hyperframes")
+RUNTIME_LOCK = REPO / "windows-runtime.lock.json"
 LOCAL_SKILLS = {
     "dbs": "b0290051cf5563047d5b0a5a3e55dcf046c2dff1a1b66e299825a4462c9507ce",
     "dbs-ai-check": "1f2703581914ae9bff5384196a08138fa55e64f70ad4427d95ee220c7ee5e2d9",
@@ -39,11 +38,7 @@ class ReleaseError(RuntimeError):
 
 def run(*args: str, cwd: Path = REPO, capture: bool = False) -> str:
     result = subprocess.run(
-        args,
-        cwd=cwd,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE if capture else None,
+        args, cwd=cwd, check=True, text=True, stdout=subprocess.PIPE if capture else None
     )
     return result.stdout.strip() if capture else ""
 
@@ -51,7 +46,7 @@ def run(*args: str, cwd: Path = REPO, capture: bool = False) -> str:
 def version_tag(value: str) -> tuple[str, str]:
     match = VERSION_PATTERN.fullmatch(value)
     if not match:
-        raise ReleaseError("Version must look like 2026.09.0 or harness-2026.09.0")
+        raise ReleaseError("Version must look like 2026.09.1 or harness-2026.09.1")
     version = match.group(1)
     return version, f"harness-{version}"
 
@@ -93,23 +88,59 @@ def release_checks(root: Path) -> None:
     )
 
 
-def write_archive(source: Path, archive: Path, prefix: str, mtime: int) -> None:
-    def normalize(info: tarfile.TarInfo) -> tarfile.TarInfo:
-        info.uid = info.gid = 0
-        info.uname = info.gname = ""
-        info.mtime = mtime
-        info.mode = 0o755 if info.isdir() or info.mode & 0o111 else 0o644
-        return info
+def stage_runtime(staging: Path, cache: Path) -> dict[str, str]:
+    lock = json.loads(RUNTIME_LOCK.read_text(encoding="utf-8"))
+    assets = lock.get("assets")
+    if lock.get("target") != "windows-x64" or not isinstance(assets, list) or not assets:
+        raise ReleaseError("Invalid Windows runtime lock")
+    runtime = staging / "runtime" / "python"
+    site_packages = runtime / "Lib" / "site-packages"
+    runtime.mkdir(parents=True)
+    site_packages.mkdir(parents=True)
+    hashes: dict[str, str] = {}
+    for asset in assets:
+        source = cache / asset["file"]
+        if not source.is_file() or sha256(source) != asset["sha256"]:
+            raise ReleaseError(f"Missing or invalid locked runtime asset: {source}")
+        hashes[asset["file"]] = asset["sha256"]
+        with zipfile.ZipFile(source) as bundle:
+            bundle.extractall(runtime if asset["kind"] == "python" else site_packages)
+    pth_files = list(runtime.glob("python*._pth"))
+    if len(pth_files) != 1:
+        raise ReleaseError("Embedded Python ._pth file is missing")
+    lines = [line for line in pth_files[0].read_text(encoding="utf-8").splitlines() if line != "#import site"]
+    lines.extend(["Lib/site-packages", "import site"])
+    pth_files[0].write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return hashes
 
-    with archive.open("wb") as raw:
-        with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as compressed:
-            with tarfile.open(fileobj=compressed, mode="w") as bundle:
-                bundle.add(source, arcname=prefix, recursive=False, filter=normalize)
-                for path in sorted(source.rglob("*")):
-                    bundle.add(path, arcname=f"{prefix}/{path.relative_to(source).as_posix()}", recursive=False, filter=normalize)
+
+def write_zip(source: Path, archive: Path, prefix: str, timestamp: int) -> None:
+    dt = datetime.fromtimestamp(timestamp, timezone.utc)
+    zip_time = (max(dt.year, 1980), dt.month, dt.day, dt.hour, dt.minute, dt.second)
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
+        for path in sorted(p for p in source.rglob("*") if p.is_file()):
+            info = zipfile.ZipInfo(f"{prefix}/{path.relative_to(source).as_posix()}", zip_time)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (0o755 if os.access(path, os.X_OK) else 0o644) << 16
+            bundle.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
 
 
-def build(version_value: str, output_dir: Path) -> Path:
+def verified_archive(archive: Path) -> str:
+    checksum = archive.with_suffix(archive.suffix + ".sha256")
+    if not archive.is_file() or not checksum.is_file():
+        raise ReleaseError("Archive and matching .sha256 file are required")
+    fields = checksum.read_text(encoding="ascii").strip().split()
+    if len(fields) != 2 or fields[1] != archive.name or fields[0] != sha256(archive):
+        raise ReleaseError(f"Checksum verification failed: {archive}")
+    with zipfile.ZipFile(archive) as bundle:
+        roots = {Path(name).parts[0] for name in bundle.namelist() if name}
+        bad = [name for name in bundle.namelist() if ".." in Path(name).parts or Path(name).is_absolute()]
+    if len(roots) != 1 or bad:
+        raise ReleaseError("Release ZIP must contain one safe top-level directory")
+    return roots.pop()
+
+
+def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
     version, tag = version_tag(version_value)
     if run("git", "status", "--porcelain", capture=True):
         raise ReleaseError("Refusing to build from a dirty working tree")
@@ -124,7 +155,7 @@ def build(version_value: str, output_dir: Path) -> Path:
         raise ReleaseError("The current branch needs an upstream before release") from exc
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    archive = output_dir / f"hyperframes-ai-harness-{version}.tar.gz"
+    archive = output_dir / f"hyperframes-ai-harness-{version}-windows-x64.zip"
     checksum = archive.with_suffix(archive.suffix + ".sha256")
     if archive.exists() or checksum.exists():
         raise ReleaseError(f"Release artifact already exists: {archive}")
@@ -140,121 +171,35 @@ def build(version_value: str, output_dir: Path) -> Path:
         dependency_hashes: dict[str, str] = {}
         for name, locked_hash in LOCAL_SKILLS.items():
             source = REPO / ".agents" / "skills" / name
-            if not (source / "SKILL.md").is_file():
-                raise ReleaseError(f"Missing local release dependency: {source}")
-            actual_hash = directory_sha256(source)
-            if actual_hash != locked_hash:
-                raise ReleaseError(f"Local release dependency changed; update its lock deliberately: {name}")
-            target = staging / ".agents" / "skills" / name
-            shutil.copytree(source, target)
-            dependency_hashes[name] = actual_hash
+            if not (source / "SKILL.md").is_file() or directory_sha256(source) != locked_hash:
+                raise ReleaseError(f"Missing or changed local release dependency: {name}")
+            shutil.copytree(source, staging / ".agents" / "skills" / name)
+            dependency_hashes[name] = locked_hash
 
+        runtime_hashes = stage_runtime(staging, runtime_cache)
         timestamp = int(run("git", "show", "-s", "--format=%ct", f"{tag}^{{commit}}", capture=True))
+        files = {
+            path.relative_to(staging).as_posix(): sha256(path)
+            for path in sorted(p for p in staging.rglob("*") if p.is_file())
+        }
         manifest = {
-            "schema_version": 1,
+            "schema_version": 2,
             "release": tag,
             "commit": head,
+            "target": "windows-x64",
             "built_at": datetime.fromtimestamp(timestamp, timezone.utc).isoformat(timespec="seconds"),
+            "workstore": r"D:\AI\AI+hyperframes",
+            "runtime_asset_sha256": runtime_hashes,
             "local_skill_sha256": dependency_hashes,
+            "files": files,
         }
         (staging / ".release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         release_checks(staging)
-        write_archive(staging, archive, tag, timestamp)
+        write_zip(staging, archive, tag, timestamp)
 
     checksum.write_text(f"{sha256(archive)}  {archive.name}\n", encoding="ascii")
     print(archive)
     return archive
-
-
-def verified_archive(archive: Path) -> str:
-    checksum = archive.with_suffix(archive.suffix + ".sha256")
-    if not archive.is_file() or not checksum.is_file():
-        raise ReleaseError("Archive and matching .sha256 file are required")
-    fields = checksum.read_text(encoding="ascii").strip().split()
-    if len(fields) != 2 or fields[1] != archive.name or fields[0] != sha256(archive):
-        raise ReleaseError(f"Checksum verification failed: {archive}")
-    with tarfile.open(archive) as bundle:
-        roots = {Path(member.name).parts[0] for member in bundle.getmembers() if member.name}
-    if len(roots) != 1:
-        raise ReleaseError("Release archive must contain exactly one top-level directory")
-    return roots.pop()
-
-
-def replace_link(link: Path, target: Path) -> None:
-    if link.exists() and not link.is_symlink():
-        raise ReleaseError(f"Refusing to replace a real path: {link}")
-    temporary = link.with_name(f".{link.name}.{os.getpid()}")
-    temporary.unlink(missing_ok=True)
-    temporary.symlink_to(target)
-    os.replace(temporary, link)
-
-
-def activate(release_root: Path, destination: Path) -> None:
-    current = release_root / "current"
-    previous = release_root / "previous"
-    if current.is_symlink():
-        old = current.resolve(strict=True)
-        if old != destination:
-            replace_link(previous, old)
-    replace_link(current, destination)
-
-
-def deploy(archive: Path, release_root: Path, work_root: Path) -> None:
-    tag = verified_archive(archive)
-    _, expected_tag = version_tag(tag)
-    if tag != expected_tag:
-        raise ReleaseError(f"Unexpected archive root: {tag}")
-    for name in ("active", "parked", "archive"):
-        if not (work_root / "works" / name).is_dir():
-            raise ReleaseError(f"Invalid WorkStore; missing works/{name}: {work_root}")
-
-    releases = release_root / "releases"
-    releases.mkdir(parents=True, exist_ok=True)
-    destination = releases / tag
-    if destination.exists():
-        raise ReleaseError(f"Release is already installed: {destination}")
-
-    with tempfile.TemporaryDirectory(prefix=".deploy-", dir=releases) as temporary:
-        with tarfile.open(archive) as bundle:
-            bundle.extractall(temporary, filter="data")
-        staged = Path(temporary) / tag
-        manifest = json.loads((staged / ".release.json").read_text(encoding="utf-8"))
-        if manifest.get("release") != tag:
-            raise ReleaseError("Release manifest does not match the archive")
-        dependency_hashes = manifest.get("local_skill_sha256")
-        if not isinstance(dependency_hashes, dict) or not dependency_hashes:
-            raise ReleaseError("Release dependency lock is missing")
-        for name, expected in dependency_hashes.items():
-            actual = directory_sha256(staged / ".agents" / "skills" / name)
-            if actual != expected:
-                raise ReleaseError(f"Bundled Skill failed verification: {name}")
-        release_checks(staged)
-        run(sys.executable, "work", "root", "set", str(work_root), cwd=staged)
-        run(sys.executable, "work", "root", "show", cwd=staged)
-        shutil.move(staged, destination)
-
-    activate(release_root, destination)
-    print(destination)
-
-
-def rollback(release_root: Path) -> None:
-    current = release_root / "current"
-    previous = release_root / "previous"
-    if not current.is_symlink() or not previous.is_symlink():
-        raise ReleaseError("Both current and previous releases are required for rollback")
-    old_current = current.resolve(strict=True)
-    old_previous = previous.resolve(strict=True)
-    replace_link(current, old_previous)
-    replace_link(previous, old_current)
-    print(old_previous)
-
-
-def status(release_root: Path) -> None:
-    result: dict[str, str | None] = {}
-    for name in ("current", "previous"):
-        link = release_root / name
-        result[name] = str(link.resolve()) if link.is_symlink() and link.exists() else None
-    print(json.dumps(result, indent=2))
 
 
 def parser() -> argparse.ArgumentParser:
@@ -263,13 +208,9 @@ def parser() -> argparse.ArgumentParser:
     build_parser = subcommands.add_parser("build")
     build_parser.add_argument("version")
     build_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
-    deploy_parser = subcommands.add_parser("deploy")
-    deploy_parser.add_argument("archive", type=Path)
-    deploy_parser.add_argument("--release-root", type=Path, default=DEFAULT_RELEASE_ROOT)
-    deploy_parser.add_argument("--work-root", type=Path, default=DEFAULT_WORK_ROOT)
-    for name in ("status", "rollback"):
-        child = subcommands.add_parser(name)
-        child.add_argument("--release-root", type=Path, default=DEFAULT_RELEASE_ROOT)
+    build_parser.add_argument("--runtime-cache", type=Path, required=True)
+    verify_parser = subcommands.add_parser("verify")
+    verify_parser.add_argument("archive", type=Path)
     return command
 
 
@@ -277,14 +218,10 @@ def main(arguments: list[str] | None = None) -> int:
     args = parser().parse_args(arguments)
     try:
         if args.command == "build":
-            build(args.version, args.output_dir.resolve())
-        elif args.command == "deploy":
-            deploy(args.archive.resolve(), args.release_root.resolve(), args.work_root.resolve())
-        elif args.command == "rollback":
-            rollback(args.release_root.resolve())
+            build(args.version, args.output_dir.resolve(), args.runtime_cache.resolve())
         else:
-            status(args.release_root.resolve())
-    except (ReleaseError, subprocess.CalledProcessError, OSError, json.JSONDecodeError) as exc:
+            print(verified_archive(args.archive.resolve()))
+    except (ReleaseError, subprocess.CalledProcessError, OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
         print(f"release: {exc}", file=sys.stderr)
         return 1
     return 0

@@ -83,7 +83,8 @@
 
 ## Release 与 Codex App 部署
 
-- WSL Git 仓只负责开发；Windows Codex App 使用 WSL2 环境打开 `~/.local/share/hyperframes-ai/current`，不得把 Windows 旧仓恢复为运行真源。
+- WSL Git 仓只负责开发和构建；Windows Codex App 原生运行 Windows x64 Release，并打开 `%LOCALAPPDATA%\HyperFramesAI\current`。不得把 Windows 旧仓恢复为运行真源。
 - Harness Release 使用 `harness-YYYY.MM.PATCH`，只通过 `./release build` 从干净、已标记且与 upstream 同步的提交构建；脚本不代替用户执行 commit、tag 或 push。
-- `./release deploy` 必须先验证归档、固定的本地 Skill、测试、Workflow Package 与 WorkStore，再原子切换 `current`；回滚只使用 `./release rollback`，不回滚 WorkStore。
+- Windows Release 是内置固定 CPython 与依赖的 ZIP。Codex App 解压后只通过 `release.ps1 install` 验证并安装到 `%LOCALAPPDATA%\HyperFramesAI\releases\<tag>`，以 junction 切换 `current` 和 `previous`；回滚只使用 `release.ps1 rollback`。
+- `D:\AI\AI+hyperframes` 始终只是 WorkStore。部署只能在其中绑定和维护 `works/` 与 `.runtime/`，不得写入 Harness 源码、运行时或 Release。
 - 升级或回滚后新建 Codex App 会话。旧 Release 不自动删除，清理需要单独明确授权。
