@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "component_ref": "capability-convergence/4x3@v1",
+  "ratio": "4x3",
+  "slots": {
+    "required": ["context", "items", "proposition", "core_name", "summary_emphasis", "summary_suffix", "handoff_label"],
+    "properties": {
+      "context": {"type": "string", "minLength": 1, "maxLength": 40},
+      "items": {
+        "type": "array",
+        "minItems": 5,
+        "maxItems": 5,
+        "items": {
+          "type": "object",
+          "required": ["index", "skill", "result"],
+          "properties": {
+            "index": {"type": "string", "minLength": 1, "maxLength": 4},
+            "skill": {"type": "string", "minLength": 1, "maxLength": 22},
+            "result": {"type": "string", "minLength": 1, "maxLength": 34}
+          }
+        }
+      },
+      "proposition": {"type": "string", "minLength": 1, "maxLength": 32},
+      "core_name": {"type": "string", "minLength": 1, "maxLength": 12},
+      "summary_emphasis": {"type": "string", "minLength": 1, "maxLength": 34},
+      "summary_suffix": {"type": "string", "minLength": 1, "maxLength": 34},
+      "handoff_label": {"type": "string", "minLength": 1, "maxLength": 12}
+    }
+  },
+  "visual_surfaces": [
+    {"surface_id": "convergence_field", "kind": "active_media_card", "modes": ["none"], "required": true, "fallback": "programmatic"}
+  ],
+  "assets": {"allowed_types": [], "runtime_network": false},
+  "timing": {"duration_seconds": 12.7, "allowed_time_scale": {"min": 0.8, "max": 1.2}}
+}

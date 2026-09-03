@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1440, height=1080">
+  <title>gap-first-selection/4x3@v1</title>
+</head>
+<body>
+  <template>
+  <style>
+    :root {
+      --canvas: var(--hf-color-canvas);
+      --panel-l1: var(--hf-color-surface);
+      --panel-l2: color-mix(in srgb, var(--hf-color-surface) 94%, var(--hf-color-text-primary));
+      --ink: var(--hf-color-text-primary);
+      --muted: var(--hf-color-text-secondary);
+      --dim: color-mix(in srgb, var(--hf-color-text-secondary) 62%, transparent);
+      --warm: var(--hf-color-accent-secondary);
+      --cool: var(--hf-color-accent-primary);
+      --mint: var(--hf-color-accent-primary);
+      --agent: var(--hf-color-accent-primary);
+      --violet: var(--hf-color-accent-primary);
+      --rule: color-mix(in srgb, var(--hf-color-text-secondary) 28%, transparent);
+      --match-color: var(--warm);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 1440px;
+      height: 1080px;
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+    body {
+      color: var(--ink);
+      font-family: var(--hf-font-body);
+    }
+
+    [data-composition-id="gap-first-selection"] {
+      position: relative;
+      width: 1440px;
+      height: 1080px;
+      overflow: hidden;
+      background: transparent;
+    }
+    .clip { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
+    .field-grid {
+      position: absolute;
+      inset: 0;
+      opacity: 0.11;
+      background-image: repeating-linear-gradient(90deg, transparent 0 119px, var(--rule) 120px);
+      pointer-events: none;
+    }
+    .field-light {
+      position: absolute;
+      left: 320px;
+      top: 240px;
+      width: 820px;
+      height: 520px;
+      background: radial-gradient(ellipse, rgba(90, 200, 250, 0.10), transparent 68%);
+      pointer-events: none;
+    }
+
+    .topline {
+      position: absolute;
+      z-index: 20;
+      left: 80px;
+      right: 80px;
+      top: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      border-bottom: 1px solid var(--rule);
+      font-family: var(--hf-font-mono);
+      font-size: 17px;
+      font-variant-numeric: tabular-nums;
+    }
+    .component-id { color: var(--mint); font-weight: 700; }
+    .section-id { color: var(--muted); }
+
+    .legacy-system {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 100%;
+      will-change: transform, opacity;
+    }
+
+    .candidate-pool {
+      position: absolute;
+      z-index: 10;
+      right: 92px;
+      top: 132px;
+      width: 254px;
+      height: 132px;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      padding: 18px 4px;
+    }
+    .pool-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      font-family: var(--hf-font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    .pool-name { color: var(--muted); font-size: 16px; }
+    .pool-count { color: var(--ink); font-size: 30px; font-weight: 700; }
+    .pool-field { position: absolute; left: 4px; right: 4px; bottom: 20px; height: 34px; }
+    .candidate-dot {
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: var(--candidate-color);
+      box-shadow: 0 0 18px color-mix(in srgb, var(--candidate-color) 42%, transparent);
+      will-change: transform, opacity;
+    }
+    .match-origin {
+      position: absolute;
+      left: 88px;
+      top: 10px;
+      width: 19px;
+      height: 19px;
+      border: 1px solid var(--warm);
+      border-radius: 50%;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .selection-warning {
+      position: absolute;
+      left: 82px;
+      top: 188px;
+      color: var(--ink);
+      font-family: var(--hf-font-display);
+      font-size: 44px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .selection-warning small {
+      display: block;
+      margin-top: 16px;
+      color: var(--dim);
+      font-family: var(--hf-font-mono);
+      font-size: 15px;
+      font-weight: 400;
+    }
+
+    .workflow-system {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1440px;
+      height: 1080px;
+      transform-origin: center;
+      will-change: transform, opacity;
+    }
+    .workflow-owner {
+      position: absolute;
+      left: 82px;
+      top: 356px;
+      color: var(--cool);
+      font-family: var(--hf-font-mono);
+      font-size: 17px;
+      font-weight: 700;
+    }
+    .workflow-svg {
+      position: absolute;
+      inset: 0;
+      width: 1440px;
+      height: 1080px;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .workflow-line, .workflow-bridge {
+      fill: none;
+      stroke-linecap: round;
+      path-length: 1;
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+    }
+    .workflow-line { stroke: rgba(90, 200, 250, 0.48); stroke-width: 3; }
+    .workflow-bridge { stroke: var(--match-color); stroke-width: 5; }
+    .workflow-node {
+      position: absolute;
+      top: 484px;
+      width: 142px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 25px;
+      font-weight: 650;
+    }
+    .workflow-node::before {
+      content: "";
+      display: block;
+      width: 3px;
+      height: 32px;
+      margin: 0 auto 16px;
+      background: currentColor;
+    }
+    #node-collect { left: 149px; }
+    #node-organize { left: 409px; }
+    #node-output { left: 889px; }
+    #node-review { left: 1149px; }
+    .node-halo {
+      position: absolute;
+      top: 466px;
+      width: 74px;
+      height: 74px;
+      border: 2px solid var(--cool);
+      border-radius: 50%;
+      opacity: 0;
+      pointer-events: none;
+    }
+    #halo-collect { left: 183px; }
+    #halo-organize { left: 443px; }
+
+    .gap-slot {
+      position: absolute;
+      left: 626px;
+      top: 474px;
+      width: 188px;
+      height: 72px;
+      border: 2px dashed color-mix(in srgb, var(--match-color) 72%, transparent);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--match-color) 3.5%, transparent);
+    }
+    .gap-slot::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--match-color);
+      transform: translate(-50%, -50%);
+      opacity: 0.72;
+    }
+    .bottleneck-label {
+      position: absolute;
+      left: 592px;
+      top: 575px;
+      width: 256px;
+      color: var(--match-color);
+      font-family: var(--hf-font-mono);
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .bottleneck-label span {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--dim);
+      font-size: 14px;
+      font-weight: 400;
+    }
+
+    .scan-head {
+      position: absolute;
+      left: 214px;
+      top: 430px;
+      width: 3px;
+      height: 126px;
+      background: var(--agent);
+      box-shadow: 0 0 22px rgba(90, 200, 250, 0.72);
+      will-change: transform, opacity;
+    }
+    .scan-head::after {
+      content: "SCAN";
+      position: absolute;
+      left: -20px;
+      top: -28px;
+      color: var(--agent);
+      font: 13px "DejaVu Sans Mono", monospace;
+    }
+
+    .matched-candidate {
+      position: absolute;
+      z-index: 14;
+      left: 1128px;
+      top: 208px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 166px;
+      height: 48px;
+      padding: 0 16px;
+      border: 1px solid color-mix(in srgb, var(--match-color) 60%, transparent);
+      border-radius: 6px;
+      background: var(--panel-l2);
+      color: var(--ink);
+      font-family: var(--hf-font-mono);
+      font-size: 16px;
+      font-weight: 700;
+      transform-origin: left center;
+      will-change: transform, opacity;
+    }
+    .matched-candidate i {
+      flex: 0 0 auto;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--match-color);
+      box-shadow: 0 0 18px color-mix(in srgb, var(--match-color) 58%, transparent);
+    }
+    .embed-pulse {
+      position: absolute;
+      left: 682px;
+      top: 476px;
+      width: 76px;
+      height: 76px;
+      border: 3px solid var(--match-color);
+      border-radius: 50%;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .trial-system {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1440px;
+      height: 1080px;
+    }
+    .trial-title {
+      position: absolute;
+      left: 280px;
+      top: 654px;
+      color: var(--ink);
+      font-family: var(--hf-font-display);
+      font-size: 34px;
+      font-weight: 700;
+    }
+    .trial-title span { color: var(--match-color); }
+    .trial-rail, .trial-progress {
+      position: absolute;
+      left: 300px;
+      top: 784px;
+      width: 780px;
+      height: 3px;
+      transform-origin: left center;
+    }
+    .trial-rail { background: var(--rule); }
+    .trial-progress { background: var(--match-color); box-shadow: 0 0 16px color-mix(in srgb, var(--match-color) 36%, transparent); }
+    .day-mark {
+      position: absolute;
+      top: 748px;
+      width: 1px;
+      height: 74px;
+      background: var(--rule);
+      color: var(--muted);
+      font-family: var(--hf-font-mono);
+      font-size: 16px;
+      font-variant-numeric: tabular-nums;
+    }
+    .day-mark span { position: absolute; left: -30px; top: -32px; width: 72px; text-align: center; }
+    #day-1 { left: 520px; }
+    #day-2 { left: 790px; }
+    #day-3 { left: 1060px; }
+    .usage-trace {
+      position: absolute;
+      top: 810px;
+      width: 76px;
+      height: 24px;
+      color: var(--match-color);
+      font: 14px "DejaVu Sans Mono", monospace;
+      text-align: center;
+    }
+    .usage-trace::before {
+      content: "";
+      display: block;
+      width: 18px;
+      height: 3px;
+      margin: 0 auto 7px;
+      background: currentColor;
+    }
+    #trace-1 { left: 482px; }
+    #trace-2 { left: 752px; }
+    #trace-3 { left: 1022px; }
+
+    .hero-group {
+      position: absolute;
+      z-index: 30;
+      left: 132px;
+      top: 268px;
+      width: 1176px;
+      color: var(--ink);
+      will-change: opacity, transform;
+    }
+    .hero-kicker {
+      margin-bottom: 32px;
+      color: var(--mint);
+      font-family: var(--hf-font-mono);
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .hero-question {
+      max-width: 1120px;
+      margin: 0;
+      font-family: var(--hf-font-display);
+      font-size: 78px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    .primary-cta {
+      position: relative;
+      display: inline-block;
+      margin-top: 54px;
+      padding-bottom: 12px;
+      color: var(--ink);
+      font-size: 34px;
+      font-weight: 700;
+    }
+    .primary-rule {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 3px;
+      background: var(--ink);
+      transform-origin: left center;
+    }
+    .secondary-actions {
+      position: absolute;
+      z-index: 31;
+      left: 132px;
+      right: 132px;
+      bottom: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 18px;
+      border-top: 1px solid var(--rule);
+      color: var(--muted);
+      font-family: var(--hf-font-mono);
+      font-size: 20px;
+    }
+    .secondary-actions strong { color: var(--ink); font-weight: 700; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stage * { animation: none !important; }
+    }
+  </style>
+  <div data-hf-id="hf-37qg" id="gap-first-selection-root" data-composition-id="gap-first-selection" data-composition-variables='[{"id":"context","type":"string","label":"Context","default":"13 / 13 · 选择与收尾"},{"id":"pool_label","type":"string","label":"Pool label","default":"工具候选"},{"id":"candidates","type":"array","label":"Candidates","default":[{"anchor":"C01","mode":"collect","tone":"agent","label":"采集工具"},{"anchor":"C02","mode":"transform","tone":"warm","label":"转换工具"},{"anchor":"C03","mode":"organize","tone":"warm","label":"整理工具"},{"anchor":"C04","mode":"media","tone":"mint","label":"媒体工具"},{"anchor":"C05","mode":"search","tone":"cool","label":"检索工具"},{"anchor":"C06","mode":"knowledge","tone":"mint","label":"知识工具"},{"anchor":"C07","mode":"summarize","tone":"cool","label":"摘要工具"},{"anchor":"C08","mode":"build","tone":"warm","label":"生成工具"},{"anchor":"C09","mode":"persist","tone":"violet","label":"记忆工具"},{"anchor":"C10","mode":"improve","tone":"violet","label":"复盘工具"}]},{"id":"selected_index","type":"number","label":"Selected index","default":8},{"id":"warning","type":"string","label":"Warning","default":"别一次全装"},{"id":"warning_detail","type":"string","label":"Warning detail","default":"先看你的流程卡在哪里"},{"id":"workflow_label","type":"string","label":"Workflow label","default":"你的日常工作流"},{"id":"workflow_nodes","type":"array","label":"Workflow nodes","default":["收集","整理","输出","复盘"]},{"id":"bottleneck_kicker","type":"string","label":"Bottleneck kicker","default":"bottleneck_label"},{"id":"bottleneck_label","type":"string","label":"Bottleneck label","default":"卡在反复重做"},{"id":"trial_prefix","type":"string","label":"Trial prefix","default":"只装匹配的一个，"},{"id":"trial_emphasis","type":"string","label":"Trial emphasis","default":"连续试用三天"},{"id":"usage_label","type":"string","label":"Usage label","default":"用过"},{"id":"hero_kicker","type":"string","label":"Hero kicker","default":"先找缺口，再选工具"},{"id":"question","type":"string","label":"Question","default":"你现在最头疼的是什么问题？"},{"id":"primary_cta","type":"string","label":"Primary CTA","default":"评论区告诉我"},{"id":"secondary_primary","type":"string","label":"Secondary primary","default":"清单扣 1"},{"id":"secondary_secondary","type":"string","label":"Secondary secondary","default":"关注，继续拆工作流"},{"id":"selection_flow_mode","type":"enum","label":"Selection flow mode","default":"none","options":[{"value":"none","label":"Programmatic fallback"}]},{"id":"selection_flow_path","type":"string","label":"Selection flow path","default":""},{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-start="0" data-duration="16.964" data-width="1440" data-height="1080">
+    <section data-hf-id="hf-r6ue" id="gap-first-selection-scene" class="clip" data-start="0" data-duration="16.964" data-track-index="1">
+      <div data-hf-id="hf-tan6" class="stage">
+        <div data-hf-id="hf-fddr" class="field-grid" id="field-grid" data-layout-ignore=""></div>
+        <div data-hf-id="hf-jn7f" class="field-light" id="field-light" data-layout-ignore=""></div>
+
+        <header data-hf-id="hf-eo3g" class="topline" id="topline">
+          <span data-hf-id="hf-bs0x" class="component-id">gap-first-selection/4x3@v1</span>
+          <span data-hf-id="hf-owqk" class="section-id">13 / 13 · 选择与收尾</span>
+        </header>
+
+        <div data-hf-id="hf-wfrc" class="legacy-system" id="legacy-system" data-visual-surface="selection_flow" data-surface-kind="active_media_card" data-surface-modes="none" data-surface-fallback="programmatic" data-surface-mode="none">
+          <section data-hf-id="hf-xabb" class="candidate-pool" id="candidate-pool" aria-label="十个工具候选池">
+            <div data-hf-id="hf-jyec" class="pool-meta"><span data-hf-id="hf-0r87" class="pool-name">工具候选</span><span data-hf-id="hf-xniq" class="pool-count" id="pool-count">10</span></div>
+            <div data-hf-id="hf-wzkr" class="pool-field" id="pool-field" aria-hidden="true"></div>
+          </section>
+
+          <div data-hf-id="hf-jykr" class="selection-warning" id="selection-warning">别一次全装<small data-hf-id="hf-5sul">先看你的流程卡在哪里</small></div>
+
+          <section data-hf-id="hf-qo18" class="workflow-system" id="workflow-system" aria-label="你的日常工作流">
+            <div data-hf-id="hf-z5hx" class="workflow-owner" id="workflow-owner">你的日常工作流</div>
+            <svg data-hf-id="hf-pz1e" class="workflow-svg" viewBox="0 0 1440 1080" aria-hidden="true" data-layout-ignore="">
+              <path data-hf-id="hf-3i91" class="workflow-line" id="workflow-left" pathLength="1" d="M220 500 H626" />
+              <path data-hf-id="hf-87p4" class="workflow-line" id="workflow-right" pathLength="1" d="M814 500 H1220" />
+              <path data-hf-id="hf-buq3" class="workflow-bridge" id="workflow-bridge" pathLength="1" d="M626 500 H814" />
+            </svg>
+            <div data-hf-id="hf-fk4z" class="workflow-node" id="node-collect">收集</div>
+            <div data-hf-id="hf-ee6q" class="workflow-node" id="node-organize">整理</div>
+            <div data-hf-id="hf-fkm2" class="workflow-node" id="node-output">输出</div>
+            <div data-hf-id="hf-kpie" class="workflow-node" id="node-review">复盘</div>
+            <div data-hf-id="hf-iunr" class="node-halo" id="halo-collect" data-layout-ignore=""></div>
+            <div data-hf-id="hf-tg28" class="node-halo" id="halo-organize" data-layout-ignore=""></div>
+            <div data-hf-id="hf-v1wa" class="gap-slot" id="gap-slot" aria-label="工作流缺口"></div>
+            <div data-hf-id="hf-ubjj" class="bottleneck-label" id="bottleneck-label"><span data-hf-id="hf-xb93">bottleneck_label</span>卡在反复重做</div>
+            <div data-hf-id="hf-8ckx" class="scan-head" id="scan-head" data-layout-ignore=""></div>
+          </section>
+
+          <div data-hf-id="hf-3f2u" class="matched-candidate" id="matched-candidate"><i data-hf-id="hf-wt6k"></i><span data-hf-id="hf-aeze">生成工具</span></div>
+          <div data-hf-id="hf-1thf" class="embed-pulse" id="embed-pulse" data-layout-ignore=""></div>
+
+          <section data-hf-id="hf-rfsx" class="trial-system" id="trial-system" aria-label="連續三天試用時間軌">
+            <div data-hf-id="hf-hwec" class="trial-title" id="trial-title">只装匹配的一个，<span data-hf-id="hf-d0bq">连续试用三天</span></div>
+            <div data-hf-id="hf-ryme" class="trial-rail" id="trial-rail"></div>
+            <div data-hf-id="hf-6l0i" class="trial-progress" id="trial-progress"></div>
+            <div data-hf-id="hf-de7q" class="day-mark" id="day-1"><span data-hf-id="hf-o1hc">DAY 01</span></div>
+            <div data-hf-id="hf-9g3p" class="day-mark" id="day-2"><span data-hf-id="hf-muk9">DAY 02</span></div>
+            <div data-hf-id="hf-8ofw" class="day-mark" id="day-3"><span data-hf-id="hf-n8va">DAY 03</span></div>
+            <div data-hf-id="hf-pxwe" class="usage-trace" id="trace-1">用过</div>
+            <div data-hf-id="hf-5w4x" class="usage-trace" id="trace-2">用过</div>
+            <div data-hf-id="hf-xzs4" class="usage-trace" id="trace-3">用过</div>
+          </section>
+        </div>
+
+        <section data-hf-id="hf-4mq1" class="hero-group" id="hero-group" aria-label="主問題與主要行動">
+          <div data-hf-id="hf-pud8" class="hero-kicker">先找缺口，再选工具</div>
+          <h1 data-hf-id="hf-mw8z" class="hero-question">你现在最头疼的是什么问题？</h1>
+          <div data-hf-id="hf-vohi" class="primary-cta" id="primary-cta">评论区告诉我<div data-hf-id="hf-ullq" class="primary-rule" id="primary-rule"></div></div>
+        </section>
+
+        <footer data-hf-id="hf-l5xw" class="secondary-actions" id="secondary-actions">
+          <span data-hf-id="hf-uckh"><strong data-hf-id="hf-7kfl">清单扣 1</strong></span>
+          <span data-hf-id="hf-j0tc">关注，继续拆工作流</span>
+        </footer>
+      </div>
+    </section>
+  </div>
+
+  <script src="assets/vendor/gsap/gsap.min.js"></script>
+  <script>
+    const DUR = 16.964;
+    const DEFAULT_CANDIDATES = [
+      { anchor: "C01", mode: "collect", tone: "agent", label: "采集工具" },
+      { anchor: "C02", mode: "transform", tone: "warm", label: "转换工具" },
+      { anchor: "C03", mode: "organize", tone: "warm", label: "整理工具" },
+      { anchor: "C04", mode: "media", tone: "mint", label: "媒体工具" },
+      { anchor: "C05", mode: "search", tone: "cool", label: "检索工具" },
+      { anchor: "C06", mode: "knowledge", tone: "mint", label: "知识工具" },
+      { anchor: "C07", mode: "summarize", tone: "cool", label: "摘要工具" },
+      { anchor: "C08", mode: "build", tone: "warm", label: "生成工具" },
+      { anchor: "C09", mode: "persist", tone: "violet", label: "记忆工具" },
+      { anchor: "C10", mode: "improve", tone: "violet", label: "复盘工具" }
+    ];
+    const TONE_COLORS = {
+      agent: "var(--hf-color-accent-primary)",
+      warm: "var(--hf-color-accent-secondary)",
+      mint: "var(--hf-color-accent-primary)",
+      cool: "var(--hf-color-accent-primary)",
+      violet: "var(--hf-color-accent-primary)"
+    };
+    const RUNTIME_VALUES = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+      ? window.__hyperframes.getVariables()
+      : {};
+    const textSlot = (name, fallback) => typeof RUNTIME_VALUES[name] === "string" ? RUNTIME_VALUES[name] : fallback;
+    const runtimeCandidates = Array.isArray(RUNTIME_VALUES.candidates) && RUNTIME_VALUES.candidates.length === 10
+      ? RUNTIME_VALUES.candidates
+      : DEFAULT_CANDIDATES;
+    const candidateData = runtimeCandidates.map((item, index) => {
+      const fallback = DEFAULT_CANDIDATES[index];
+      return item && typeof item === "object" && !Array.isArray(item) ? {
+        anchor: typeof item.anchor === "string" ? item.anchor : fallback.anchor,
+        mode: typeof item.mode === "string" ? item.mode : fallback.mode,
+        tone: Object.hasOwn(TONE_COLORS, item.tone) ? item.tone : fallback.tone,
+        label: typeof item.label === "string" ? item.label : fallback.label
+      } : fallback;
+    });
+    const runtimeNodes = Array.isArray(RUNTIME_VALUES.workflow_nodes) && RUNTIME_VALUES.workflow_nodes.length === 4
+      ? RUNTIME_VALUES.workflow_nodes
+      : ["收集", "整理", "输出", "复盘"];
+    const workflowNodes = runtimeNodes.map((item, index) => typeof item === "string" ? item : ["收集", "整理", "输出", "复盘"][index]);
+    const selectedIndex = Math.max(1, Math.min(10, Math.trunc(Number(RUNTIME_VALUES.selected_index)) || 8));
+    const selectedCandidate = candidateData[selectedIndex - 1];
+    const matchColor = TONE_COLORS[selectedCandidate.tone];
+
+    document.getElementById("gap-first-selection-root").style.setProperty("--match-color", matchColor);
+    document.querySelector(".section-id").textContent = textSlot("context", "13 / 13 · 选择与收尾");
+    document.querySelector(".pool-name").textContent = textSlot("pool_label", "工具候选");
+    document.getElementById("pool-count").textContent = String(candidateData.length);
+    document.getElementById("candidate-pool").setAttribute("aria-label", `${candidateData.length} 个候选工具`);
+    document.getElementById("selection-warning").firstChild.textContent = textSlot("warning", "别一次全装");
+    document.querySelector("#selection-warning small").textContent = textSlot("warning_detail", "先看你的流程卡在哪里");
+    document.getElementById("workflow-owner").textContent = textSlot("workflow_label", "你的日常工作流");
+    ["node-collect", "node-organize", "node-output", "node-review"].forEach((id, index) => {
+      document.getElementById(id).textContent = workflowNodes[index];
+    });
+    document.querySelector("#bottleneck-label span").textContent = textSlot("bottleneck_kicker", "bottleneck_label");
+    document.getElementById("bottleneck-label").lastChild.textContent = textSlot("bottleneck_label", "卡在反复重做");
+    document.querySelector("#matched-candidate span").textContent = selectedCandidate.label;
+    const trialTitle = document.getElementById("trial-title");
+    const trialEmphasis = document.createElement("span");
+    trialEmphasis.textContent = textSlot("trial_emphasis", "连续试用三天");
+    trialTitle.replaceChildren(document.createTextNode(textSlot("trial_prefix", "只装匹配的一个，")), trialEmphasis);
+    document.querySelectorAll(".usage-trace").forEach((node) => { node.textContent = textSlot("usage_label", "用过"); });
+    document.querySelector(".hero-kicker").textContent = textSlot("hero_kicker", "先找缺口，再选工具");
+    document.querySelector(".hero-question").textContent = textSlot("question", "你现在最头疼的是什么问题？");
+    document.getElementById("primary-cta").firstChild.textContent = textSlot("primary_cta", "评论区告诉我");
+    document.querySelector("#secondary-actions strong").textContent = textSlot("secondary_primary", "清单扣 1");
+    document.querySelector("#secondary-actions > span:last-child").textContent = textSlot("secondary_secondary", "关注，继续拆工作流");
+    document.querySelector('[data-visual-surface="selection_flow"]').setAttribute("data-surface-mode", "none");
+
+    const poolPositions = [[2, 8], [30, 8], [58, 8], [86, 8], [114, 8], [142, 8], [170, 8], [198, 8], [226, 8], [226, 34]];
+    const sourceOffsets = [[-900, 40], [-680, 210], [-440, -120], [-240, 330], [40, -270], [-760, 520], [-360, 580], [120, 430], [-70, 700], [-1060, 690]];
+    const poolField = document.getElementById("pool-field");
+
+    candidateData.forEach((item, index) => {
+      const dot = document.createElement("span");
+      dot.className = "candidate-dot";
+      dot.id = `candidate-${index + 1}`;
+      dot.dataset.anchor = item.anchor;
+      dot.dataset.mode = item.mode;
+      dot.style.setProperty("--candidate-color", TONE_COLORS[item.tone]);
+      dot.style.left = `${poolPositions[index][0]}px`;
+      dot.style.top = `${poolPositions[index][1]}px`;
+      poolField.appendChild(dot);
+    });
+
+    const origin = document.createElement("span");
+    origin.className = "match-origin";
+    origin.id = "match-origin";
+    poolField.appendChild(origin);
+
+    if (document.querySelectorAll(".candidate-dot").length !== 10) {
+      throw new Error("gap-first-selection requires exactly 10 candidates");
+    }
+
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+
+    tl.fromTo("#field-grid", { opacity: 0 }, { opacity: 0.11, duration: 0.8, ease: "sine.out" }, 0.12)
+      .fromTo("#field-light", { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 1.2, ease: "sine.out" }, 0.18)
+      .fromTo("#topline", { y: -20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.52, ease: "expo.out" }, 0.20);
+
+    document.querySelectorAll(".candidate-dot").forEach((dot, index) => {
+      const isLast = index === 9;
+      tl.fromTo(dot,
+        { x: sourceOffsets[index][0], y: sourceOffsets[index][1], opacity: 0, scale: isLast ? 0.72 : 0.48 },
+        { x: 0, y: 0, opacity: 1, scale: 1, duration: isLast ? 0.68 : 0.48, ease: isLast ? "expo.out" : (index % 2 ? "power4.out" : "power3.out") },
+        isLast ? 1.34 : 0.34 + index * 0.11
+      );
+    });
+    tl.fromTo(".pool-meta", { x: 18, opacity: 0 }, { x: 0, opacity: 1, duration: 0.38, ease: "power2.out" }, 1.88)
+      .fromTo("#candidate-pool", { opacity: 0.68 }, { opacity: 1, duration: 0.28, ease: "sine.out" }, 1.92)
+      .fromTo("#selection-warning", { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.48, ease: "expo.out" }, 2.20)
+      .fromTo("#workflow-owner", { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.38, ease: "power3.out" }, 2.36)
+      .fromTo("#workflow-left", { strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 0.70, ease: "power2.inOut" }, 2.48)
+      .fromTo("#workflow-right", { strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 0.74, ease: "sine.inOut" }, 2.66)
+      .fromTo(".workflow-node", { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.46, stagger: 0.09, ease: "power4.out" }, 2.58)
+      .fromTo("#gap-slot", { scale: 0.88, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.54, ease: "power3.out" }, 3.10);
+
+    tl.fromTo("#scan-head", { x: 0, opacity: 0 }, { x: 0, opacity: 1, duration: 0.22, ease: "power1.out" }, 4.60)
+      .to("#scan-head", { x: 250, duration: 0.56, ease: "power2.inOut" }, 4.82)
+      .fromTo("#halo-collect", { scale: 0.82, opacity: 0 }, { scale: 1, opacity: 0.7, duration: 0.16, ease: "power2.out" }, 4.84)
+      .to("#halo-collect", { opacity: 0, duration: 0.20, ease: "power1.in" }, 5.06)
+      .to("#scan-head", { x: 500, duration: 1.01, ease: "sine.out" }, 5.39)
+      .fromTo("#halo-organize", { scale: 0.82, opacity: 0 }, { scale: 1, opacity: 0.7, duration: 0.16, ease: "power2.out" }, 5.42)
+      .to("#halo-organize", { opacity: 0, duration: 0.20, ease: "power1.in" }, 5.66)
+      .fromTo("#bottleneck-label", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, ease: "power3.out" }, 6.02)
+      .fromTo("#match-origin", { scale: 0.84, opacity: 0 }, { scale: 1.18, opacity: 0.72, duration: 0.24, repeat: 1, yoyo: true, ease: "sine.inOut" }, 6.08)
+      .to(`#candidate-${selectedIndex}`, { opacity: 0.12, duration: 0.20, ease: "power1.out" }, 6.24)
+      .fromTo("#matched-candidate", { x: 0, y: 0, scale: 0.11, opacity: 0 }, { x: 0, y: 0, scale: 0.11, opacity: 1, duration: 0.20, ease: "power2.out" }, 6.24)
+      .to("#scan-head", { opacity: 0, duration: 0.22, ease: "power1.out" }, 6.38)
+      .to("#matched-candidate", {
+        keyframes: [
+          { x: -190, y: 88, scale: 0.34, duration: 0.24, ease: "power2.in" },
+          { x: -492, y: 290, scale: 1, duration: 0.66, ease: "power4.out" }
+        ]
+      }, 6.48)
+      .to("#workflow-bridge", { strokeDashoffset: 0, duration: 0.24, ease: "expo.out" }, 7.40)
+      .set("#embed-pulse", { scale: 0.72, opacity: 0.92 }, 7.42)
+      .to("#embed-pulse", { scale: 4.1, opacity: 0, duration: 0.54, ease: "expo.out" }, 7.42)
+      .to("#gap-slot", { opacity: 0.20, duration: 0.24, ease: "power1.out" }, 7.46);
+
+    tl.to("#workflow-system", { y: -126, scale: 0.86, duration: 0.56, ease: "power3.inOut" }, 8.20)
+      .to("#selection-warning", { y: -70, opacity: 0.22, duration: 0.42, ease: "power2.inOut" }, 8.20)
+      .to("#candidate-pool", { opacity: 0.22, duration: 0.42, ease: "power1.out" }, 8.20)
+      .fromTo("#trial-title", { x: -22, opacity: 0 }, { x: 0, opacity: 1, duration: 0.46, ease: "expo.out" }, 8.22)
+      .fromTo("#trial-rail", { scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 1, duration: 0.64, ease: "power3.out" }, 8.28)
+      .fromTo(".day-mark", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.34, stagger: 0.10, ease: "power2.out" }, 8.44)
+      .fromTo("#trial-progress", { scaleX: 0 }, { scaleX: 1, duration: 2.53, ease: "none" }, 8.75)
+      .to("#matched-candidate", {
+        keyframes: [
+          { x: -260, y: 500, scale: 0.80, duration: 0.18, ease: "power2.in" },
+          { x: -887, y: 532, scale: 0.80, duration: 0.32, ease: "power3.out" }
+        ]
+      }, 8.24)
+      .to("#matched-candidate", { x: -697, duration: 0.77, ease: "none" }, 8.75)
+      .fromTo("#trace-1", { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.24, ease: "power2.out" }, 9.48)
+      .to("#day-1", { backgroundColor: matchColor, duration: 0.16, ease: "power1.out" }, 9.48)
+      .to("#matched-candidate", { x: -437, duration: 0.85, ease: "none" }, 9.54)
+      .fromTo("#trace-2", { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.24, ease: "power2.out" }, 10.35)
+      .to("#day-2", { backgroundColor: matchColor, duration: 0.16, ease: "power1.out" }, 10.35)
+      .to("#matched-candidate", { x: -177, duration: 0.87, ease: "none" }, 10.41)
+      .fromTo("#trace-3", { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.24, ease: "power2.out" }, 11.24)
+      .to("#day-3", { backgroundColor: matchColor, duration: 0.16, ease: "power1.out" }, 11.24);
+
+    tl.to("#legacy-system", { scale: 0.20, y: -140, opacity: 0.48, duration: 0.72, ease: "power3.inOut" }, 11.60)
+      .fromTo("#hero-group", { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.66, ease: "expo.out" }, 11.78)
+      .fromTo(".hero-kicker", { x: -20, opacity: 0 }, { x: 0, opacity: 1, duration: 0.40, ease: "power3.out" }, 11.92)
+      .fromTo(".hero-question", { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.56, ease: "power4.out" }, 12.02)
+      .fromTo("#primary-cta", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.38, ease: "power3.out" }, 14.20)
+      .fromTo("#primary-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.34, ease: "expo.out" }, 14.24)
+      .fromTo("#secondary-actions", { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 0.34, ease: "power3.out" }, 15.00)
+      .to("#hero-group", { opacity: 0.96, duration: 0.782, repeat: 1, yoyo: true, ease: "sine.inOut" }, 15.40);
+
+    const timeScale = Number(RUNTIME_VALUES.time_scale);
+    if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+
+    window.__timelines["gap-first-selection"] = tl;
+  </script>
+  </template>
+</body>
+</html>

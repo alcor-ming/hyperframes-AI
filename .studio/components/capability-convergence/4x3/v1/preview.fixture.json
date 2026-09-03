@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "component_ref": "capability-convergence/4x3@v1",
+  "slots": {
+    "context": "P007 / 13 · 跨模块归纳",
+    "items": [
+      {"index": "02", "skill": "Agent Browser", "result": "完整网页内容"},
+      {"index": "03", "skill": "办公文件四件套", "result": "多种文件输入与文件操作"},
+      {"index": "04", "skill": "Local Whisper", "result": "逐字稿 / 摘要 / 可编辑文字"},
+      {"index": "05", "skill": "Video Downloader", "result": "分件素材与笔记"},
+      {"index": "06", "skill": "Web Search", "result": "日期 / 作者 / 原文链接"}
+    ],
+    "proposition": "05 条结果痕迹 → 01 共同能力",
+    "core_name": "获取资讯",
+    "summary_emphasis": "去哪里找、怎么拿、拿到后怎么整理",
+    "summary_suffix": "，都是把外部内容变成可用资讯。",
+    "handoff_label": "P008"
+  },
+  "surfaces": {
+    "convergence_field": {"kind": "active_media_card", "mode": "none", "fallback": "programmatic"}
+  }
+}

@@ -52,11 +52,11 @@
 
 ### 3.1 一次性设计重构
 
-1. 从 Open Design `Hyperframes` 项目读取四个公共 Component Family 的原稿与现有背景原稿。
+1. 从 Open Design `Hyperframes` 项目读取七个公共 Component Family 的原稿与现有背景原稿。
 2. 为每个 Family 分别设计 `4x3` 与 `16x9`，不通过拉伸、裁切或响应式规则生成另一画幅。
 3. 将组件里的全画幅环境层拆入独立 Background；组件根层保持透明。
 4. 把硬编码颜色与字体替换为统一语义 token；其他视觉和动效参数留在具体实现。
-5. 生成一个集中 Gallery，覆盖 8 个 Component Ratio Release 与 2 个 Background Ratio Release。
+5. 生成一个集中 Gallery，覆盖 14 个 Component Ratio Release 与 2 个 Background Ratio Release。
 6. 用户逐项验收；全部通过后冻结 artifact revision 或 bundle SHA-256。
 7. 才能写入新公共库并进入 Work 集成验证。
 
@@ -183,7 +183,7 @@ Component 不得包含：
 ```yaml
 profile_ref: optical_fluidity@v2
 background_ref: functional-field/4x3@v1
-component_ref: chapter-intro/4x3@v1
+component_ref: rich-skill-explanation/4x3@v1
 ```
 
 - 发现机制直接读取各不可变目录内的 manifest/contract，不新增 Registry。
@@ -250,30 +250,33 @@ Profile 不再要求选择理由、Motion Verb 或画幅映射；Plan 只验证�
 - `kami_editorial`
 - `monochrome_atelier`
 
-必须重构四个公共 Component Family：
+必须重构七个公共 Component Family：
 
-- `chapter-intro`
 - `rich-skill-explanation`
 - `capability-convergence`
 - `gap-first-selection`
+- `rse-input-transform`
+- `rse-retrieve-distill`
+- `rse-knowledge-roundtrip`
+- `rse-persist-reuse`
 
 必须新增一个 Background Family，`4x3` 以 Open Design 的 `rse-functional-background` 为设计起点，并重新设计 `16x9`。
 
-每个 Family 必须同时交付两个画幅。Open Design 的其他 P001-P012 Work-local 原型不进入本轮公共化范围。
+每个 Family 必须交付两个独立画幅。当前 Open Design 原稿先迁移为 `4x3`；`16x9` 必须单独设计和验收。其他未命名 Work-local 原型不进入本轮公共化范围。
 
-**验收**：恰好形成 3 个新 Profile Releases、8 个 Component Ratio Releases 和 2 个 Background Ratio Releases；不得用额外原型扩大范围。
+**验收**：最终恰好形成 3 个新 Profile Releases、14 个 Component Ratio Releases 和 2 个 Background Ratio Releases；不得用额外原型扩大范围。
 
 ### HCM-011｜Open Design Gallery 与冻结
 
 - Open Design `Hyperframes` 项目是设计原稿真源。
-- Gallery 覆盖 10 个 Ratio Release，每项可独立 Preview、pause、seek 和 render。
+- Gallery 覆盖 16 个 Ratio Release，每项可独立 Preview、pause、seek 和 render。
 - 用户逐项通过或退回；只有全部通过后才能整组写入新公共库。
 - 每项记录稳定 revision；没有稳定 revision 时记录完整 artifact bundle SHA-256。
 - 仓库只保存生产实现、合同、hash、基线与 artifact 引用，不复制设计原稿。
 - 生产翻译只允许主题 token 接线、Slots、Work 隔离、seek-safe 和离线渲染所需调整。
 - 生产结果与 Gallery 存在可感知差异时必须退回重新确认。
 
-**验收**：10 项都有独立通过记录与唯一 artifact 证据；任一未通过时不得发布整组。
+**验收**：16 项都有独立通过记录与唯一 artifact 证据；任一未通过时不得发布整组。
 
 ### HCM-012｜失败边界
 
@@ -303,7 +306,7 @@ Profile 不再要求选择理由、Motion Verb 或画幅映射；Plan 只验证�
 
 Gallery 是设计验收，不能替代生产 HyperFrames Check 与像素 QA；源码扫描也不能替代实际渲染检查。
 
-**验收**：8 个 Component Ratio Release 与 2 个 Background Ratio Release 都有独立报告；三套 Profile 全部通过主题切换。
+**验收**：14 个 Component Ratio Release 与 2 个 Background Ratio Release 都有独立报告；三套 Profile 全部通过主题切换。
 
 ### HCM-014｜权限与数据边界
 
@@ -344,7 +347,7 @@ Gallery 是设计验收，不能替代生产 HyperFrames Check 与像素 QA；�
 本模块 PRD 在以下条件下可进入 Trellis 拆分：
 
 - 三层职责、最小主题合同与 `subtemplate` 移除边界已确认；
-- 三套 Profile、四个 Component Family、一个 Background Family与两个画幅范围已锁定；
+- 三套 Profile、七个 Component Family、一个 Background Family 与两个画幅范围已锁定；
 - Open Design Gallery、版本引用、旧 Work 兼容和失败边界已明确；
 - 所有要求都有可测试验收标准；
 - 无产品级 TODO。

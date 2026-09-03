@@ -36,13 +36,13 @@
 3. 让 Component 完整拥有布局、材质、几何、字号、层级、画面效果、GSAP 编排、easing 与 Hero/Handoff。
 4. 移除 `subtemplate`、Profile Motion Verb 及 `Profile` 对组件检索的影响。
 5. 让同一 Component Family 的 `4x3` 与 `16x9` 实现共享语义用途和 Slot 合同，但保持独立源码与版本。
-6. 一次性重构三套 Profile、四个公共 Component Family 和一个 Background Family。
+6. 一次性重构三套 Profile、七个公共 Component Family 和一个 Background Family。
 7. 由 Open Design 保存设计原稿并完成集中 Gallery 验收；仓库只保存生产合同、实现、hash 与基线。
 8. 保留旧 Work 的 vendored 快照与可复现性，同时禁止新 Work 使用旧合同。
 
 ## 非目标
 
-- 不把 P001-P012 其余 Work-local 原型批量公共化。
+- 不把本轮七个明确命名组件之外的 Work-local 原型批量公共化。
 - 不增加新的 Template、Subtemplate、Profile 继承或子 Profile。
 - 不让 Component 在运行时自动适配未设计的画幅。
 - 不允许每个 Scene 任意更换 Background 实现。
@@ -116,7 +116,7 @@ Component 与 Background 只消费这些语义 token，不声明特定 Profile�
 profile_ref: optical_fluidity@v2
 background_ref: functional-field/4x3@v1
 ratio: 4x3
-component_ref: chapter-intro/4x3@v1
+component_ref: rich-skill-explanation/4x3@v1
 ```
 
 规则：
@@ -149,10 +149,13 @@ component_ref: chapter-intro/4x3@v1
 
 ### Component Family
 
-- `chapter-intro`
 - `rich-skill-explanation`
 - `capability-convergence`
 - `gap-first-selection`
+- `rse-input-transform`
+- `rse-retrieve-distill`
+- `rse-knowledge-roundtrip`
+- `rse-persist-reuse`
 
 每个 Family 必须交付独立的 `4x3` 与 `16x9` Ratio Release。
 
@@ -161,13 +164,13 @@ component_ref: chapter-intro/4x3@v1
 - 首个 Background 以 Open Design 中现有 `rse-functional-background` 为 `4:3` 设计起点；最终生产 ID 在 Gallery 冻结时确定。
 - 同时交付独立设计的 `16x9` Ratio Release。
 
-Open Design `Hyperframes` 项目中其余 P001-P012 原型继续保持 Work-local，不计入本次公共库范围。
+Open Design `Hyperframes` 项目中其余未命名原型继续保持 Work-local，不计入本次公共库范围。
 
 ## Open Design 与冻结
 
 - Open Design `Hyperframes` 项目继续作为设计原稿真源。
-- Gallery 必须覆盖 `4 Component Families x 2 ratios + 1 Background Family x 2 ratios`，共 10 个可独立 Preview/seek 的实现。
-- 用户可逐项退回；只有 10 项全部通过后，整组才可进入新公共库。
+- Gallery 必须覆盖 `7 Component Families x 2 ratios + 1 Background Family x 2 ratios`，共 16 个可独立 Preview/seek 的实现。
+- 用户可逐项退回；只有 16 项全部通过后，整组才可进入新公共库。
 - 每项冻结稳定 revision；无稳定 revision 时对完整 artifact bundle 计算 SHA-256。
 - 开发仓不复制 Open Design 原稿，只记录 artifact ref、revision/hash、生产合同、实现、基线与 package hash。
 - 生产翻译只允许主题 token 接线、Slots、Work 隔离、seek-safe 与离线渲染所需调整；可感知差异必须退回 Gallery 重新确认。
@@ -193,7 +196,7 @@ Open Design `Hyperframes` 项目中其余 P001-P012 原型继续保持 Work-loca
 ## 验收
 
 1. 三套 Profile 只包含最小主题合同，不再拥有画幅、材质、构图或动效字段。
-2. 10 个 Open Design Gallery 项均完成独立设计、seek、关键状态与用户验收。
+2. 16 个 Open Design Gallery 项均完成独立设计、seek、关键状态与用户验收。
 3. 每个 Component Family 的两个 Ratio Release 共享相同 Slot Schema。
 4. 每个 Ratio Release 分别通过三套 Profile 的主题切换、对比度、字体回退与无硬编码检查。
 5. Background 与 Component 能独立 Preview，组合后层级正确且 Component 全画幅根层透明。

@@ -92,10 +92,13 @@ font.mono
 
 ### Component Families
 
-- `chapter-intro`
 - `rich-skill-explanation`
 - `capability-convergence`
 - `gap-first-selection`
+- `rse-input-transform`
+- `rse-retrieve-distill`
+- `rse-knowledge-roundtrip`
+- `rse-persist-reuse`
 
 每个 Family 同时交付 `4x3` 和 `16x9`。
 
@@ -105,13 +108,13 @@ font.mono
 - `4x3` 以 Open Design `Hyperframes` 项目中的 `rse-functional-background` 为设计起点。
 - `16x9` 单独设计。
 
-Open Design 中其余 P001-P012 Work-local 原型不进入本次公共化范围。
+Open Design 中其余未命名 Work-local 原型不进入本次公共化范围。
 
 ## Open Design 与生产真源
 
 - Open Design `Hyperframes` 项目保存设计原稿。
-- 集中 Gallery 覆盖 8 个 Component Ratio Releases 与 2 个 Background Ratio Releases。
-- 用户逐项通过或退回；10 项全部通过后才允许整组入库。
+- 集中 Gallery 覆盖 14 个 Component Ratio Releases 与 2 个 Background Ratio Releases。
+- 用户逐项通过或退回；16 项全部通过后才允许整组入库。
 - 每项冻结稳定 revision；无法稳定引用时使用完整 artifact bundle SHA-256。
 - 仓库保存生产合同、实现、hash、基线和 artifact 引用，不复制 Open Design 原稿。
 - Work 不运行时依赖 Open Design。
@@ -127,7 +130,7 @@ Open Design 中其余 P001-P012 Work-local 原型不进入本次公共化范围�
 ```yaml
 profile_ref: optical_fluidity@v2
 background_ref: functional-field/4x3@v1
-component_ref: chapter-intro/4x3@v1
+component_ref: rich-skill-explanation/4x3@v1
 ```
 
 所有发布包不可变。旧公共组件原样保留并标记 `legacy-profile-coupled`，不参加新 Work 检索；旧 Work vendor、Binding、Lock、Accepted Draft 与 Final 不修改。
@@ -139,8 +142,8 @@ component_ref: chapter-intro/4x3@v1
 ### 已知且确定
 
 - Profile、Background、Component 的职责已逐项确认。
-- 三套 Profile、四个公共 Component Family、一个 Background Family 和两个画幅已锁定。
-- Open Design 中存在四个当前组件原稿与 `rse-functional-background` 原稿。
+- 三套 Profile、七个公共 Component Family、一个 Background Family 和两个画幅已锁定。
+- Open Design 中存在七个当前组件原稿与 `rse-functional-background` 原稿。
 - 新旧 Work 的兼容边界已明确。
 - Gallery、不可变版本、Work vendoring/locking 与 Animation Plan 审批继续保留。
 - Fixture/Case、Match Record、Visual Payload Surface、媒体闭包与 Composition Evidence 继续保留，不因职责拆分而降级。
@@ -148,7 +151,7 @@ component_ref: chapter-intro/4x3@v1
 ### 执行时再确定
 
 - Background 的最终生产 ID。
-- 10 个 Gallery artifact 的最终文件名、revision/hash 和视觉细节。
+- 16 个 Gallery artifact 的最终文件名、revision/hash 和视觉细节。
 - 每个 Background Release 的有限状态名称。
 - Profile Release 的首个实际版本号是否统一从 `v2` 开始。
 
@@ -156,9 +159,9 @@ component_ref: chapter-intro/4x3@v1
 
 ### 隐含假设
 
-- Open Design 原稿足以还原四个 `4x3` 组件，而无需依赖旧 Work 私有内容。
+- Open Design 原稿足以还原七个 `4x3` 组件，而无需依赖旧 Work 私有内容。
 - 两个画幅能维持一致 Slot Schema；若某一画幅需要不同输入合同，应拆成新的 Component Family。
-- 三套 Profile 的最小 token 能覆盖当前四个组件与背景的主题需求。
+- 三套 Profile 的最小 token 能覆盖当前七个组件与背景的主题需求。
 - 旧 Work 已包含完整 vendor 副本，可在公共旧包停止发现后继续渲染。
 
 ### 主要盲区与控制
@@ -166,7 +169,7 @@ component_ref: chapter-intro/4x3@v1
 - 主题合同过小：缺失 token 时失败关闭；只有多个真实实现共同需要时才扩展合同。
 - 背景重新侵入组件：通过透明根层扫描和组合像素检查阻止。
 - 独立画幅退化为缩放：要求独立 artifact、源码、关键帧和用户验收。
-- 全组合 QA 爆炸：只固定三套 Profile x 10 个 Ratio Releases 的主题冒烟，组件语义与 seek 检查按 Release 独立执行。
+- 全组合 QA 爆炸：只固定三套 Profile x 16 个 Ratio Releases 的主题冒烟，组件语义与 seek 检查按 Release 独立执行。
 - 一次性迁移破坏旧 Work：采用 expand-contract，不覆盖旧包，不修改旧快照。
 - Gallery 与生产翻译漂移：记录 revision/hash，出现可感知差异即退回确认。
 
@@ -175,8 +178,8 @@ component_ref: chapter-intro/4x3@v1
 | 维度 | 结论 |
 |---|---|
 | 目标 | 消除 Profile、Background、Component 的职责重叠，并支持真实独立画幅设计。 |
-| 范围/非目标 | 只重构 3 Profile、4 Component Families、1 Background Family；不公共化其余原型。 |
-| 验收 | 10 项 Gallery、三 Profile 主题切换、跨画幅 Slot 一致、seek/像素/hash/离线渲染。 |
+| 范围/非目标 | 只重构 3 Profile、7 Component Families、1 Background Family；不公共化其余原型。 |
+| 验收 | 16 项 Gallery、三 Profile 主题切换、跨画幅 Slot 一致、seek/像素/hash/离线渲染。 |
 | 返工歧义 | 任何可感知视觉或动效变化回到 Gallery；合同或内部实现变化发布新版本。 |
 | 过度建设 | 不新增 Registry、Planner Skill、响应式组件系统、主题继承或 Background 编排器。 |
 | 已知未知 | 最终 Background ID、状态名、artifact revisions 属于实施输入。 |
@@ -195,11 +198,11 @@ component_ref: chapter-intro/4x3@v1
 | Q-006 | `4:3` 与 `16:9` 是否共享实现？ | 否，同 Family 下分别设计、版本化和验收。 | 已决定 |
 | Q-007 | 是否一次性重构？ | 是，不采用按真实使用渐进迁移。 | 已决定 |
 | Q-008 | 是否保护旧 Work？ | 是；旧 Work 快照不变，旧公共包只读保留。 | 已决定 |
-| Q-009 | 本轮包含哪些公共组件？ | 只包含当前四个公共 Family。 | 已决定 |
+| Q-009 | 本轮包含哪些公共组件？ | 只包含当前七个明确命名的公共 Family。 | 已决定 |
 | Q-010 | 是否公共化其他 P001-P012 原型？ | 否，继续 Work-local。 | 已决定 |
-| Q-011 | 是否同时交付两个画幅？ | 是，4 个组件和 1 个背景都交付 `4x3 + 16x9`。 | 已决定 |
+| Q-011 | 是否同时交付两个画幅？ | 最终是，7 个组件和 1 个背景都交付 `4x3 + 16x9`；当前先迁移已有 `4x3` 原稿。 | 已决定 |
 | Q-012 | 是否迁移全部 Profile？ | 是，三套 Profile 一次性迁移。 | 已决定 |
-| Q-013 | Open Design 如何验收？ | 集中 Gallery 展示 10 项，逐项验收，整组通过后入库。 | 已决定 |
+| Q-013 | Open Design 如何验收？ | 集中 Gallery 展示 16 项，逐项验收，整组通过后入库。 | 已决定 |
 | Q-014 | 主题如何接入？ | 使用统一最小 token；缺失时失败，不允许组件 fallback。 | 已决定 |
 | Q-015 | 颜色派生与媒体固有颜色是否允许？ | 允许 token 派生、`transparent`、`currentColor` 及媒体固有颜色。 | 已决定 |
 | Q-016 | 新资产如何引用？ | `profile@vN` 与 `asset/ratio@vN`，Work 冻结精确版本与 hash。 | 已决定 |
@@ -213,7 +216,7 @@ component_ref: chapter-intro/4x3@v1
 - `Profile + subtemplate` 是组件兼容键；
 - 画幅由 Work/Subtemplate 负责而不进入组件引用；
 - MVP 只覆盖 `optical_fluidity + module_stage + 4:3`；
-- 只有 `chapter-intro@v1` 进入公共化路径。
+- 只有七个明确命名的 Component Family 进入公共化路径。
 
 新实现以 2026-09-03 确认的三层合同、两个独立画幅和一次性重构范围为准。
 

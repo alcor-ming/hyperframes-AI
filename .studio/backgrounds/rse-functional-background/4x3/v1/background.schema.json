@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "background_ref": "rse-functional-background/4x3@v1",
+  "ratio": "4x3",
+  "width": 1440,
+  "height": 1080,
+  "states": {
+    "default": {
+      "type": "string",
+      "const": "default"
+    }
+  },
+  "default_state": "default",
+  "timing": {
+    "duration_seconds": 48,
+    "allowed_time_scale": {
+      "minimum": 0.8,
+      "maximum": 1.2
+    }
+  },
+  "assets": {
+    "allowed_types": [],
+    "runtime_network": false
+  }
+}
