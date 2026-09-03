@@ -64,4 +64,24 @@ Draft 与 Final 生命周期：
 
 外部 WorkStore 的 `works/`、旧 `tasks/`、媒体、工程、Draft、Final 和运行状态不进入开发仓或 Git。Harness 不实现下载后端，而是调用独立的 `trendradar-media`；它不公开发布内容，也不内置 ASR 模型。经用户对准确 Work/Variant 明确授权，可使用其已登录的 Windows Chrome 保存小红书创作者平台草稿，但绝不点击发布。
 
+## 固定 Release 与 Codex App 部署
+
+开发只在本 WSL Git 仓进行。Windows Codex App 使用 WSL2 执行环境，并打开固定入口 `~/.local/share/hyperframes-ai/current`；不得打开或更新 Windows 旧仓。作品仍只写入 `/mnt/d/AI/AI+hyperframes`。
+
+Release 使用 `harness-YYYY.MM.PATCH`。构建要求工作树干净、对应 tag 指向当前提交，且当前分支没有尚未推送到 upstream 的提交。脚本不会创建 tag、提交或推送：
+
+```bash
+./release build 2026.09.0
+./release deploy dist/hyperframes-ai-harness-2026.09.0.tar.gz
+./release status
+```
+
+归档冻结 Git tracked tree 和工作流直接依赖的本地 Skill，记录其 SHA-256，并在构建与部署时重复运行测试和 Workflow Package 校验。部署验证 WorkStore 后原子切换 `current`，保留上一个版本为 `previous`：
+
+```bash
+./release rollback
+```
+
+升级或回滚后在 Codex App 新建会话，使新的 `AGENTS.md` 与项目 Skill 生效。脚本不删除旧 Release；清理必须单独确认。
+
 完整产品契约以 `.studio/` 和 `AGENTS.md` 为准。

@@ -80,3 +80,10 @@
 - Work 和 Variant 的创建、指针、等待、Park、Draft 注册、Final、Archive 与 Reopen 只通过 `./work` 管理。
 - CLI 只管理生命周期和文件一致性；内容判断与视觉选择仍由 Agent 负责，确定性的解析、时间与格式处理交给对应 Skill 脚本。
 - Final 是本地交付物，不表示已保存到平台草稿箱或已发布；两者分别需要外部动作，且草稿授权绝不包含发布。
+
+## Release 与 Codex App 部署
+
+- WSL Git 仓只负责开发；Windows Codex App 使用 WSL2 环境打开 `~/.local/share/hyperframes-ai/current`，不得把 Windows 旧仓恢复为运行真源。
+- Harness Release 使用 `harness-YYYY.MM.PATCH`，只通过 `./release build` 从干净、已标记且与 upstream 同步的提交构建；脚本不代替用户执行 commit、tag 或 push。
+- `./release deploy` 必须先验证归档、固定的本地 Skill、测试、Workflow Package 与 WorkStore，再原子切换 `current`；回滚只使用 `./release rollback`，不回滚 WorkStore。
+- 升级或回滚后新建 Codex App 会话。旧 Release 不自动删除，清理需要单独明确授权。
