@@ -149,7 +149,7 @@ def build(version_value: str, output_dir: Path) -> Path:
             shutil.copytree(source, target)
             dependency_hashes[name] = actual_hash
 
-        timestamp = int(run("git", "show", "-s", "--format=%ct", tag, capture=True))
+        timestamp = int(run("git", "show", "-s", "--format=%ct", f"{tag}^{{commit}}", capture=True))
         manifest = {
             "schema_version": 1,
             "release": tag,
