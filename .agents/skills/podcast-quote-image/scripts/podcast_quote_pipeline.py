@@ -24,7 +24,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 SCHEMA_VERSION = 1
 WORKFLOW = "podcast_quote_image"
 ASR_SCRIPT = os.environ.get("HYPERFRAMES_ASR_SCRIPT") or (
-    "/home/jym/workspace/_external/scripts/asr.sh" if os.name != "nt" else ""
+    str(Path(__file__).resolve().parents[4] / "asr-wsl.cmd")
+    if os.name == "nt"
+    else "/home/jym/workspace/_external/scripts/asr.sh"
 )
 WINDOWS_FONTS = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
 FONT_CANDIDATES = (
@@ -343,7 +345,7 @@ def resolve_segments(
 def run_asr(video: Path, output_dir: Path, language: str, asr_script: Path) -> Path:
     if not video.is_file():
         raise PipelineError(f"Video is missing: {video}")
-    if not asr_script.is_file() or not os.access(asr_script, os.X_OK):
+    if not asr_script.is_file() or (os.name != "nt" and not os.access(asr_script, os.X_OK)):
         raise PipelineError(f"Shared ASR dispatcher is unavailable: {asr_script}")
     output_dir.mkdir(parents=True, exist_ok=True)
     command = [

@@ -86,4 +86,12 @@ ZIP 内置 Windows CPython、Python 依赖、`work.cmd`、`work.ps1` 和 `releas
 
 安装会验证 Manifest 与 WorkStore，然后以 Windows junction 切换 `current` 并保留 `previous`。升级或回滚后新建 Codex App 会话。旧 Release 不自动删除。
 
+Windows 侧共享 ASR 由包内 `asr-wsl.cmd` 桥接到固定的 `Ubuntu` 和 `/home/jym/workspace/_external/scripts/asr.sh`；`HYPERFRAMES_ASR_SCRIPT` 仅可指定另一 Windows 入口。桥接器拒绝 WorkStore 外的输入和输出，并把路径转换、可用性检查和转录合并为唯一一次固定调用：
+
+```text
+wsl.exe --distribution Ubuntu --exec /bin/sh -c <fixed-script>
+```
+
+任务参数只经 `WSLENV` 传入，路径由 WSL 内的 `wslpath` 转换；stdout、stderr 和退出码原样返回。Windows Codex 沙盒已确认能复用 WSL ASR、模型和 GPU，但未持久授权时每次调用仍可能先报 `Wsl/Service/E_ACCESSDENIED` 并要求审批。Codex 规则只匹配 Agent 发起的顶层 argv，因此应持久批准包内 `asr-wsl.cmd transcribe-faster` 前缀；不得批准任意 `wsl.exe` 命令。
+
 完整产品契约以 `.studio/` 和 `AGENTS.md` 为准。
