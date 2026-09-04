@@ -71,7 +71,7 @@
     "project": "Hyperframes",
     "file": "rse-functional-background.html",
     "revision": 1,
-    "sha256": "f02bc892f8ef5c0ba0c1705e19c6075a01a77d0bf0ecc6264824050a102ce8d6"
+    "sha256": "e4bdf553ac9fce0edce62834a2ef218aeba2928d728b59e29b017a649134235a"
   }
 }
 ---

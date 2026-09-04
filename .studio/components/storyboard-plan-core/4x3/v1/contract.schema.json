@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "component_ref": "storyboard-plan-core/4x3@v1",
+  "ratio": "4x3",
+  "slots": {
+    "required": [],
+    "properties": {}
+  },
+  "timing": {
+    "duration_seconds": 5.0,
+    "allowed_time_scale": {
+      "minimum": 0.8,
+      "maximum": 1.2
+    }
+  },
+  "assets": {
+    "allowed_types": [],
+    "runtime_network": false
+  }
+}

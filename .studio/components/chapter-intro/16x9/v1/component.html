@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>chapter-intro/16x9@v1</title>
+<!--
+  ==========================================================================
+  B00 ｜ ChapterIntro 介绍候选 · 组件原型 rev.5（按 Draft rev.3 重新冻结）
+  依据：ANIMATION_DRAFT.md rev.3 · COMPONENT_SPLIT.md rev.3
+  重新冻结说明：视觉、布局、时序与内部动效不变；本原型不再被定义为
+  P002-P011 的固定前导，1.6s 仅为 Preview 时长，截图仅为可选证据位。
+  rev.2 变更：左侧身份信息收进唯一玻璃材质面；右侧截图槽改为
+  preserve-3d 错层结构（背板 + 前面板 + 落地阴影）；修正 CJK 行高与
+  字距；可见文案统一简体中文。
+  rev.3 变更：3D 截图组背板增加跟随惯性（晚 40ms 起步、从更大偏移
+  归位）；验收工具条加按压反馈与焦点环；prefers-reduced-motion 下
+  组件退化为纯 opacity 版本（仅影响本地预览，渲染输出始终全动效）。
+  rev.4 变更：身份卡应用参考图卡片风格（image.png）：图标 tile +
+  右上角 muted 序号 + 受光渐变描边 + 局部活动蓝外晕；玻璃材质面
+  仍然全帧唯一（截图卡保持实心）。紫蓝极光/霓虹氛围层按 Draft
+  边界过滤，不引入。
+  rev.5 变更：反 AI 味文案层收口。占位元语言（「Skill 名称占位」
+  「把什么输入变成什么结果」）替换为具体示例文案（示例，非 Script
+  确认数据）；截图槽工程说明收敛为一行；机制区副标题去掉组件
+  家族罗列；SCREENSHOT SLOT 字距 0.18em 收到 0.08em（ALL CAPS
+  正字距上限内）。布局、材质、时间轴均未动。
+  --------------------------------------------------------------------------
+  核心 Preview 数据（技术键不是最终 Slot API）:
+    index          当前章序号（"01"-"10"）
+    name           Skill 名称（正式数据须来自 Script；此处为示例文案）
+    function_line  一句功能描述（不得扩大能力）
+    screenshot     可选 GitHub SKILL.md 页面截图（需要时由本地文件注入 #ci-shot-media；
+                   无 iframe、无网络请求、不虚构仓库/星标/使用状态）
+    source_label   截图来源标注（仓库路径）
+  可选 Preview 数据:
+    total            总章数（默认 "10"）
+    previous_context 上一章结果的最小上下文标签（Opening 保留，Build 退位）
+    progress         { current, total } 进度轨状态
+    icon             章节 glyph（线性 SVG 注入 #ci-glyph；默认为雷达占位图形）
+  --------------------------------------------------------------------------
+  四状态时间表（总长 1.6s = 本原型 Preview 时长，不冻结最终 Scene 时长）:
+    Opening  0.00-0.10  上一章结果可见，本章尚未成为焦点
+    Build    0.10-1.48  身份卡壳 → 序号+名称 → 功能句 → 进度轨 →
+                        截图组（整组 1.08 起，背板 1.12 跟随归位）
+                        （任意时刻同时运动事件 ≤ 2）
+    Hero     1.48-1.50  左：玻璃身份卡 / 右：3D 截图组，同时清晰可读
+    End      1.50-1.60  截图组与功能句退位，机制区占位框亮起；
+                        章节身份（序号+名称）与总进度保持可辨
+  --------------------------------------------------------------------------
+  运动约束（optical_fluidity）:
+    进场 easing   cubic-bezier(0.23,1,0.32,1)  → CustomEase "hfEnter"
+    画面内变化    cubic-bezier(0.77,0,0.175,1) → CustomEase "hfMove"
+    单帧主强调色唯一（var(--hf-color-accent-primary)）；关系青（var(--hf-color-accent-primary)）仅用于细线级关系表达；
+    全帧仅左侧身份卡一个主要玻璃材质面。
+  --------------------------------------------------------------------------
+  Seek-safe：全部状态由单条 paused GSAP timeline 驱动；无 wall clock、
+  无无限循环、无未播种随机数、无运行时网络；GSAP 使用共享本地文件。任意时间 seek 与顺序
+  播放状态一致。
+  ==========================================================================
+-->
+</head>
+<body>
+<template id="chapter-intro-template">
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+    --glass-fill: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  #root {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: relative;
+    background: transparent;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+    margin: 24px auto 120px; /* 预览页居中；渲染时由框架接管 */
+  }
+
+  .ci-stage {
+    width: 100%;
+    height: 100%;
+    padding: 56px 96px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    position: relative;
+  }
+
+  /* --- 顶部：总进度轨 + 章节计数（共享舞台认知） --- */
+  .ci-header {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+  .ci-rail {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+  }
+  .ci-seg {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.10);
+    overflow: hidden;
+  }
+  .ci-seg > i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 2px;
+    background: transparent;
+    transform-origin: left center;
+  }
+  .ci-seg.is-done > i { background: rgba(84, 215, 255, 0.55); }
+  .ci-seg.is-active > i { background: var(--active); }
+  .ci-counter {
+    font-size: 20px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .ci-counter b {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+
+  /* --- 中部：左玻璃身份卡 + 右 3D 截图组 --- */
+  .ci-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 112px;
+    min-height: 0;
+  }
+
+  /* 左侧：全帧唯一主要玻璃材质面（参考图卡片工艺：受光描边 + 局部外晕） */
+  .ci-left {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+  }
+  .ci-idcard {
+    width: 100%;
+    max-width: 760px;
+    padding: 48px 52px;
+    border-radius: 20px;
+    position: relative;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 24px 64px rgba(0, 0, 0, 0.35),
+      0 0 56px rgba(10, 132, 255, 0.10); /* 局部外晕，收在卡片周边 */
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  /* 受光渐变描边：左上最亮，向右下渐隐（1px mask 边框） */
+  .ci-idcard::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 20px;
+    padding: 1px;
+    background: linear-gradient(155deg,
+      rgba(84, 215, 255, 0.45),
+      rgba(255, 255, 255, 0.16) 36%,
+      rgba(255, 255, 255, 0.05) 68%);
+    -webkit-mask: linear-gradient(var(--hf-color-text-primary) 0 0) content-box, linear-gradient(var(--hf-color-text-primary) 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(var(--hf-color-text-primary) 0 0) content-box, linear-gradient(var(--hf-color-text-primary) 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .ci-idhead {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .ci-glyph {
+    width: 56px;
+    height: 56px;
+    flex: none;
+    border-radius: 14px;
+    background: rgba(10, 132, 255, 0.12);
+    border: 1px solid rgba(10, 132, 255, 0.28);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ci-glyph svg {
+    width: 28px;
+    height: 28px;
+    color: var(--text-1);
+  }
+  .ci-index {
+    margin-left: auto;
+    align-self: flex-start;
+    font-size: 26px;
+    line-height: 1.3;
+    font-weight: 600;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .ci-name {
+    margin: 0;
+    flex: 1;
+    min-width: 0; /* 长名称允许在 tile 与序号之间换行收缩 */
+    font-size: 44px;
+    line-height: 1.3; /* CJK 显示字号行高下限 */
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .ci-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    transform-origin: left center;
+  }
+  .ci-function {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.7; /* CJK 正文行高 */
+    color: var(--text-2);
+    max-width: 26em;
+  }
+
+  /* 右侧：preserve-3d 截图组（实心深层面板，非玻璃） */
+  .ci-right {
+    flex: 0 0 620px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .ci-shot-persp {
+    perspective: 1600px;
+  }
+  .ci-shot3d {
+    position: relative;
+    width: 620px;
+    height: 600px;
+    transform-style: preserve-3d;
+    transform: rotateY(-7deg) rotateX(2deg);
+  }
+  .ci-plate-back {
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    transform: translate3d(22px, 18px, -70px);
+  }
+  .ci-shot-shadow {
+    position: absolute;
+    left: 10%;
+    right: 2%;
+    bottom: -36px;
+    height: 44px;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55), transparent 70%);
+    transform: translateZ(-90px);
+  }
+  .ci-shot {
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .ci-shot-bar {
+    height: 44px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 16px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .ci-shot-media {
+    flex: 1;
+    margin: 16px;
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  /* 文档骨架线：提示「一个 SKILL.md 将注入这里」，非真实内容 */
+  .ci-skel {
+    height: 12px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .ci-skel.is-title {
+    height: 20px;
+    width: 52%;
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .ci-skel.w-90 { width: 90%; }
+  .ci-skel.w-75 { width: 75%; }
+  .ci-skel.w-82 { width: 82%; }
+  .ci-skel.w-60 { width: 60%; }
+  .ci-shot-note {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ci-shot-tag {
+    font-size: 15px;
+    letter-spacing: 0.08em; /* ALL CAPS 正字距（0.06-0.1em 区间） */
+    color: var(--text-2);
+    font-weight: 600;
+  }
+  .ci-shot-hint {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text-3);
+  }
+  .ci-source {
+    font-size: 16px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- 底部：上一章最小上下文 --- */
+  .ci-footer {
+    display: flex;
+    align-items: center;
+  }
+  .ci-prev {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    color: var(--text-2);
+    transform-origin: left center;
+  }
+  .ci-prev-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+    opacity: 0.7;
+  }
+
+  /* --- End 状态：本章机制区占位框（由后续机制组件接管） --- */
+  .ci-mech {
+    position: absolute;
+    left: 96px;
+    right: 96px;
+    top: 150px;
+    bottom: 150px;
+    border: 1px dashed rgba(84, 215, 255, 0.35);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    opacity: 0;
+    pointer-events: none;
+    background: rgba(11, 23, 32, 0.55);
+  }
+  .ci-mech-title {
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .ci-mech-sub {
+    font-size: 18px;
+    color: var(--text-2);
+  }
+
+
+  #root[data-composition-id="chapter-intro"] { background: transparent; margin: 0; }
+</style>
+
+<!-- ==================== 组件本体 ==================== -->
+<div data-hf-id="hf-i4e3" id="root" data-composition-id="chapter-intro" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-width="1920" data-height="1080" data-start="0" data-duration="1.6" data-track-index="0">
+  <div data-hf-id="hf-aft5" class="ci-stage">
+
+    <header data-hf-id="hf-0b0y" class="ci-header">
+      <div data-hf-id="hf-7gjn" class="ci-rail" id="ci-rail" data-slot="progress"></div>
+      <div data-hf-id="hf-wkoc" class="ci-counter"><b data-hf-id="hf-7l4p" id="ci-counter-cur">03</b> / <span data-hf-id="hf-t4xd" id="ci-counter-total">10</span></div>
+    </header>
+
+    <main data-hf-id="hf-6toq" class="ci-main">
+      <section data-hf-id="hf-fqsu" class="ci-left">
+        <div data-hf-id="hf-skqu" class="ci-idcard" id="ci-idcard">
+          <div data-hf-id="hf-av7g" class="ci-idhead">
+            <div data-hf-id="hf-fswx" class="ci-glyph" id="ci-glyph" data-slot="icon">
+              <svg data-hf-id="hf-70l1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <circle data-hf-id="hf-xksm" cx="12" cy="12" r="8" />
+                <circle data-hf-id="hf-ctcu" cx="12" cy="12" r="3.5" />
+                <path data-hf-id="hf-62gy" d="M12 12 L18 6" />
+              </svg>
+            </div>
+            <h1 data-hf-id="hf-zczb" class="ci-name" id="ci-name" data-slot="name">选题罗盘</h1>
+            <div data-hf-id="hf-hzlh" class="ci-index" id="ci-index" data-slot="index">03</div>
+          </div>
+          <div data-hf-id="hf-wgey" class="ci-divider" id="ci-divider"></div>
+          <p data-hf-id="hf-rh9x" class="ci-function" id="ci-function" data-slot="function_line">把一周的零散灵感，整理成一张可发布的选题清单</p>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-4h7p" class="ci-right">
+        <div data-hf-id="hf-yczm" class="ci-shot-persp">
+          <div data-hf-id="hf-kxsq" class="ci-shot3d" id="ci-shot3d">
+            <div data-hf-id="hf-jgii" class="ci-shot-shadow"></div>
+            <div data-hf-id="hf-zy7c" class="ci-plate-back" id="ci-plate-back"></div>
+            <div data-hf-id="hf-ojot" class="ci-shot" data-slot="screenshot">
+              <div data-hf-id="hf-rdhx" class="ci-shot-bar"><span data-hf-id="hf-spm8" id="ci-shot-path">owner/repo · SKILL.md</span></div>
+              <div data-hf-id="hf-tici" class="ci-shot-media" id="ci-shot-media">
+                <div data-hf-id="hf-n4mp" class="ci-skel is-title"></div>
+                <div data-hf-id="hf-yyzz" class="ci-skel w-90"></div>
+                <div data-hf-id="hf-r98c" class="ci-skel w-75"></div>
+                <div data-hf-id="hf-29bi" class="ci-skel w-82"></div>
+                <div data-hf-id="hf-5f1i" class="ci-skel w-60"></div>
+                <div data-hf-id="hf-4g9q" class="ci-shot-note">
+                  <span data-hf-id="hf-o3lr" class="ci-shot-tag">SCREENSHOT SLOT</span>
+                  <span data-hf-id="hf-4hxo" class="ci-shot-hint">真实 SKILL.md 截图将注入此处（本地图片）</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div data-hf-id="hf-n0zw" class="ci-source" id="ci-source" data-slot="source_label">github.com/owner/repo · SKILL.md</div>
+      </section>
+    </main>
+
+    <footer data-hf-id="hf-joii" class="ci-footer">
+      <div data-hf-id="hf-zu89" class="ci-prev" id="ci-prev" data-slot="previous_context">
+        <span data-hf-id="hf-nd0j" class="ci-prev-dot"></span>
+        <span data-hf-id="hf-r5y9" id="ci-prev-label">02 · 词云已生成</span>
+      </div>
+    </footer>
+
+    <div data-hf-id="hf-n0hx" class="ci-mech" id="ci-mech" data-layout-ignore="">
+      <span data-hf-id="hf-g69e" class="ci-mech-title">本章机制区</span>
+      <span data-hf-id="hf-r085" class="ci-mech-sub">下一组件接管：本章机制演示</span>
+    </div>
+
+  </div>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+/* ===== 默认 Preview 数据（示例文案，无私有素材；技术键不是最终 Slot API） ===== */
+var SLOT_DATA = {
+  index: "03",
+  total: "10",
+  name: "选题罗盘",
+  function_line: "把一周的零散灵感，整理成一张可发布的选题清单",
+  source_label: "github.com/owner/repo · SKILL.md",
+  shot_path: "owner/repo · SKILL.md",
+  previous_context: "02 · 词云已生成",
+  progress: { current: 3, total: 10 }
+};
+
+/* ==================== Preview 数据注入（同步执行，渲染前就绪） ==================== */
+(function injectSlots(d) {
+  document.getElementById("ci-index").textContent = d.index;
+  document.getElementById("ci-name").textContent = d.name;
+  document.getElementById("ci-function").textContent = d.function_line;
+  document.getElementById("ci-source").textContent = d.source_label;
+  document.getElementById("ci-shot-path").textContent = d.shot_path;
+  document.getElementById("ci-prev-label").textContent = d.previous_context;
+  document.getElementById("ci-counter-cur").textContent = d.index;
+  document.getElementById("ci-counter-total").textContent = d.total;
+
+  var rail = document.getElementById("ci-rail");
+  for (var i = 1; i <= d.progress.total; i++) {
+    var seg = document.createElement("span");
+    seg.className = "ci-seg" + (i < d.progress.current ? " is-done" : i === d.progress.current ? " is-active" : "");
+    seg.appendChild(document.createElement("i"));
+    rail.appendChild(seg);
+  }
+})(SLOT_DATA);
+
+/* ==================== Easing（optical_fluidity profile） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ==================== 组件 Timeline（paused · seek-safe · 同时运动 ≤ 2） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* prefers-reduced-motion：剥离位移/旋转/缩放，仅保留 opacity 交叉淡变。
+   仅影响本地预览；daemon 渲染环境为 no-preference，输出始终全动效。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* Opening → Build：上一章上下文退位（0.10-0.34） */
+tl.to("#ci-prev", R(
+  { opacity: 0.28, scale: 0.96, duration: 0.24, ease: E_MOVE },
+  { opacity: 0.28, duration: 0.24, ease: E_MOVE }), 0.10);
+
+/* Build：身份卡壳进场（0.14-0.50） */
+tl.from("#ci-idcard", R(
+  { y: 28, opacity: 0, duration: 0.36, ease: E_ENTER },
+  { opacity: 0, duration: 0.36, ease: E_ENTER }), 0.14);
+
+/* Build：图标 tile、序号与名称建立（0.40-0.72，stagger 视为单一事件） */
+tl.from("#ci-glyph, #ci-index, #ci-name", R(
+  { y: 22, opacity: 0, duration: 0.30, stagger: 0.06, ease: E_ENTER },
+  { opacity: 0, duration: 0.30, stagger: 0.06, ease: E_ENTER }), 0.40);
+
+/* Build：分隔线 + 功能句落位（0.62-0.94） */
+tl.from("#ci-divider", R(
+  { scaleX: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.24, ease: E_ENTER }), 0.62);
+tl.from("#ci-function", R(
+  { y: 16, opacity: 0, duration: 0.30, ease: E_ENTER },
+  { opacity: 0, duration: 0.30, ease: E_ENTER }), 0.64);
+
+/* Build：进度轨推进至当前章（0.80-1.10，stagger 视为单一事件） */
+tl.from(".ci-seg.is-done i, .ci-seg.is-active i", R(
+  { scaleX: 0, duration: 0.20, stagger: 0.05, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, stagger: 0.05, ease: E_ENTER }), 0.80);
+
+/* Build：3D 截图组旋转归位（1.08-1.36） */
+tl.from("#ci-shot3d", R(
+  { y: 44, opacity: 0, rotationY: -16, duration: 0.28, ease: E_ENTER },
+  { opacity: 0, duration: 0.28, ease: E_ENTER }), 1.08);
+
+/* Build：背板跟随惯性，比整组晚 40ms 从更大偏移归位（1.12-1.42） */
+if (!REDUCED) {
+  tl.from("#ci-plate-back", { x: 12, y: 8, duration: 0.30, ease: E_ENTER }, 1.12);
+}
+
+/* Build：来源标注落定（1.36-1.48） → Hero 1.48-1.50 */
+tl.from("#ci-source", { opacity: 0, duration: 0.12, ease: E_ENTER }, 1.36);
+
+/* End：介绍信息让位，章节身份与进度保留（1.50-1.60） */
+tl.to("#ci-divider, #ci-function", { opacity: 0.35, duration: 0.04, ease: E_MOVE }, 1.50);
+tl.to("#ci-shot3d, #ci-source", R(
+  { opacity: 0.28, scale: 0.96, duration: 0.06, ease: E_MOVE },
+  { opacity: 0.28, duration: 0.06, ease: E_MOVE }), 1.52);
+tl.to("#ci-mech", { opacity: 1, duration: 0.04, ease: E_MOVE }, 1.56);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["chapter-intro"] = tl;
+</script>
+
+</template>
+</body>
+</html>

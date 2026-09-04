@@ -4,10 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1440, height=1080">
     <title>rse-functional-background/4x3@v1</title>
-  </head>
-  <body>
-    <template>
-    <script src="assets/vendor/gsap/gsap.min.js"></script>
     <style>
       :root {
         --canvas: var(--hf-color-canvas);
@@ -34,7 +30,7 @@
       .clip, .backdrop, .grid-field, .grain { position: absolute; inset: 0; }
       .backdrop {
         background:
-          radial-gradient(ellipse at 24% 18%, rgba(90, 200, 250, 0.055), transparent 64%),
+          radial-gradient(ellipse at 24% 18%, rgba(115, 139, 131, 0.08), transparent 64%),
           radial-gradient(circle at 30% 20%, var(--surface-raised) 0%, var(--surface) 48%, var(--canvas) 100%);
       }
       .ambient {
@@ -44,20 +40,20 @@
         width: 936px;
         height: 936px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(39, 45, 56, 0.92) 0%, rgba(27, 31, 39, 0.55) 32%, rgba(15, 18, 22, 0.08) 58%, transparent 80%);
+        background: radial-gradient(circle, rgba(75, 78, 99, 0.82) 0%, rgba(70, 83, 94, 0.55) 32%, rgba(39, 39, 43, 0.08) 58%, transparent 80%);
         opacity: 0.78;
       }
       .grid-field {
         background-image:
-          radial-gradient(circle, rgba(90, 200, 250, 0.42) 0 1px, transparent 1.5px),
+          radial-gradient(circle, rgba(115, 139, 131, 0.48) 0 1px, transparent 1.5px),
           linear-gradient(var(--rule) 1px, transparent 1px),
           linear-gradient(90deg, var(--rule) 1px, transparent 1px),
-          linear-gradient(rgba(39, 45, 56, 0.52) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(39, 45, 56, 0.52) 1px, transparent 1px);
+          linear-gradient(rgba(71, 80, 92, 0.46) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(71, 80, 92, 0.46) 1px, transparent 1px);
         background-size: 52px 52px, 52px 52px, 52px 52px, 13px 13px, 13px 13px;
         opacity: 0.24;
-        -webkit-mask-image: radial-gradient(ellipse 48% 42% at 50% 57%, color-mix(in srgb, var(--hf-color-text-primary) 30%, transparent) 0 38%, color-mix(in srgb, var(--hf-color-text-primary) 58%, transparent) 62%, var(--hf-color-text-primary) 100%);
-        mask-image: radial-gradient(ellipse 48% 42% at 50% 57%, color-mix(in srgb, var(--hf-color-text-primary) 30%, transparent) 0 38%, color-mix(in srgb, var(--hf-color-text-primary) 58%, transparent) 62%, var(--hf-color-text-primary) 100%);
+        -webkit-mask-image: radial-gradient(ellipse 48% 42% at 50% 57%, rgba(0, 0, 0, 0.3) 0 38%, rgba(0, 0, 0, 0.58) 62%, var(--hf-color-text-primary) 100%);
+        mask-image: radial-gradient(ellipse 48% 42% at 50% 57%, rgba(0, 0, 0, 0.3) 0 38%, rgba(0, 0, 0, 0.58) 62%, var(--hf-color-text-primary) 100%);
       }
       .grain {
         inset: -24px;
@@ -66,6 +62,10 @@
         opacity: 0.055;
       }
     </style>
+  </head>
+  <body>
+    <template>
+    <script src="assets/vendor/gsap/gsap.min.js"></script>
     <div id="root" data-composition-id="rse-functional-background" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1},{"id":"background_field_mode","type":"enum","label":"Background field mode","default":"none","options":[{"value":"none","label":"Programmatic fallback"}]},{"id":"background_field_path","type":"string","label":"Background field path","default":""}]' data-start="0" data-duration="48" data-width="1440" data-height="1080">
       <div id="background-plate" class="clip" data-start="0" data-duration="48" data-track-index="0" data-layout-ignore data-visual-surface="background_field" data-surface-kind="active_media_card" data-surface-modes="none" data-surface-fallback="programmatic" data-surface-mode="none">
         <div class="backdrop"></div>

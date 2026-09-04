@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1440, height=1080" />
+    <title>storyboard-plan-core/4x3@v1</title>
+    <style>
+      :root {
+        --canvas: var(--hf-color-canvas);
+        --surface: var(--hf-color-surface);
+        --text: var(--hf-color-text-primary);
+        --muted: var(--hf-color-text-secondary);
+        --quiet: var(--hf-color-text-secondary);
+        --line: rgba(255, 255, 255, 0.14);
+        --accent: var(--hf-color-accent-primary);
+        --active: var(--hf-color-accent-primary);
+      }
+      * { box-sizing: border-box; }
+      html,
+      body { margin: 0; padding: 0; background: transparent; }
+      body {
+        color: var(--text);
+        font-family: var(--hf-font-body);
+      }
+      #root {
+        position: relative;
+        width: 1440px;
+        height: 1080px;
+        overflow: hidden;
+        margin: 24px auto 120px;
+      }
+      .scene,
+      .scene-fill,
+      .world { position: absolute; inset: 0; }
+      .scene { overflow: hidden; }
+      .scene-fill { background: transparent; }
+      .world { transform-origin: 50% 50%; will-change: transform; }
+      .scene-content {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        padding: 76px 92px 70px;
+        gap: 24px;
+        overflow: hidden;
+      }
+      .source-actor {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        text-align: center;
+        pointer-events: none;
+      }
+      .source-label {
+        color: var(--quiet);
+        font-size: 19px;
+        font-weight: 550;
+        letter-spacing: 0.02em;
+        opacity: 0;
+      }
+      .source-copy {
+        max-width: 980px;
+        margin: 0;
+        color: var(--text);
+        font-size: 76px;
+        font-weight: 600;
+        line-height: 1.34;
+        letter-spacing: 0;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .source-rule {
+        width: 410px;
+        height: 2px;
+        background: var(--accent);
+        transform-origin: 50% 50%;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .assembly-field { position: absolute; inset: 0; pointer-events: none; }
+      .material {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 82px;
+        height: 36px;
+        margin: -18px 0 0 -41px;
+        color: var(--muted);
+        font-size: 20px;
+        font-weight: 550;
+        letter-spacing: 0.02em;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .material::before {
+        content: "";
+        width: 22px;
+        height: 1px;
+        margin-right: 10px;
+        background: currentColor;
+        opacity: 0.52;
+      }
+      .hero-shot,
+      .generated-shot {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 540px;
+        height: 340px;
+        margin: -170px 0 0 -270px;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .frame-surface {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .crop-line {
+        position: absolute;
+        background: rgba(243, 248, 251, 0.56);
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .crop-line.top,
+      .crop-line.bottom {
+        left: 0;
+        width: 100%;
+        height: 1px;
+        transform-origin: 0 50%;
+      }
+      .crop-line.top { top: 0; }
+      .crop-line.bottom { bottom: 0; }
+      .crop-line.left,
+      .crop-line.right {
+        top: 0;
+        width: 1px;
+        height: 100%;
+        transform-origin: 50% 0;
+      }
+      .crop-line.left { left: 0; }
+      .crop-line.right { right: 0; }
+      .texture-layer {
+        position: absolute;
+        inset: 0;
+        background: rgba(84, 215, 255, 0.045);
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .visual-horizon {
+        position: absolute;
+        left: 44px;
+        right: 44px;
+        top: 54%;
+        height: 1px;
+        background: rgba(243, 248, 251, 0.22);
+        opacity: 0;
+        transform-origin: 0 50%;
+        will-change: transform, opacity;
+      }
+      .visual-subject {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 152px;
+        height: 102px;
+        margin: -56px 0 0 -76px;
+        border: 1px solid rgba(243, 248, 251, 0.44);
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .visual-subject::after {
+        content: "";
+        position: absolute;
+        left: 26px;
+        right: 26px;
+        bottom: 22px;
+        height: 8px;
+        background: rgba(243, 248, 251, 0.2);
+      }
+      .copy-layer {
+        position: absolute;
+        left: 38px;
+        top: 62px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 156px;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .copy-layer span { display: block; height: 8px; background: rgba(243, 248, 251, 0.38); }
+      .copy-layer span:last-child { width: 64%; background: rgba(243, 248, 251, 0.16); }
+      .time-ruler {
+        position: absolute;
+        left: 34px;
+        right: 34px;
+        bottom: 48px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        height: 18px;
+        border-bottom: 1px solid rgba(243, 248, 251, 0.3);
+        opacity: 0;
+        transform-origin: 0 50%;
+        will-change: transform, opacity;
+      }
+      .time-ruler i { width: 1px; height: 8px; background: rgba(243, 248, 251, 0.34); }
+      .shot-index {
+        position: absolute;
+        z-index: 2;
+        right: 18px;
+        top: 16px;
+        color: var(--quiet);
+        font-family: var(--hf-font-mono);
+        font-size: 16px;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+      }
+      .shot-title {
+        position: absolute;
+        z-index: 2;
+        left: 18px;
+        top: 16px;
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 550;
+        letter-spacing: 0.02em;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .shot-meta {
+        position: absolute;
+        z-index: 2;
+        left: 18px;
+        right: 18px;
+        bottom: 15px;
+        display: flex;
+        gap: 12px;
+        color: var(--quiet);
+        font-size: 13px;
+        font-weight: 550;
+        letter-spacing: 0.02em;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .shot-meta span + span::before { content: "/"; margin-right: 12px; color: rgba(243, 248, 251, 0.24); }
+      .generated-shot .frame-surface { border: 1px solid var(--line); }
+      .generated-shot .visual-horizon,
+      .generated-shot .visual-subject,
+      .generated-shot .copy-layer,
+      .generated-shot .time-ruler,
+      .generated-shot .texture-layer { opacity: 1; }
+      .generated-shot[data-kind="detail"] .visual-subject {
+        left: 62%;
+        top: 47%;
+        width: 236px;
+        height: 162px;
+        margin: -81px 0 0 -118px;
+      }
+      .generated-shot[data-kind="detail"] .copy-layer { top: auto; bottom: 78px; }
+      .generated-shot[data-kind="text"] .visual-subject {
+        left: 38px;
+        right: 38px;
+        top: 88px;
+        width: auto;
+        height: 92px;
+        margin: 0;
+      }
+      .generated-shot[data-kind="text"] .visual-horizon { top: 68%; }
+      .generated-shot[data-kind="text"] .copy-layer { top: 62px; width: 220px; }
+      .story-progress {
+        position: absolute;
+        left: 50%;
+        top: calc(50% + 140px);
+        width: 1010px;
+        height: 4px;
+        margin-left: -505px;
+        overflow: hidden;
+        background: rgba(243, 248, 251, 0.14);
+        opacity: 0;
+        will-change: opacity;
+      }
+      .story-progress-fill {
+        width: 100%;
+        height: 100%;
+        background: var(--accent);
+        transform-origin: 0 50%;
+        will-change: transform;
+      }
+      .story-label {
+        position: absolute;
+        left: 50%;
+        top: calc(50% + 190px);
+        width: 1010px;
+        margin-left: -505px;
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 18px;
+        letter-spacing: 0.02em;
+      }
+      .story-label span {
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .story-label span:last-child { color: var(--quiet); font-size: 15px; }
+      .final-copy {
+        position: absolute;
+        left: 50%;
+        bottom: 148px;
+        display: flex;
+        align-items: baseline;
+        gap: 18px;
+        transform: translateX(-50%);
+        color: var(--muted);
+        font-size: 30px;
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+      .final-copy span,
+      .final-copy strong { display: block; opacity: 0; will-change: transform, opacity; }
+      .final-copy strong {
+        color: var(--text);
+        font-size: 68px;
+        font-weight: 600;
+        line-height: 1.34;
+      }
+      .harness {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 99;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 16px;
+        border-top: 1px dashed rgba(255, 255, 255, 0.25);
+        background: var(--surface);
+        color: var(--muted);
+        font-family: var(--hf-font-mono);
+        font-size: 13px;
+      }
+      .h-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .h-brand { margin-right: 8px; color: var(--quiet); }
+      .harness button,
+      .harness select {
+        padding: 4px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+        transition: transform 140ms cubic-bezier(0.2, 0, 0, 1), background-color 140ms;
+      }
+      .harness button:hover { background: rgba(255, 255, 255, 0.12); }
+      .harness button:active { transform: translateY(1px) scale(0.98); }
+      .harness button:focus-visible,
+      .harness select:focus-visible,
+      #hScrub:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }
+      .harness button i { margin-left: 6px; color: var(--muted); font-style: normal; }
+      .h-phase-label { margin-left: auto; color: var(--accent); }
+      #hScrub { flex: 1; min-width: 200px; accent-color: var(--active); }
+      #hTime { min-width: 110px; color: var(--text); font-variant-numeric: tabular-nums; }
+      @media (prefers-reduced-motion: reduce) {
+        .world,
+        .source-copy,
+        .source-rule,
+        .material,
+        .hero-shot,
+        .generated-shot,
+        .crop-line,
+        .texture-layer,
+        .visual-horizon,
+        .visual-subject,
+        .copy-layer,
+        .time-ruler,
+        .story-progress,
+        .story-progress-fill,
+        .story-label span,
+        .shot-title,
+        .shot-meta,
+        .final-copy > *,
+        .final-copy > * { will-change: auto; }
+        .harness button,
+        .harness select { transition: none; }
+        .harness button:active { transform: none; }
+      }
+
+      html, body, [data-composition-id="storyboard-plan-core"] { background: transparent; }
+    </style>
+  </head>
+  <body>
+    <template>
+    <div id="root" data-composition-id="storyboard-plan-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-start="0" data-duration="5" data-width="1440" data-height="1080">
+      <section id="p005-scene" class="clip scene" data-start="0" data-duration="5" data-track-index="0">
+        <div class="scene-fill" aria-hidden="true"></div>
+        <div class="world" id="world">
+          <div class="scene-content">
+            <div class="source-actor" id="source-actor">
+              <div class="source-label" id="source-label">一段脚本</div>
+              <h1 class="source-copy" id="source-copy">把脚本变成可拍的镜头</h1>
+              <div class="source-rule" id="source-rule" aria-hidden="true"></div>
+            </div>
+            <div class="assembly-field" id="assembly-field">
+              <div class="material" id="material-visual">画面</div>
+              <div class="material" id="material-copy">文字</div>
+              <div class="material" id="material-asset">素材</div>
+              <div class="material" id="material-time">时长</div>
+              <div class="hero-shot" id="hero-shot">
+                <div class="frame-surface">
+                  <span class="shot-title" id="shot-title-1">开场构图</span>
+                  <div class="texture-layer" id="texture-layer"></div>
+                  <div class="visual-horizon" id="visual-horizon"></div>
+                  <div class="visual-subject" id="visual-subject"></div>
+                  <div class="copy-layer" id="copy-layer"><span></span><span></span></div>
+                  <div class="time-ruler" id="time-ruler"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                  <div class="shot-meta" id="shot-meta-1"><span>画面</span><span>文字</span><span>素材</span><span>时长</span></div>
+                  <span class="shot-index">01</span>
+                </div>
+                <span class="crop-line top"></span>
+                <span class="crop-line right"></span>
+                <span class="crop-line bottom"></span>
+                <span class="crop-line left"></span>
+              </div>
+              <div class="generated-shot" id="generated-shot-2" data-kind="detail">
+                <div class="frame-surface">
+                  <span class="shot-title" id="shot-title-2">主体细节</span>
+                  <div class="texture-layer"></div><div class="visual-horizon"></div><div class="visual-subject"></div>
+                  <div class="copy-layer"><span></span><span></span></div>
+                  <div class="time-ruler"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                  <div class="shot-meta" id="shot-meta-2"><span>特写</span><span>主体</span><span>节奏</span></div><span class="shot-index">02</span>
+                </div>
+              </div>
+              <div class="generated-shot" id="generated-shot-3" data-kind="text">
+                <div class="frame-surface">
+                  <span class="shot-title" id="shot-title-3">文案节奏</span>
+                  <div class="texture-layer"></div><div class="visual-horizon"></div><div class="visual-subject"></div>
+                  <div class="copy-layer"><span></span><span></span></div>
+                  <div class="time-ruler"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                  <div class="shot-meta" id="shot-meta-3"><span>文案</span><span>层级</span><span>节奏</span></div><span class="shot-index">03</span>
+                </div>
+              </div>
+              <div class="story-progress" id="story-progress" role="progressbar" aria-label="分镜计划生成进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div class="story-progress-fill" id="story-progress-fill"></div></div>
+              <div class="story-label" id="story-label"><span id="story-label-name">分镜计划</span><span id="story-label-meta">03 镜头 · 04 层素材</span></div>
+            </div>
+            <div class="final-copy" id="final-copy"><span>拍摄前</span><strong>可执行</strong></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="assets/vendor/gsap/gsap.min.js"></script>
+<script>
+      window.__timelines = window.__timelines || {};
+      var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      function R(full, reduced) { return REDUCED ? reduced : full; }
+      var tl = gsap.timeline({ paused: true });
+      var materials = [
+        { selector: "#material-visual", x: -350, y: -214 },
+        { selector: "#material-copy", x: -250, y: 208 },
+        { selector: "#material-asset", x: 300, y: -214 },
+        { selector: "#material-time", x: 310, y: 208 }
+      ];
+      tl.fromTo("#source-label", { opacity: 0 }, { opacity: 1, duration: 0.22, ease: "power1.out" }, 0.14);
+      tl.fromTo("#source-copy", R({ opacity: 0, y: 28, scale: 0.94 }, { opacity: 0 }), R({ opacity: 1, y: 0, scale: 1, duration: 0.42, ease: "power4.out" }, { opacity: 1, duration: 0.24, ease: "power1.out" }), 0.18);
+      tl.fromTo("#source-rule", { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.34, ease: "power3.out" }, 0.34);
+      materials.forEach(function (item, index) {
+        tl.fromTo(item.selector, R({ opacity: 0, x: 0, y: 34, scale: 0.82 }, { opacity: 0 }), R({ opacity: 1, x: item.x, y: item.y, scale: 1, duration: 0.48, ease: "power3.out" }, { opacity: 1, duration: 0.22, ease: "power1.out" }), 0.58 + index * 0.05);
+      });
+      tl.to("#source-copy", R({ y: -232, scale: 0.66, opacity: 0.22, duration: 0.5, ease: "power3.inOut" }, { opacity: 0.18, duration: 0.24, ease: "power1.out" }), 0.72);
+      tl.to("#source-label, #source-rule", { opacity: 0, duration: 0.2, ease: "power1.out" }, 0.76);
+      tl.fromTo("#hero-shot", R({ opacity: 0, scale: 0.82 }, { opacity: 0 }), R({ opacity: 1, scale: 1, duration: 0.42, ease: "expo.out" }, { opacity: 1, duration: 0.24, ease: "power1.out" }), 0.94);
+      tl.fromTo("#shot-title-1", R({ opacity: 0, x: -18 }, { opacity: 0 }), R({ opacity: 1, x: 0, duration: 0.24, ease: "power3.out" }, { opacity: 1, duration: 0.18, ease: "power1.out" }), 1.12);
+      tl.fromTo(".crop-line.top, .crop-line.bottom", { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.34, ease: "power3.out" }, 1.02);
+      tl.fromTo(".crop-line.left, .crop-line.right", { opacity: 0, scaleY: 0 }, { opacity: 1, scaleY: 1, duration: 0.34, ease: "power4.out" }, 1.08);
+      tl.addLabel("visual-build", 1.24);
+      tl.to("#material-visual", { color: "var(--hf-color-text-primary)", duration: 0.24, ease: "power1.inOut" }, "visual-build");
+      tl.fromTo("#visual-horizon", { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.24, ease: "power2.out" }, "visual-build");
+      tl.fromTo("#visual-subject", R({ opacity: 0, scale: 0.62 }, { opacity: 0 }), R({ opacity: 1, scale: 1, duration: 0.24, ease: "back.out(1.35)" }, { opacity: 1, duration: 0.18, ease: "power1.out" }), "visual-build");
+      tl.addLabel("copy-build", 1.48);
+      tl.to("#material-copy", { color: "var(--hf-color-text-primary)", duration: 0.22, ease: "power1.inOut" }, "copy-build");
+      tl.fromTo("#copy-layer", R({ opacity: 0, x: -22 }, { opacity: 0 }), R({ opacity: 1, x: 0, duration: 0.22, ease: "power3.out" }, { opacity: 1, duration: 0.18, ease: "power1.out" }), "copy-build");
+      tl.addLabel("asset-build", 1.7);
+      tl.to("#material-asset", { color: "var(--hf-color-text-primary)", duration: 0.22, ease: "power1.inOut" }, "asset-build");
+      tl.fromTo("#texture-layer", R({ opacity: 0, scale: 0.88 }, { opacity: 0 }), R({ opacity: 1, scale: 1, duration: 0.22, ease: "power2.out" }, { opacity: 1, duration: 0.18, ease: "power1.out" }), "asset-build");
+      tl.addLabel("time-build", 1.9);
+      tl.to("#material-time", { color: "var(--hf-color-text-primary)", duration: 0.2, ease: "power1.inOut" }, "time-build");
+      tl.fromTo("#time-ruler", { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.26, ease: "power3.out" }, "time-build");
+      tl.fromTo("#shot-meta-1", R({ opacity: 0, y: 10 }, { opacity: 0 }), R({ opacity: 1, y: 0, duration: 0.22, ease: "power2.out" }, { opacity: 1, duration: 0.16, ease: "power1.out" }), 1.96);
+      tl.to(".material", { opacity: 0, duration: 0.18, stagger: 0.03, ease: "power1.out" }, 2.12);
+      tl.to("#hero-shot", { x: -35, duration: 0.12, ease: "power3.in" }, 2.14);
+      tl.to("#hero-shot", { x: -248, duration: 0.1, ease: "none" }, 2.27);
+      tl.to("#hero-shot", { x: -340, duration: 0.35, ease: "power4.out" }, 2.38);
+      tl.to("#hero-shot", { scale: 0.62, duration: 0.59, ease: "power3.inOut" }, 2.14);
+      tl.fromTo("#story-progress", { opacity: 0 }, { opacity: 1, duration: 0.18, ease: "power1.out" }, 2.24);
+      tl.fromTo("#story-progress-fill", { scaleX: 0 }, { scaleX: 1, duration: 1.18, ease: "power2.inOut" }, 2.28);
+      tl.fromTo("#generated-shot-2", R({ opacity: 0, x: -340, scale: 0.62 }, { opacity: 0 }), R({ opacity: 1, x: 0, scale: 0.62, duration: 0.48, ease: "power3.out" }, { opacity: 1, duration: 0.24, ease: "power1.out" }), 2.48);
+      tl.fromTo("#shot-title-2", R({ opacity: 0, x: -14 }, { opacity: 0 }), R({ opacity: 1, x: 0, duration: 0.2, ease: "power3.out" }, { opacity: 1, duration: 0.16, ease: "power1.out" }), 2.66);
+      tl.fromTo("#shot-meta-2", R({ opacity: 0, y: 8 }, { opacity: 0 }), R({ opacity: 1, y: 0, duration: 0.2, ease: "power2.out" }, { opacity: 1, duration: 0.16, ease: "power1.out" }), 2.78);
+      tl.fromTo("#generated-shot-3", R({ opacity: 0, x: 0, scale: 0.62 }, { opacity: 0 }), R({ opacity: 1, x: 340, scale: 0.62, duration: 0.5, ease: "expo.out" }, { opacity: 1, duration: 0.24, ease: "power1.out" }), 2.86);
+      tl.fromTo("#shot-title-3", R({ opacity: 0, x: -14 }, { opacity: 0 }), R({ opacity: 1, x: 0, duration: 0.2, ease: "power3.out" }, { opacity: 1, duration: 0.16, ease: "power1.out" }), 3.04);
+      tl.fromTo("#shot-meta-3", R({ opacity: 0, y: 8 }, { opacity: 0 }), R({ opacity: 1, y: 0, duration: 0.2, ease: "power2.out" }, { opacity: 1, duration: 0.16, ease: "power1.out" }), 3.16);
+      tl.to("#source-copy", { opacity: 0, duration: 0.2, ease: "power1.out" }, 3.22);
+      tl.to("#world", R({ scale: 0.9, y: -28, duration: 0.66, ease: "power3.inOut" }, { opacity: 1, duration: 0.2, ease: "power1.out" }), 3.34);
+      tl.fromTo("#story-label-name", R({ opacity: 0, x: -24 }, { opacity: 0 }), R({ opacity: 1, x: 0, duration: 0.28, ease: "power3.out" }, { opacity: 1, duration: 0.2, ease: "power1.out" }), 3.58);
+      tl.fromTo("#story-label-meta", R({ opacity: 0, x: 18 }, { opacity: 0 }), R({ opacity: 1, x: 0, duration: 0.26, ease: "power2.out" }, { opacity: 1, duration: 0.2, ease: "power1.out" }), 3.72);
+      tl.fromTo("#final-copy span", R({ opacity: 0, x: -24 }, { opacity: 0 }), R({ opacity: 1, x: 0, duration: 0.28, ease: "power3.out" }, { opacity: 1, duration: 0.2, ease: "power1.out" }), 4.12);
+      tl.fromTo("#final-copy strong", R({ opacity: 0, x: 28 }, { opacity: 0 }), R({ opacity: 1, x: 0, duration: 0.32, ease: "expo.out" }, { opacity: 1, duration: 0.2, ease: "power1.out" }), 4.2);
+      tl.seek(0);
+      const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+        ? window.__hyperframes.getVariables()
+        : {};
+      const timeScale = Number(runtimeValues.time_scale);
+      if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+      window.__timelines["storyboard-plan-core"] = tl;
+    </script>
+    </template>
+  </body>
+</html>

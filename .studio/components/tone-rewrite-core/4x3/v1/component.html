@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>tone-rewrite-core/4x3@v1</title>
+<!--
+  ==========================================================================
+  P006 ｜ 人话改写机制详解核心（ToneRewriteCore）· 组件原型 rev.1（2026-08-24 用户确认锁定）
+  锁定说明：视觉、布局、时序与内部动效冻结；本原型语汇可供后续参考，
+  但不作为未设计 Anchor 的固定模板，Preview 技术键不形成最终 Slot API。
+  依据：ANIMATION_DRAFT.md rev.3 · COMPONENT_SPLIT.md rev.5 · anti-PPT skill
+  版面纪律：沿用 P002 rev.4 锁定语汇 + P004 rev.3 机制卡栈（后续机制以
+  同尺寸新卡覆盖、旧卡留边）+ P005 rev.2 材料纪律（无 3D、无工作台面板）。
+  --------------------------------------------------------------------------
+  本章要解释的关系：生硬 AI 文案 → 语气规则逐行重织 → 节奏改变后的人话稿
+  （改写需要语气规则和本人终审，不是简单替换几个词 —— Draft 事实边界；
+  不声称模型等同本人，也不复制他人的独特表达）
+  --------------------------------------------------------------------------
+  视觉隐喻：文字重织。文案本身是唯一主角，不装进对照卡片：
+    · AI 初稿直接写入文档板，三处「AI 腔」短语被灰标记框出；
+    · 语气规则以一把「规则梳」（梳脊 + 三齿：删套话 / 短句优先 / 第一人称）
+      落入文首，逐行下扫；
+    · 梳过之处：套话短语塌缩变暗，人话措辞以遮罩擦写方式在同一行位置
+      生长出来，行长真实变短；每行行尾留下一枚青色梳痕（Tracer）；
+    · 三行完成后段落断行重排收紧（节奏改变的证据，不只是换词），
+      旧稿底稿完全离场；规则梳折起收进文首标签旁，成为痕迹；
+    · 文档标签由「AI 初稿」翻转为「人话稿」，「本人终审」章落文首。
+  --------------------------------------------------------------------------
+  反 PPT 检查（anti-PPT skill §6 强制重写条件对照）：
+    · 无 Before/After 并排——同一行位置连续变形（遮罩替换）；
+    · 无规则卡片列表——规则是作用于文本的梳，其证据留在结果里
+      （套话消失 / 行变短 / 第一人称出现）；
+    · 无箭头映射——替换真实发生在同一文字对象上；
+    · 删除动画后静态截图只剩结果，过程因果不可读（通过无动画测试）；
+    · 单帧一个主焦点：当前被改写的行（唯一玻璃面 + 唯一蓝色）。
+  --------------------------------------------------------------------------
+  核心 Preview 数据（技术键不是最终 Slot API）:
+    lines      三行改写对 [{ ai, cliche, cn }, ...]（接近真实中文长度的
+               占位样例，正式文案须来自 Script；cliche 为 ai 中被标记短语）
+    label_ai   文档初始标签（默认 "AI 初稿"）
+    label_cn   改写完成标签（默认 "人话稿"）
+    result_tag 本章产出凝练标签（供 P007 ChapterIntro previous_context 引用）
+    explain    文字解释区（左下，骨架占位，正式文案注入 #tw-explain）
+  可选 Preview 数据:
+    context_label  组件语境标签（默认 "机制详解 · 06"）
+    rules          规则梳三齿标注（默认 删套话 / 短句优先 / 第一人称）
+    review_stamp   状态章文字（默认 "本人终审"）
+  --------------------------------------------------------------------------
+  四状态时间表（总长 5.90s = 本原型 Preview 时长，不冻结固定前导或最终 Scene 时长）:
+    Opening  0.00-1.80   容器建立 → AI 初稿三行遮罩写入 → 三处 AI 腔标记描出
+                         → 规则梳落入文首（1.30，落点即第一行重织位）
+    Build    1.80-5.52   齿标注折叠（1.80，梳开始工作即收成工作形态）→
+                         逐行重织 ×3
+                         （1.86 / 2.56 / 3.52：梳行 → 行框亮 → 套话塌缩 →
+                         人话擦写生长 → 行尾梳痕）→ 段落重排 + 旧稿离场
+                         （4.48）→ 梳折起成痕迹（4.78）→ 标签翻转（5.06）→
+                         本人终审落章（5.22）→ 产出标签（5.44）
+    Hero     5.52-5.70   输入痕迹（梳痕）→ 处理证据（行变短）→ 输出（人话稿
+                         + 本人终审章）完整关系首次同时可读
+    End      5.70-5.90   语境与解释区退位 0.35；人话稿、梳痕、状态章与产出
+                         标签保持可辨，供下一章 ChapterIntro 承接
+  --------------------------------------------------------------------------
+  运动约束（optical_fluidity）:
+    进场 easing   cubic-bezier(0.23,1,0.32,1)  → CustomEase "hfEnter"
+    画面内变化    cubic-bezier(0.77,0,0.175,1) → CustomEase "hfMove"
+    单帧主强调色唯一（var(--hf-color-accent-primary)）：仅当前行玻璃框 + 「本人终审」章描边；
+    玻璃面同一时刻只亮一个（行框逐行移交，间隙熄灭）。关系青（var(--hf-color-accent-primary)）
+    仅梳脊 1px 细线与行尾梳痕。无 3D、无粒子、无扫描线。
+  --------------------------------------------------------------------------
+  Seek-safe：全部状态由单条 paused GSAP timeline 驱动；无 wall clock、
+  无无限循环、无随机数、无运行时网络；GSAP 使用共享本地文件。
+  reduced-motion 兜底：位移/缩放全剥离（梳移动 → tl.set 瞬时 reposition
+  + opacity 脉冲，擦写 → 仅 opacity 交叉淡变，落章 → 仅 opacity）。
+  底部「原型检查工具」为验收用脚手架，正式生产翻译时由 Codex 移除。
+  ==========================================================================
+-->
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --ai-ink: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  [data-composition-id="tone-rewrite-core"] {
+    width: 1440px;
+    height: 1080px;
+    overflow: hidden;
+    position: relative;
+    background: transparent;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+    margin: 24px auto 120px; /* 预览页居中；渲染时由框架接管 */
+  }
+
+  .tw-stage {
+    width: 100%;
+    height: 100%;
+    padding: 72px 88px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* --- 机制卡片栈：本章是一张完整主卡；后续机制覆盖其上时，旧卡仅留边 --- */
+  .tw-stack-card,
+  .tw-mechanism-shell {
+    position: absolute;
+    left: 56px;
+    top: 64px;
+    width: 1328px;
+    height: 964px;
+    border-radius: 30px;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .tw-stack-card {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 52px rgba(2, 7, 11, 0.28);
+  }
+  .tw-stack-card.back-2 {
+    left: 88px;
+    top: 24px;
+    opacity: 0.26;
+  }
+  .tw-stack-card.back-1 {
+    left: 72px;
+    top: 44px;
+    opacity: 0.52;
+  }
+  .tw-mechanism-shell {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 28px 72px rgba(2, 7, 11, 0.46);
+  }
+
+  /* --- 顶部：组件语境标签（结构性占位，非文案） --- */
+  .tw-context {
+    position: absolute;
+    left: 88px;
+    top: 64px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  /* --- 中央：文档板（实心深层面板；既是重织现场也是产出容器） --- */
+  .tw-doc {
+    position: absolute;
+    left: 360px;
+    top: 250px;
+    width: 720px;
+    height: 490px;
+    border-radius: 20px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 36px rgba(2, 7, 11, 0.5);
+    box-sizing: border-box;
+  }
+  /* 文档标签：改写完成时由「AI 初稿」翻转为「人话稿」（状态证据，非标题栏） */
+  .tw-label {
+    position: absolute;
+    left: 56px;
+    top: 32px;
+    font-size: 17px;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+  .tw-label-ai { color: var(--text-3); }
+  .tw-label-cn { color: var(--text-1); opacity: 0; }
+
+  /* 「本人终审」状态章：wrapper 承载定位与入场动效，内层静态 -8° 章面旋转 */
+  .tw-stamp-wrap {
+    position: absolute;
+    left: 546px;
+    top: 18px;
+    width: 148px;
+    height: 46px;
+    opacity: 0;
+    will-change: transform;
+  }
+  .tw-stamp {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-8deg);
+    border: 1.5px solid rgba(10, 132, 255, 0.85);
+    border-radius: 8px;
+    background: rgba(10, 132, 255, 0.08);
+    box-sizing: border-box;
+    color: var(--text-1);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-indent: 0.1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* --- 文本行：AI 稿与人话稿占据同一行位（遮罩替换，不并排对照） ---
+     行位由 Slot lines 注入；white-space: nowrap，行长差异即「短句优先」证据 */
+  .tw-line {
+    position: absolute;
+    left: 56px;
+    font-size: 27px;
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+  .tw-line-ai {
+    color: var(--ai-ink);
+    clip-path: inset(0% 100% 0% 0%);
+  }
+  .tw-line-cn {
+    color: var(--text-1);
+    clip-path: inset(0% 100% 0% 0%);
+  }
+  /* AI 腔短语：被规则梳识别后塌缩变暗；下标细线由 .tw-mark 承载 */
+  .tw-cliche { position: relative; }
+  .tw-mark {
+    position: absolute;
+    left: 0;
+    bottom: -6px;
+    width: 100%;
+    height: 2px;
+    background: rgba(141, 163, 176, 0.55);
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+  /* 行尾梳痕：规则梳经过后留下的 1px 级关系青刻度（Tracer 证据） */
+  .tw-tick {
+    display: inline-block;
+    width: 12px;
+    height: 3px;
+    margin-left: 14px;
+    vertical-align: 4px;
+    background: var(--relation);
+    opacity: 0.8;
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+
+  /* --- 当前行框：正在被重织的行（全帧唯一玻璃面 + 唯一主强调色描边） --- */
+  .tw-glass {
+    position: absolute;
+    left: 40px;
+    width: 656px;
+    height: 60px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(10, 132, 255, 0.65);
+    box-sizing: border-box;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* --- 规则梳：语气规则的作用形态（梳脊 1px 关系青 + 三齿 + 齿标注）。
+         位于飞行层，布局坐标由 JS 依行位计算；不是规则列表卡片 --- */
+  .tw-field {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .tw-comb {
+    position: absolute;
+    left: 416px;
+    top: 0;
+    width: 608px;
+    height: 60px;
+    opacity: 0;
+    will-change: transform;
+  }
+  .tw-comb-spine {
+    position: absolute;
+    left: 0;
+    top: 26px;
+    width: 608px;
+    height: 1px;
+    background: var(--relation);
+    opacity: 0.5;
+    transform-origin: left center;
+  }
+  .tw-comb-tooth {
+    position: absolute;
+    top: 30px;
+    width: 2px;
+    height: 26px;
+    background: rgba(255, 255, 255, 0.35);
+    transform-origin: top center;
+  }
+  .tw-comb-label {
+    position: absolute;
+    top: 0;
+    font-size: 15px;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    transform: translateX(-10px);
+    white-space: nowrap;
+  }
+
+  /* --- 左下：文字解释区（EXPLAIN SLOT，骨架占位；正式文案由此注入） --- */
+  .tw-explain {
+    position: absolute;
+    left: 88px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tw-explain-tag {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .tw-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .tw-explain .bar.b1 { width: 88%; }
+  .tw-explain .bar.b2 { width: 62%; background: rgba(255, 255, 255, 0.08); }
+
+  /* --- 本章产出标签（End 状态的凝练结果，供下一章承接） --- */
+  .tw-output {
+    position: absolute;
+    left: 360px;
+    top: 764px;
+    width: 720px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    color: var(--text-1);
+    opacity: 0;
+    box-sizing: border-box;
+  }
+  .tw-output .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+  /* ============ 原型检查工具（验收脚手架，非正式组件） ============ */
+
+  .harness {
+    position: absolute;
+    top: 1128px;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    z-index: 99;
+    background: var(--elevated);
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
+    font-family: var(--hf-font-mono);
+    font-size: 13px;
+    color: var(--text-2);
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .h-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .h-brand {
+    color: var(--text-3);
+    margin-right: 8px;
+  }
+  .harness button, .harness select {
+    font: inherit;
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: transform 140ms cubic-bezier(0.2, 0, 0, 1), background-color 140ms;
+  }
+  .harness button:hover { background: rgba(255, 255, 255, 0.12); }
+  .harness button:active { transform: translateY(1px) scale(0.98); }
+  .harness button:focus-visible, .harness select:focus-visible, #hScrub:focus-visible {
+    outline: 2px solid var(--active);
+    outline-offset: 2px;
+  }
+  .harness button i {
+    font-style: normal;
+    color: var(--hf-color-text-secondary);
+    margin-left: 6px;
+  }
+  .h-phase-label {
+    margin-left: auto;
+    color: var(--relation);
+  }
+  #hScrub {
+    flex: 1;
+    min-width: 200px;
+    accent-color: var(--active);
+  }
+  #hTime {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+    min-width: 110px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .harness button, .harness select { transition: none; }
+    .harness button:active { transform: none; }
+  }
+
+      html, body, [data-composition-id="tone-rewrite-core"] { background: transparent; }
+    </style>
+</head>
+<body>
+    <template>
+
+<!-- ==================== 组件本体 ==================== -->
+<div data-composition-id="tone-rewrite-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]'
+     data-width="1440" data-height="1080"
+     data-start="0" data-duration="5.90" data-track-index="0">
+  <div class="tw-stage">
+
+    <!-- 当前机制主卡 + 两层旧卡留边：后续机制以同尺寸卡片覆盖上来 -->
+    <div class="tw-stack-card back-2" id="tw-stack-back-2" aria-hidden="true"></div>
+    <div class="tw-stack-card back-1" id="tw-stack-back-1" aria-hidden="true"></div>
+    <div class="tw-mechanism-shell" id="tw-mechanism-shell" aria-hidden="true"></div>
+
+    <div class="tw-context" id="tw-context">机制详解 · 06</div>
+
+    <!-- 中央：文档板（文本行由 Slot lines 注入，AI 稿与人话稿同行位叠放） -->
+    <div class="tw-doc" id="tw-doc">
+      <div class="tw-label tw-label-ai" id="tw-label-ai">AI 初稿</div>
+      <div class="tw-label tw-label-cn" id="tw-label-cn">人话稿</div>
+      <div class="tw-stamp-wrap" id="tw-stamp-wrap">
+        <div class="tw-stamp" id="tw-stamp">本人终审</div>
+      </div>
+      <!-- 当前行框：逐行移交，同一时刻只亮一个 -->
+      <div class="tw-glass" id="tw-glass"></div>
+    </div>
+
+    <!-- 左下：文字解释区（骨架占位，正式文案经 Slot 注入） -->
+    <div class="tw-explain" id="tw-explain" data-slot="explain">
+      <span class="tw-explain-tag">EXPLAIN SLOT</span>
+      <div class="bar b1"></div>
+      <div class="bar b2"></div>
+    </div>
+
+    <!-- 本章产出标签 -->
+    <div class="tw-output" id="tw-output">
+      <span class="dot"></span><span id="tw-output-t">产出 · 人话文案</span>
+    </div>
+
+    <!-- 飞行层：规则梳 -->
+    <div class="tw-field" id="tw-field" data-layout-ignore>
+      <div class="tw-comb" id="tw-comb">
+        <div class="tw-comb-spine" id="tw-comb-spine"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== 原型检查工具 ==================== -->
+
+    <script src="assets/vendor/gsap/gsap.min.js"></script>
+    <script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+/* ===== 默认 Preview 数据（占位样例，接近真实中文长度；技术键不是最终 Slot API） =====
+   三行改写对为确定性数据：ai = AI 初稿行，cliche = 该行被标记的 AI 腔短语
+   （必须是 ai 中的连续子串），cn = 同一行位重织后的人话措辞。无随机数，
+   seek 任意时刻状态确定。 */
+var SLOT_DATA = {
+  context_label: "机制详解 · 06",
+  label_ai: "AI 初稿",
+  label_cn: "人话稿",
+  review_stamp: "本人终审",
+  result_tag: "产出 · 人话文案",
+  rules: ["删套话", "短句优先", "第一人称"],
+  lines: [
+    { ai: "在当今快节奏的社会中，时间管理尤为重要。", cliche: "在当今快节奏的社会中，", cn: "做号这一年，我最缺的就是时间。" },
+    { ai: "本文将系统性地介绍三个核心方法论。", cliche: "系统性地", cn: "今天只讲三件我踩过坑的事。" },
+    { ai: "综上所述，坚持执行这些策略定能成功。", cliche: "综上所述，", cn: "方法不难，难的是明天还继续做。" }
+  ]
+};
+
+/* ==================== 几何常量（1440×1080 画布，与 CSS 布局一致） ==================== */
+var GEO = {
+  /* 行位（文档局部坐标；x 一律 56，y 依行序；文档舞台位 360,250） */
+  LINE_X: 56,
+  LINE_Y: [140, 240, 340],
+  LINE_Y_REFLOW: [140, 228, 316],  /* 重排后断行收紧：节奏改变的证据 */
+  GLASS_X: 40,
+  GLASS_Y_PAD: 14,                  /* 行框 top = 行 y − 14 */
+  /* 规则梳（舞台坐标）：梳脊停在当前行文本顶上方 40px */
+  COMB_X: 416,
+  DOC_TOP: 250,
+  COMB_ABOVE: 66,                   /* 梳 y = 行舞台 y − 66（含梳齿与标注高度） */
+  COMB_ENTER_FROM: -40,             /* 入场相对首行位偏移 */
+  COMB_FOLD: { x: 512, y: 292, scaleX: 0.12 }, /* 折起后收进文首标签旁的痕迹位 */
+  TOOTH_X: [70, 280, 490]
+};
+
+/* ==================== Preview 数据注入（同步执行，渲染前就绪） ==================== */
+(function injectSlots(d) {
+  document.getElementById("tw-context").textContent = d.context_label;
+  document.getElementById("tw-label-ai").textContent = d.label_ai;
+  document.getElementById("tw-label-cn").textContent = d.label_cn;
+  document.getElementById("tw-stamp").textContent = d.review_stamp;
+  document.getElementById("tw-output-t").textContent = d.result_tag;
+
+  /* 文本行：AI 稿（含 AI 腔标记短语）与人话稿（含行尾梳痕）同行位叠放 */
+  var doc = document.getElementById("tw-doc");
+  d.lines.forEach(function (ln, i) {
+    var ai = document.createElement("div");
+    ai.className = "tw-line tw-line-ai";
+    ai.id = "tw-ai-" + (i + 1);
+    ai.style.top = GEO.LINE_Y[i] + "px";
+    var rest_before = ln.ai.slice(0, ln.ai.indexOf(ln.cliche));
+    var rest_after = ln.ai.slice(ln.ai.indexOf(ln.cliche) + ln.cliche.length);
+    ai.innerHTML = rest_before + '<span class="tw-cliche">' + ln.cliche +
+      '<b class="tw-mark" id="tw-mark-' + (i + 1) + '"></b></span>' + rest_after;
+    doc.appendChild(ai);
+
+    var cn = document.createElement("div");
+    cn.className = "tw-line tw-line-cn";
+    cn.id = "tw-cn-" + (i + 1);
+    cn.style.top = GEO.LINE_Y[i] + "px";
+    cn.innerHTML = ln.cn + '<i class="tw-tick" id="tw-tick-' + (i + 1) + '"></i>';
+    doc.appendChild(cn);
+  });
+
+  /* 规则梳三齿与标注（梳脊已在 DOM 中） */
+  var comb = document.getElementById("tw-comb");
+  d.rules.forEach(function (label, i) {
+    var tooth = document.createElement("div");
+    tooth.className = "tw-comb-tooth";
+    tooth.id = "tw-tooth-" + (i + 1);
+    tooth.style.left = GEO.TOOTH_X[i] + "px";
+    comb.appendChild(tooth);
+    var lab = document.createElement("div");
+    lab.className = "tw-comb-label";
+    lab.id = "tw-comb-label-" + (i + 1);
+    lab.style.left = GEO.TOOTH_X[i] + "px";
+    lab.textContent = label;
+    comb.appendChild(lab);
+  });
+})(SLOT_DATA);
+
+/* ==================== Easing（optical_fluidity profile，与 B00 / P002–P005 一致） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ==================== 组件 Timeline（paused · seek-safe · 同时运动 ≤ 2） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* prefers-reduced-motion：剥离位移/缩放，仅保留 opacity 交叉淡变。
+   仅影响本地预览；daemon 渲染环境为 no-preference，输出始终全动效。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* 梳 / 行框 reposition：全动效下梳做 hfMove 位移，行框瞬时置位（它是指示器，
+   不是运动主体）；reduced 下两者均瞬时置位 + 仅 opacity 变化 */
+function combMoveTo(stageY, t) {
+  if (REDUCED) {
+    tl.set("#tw-comb", { y: stageY }, t);
+  } else {
+    tl.to("#tw-comb", { y: stageY, duration: 0.20, ease: E_MOVE }, t);
+  }
+}
+function glassAtLine(i, t) {
+  tl.set("#tw-glass", { top: (GEO.LINE_Y[i] - GEO.GLASS_Y_PAD) + "px" }, t);
+}
+function combStageY(i) {
+  return GEO.DOC_TOP + GEO.LINE_Y[i] - GEO.COMB_ABOVE;
+}
+
+/* ---------- Opening（0.00-1.80 容器先建立，初稿写入，问题被标出） ----------
+   卡栈 → 语境 → 文档壳 → 文档标签 → AI 初稿三行遮罩写入（左起擦写，
+   不整页淡入）→ 三处 AI 腔标记依次描出 */
+tl.from("#tw-stack-back-2", R(
+  { x: 18, y: -8, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.02);
+tl.from("#tw-stack-back-1", R(
+  { x: 12, y: -5, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.06);
+tl.from("#tw-mechanism-shell", R(
+  { y: 18, opacity: 0, duration: 0.30, ease: E_ENTER },
+  { opacity: 0, duration: 0.26, ease: E_ENTER }), 0.08);
+tl.from("#tw-context", { opacity: 0, duration: 0.20, ease: E_ENTER }, 0.05);
+tl.from("#tw-doc", R(
+  { y: 24, opacity: 0, duration: 0.36, ease: E_ENTER },
+  { opacity: 0, duration: 0.32, ease: E_ENTER }), 0.12);
+tl.from("#tw-label-ai", { opacity: 0, duration: 0.16, ease: E_ENTER }, 0.34);
+tl.from("#tw-explain", { opacity: 0, duration: 0.22, ease: E_ENTER }, 0.40);
+
+/* AI 初稿三行：遮罩左起擦写（文字即材料，reduced 降为仅 opacity） */
+for (var i = 1; i <= 3; i++) {
+  tl.fromTo("#tw-ai-" + i,
+    R({ clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", opacity: 0 }),
+    R({ clipPath: "inset(0% 0% 0% 0%)", duration: 0.32, ease: E_ENTER },
+      { opacity: 1, duration: 0.24, ease: E_ENTER }),
+    0.42 + (i - 1) * 0.18);
+}
+/* 三处 AI 腔标记依次描出（问题可见；reduced 分支 from 直接带 scaleX:1） */
+for (var m = 1; m <= 3; m++) {
+  tl.fromTo("#tw-mark-" + m,
+    R({ scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 0 }),
+    R({ scaleX: 1, opacity: 1, duration: 0.18, ease: E_ENTER },
+      { opacity: 1, duration: 0.16, ease: E_ENTER }),
+    0.98 + (m - 1) * 0.10);
+}
+
+/* ---------- Build：逐个功能展现 ---------- */
+
+/* ① 规则梳落入文首（1.30 起）：语气规则不是列表卡片，而是一把即将
+     作用于文本的梳；落点即第一行重织位 */
+tl.fromTo("#tw-comb",
+  R({ y: combStageY(0) + GEO.COMB_ENTER_FROM, opacity: 0 },
+    { y: combStageY(0), opacity: 0 }),
+  R({ y: combStageY(0), opacity: 1, duration: 0.34, ease: E_ENTER },
+    { opacity: 1, duration: 0.26, ease: E_ENTER }), 1.30);
+
+/* ② 逐行重织 ×3：梳行（首行已在位）→ 行框亮 → 套话塌缩 →
+     人话同行位擦写生长（AI 行降底稿）→ 行尾梳痕 → 框熄。
+     齿标注在梳开始工作时即折叠（已完成的信息不持续堆积），
+     也为梳下移腾出行间空间。任意时刻同时运动 ≤ 2。 */
+tl.to(".tw-comb-label", { opacity: 0, duration: 0.20, ease: E_MOVE }, 1.80);
+var PASS = [
+  { t: 1.86 }, /* 行 1：梳已在位 */
+  { t: 2.56 }, /* 行 2 */
+  { t: 3.52 }  /* 行 3 */
+];
+PASS.forEach(function (p, k) {
+  var n = k + 1;
+  if (k > 0) combMoveTo(combStageY(k), p.t);
+  glassAtLine(k, p.t + (k > 0 ? 0.22 : 0));
+  tl.fromTo("#tw-glass",
+    { opacity: 0 },
+    { opacity: 1, duration: 0.14, ease: E_ENTER }, p.t + (k > 0 ? 0.22 : 0));
+  /* 套话短语塌缩变暗（删套话的直接证据） */
+  tl.to("#tw-ai-" + n + " .tw-cliche",
+    { opacity: 0.3, duration: 0.16, ease: E_MOVE }, p.t + (k > 0 ? 0.36 : 0.14));
+  /* 人话措辞同行位擦写生长；AI 行同步降为 0.16 底稿 */
+  tl.fromTo("#tw-cn-" + n,
+    R({ clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", opacity: 0 }),
+    R({ clipPath: "inset(0% 0% 0% 0%)", duration: 0.38, ease: E_MOVE },
+      { opacity: 1, duration: 0.26, ease: E_MOVE }),
+    p.t + (k > 0 ? 0.44 : 0.22));
+  tl.to("#tw-ai-" + n,
+    { opacity: 0.16, duration: 0.30, ease: E_MOVE }, p.t + (k > 0 ? 0.46 : 0.24));
+  /* 行尾梳痕 + 框熄 */
+  tl.fromTo("#tw-tick-" + n,
+    R({ scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 0 }),
+    R({ scaleX: 1, opacity: 0.8, duration: 0.12, ease: E_ENTER },
+      { opacity: 0.8, duration: 0.12, ease: E_ENTER }),
+    p.t + (k > 0 ? 0.82 : 0.64));
+  tl.to("#tw-glass", { opacity: 0, duration: 0.12, ease: E_MOVE }, p.t + (k > 0 ? 0.86 : 0.66));
+});
+
+/* ③ 段落重排 + 旧稿离场（4.48 起）：断行收紧（节奏改变，不只是换词），
+     AI 底稿完全离场；梳折起收进文首标签旁，成为语气规则痕迹。
+     重排只用 y 位移（不动 layout 属性）；reduced 下整段剥离 */
+if (!REDUCED) {
+  tl.to("#tw-cn-2", { y: GEO.LINE_Y_REFLOW[1] - GEO.LINE_Y[1], duration: 0.26, ease: E_MOVE }, 4.48);
+  tl.to("#tw-cn-3", { y: GEO.LINE_Y_REFLOW[2] - GEO.LINE_Y[2], duration: 0.26, ease: E_MOVE }, 4.48);
+}
+tl.to(".tw-line-ai", { opacity: 0, duration: 0.20, ease: E_MOVE }, 4.48);
+tl.to(".tw-comb-tooth", R(
+  { scaleY: 0, opacity: 0, duration: 0.14, ease: E_MOVE },
+  { opacity: 0, duration: 0.14, ease: E_MOVE }), 4.78);
+tl.to(".tw-comb-label", { opacity: 0, duration: 0.14, ease: E_MOVE }, 4.78);
+if (!REDUCED) {
+  tl.to("#tw-comb",
+    { x: GEO.COMB_FOLD.x - GEO.COMB_X, y: GEO.COMB_FOLD.y, duration: 0.22, ease: E_MOVE }, 4.88);
+  tl.to("#tw-comb-spine",
+    { scaleX: GEO.COMB_FOLD.scaleX, duration: 0.22, ease: E_MOVE }, 4.88);
+} else {
+  tl.set("#tw-comb", { x: GEO.COMB_FOLD.x - GEO.COMB_X, y: GEO.COMB_FOLD.y, opacity: 0.6 }, 4.88);
+  tl.set("#tw-comb-spine", { scaleX: GEO.COMB_FOLD.scaleX, opacity: 0.35 }, 4.88);
+}
+
+/* ④ 标签翻转（5.06 起）：「AI 初稿」→「人话稿」，文档身份不可逆改变 */
+tl.to("#tw-label-ai", { opacity: 0, duration: 0.12, ease: E_MOVE }, 5.06);
+tl.to("#tw-label-cn", { opacity: 1, duration: 0.16, ease: E_ENTER }, 5.10);
+
+/* ⑤ 本人终审落章（5.22 起，本章核心状态标记：改写需本人终审，不声称
+     模型等同本人）：章面 -8° 为静态 CSS，入场只动 wrapper 的 y/scale/opacity */
+tl.fromTo("#tw-stamp-wrap",
+  R({ y: -24, scale: 1.25, opacity: 0 }, { opacity: 0 }),
+  R({ y: 0, scale: 1, opacity: 1, duration: 0.28, ease: E_ENTER },
+    { opacity: 1, duration: 0.24, ease: E_ENTER }), 5.22);
+
+/* 产出标签（5.44 起） */
+tl.fromTo("#tw-output",
+  R({ y: 14, opacity: 0 }, { opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.20, ease: E_ENTER },
+    { opacity: 1, duration: 0.18, ease: E_ENTER }), 5.44);
+
+/* ---------- Hero 5.52-5.70：完整关系可读，无新动效 ---------- */
+
+/* ---------- End（5.70-5.90）：语境与解释区退位，人话稿 / 梳痕 / 章 / 产出保持可辨 ---------- */
+tl.to("#tw-context, #tw-explain", { opacity: 0.35, duration: 0.18, ease: E_MOVE }, 5.70);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+
+  ? window.__hyperframes.getVariables()
+
+  : {};
+
+const timeScale = Number(runtimeValues.time_scale);
+
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+
+window.__timelines["tone-rewrite-core"] = tl;
+    </script>
+    </template>
+  </body>
+</html>

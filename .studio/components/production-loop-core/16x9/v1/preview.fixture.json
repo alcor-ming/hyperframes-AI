@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "component_ref": "production-loop-core/16x9@v1",
+  "slots": {},
+  "timing": {
+    "time_scale": 1
+  },
+  "key_times_seconds": [
+    0,
+    4.9,
+    9.8
+  ]
+}

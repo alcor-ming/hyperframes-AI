@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>production-loop-core/16x9@v1</title>
+<!--
+  P012 ｜闭环收口（ProductionLoopCore）· rev.2
+  依据：ANIMATION_DRAFT.md rev.3、P011_HANDOFF.md、
+  .hyperframes-cache/p012-production-loop/ANTI_PPT_PLAN.md（已批准）。
+
+  单一状态链（珠子环流 + 向心凝结）：
+  P011 闭环弧线入画延展为完整环线 → 十结随环落位 →
+  珠子自「选题」出发环流一周、逐结触发留痕 → 回到起点二次亮起
+  （反馈成立）→ 环线向心收拢，十结聚为「工具包」印记 →
+  CTA 短语生成，画面保持。
+
+  事实边界：不表现无人审批的自动发布；CTA 不增加口播之外的承诺；
+  口播结束后画面保持（生产侧负责保持段，Preview 止于短保持）。
+
+  HyperFrames：单一 paused GSAP timeline；无随机数、wall clock、
+  运行时网络、无限循环或异步建表。总长 9.80s，仅为 Preview 时长。
+
+  rev.2 润色：开场卡栈入场放宽并加长缓动；入口弧由淡入改为描画进入，
+  收尾与环线成形重叠形成动量交接；结/珠子弹出回弹收敛；珠子
+  will-change 修正为 opacity（位移走 cx/cy 属性，不经 transform）。
+-->
+</head>
+<body>
+<template>
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+  }
+
+  * { box-sizing: border-box; }
+
+  html,
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: transparent;
+  }
+
+  #root {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    margin: 0;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+  }
+
+  .pl-clip,
+  .pl-stage,
+  .pl-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .pl-bg { background: transparent; }
+
+  .pl-stack-card,
+  .pl-shell {
+    position: absolute;
+    left: 56px;
+    top: 64px;
+    width: 1808px;
+    height: 964px;
+    border-radius: 30px;
+    pointer-events: none;
+  }
+
+  .pl-stack-card {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 52px rgba(2, 7, 11, 0.28);
+  }
+
+  .pl-stack-card.back-2 {
+    left: 88px;
+    top: 24px;
+    opacity: 0.26;
+  }
+
+  .pl-stack-card.back-1 {
+    left: 72px;
+    top: 44px;
+    opacity: 0.52;
+  }
+
+  .pl-shell {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 28px 72px rgba(2, 7, 11, 0.46);
+  }
+
+  .pl-context {
+    position: absolute;
+    left: 88px;
+    top: 64px;
+    color: var(--text-3);
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+
+  /* 环系统：入口弧、环线、轨迹痕、十结、珠子全部在同一张 SVG 内，
+     向心凝结时整体缩放，保持结的相对秩序 */
+  .pl-ring-svg {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    pointer-events: none;
+    transform-origin: 960px 520px;
+    will-change: transform, opacity;
+  }
+
+  .pl-entry {
+    fill: none;
+    stroke: rgba(84, 215, 255, 0.45);
+    stroke-width: 2;
+    stroke-dasharray: 4 7;
+    stroke-linecap: round;
+  }
+
+  .pl-ring {
+    fill: none;
+    stroke: rgba(247, 251, 255, 0.20);
+    stroke-width: 2;
+  }
+
+  /* 珠子走过的轨迹痕 */
+  .pl-trail {
+    fill: none;
+    stroke: rgba(84, 215, 255, 0.55);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+
+  .pl-node {
+    fill: var(--hf-color-canvas);
+    stroke: rgba(247, 251, 255, 0.35);
+    stroke-width: 2;
+    transform-origin: center;
+    transform-box: fill-box;
+  }
+
+  .pl-node-act {
+    fill: var(--relation);
+    opacity: 0;
+  }
+
+  /* 起点结的二次亮起： halo 环 */
+  .pl-node-halo {
+    fill: none;
+    stroke: var(--active);
+    stroke-width: 2;
+    opacity: 0;
+    transform-origin: center;
+    transform-box: fill-box;
+  }
+
+  .pl-bead {
+    fill: var(--active);
+    stroke: var(--hf-color-text-primary);
+    stroke-width: 3;
+    opacity: 0;
+    transform-origin: center;
+    transform-box: fill-box;
+    /* 位移由 cx/cy 属性驱动，只有 opacity 经合成层 */
+    will-change: opacity;
+  }
+
+  /* 短名标注：贴近结的外侧，即显即隐；位置由初始化脚本计算 */
+  .pl-node-label {
+    position: absolute;
+    color: var(--text-2);
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+  }
+
+  .pl-return-note {
+    position: absolute;
+    color: var(--relation);
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+  }
+
+  /* 工具包印记：环线凝结后浮现于环心 */
+  .pl-mark {
+    position: absolute;
+    left: 912px;
+    top: 472px;
+    width: 96px;
+    height: 96px;
+    border: 2px solid var(--relation);
+    border-radius: 50%;
+    background: rgba(11, 23, 32, 0.82);
+    box-shadow: 0 0 40px rgba(84, 215, 255, 0.22);
+    opacity: 0;
+    transform-origin: center;
+    will-change: transform, opacity;
+  }
+
+  .pl-mark-text {
+    position: absolute;
+    left: 912px;
+    top: 472px;
+    width: 96px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-1);
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    opacity: 0;
+  }
+
+  .pl-cta {
+    position: absolute;
+    left: 0;
+    top: 648px;
+    width: 1920px;
+    text-align: center;
+    color: var(--text-1);
+    font-size: 28px;
+    font-weight: 620;
+    letter-spacing: 0.10em;
+    opacity: 0;
+  }
+
+  .pl-explain {
+    position: absolute;
+    left: 88px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .pl-explain-tag {
+    color: var(--text-3);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .pl-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .pl-explain .bar:nth-child(2) { width: 88%; }
+  .pl-explain .bar:nth-child(3) {
+    width: 62%;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+
+  #root[data-composition-id="production-loop-core"] { background: transparent; margin: 0; }
+</style>
+
+<div data-hf-id="hf-cbep" id="root" data-composition-id="production-loop-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-start="0" data-width="1920" data-height="1080" data-duration="9.80">
+  <section data-hf-id="hf-nru4" id="pl-scene" class="pl-clip clip" data-start="0" data-duration="9.80" data-track-index="1">
+    <div data-hf-id="hf-r9ca" class="pl-bg" data-layout-ignore="" aria-hidden="true"></div>
+    <div data-hf-id="hf-dcol" class="pl-stage">
+      <div data-hf-id="hf-a73k" class="pl-stack-card back-2" id="pl-stack-back-2" data-layout-ignore="" aria-hidden="true"></div>
+      <div data-hf-id="hf-l6za" class="pl-stack-card back-1" id="pl-stack-back-1" data-layout-ignore="" aria-hidden="true"></div>
+      <div data-hf-id="hf-05dy" class="pl-shell" id="pl-shell" data-layout-ignore="" aria-hidden="true"></div>
+
+      <div data-hf-id="hf-83pv" class="pl-context" id="pl-context">机制详解 · 12</div>
+
+      <svg data-hf-id="hf-iyax" class="pl-ring-svg" id="pl-ring-svg" viewBox="0 0 1920 1080" width="1920" height="1080" aria-label="十个环节组成的生产环线示意">
+        <path data-hf-id="hf-3mu7" class="pl-entry" id="pl-entry" d="M410 790 C370 700 350 620 340 520" />
+        <path data-hf-id="hf-2wpv" class="pl-ring" id="pl-ring" d="M340 520 A620 250 0 1 1 1580 520 A620 250 0 1 1 340 520 Z" />
+        <path data-hf-id="hf-14ev" class="pl-trail" id="pl-trail" d="M340 520 A620 250 0 1 1 1580 520 A620 250 0 1 1 340 520 Z" />
+        <g data-hf-id="hf-jkij" id="pl-nodes" />
+        <circle data-hf-id="hf-s0y4" class="pl-bead" id="pl-bead" cx="340" cy="520" r="10" />
+      </svg>
+
+      <!-- 十枚短名标注由初始化脚本定位到各结外侧 -->
+      <div data-hf-id="hf-az2t" class="pl-node-label" id="pl-label-0">选题</div>
+      <div data-hf-id="hf-z7n2" class="pl-node-label" id="pl-label-1">拆解</div>
+      <div data-hf-id="hf-nud4" class="pl-node-label" id="pl-label-2">脚本</div>
+      <div data-hf-id="hf-qm9p" class="pl-node-label" id="pl-label-3">分镜</div>
+      <div data-hf-id="hf-4r29" class="pl-node-label" id="pl-label-4">人话</div>
+      <div data-hf-id="hf-niw6" class="pl-node-label" id="pl-label-5">封面</div>
+      <div data-hf-id="hf-8tfu" class="pl-node-label" id="pl-label-6">卡片</div>
+      <div data-hf-id="hf-5ppc" class="pl-node-label" id="pl-label-7">归档</div>
+      <div data-hf-id="hf-enyh" class="pl-node-label" id="pl-label-8">复盘</div>
+      <div data-hf-id="hf-2odq" class="pl-node-label" id="pl-label-9">周报</div>
+
+      <div data-hf-id="hf-hx2t" class="pl-return-note" id="pl-return-note">回到选题</div>
+
+      <div data-hf-id="hf-w2hr" class="pl-mark" id="pl-mark" aria-hidden="true"></div>
+      <div data-hf-id="hf-lzht" class="pl-mark-text" id="pl-mark-text">工具包</div>
+      <div data-hf-id="hf-k41j" class="pl-cta" id="pl-cta">十个 Skill · 一条生产线</div>
+
+      <div data-hf-id="hf-jy7l" class="pl-explain" id="pl-explain" data-slot="explain">
+        <span data-hf-id="hf-97xx" class="pl-explain-tag">EXPLAIN SLOT</span>
+        <div data-hf-id="hf-ufsv" class="bar"></div>
+        <div data-hf-id="hf-c51b" class="bar"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+(function () {
+var DUR = 9.80;
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+var CX = 960;
+var CY = 520;
+var SVGNS = "http://www.w3.org/2000/svg";
+
+/* 入口弧：非减弱动效下先以单破折描画进入，成形后换回 4 7 虚线外观 */
+var entry = document.getElementById("pl-entry");
+var entryLen = entry.getTotalLength();
+if (!REDUCED) {
+  entry.style.strokeDasharray = String(entryLen);
+  entry.style.strokeDashoffset = String(entryLen);
+}
+
+/* 环线：描边成形 */
+var ring = document.getElementById("pl-ring");
+var ringLen = ring.getTotalLength();
+ring.style.strokeDasharray = String(ringLen);
+ring.style.strokeDashoffset = String(ringLen);
+
+/* 轨迹痕：与环同形，随珠子进度同步描出 */
+var trail = document.getElementById("pl-trail");
+trail.style.strokeDasharray = String(ringLen);
+trail.style.strokeDashoffset = String(ringLen);
+
+/* 十结：等弧长分布于环上，p=0 处为「选题」；
+   结与短名标注的位置全部由真实轨迹几何计算 */
+var nodesGroup = document.getElementById("pl-nodes");
+var NODE_N = 10;
+var nodeEls = [];
+var actEls = [];
+var i;
+for (i = 0; i < NODE_N; i++) {
+  var pt = ring.getPointAtLength(ringLen * i / NODE_N);
+
+  var node = document.createElementNS(SVGNS, "circle");
+  node.setAttribute("class", "pl-node");
+  node.setAttribute("cx", pt.x);
+  node.setAttribute("cy", pt.y);
+  node.setAttribute("r", "10");
+  node.setAttribute("id", "pl-node-" + i);
+  nodesGroup.appendChild(node);
+  nodeEls.push(node);
+
+  var act = document.createElementNS(SVGNS, "circle");
+  act.setAttribute("class", "pl-node-act");
+  act.setAttribute("cx", pt.x);
+  act.setAttribute("cy", pt.y);
+  act.setAttribute("r", "5");
+  act.setAttribute("id", "pl-act-" + i);
+  nodesGroup.appendChild(act);
+  actEls.push(act);
+
+  /* 短名标注：结外侧 34px，沿环心到结的方向 */
+  var dx = pt.x - CX;
+  var dy = pt.y - CY;
+  var dl = Math.sqrt(dx * dx + dy * dy) || 1;
+  var label = document.getElementById("pl-label-" + i);
+  label.style.left = (pt.x + dx / dl * 34) + "px";
+  label.style.top = (pt.y + dy / dl * 34) + "px";
+}
+
+/* 起点 halo 与返回注记 */
+var startPt = ring.getPointAtLength(0);
+var halo = document.createElementNS(SVGNS, "circle");
+halo.setAttribute("class", "pl-node-halo");
+halo.setAttribute("cx", startPt.x);
+halo.setAttribute("cy", startPt.y);
+halo.setAttribute("r", "18");
+halo.setAttribute("id", "pl-halo");
+nodesGroup.appendChild(halo);
+
+var returnNote = document.getElementById("pl-return-note");
+returnNote.style.left = (startPt.x - 10) + "px";
+returnNote.style.top = (startPt.y - 44) + "px";
+
+/* 珠子环流：p 0→1 一周，轨迹痕同步描出 */
+var bead = document.getElementById("pl-bead");
+var beadState = { p: 0 };
+function applyBead() {
+  var point = ring.getPointAtLength(ringLen * beadState.p);
+  bead.setAttribute("cx", point.x);
+  bead.setAttribute("cy", point.y);
+  trail.style.strokeDashoffset = String(ringLen * (1 - beadState.p));
+}
+applyBead();
+
+/* 珠子匀速环流，结 i 的到达时刻可精确计算 */
+var RUN_START = 2.20;
+var RUN_DUR = 3.80;
+function arriveAt(idx) { return RUN_START + RUN_DUR * idx / NODE_N; }
+
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* ---------- Opening：卡栈、语境 ---------- */
+tl.from("#pl-stack-back-2", R(
+  { x: 18, y: -8, opacity: 0, duration: 0.28, ease: E_ENTER },
+  { opacity: 0, duration: 0.22, ease: E_ENTER }), 0.12);
+tl.from("#pl-stack-back-1", R(
+  { x: 12, y: -5, opacity: 0, duration: 0.28, ease: E_ENTER },
+  { opacity: 0, duration: 0.22, ease: E_ENTER }), 0.20);
+tl.from("#pl-shell", R(
+  { y: 18, opacity: 0, duration: 0.36, ease: E_ENTER },
+  { opacity: 0, duration: 0.28, ease: E_ENTER }), 0.28);
+tl.from("#pl-context", { opacity: 0, duration: 0.22, ease: E_ENTER }, 0.24);
+tl.from("#pl-explain", { opacity: 0, duration: 0.24, ease: E_ENTER }, 0.38);
+
+/* ---------- 环线成形：P011 弧线描画入画，延展闭合为环 ---------- */
+tl.fromTo("#pl-entry",
+  { opacity: 0 },
+  { opacity: 1, duration: R(0.12, 0.18), ease: "power1.out" }, 0.30);
+if (!REDUCED) {
+  tl.to("#pl-entry", {
+    strokeDashoffset: 0,
+    duration: 0.38,
+    ease: "power1.inOut"
+  }, 0.32);
+  /* 描画完成后换回虚线外观（seek-safe 的 set，不依赖 call） */
+  tl.set("#pl-entry", { strokeDasharray: "4 7" }, 0.72);
+}
+tl.to("#pl-ring", {
+  strokeDashoffset: 0,
+  duration: R(0.90, 0.30),
+  ease: R("power2.inOut", "power1.out")
+}, 0.60);
+tl.fromTo(".pl-node",
+  R({ scale: 0.4, opacity: 0 }, { scale: 1, opacity: 0 }),
+  R({ scale: 1, opacity: 1, duration: 0.26, ease: "back.out(1.3)", stagger: 0.05 },
+    { opacity: 1, duration: 0.20, ease: "power1.out", stagger: 0.05 }), 1.10);
+
+/* ---------- 珠子在「选题」结凝结，起点首次亮起 ---------- */
+tl.fromTo("#pl-bead",
+  R({ scale: 0.5, opacity: 0 }, { scale: 1, opacity: 0 }),
+  R({ scale: 1, opacity: 1, duration: 0.26, ease: "back.out(1.4)" },
+    { opacity: 1, duration: 0.20, ease: "power1.out" }), 1.95);
+tl.fromTo("#pl-act-0",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: "power1.out" }, 2.05);
+tl.fromTo("#pl-label-0",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.18, ease: "power1.out" }, 2.10);
+tl.to("#pl-label-0", { opacity: 0, duration: 0.18, ease: "power1.in" }, 2.70);
+
+/* ---------- Build：珠子匀速环流一周，逐结触发、短名即显即隐 ---------- */
+tl.to(beadState, {
+  p: 1,
+  duration: R(RUN_DUR, 0.01),
+  ease: "none",
+  onUpdate: applyBead
+}, RUN_START);
+
+for (i = 1; i < NODE_N; i++) {
+  tl.fromTo("#pl-act-" + i,
+    { opacity: 0 },
+    { opacity: 1, duration: 0.18, ease: "power1.out" }, arriveAt(i));
+  tl.fromTo("#pl-label-" + i,
+    { opacity: 0 },
+    { opacity: 1, duration: 0.16, ease: "power1.out" }, arriveAt(i) + 0.02);
+  tl.to("#pl-label-" + i,
+    { opacity: 0, duration: 0.16, ease: "power1.in" }, arriveAt(i) + 0.55);
+}
+
+/* ---------- 回到起点：二次亮起，反馈闭环成立 ---------- */
+tl.fromTo("#pl-halo",
+  R({ scale: 0.6, opacity: 0 }, { scale: 1, opacity: 0 }),
+  R({ scale: 1, opacity: 1, duration: 0.30, ease: "back.out(1.4)" },
+    { opacity: 1, duration: 0.20, ease: "power1.out" }), 6.10);
+tl.fromTo("#pl-return-note",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: "power1.out" }, 6.16);
+
+/* ---------- Hero：环线向心收拢，十结聚为工具包印记 ---------- */
+tl.to("#pl-return-note", { opacity: 0, duration: 0.18, ease: "power1.in" }, 6.92);
+tl.to("#pl-ring-svg", R(
+  { scale: 0.22, opacity: 0.60, duration: 0.90, ease: E_MOVE },
+  { scale: 0.22, opacity: 0.60, duration: 0.01, ease: "none" }), 6.90);
+
+tl.fromTo("#pl-mark",
+  R({ scale: 0.6, opacity: 0 }, { scale: 1, opacity: 0 }),
+  R({ scale: 1, opacity: 1, duration: 0.40, ease: "back.out(1.3)" },
+    { opacity: 1, duration: 0.26, ease: "power1.out" }), 7.66);
+tl.fromTo("#pl-mark-text",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.24, ease: "power1.out" }, 7.86);
+
+/* ---------- End：CTA 生成，语境退位，画面保持 ---------- */
+tl.fromTo("#pl-cta",
+  R({ y: 14, opacity: 0 }, { y: 0, opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.34, ease: E_ENTER },
+    { opacity: 1, duration: 0.26, ease: E_ENTER }), 8.20);
+tl.to("#pl-context, #pl-explain", { opacity: 0.35, duration: 0.22, ease: E_MOVE }, 8.48);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["production-loop-core"] = tl;
+
+console.assert(
+  document.querySelector("[data-composition-id='production-loop-core']") &&
+  window.__timelines["production-loop-core"] === tl &&
+  tl.duration() <= DUR &&
+  nodeEls.length === NODE_N,
+  "P012 HyperFrames composition contract failed"
+);
+})();
+</script>
+
+</template>
+</body>
+</html>

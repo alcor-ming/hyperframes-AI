@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>cover-title-core/16x9@v1</title>
+<!--
+  ==========================================================================
+  P007 ｜ 封面标题机制详解核心（CoverTitleCore）· 组件原型 rev.1（已冻结）
+  依据：ANIMATION_DRAFT.md rev.3 · COMPONENT_SPLIT.md rev.6（P007 已冻结）· anti-PPT skill（motion-native 重构流程）·
+  design-taste-frontend（反 AI 味约束）
+  版面纪律：沿用 P002 rev.4 锁定语汇 + P004 rev.3 机制卡栈（后续机制以
+  同尺寸新卡覆盖、旧卡留边）+ P006 rev.1 承接（输入即「产出 · 人话文案」）。
+  --------------------------------------------------------------------------
+  本章要解释的关系：同一内容 → 发散为多组标题 / 封面方向 → 供人比较选定
+  （候选用于比较，没有真实数据时不存在确定赢家 —— Draft 事实边界；
+  不显示虚构点击率、观看时长或 A/B 胜出）
+  --------------------------------------------------------------------------
+  视觉隐喻：折射发散。不做"三张等宽候选卡片并排"（PPT 与 AI 模板的双重
+  红线），候选在时间中逐一产生：
+    · 上一章产出条飞入舞台，凝结为一枚「内容核」；
+    · 核沿三条细轨迹分裂出三枚候选坯，各落其位（不同尺寸、错落排布，
+      无网格、无等宽）；
+    · 逐枚显影：当前候选玻璃框亮（全帧唯一玻璃面 + 唯一蓝色），标题措辞
+      擦写写入，封面骨架生长——三枚骨架版式各异（满版标题 / 左图右文 /
+      上图下文），其余候选退为底稿；
+    · 比较态：三枚回到同亮度；轨道末端出现空的「选定位」虚线槽，
+      「待人选定」章落在槽上——有人选定之前，槽保持为空；
+    · End 保留三枚候选、空选定位与章，供 P008（图文卡片）承接。
+  --------------------------------------------------------------------------
+  反 PPT 检查（anti-PPT skill §6 强制重写条件对照）：
+    · 无三张等尺寸卡片同时完整展示——候选逐一从核中产生，版式互异；
+    · 新对象由旧对象生成——三枚候选全部自内容核分裂而来，留下轨迹；
+    · 无"最佳/ winner"标记——结尾新增的是空槽与待选定状态；
+    · 删除动画后静态截图只剩结果，发散过程不可读（通过无动画测试）；
+    · 单帧一个主焦点：当前显影的候选。
+  --------------------------------------------------------------------------
+  核心 Preview 数据（技术键不是最终 Slot API）:
+    candidates   三组候选 [{ dir_label, layout, title: [...] }, ...]
+                 （接近真实中文长度的占位样例，正式文案须来自 Script；
+                 layout ∈ full-title / img-left / img-top，骨架写死）
+    result_tag   本章产出凝练标签（供 P008 ChapterIntro previous_context 引用）
+    explain      文字解释区（左下，骨架占位，正式文案注入 #ct-explain）
+  可选 Preview 数据:
+    context_label  组件语境标签（默认 "机制详解 · 07"）
+    input_label    输入条标签（默认 "产出 · 人话文案"，承接 P006 result_tag）
+    slot_label     空槽标注（默认 "选定位"）
+    pick_stamp     状态章文字（默认 "待人选定"）
+  --------------------------------------------------------------------------
+  四状态时间表（总长 5.60s = 本原型 Preview 时长，不冻结固定前导或最终 Scene 时长）:
+    Opening  0.00-1.14   卡栈 / 语境 / 解释区建立 → 人话文案产出条飞入（0.26）
+                         → 凝结为内容核（0.74）
+    Build    1.14-5.14   ①分裂 1.14：三条轨迹描画，候选坯自核飞出落位（1.22）
+                         ②显影 ×3（2.14 / 2.84 / 3.54：框亮 → 标题擦写 →
+                         骨架生长 → 框熄，非当前候选退底稿）
+                         ③比较态 4.16：三枚同亮度 → 空选定位槽（4.36）→
+                         待人选定落章（4.66）→ 产出标签（4.94）
+    Hero     5.14-5.36   来源（核 + 轨迹）→ 三候选 → 空选定位完整关系可读
+    End      5.36-5.60   语境与解释区退位 0.35；核、候选、空槽、章与产出
+                         标签保持可辨，供下一章 ChapterIntro 承接
+  --------------------------------------------------------------------------
+  运动约束（optical_fluidity）:
+    进场 easing   cubic-bezier(0.23,1,0.32,1)  → CustomEase "hfEnter"
+    画面内变化    cubic-bezier(0.77,0,0.175,1) → CustomEase "hfMove"
+    单帧主强调色唯一（var(--hf-color-accent-primary)）：仅当前候选玻璃框 + 「待人选定」章描边；
+    玻璃面同一时刻只亮一个。关系青（var(--hf-color-accent-primary)）仅三条分裂轨迹 1px 细线。
+    无渐变、无光晕、无粒子、无 3D、无虚构数据。
+  --------------------------------------------------------------------------
+  Seek-safe：全部状态由单条 paused GSAP timeline 驱动；无 wall clock、
+  无无限循环、无随机数、无运行时网络；GSAP 使用共享本地文件。
+  reduced-motion 兜底：位移/缩放全剥离（飞入 / 分裂 → 原地淡入，
+  擦写 → 仅 opacity，落章 → 仅 opacity）。
+  ==========================================================================
+-->
+</head>
+<body>
+<template id="cover-title-core-template">
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  #root {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: relative;
+    background: transparent;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+    margin: 24px auto 120px; /* 预览页居中；渲染时由框架接管 */
+  }
+
+  .ct-stage {
+    width: 100%;
+    height: 100%;
+    padding: 72px 88px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* --- 机制卡片栈：本章是一张完整主卡；后续机制覆盖其上时，旧卡仅留边 --- */
+  .ct-stack-card,
+  .ct-mechanism-shell {
+    position: absolute;
+    left: 56px;
+    top: 64px;
+    width: 1808px;
+    height: 964px;
+    border-radius: 30px;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .ct-stack-card {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 52px rgba(2, 7, 11, 0.28);
+  }
+  .ct-stack-card.back-2 {
+    left: 88px;
+    top: 24px;
+    opacity: 0.26;
+  }
+  .ct-stack-card.back-1 {
+    left: 72px;
+    top: 44px;
+    opacity: 0.52;
+  }
+  .ct-mechanism-shell {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 28px 72px rgba(2, 7, 11, 0.46);
+  }
+
+  /* --- 顶部：组件语境标签（结构性占位，非文案） --- */
+  .ct-context {
+    position: absolute;
+    left: 88px;
+    top: 64px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  /* --- 分裂轨迹层：1px 关系青细线（SVG，实际承载候选飞出的路径） --- */
+  .ct-links {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .ct-links path {
+    stroke: var(--relation);
+    stroke-width: 1;
+    fill: none;
+    opacity: 0.35;
+  }
+
+  /* --- 输入条：上一章产出（飞入后凝结为内容核） --- */
+  .ct-strip {
+    position: absolute;
+    left: 262px;
+    top: 430px;
+    width: 240px;
+    height: 52px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 16px;
+    color: var(--text-2);
+    box-sizing: border-box;
+    opacity: 0;
+    will-change: transform;
+  }
+  .ct-strip .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+  /* --- 内容核：本章 Hero Subject（三枚候选的共同来源） --- */
+  .ct-core {
+    position: absolute;
+    left: 286px;
+    top: 420px;
+    width: 216px;
+    height: 72px;
+    border-radius: 16px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 14px 36px rgba(2, 7, 11, 0.5);
+    box-sizing: border-box;
+    opacity: 0;
+  }
+  .ct-core .bar {
+    position: absolute;
+    left: 24px;
+    height: 12px;
+    border-radius: 4px;
+    background: rgba(247, 251, 255, 0.5);
+  }
+  .ct-core .c1 { top: 20px; width: 150px; }
+  .ct-core .c2 { top: 42px; width: 96px; background: rgba(247, 251, 255, 0.28); }
+
+  /* --- 候选坯：同一内容核的三个方向（尺寸 / 版式互异，错落排布，无网格） ---
+     终态位置即 CSS 布局（layout first）；分裂动效从核位 from 过来 */
+  .ct-cand {
+    position: absolute;
+    border-radius: 16px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 36px rgba(2, 7, 11, 0.5);
+    box-sizing: border-box;
+    opacity: 0;
+    will-change: transform;
+  }
+  .ct-cand .dir {
+    position: absolute;
+    left: 18px;
+    top: 15px;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .ct-cand .ti {
+    position: absolute;
+    font-weight: 600;
+    color: var(--text-1);
+    line-height: 1.4;
+    white-space: nowrap;
+    clip-path: inset(0% 100% 0% 0%);
+  }
+  .ct-cand .ph {
+    position: absolute;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+  .ct-cand .sub {
+    position: absolute;
+    height: 10px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+
+  /* 候选 A · 满版标题型 300×220 */
+  #ct-cand-1 { left: 590px; top: 270px; width: 300px; height: 220px; }
+  #ct-cand-1 .t1 { left: 20px; top: 54px; font-size: 26px; }
+  #ct-cand-1 .t2 { left: 20px; top: 94px; font-size: 26px; }
+  #ct-cand-1 .sub { left: 20px; top: 168px; width: 118px; }
+
+  /* 候选 B · 左图右文型 430×190 */
+  #ct-cand-2 { left: 1030px; top: 340px; width: 430px; height: 190px; }
+  #ct-cand-2 .ph { left: 18px; top: 52px; width: 120px; height: 120px; }
+  #ct-cand-2 .t1 { left: 158px; top: 62px; font-size: 24px; }
+  #ct-cand-2 .t2 { left: 158px; top: 98px; font-size: 24px; }
+  #ct-cand-2 .sub { left: 158px; top: 150px; width: 140px; }
+
+  /* 候选 C · 上图下文型 370×240 */
+  #ct-cand-3 { left: 660px; top: 560px; width: 370px; height: 240px; }
+  #ct-cand-3 .ph { left: 18px; top: 50px; width: 334px; height: 92px; }
+  #ct-cand-3 .t1 { left: 18px; top: 162px; font-size: 23px; }
+  #ct-cand-3 .sub { left: 18px; top: 206px; width: 120px; }
+
+  /* --- 当前候选框：正在显影的候选（全帧唯一玻璃面 + 唯一主强调色描边） --- */
+  .ct-glass {
+    position: absolute;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(10, 132, 255, 0.65);
+    box-sizing: border-box;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* --- 选定位：空槽（有人选定之前保持为空；本章事实边界的视觉形态） --- */
+  .ct-slot {
+    position: absolute;
+    left: 1390px;
+    top: 590px;
+    width: 360px;
+    height: 180px;
+    border-radius: 16px;
+    border: 1.5px dashed rgba(255, 255, 255, 0.22);
+    box-sizing: border-box;
+    opacity: 0;
+  }
+  .ct-slot-label {
+    position: absolute;
+    left: 18px;
+    top: 15px;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  /* 「待人选定」状态章：落在空槽上沿；wrapper 承载动效，内层静态 -8° */
+  .ct-stamp-wrap {
+    position: absolute;
+    left: 1546px;
+    top: 566px;
+    width: 148px;
+    height: 46px;
+    opacity: 0;
+    will-change: transform;
+  }
+  .ct-stamp {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-8deg);
+    border: 1.5px solid rgba(10, 132, 255, 0.85);
+    border-radius: 8px;
+    background: rgba(10, 132, 255, 0.08);
+    box-sizing: border-box;
+    color: var(--text-1);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-indent: 0.1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* --- 左下：文字解释区（EXPLAIN SLOT，骨架占位；正式文案由此注入） --- */
+  .ct-explain {
+    position: absolute;
+    left: 88px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .ct-explain-tag {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .ct-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .ct-explain .bar.b1 { width: 88%; }
+  .ct-explain .bar.b2 { width: 62%; background: rgba(255, 255, 255, 0.08); }
+
+  /* --- 本章产出标签（End 状态的凝练结果，供下一章承接） --- */
+  .ct-output {
+    position: absolute;
+    left: 600px;
+    top: 876px;
+    width: 720px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    color: var(--text-1);
+    opacity: 0;
+    box-sizing: border-box;
+  }
+  .ct-output .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+
+  #root[data-composition-id="cover-title-core"] { background: transparent; margin: 0; }
+</style>
+
+<!-- ==================== 组件本体 ==================== -->
+<div data-hf-id="hf-9rj1" id="root" data-composition-id="cover-title-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-width="1920" data-height="1080" data-start="0" data-duration="5.60" data-track-index="0">
+  <div data-hf-id="hf-4dq8" class="ct-stage">
+
+    <!-- 当前机制主卡 + 两层旧卡留边：后续机制以同尺寸卡片覆盖上来 -->
+    <div data-hf-id="hf-f7m7" class="ct-stack-card back-2" id="ct-stack-back-2" aria-hidden="true"></div>
+    <div data-hf-id="hf-ld3d" class="ct-stack-card back-1" id="ct-stack-back-1" aria-hidden="true"></div>
+    <div data-hf-id="hf-hjsn" class="ct-mechanism-shell" id="ct-mechanism-shell" aria-hidden="true"></div>
+
+    <div data-hf-id="hf-c4yd" class="ct-context" id="ct-context">机制详解 · 07</div>
+
+    <!-- 分裂轨迹：内容核 → 三枚候选（描画后候选沿其飞出） -->
+    <svg data-hf-id="hf-i9lr" class="ct-links" width="1920" height="1080" viewBox="0 0 1920 1080" aria-hidden="true">
+      <path data-hf-id="hf-q2oj" id="ct-link-1" d="M 506 456 C 548 428, 574 404, 589 386" pathLength="1" />
+      <path data-hf-id="hf-v021" id="ct-link-2" d="M 506 456 C 690 460, 860 450, 1024 440" pathLength="1" />
+      <path data-hf-id="hf-6dx2" id="ct-link-3" d="M 506 462 C 570 540, 626 616, 656 672" pathLength="1" />
+    </svg>
+
+    <!-- 输入条（上一章产出）与内容核 -->
+    <div data-hf-id="hf-fiy2" class="ct-strip" id="ct-strip">
+      <span data-hf-id="hf-9gry" class="dot"></span><span data-hf-id="hf-uk51" id="ct-strip-t">产出 · 人话文案</span>
+    </div>
+    <div data-hf-id="hf-zwfg" class="ct-core" id="ct-core">
+      <div data-hf-id="hf-idol" class="bar c1"></div>
+      <div data-hf-id="hf-mbsm" class="bar c2"></div>
+    </div>
+
+    <!-- 当前候选框：逐枚移交，同一时刻只亮一个。DOM 序在候选之前：
+         玻璃面被实心候选压住，只露出外圈 10-12px 描边环（选择环），
+         backdrop blur 不遮挡候选文字 -->
+    <div data-hf-id="hf-fm3m" class="ct-glass" id="ct-glass"></div>
+
+    <!-- 三枚候选坯：内部骨架由 Slot candidates 按 layout 注入 -->
+    <div data-hf-id="hf-lvz8" class="ct-cand" id="ct-cand-1"></div>
+    <div data-hf-id="hf-ujv3" class="ct-cand" id="ct-cand-2"></div>
+    <div data-hf-id="hf-qlr2" class="ct-cand" id="ct-cand-3"></div>
+
+    <!-- 选定位空槽 + 待人选定章 -->
+    <div data-hf-id="hf-xzw2" class="ct-slot" id="ct-slot">
+      <span data-hf-id="hf-pue9" class="ct-slot-label" id="ct-slot-label">选定位</span>
+    </div>
+    <div data-hf-id="hf-h2d6" class="ct-stamp-wrap" id="ct-stamp-wrap">
+      <div data-hf-id="hf-qmue" class="ct-stamp" id="ct-stamp">待人选定</div>
+    </div>
+
+    <!-- 左下：文字解释区（骨架占位，正式文案经 Slot 注入） -->
+    <div data-hf-id="hf-jx01" class="ct-explain" id="ct-explain" data-slot="explain">
+      <span data-hf-id="hf-i77s" class="ct-explain-tag">EXPLAIN SLOT</span>
+      <div data-hf-id="hf-1iyu" class="bar b1"></div>
+      <div data-hf-id="hf-xkut" class="bar b2"></div>
+    </div>
+
+    <!-- 本章产出标签 -->
+    <div data-hf-id="hf-gpu4" class="ct-output" id="ct-output">
+      <span data-hf-id="hf-zcc2" class="dot"></span><span data-hf-id="hf-v9xl" id="ct-output-t">产出 · 标题候选 ×3</span>
+    </div>
+
+  </div>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+/* ===== 默认 Preview 数据（占位样例，接近真实中文长度；技术键不是最终 Slot API） =====
+   三组候选为确定性数据：dir_label = 方向标注，layout = 骨架版式（对应写死的
+   CSS 骨架），title = 标题行数组。无随机数，seek 任意时刻状态确定。
+   事实边界：无点击率、无观看时长、无 A/B 胜出标记。 */
+var SLOT_DATA = {
+  context_label: "机制详解 · 07",
+  input_label: "产出 · 人话文案",
+  slot_label: "选定位",
+  pick_stamp: "待人选定",
+  result_tag: "产出 · 标题候选 ×3",
+  candidates: [
+    { dir_label: "满版标题", layout: "full-title", title: ["做号一年，", "我把时间花在哪了"] },
+    { dir_label: "左图右文", layout: "img-left", title: ["只讲三件", "我踩过坑的事"] },
+    { dir_label: "上图下文", layout: "img-top", title: ["方法不难，难在明天继续"] }
+  ]
+};
+
+/* ==================== 几何常量（1920×1080 画布，与 CSS 布局一致） ==================== */
+var GEO = {
+  /* 内容核中心（舞台坐标）：分裂动效的共同起点 */
+  CORE: { x: 394, y: 456 },
+  /* 候选终态中心（与 CSS 一致，用于计算 from 偏移） */
+  CAND_CENTER: [
+    { x: 740, y: 380 },
+    { x: 1245, y: 435 },
+    { x: 845, y: 680 }
+  ],
+  /* 当前候选框（候选外扩 10/12px） */
+  GLASS: [
+    { left: 580, top: 258, width: 320, height: 244 },
+    { left: 1020, top: 328, width: 450, height: 214 },
+    { left: 650, top: 548, width: 390, height: 264 }
+  ]
+};
+
+/* ==================== Preview 数据注入（同步执行，渲染前就绪） ==================== */
+(function injectSlots(d) {
+  document.getElementById("ct-context").textContent = d.context_label;
+  document.getElementById("ct-strip-t").textContent = d.input_label;
+  document.getElementById("ct-slot-label").textContent = d.slot_label;
+  document.getElementById("ct-stamp").textContent = d.pick_stamp;
+  document.getElementById("ct-output-t").textContent = d.result_tag;
+
+  /* 候选内部骨架：dir 标注 + 标题行（.ti t1/t2）+ 版式骨架块（.ph / .sub，
+     类名对应写死的 CSS 位；layout 只决定渲染哪些骨架元素） */
+  d.candidates.forEach(function (c, i) {
+    var el = document.getElementById("ct-cand-" + (i + 1));
+    var dir = document.createElement("span");
+    dir.className = "dir";
+    dir.textContent = c.dir_label;
+    el.appendChild(dir);
+    if (c.layout !== "full-title") {
+      var ph = document.createElement("div");
+      ph.className = "ph";
+      el.appendChild(ph);
+    }
+    c.title.forEach(function (line, r) {
+      var ti = document.createElement("div");
+      ti.className = "ti t" + (r + 1);
+      ti.textContent = line;
+      el.appendChild(ti);
+    });
+    var sub = document.createElement("div");
+    sub.className = "sub";
+    el.appendChild(sub);
+  });
+})(SLOT_DATA);
+
+/* ==================== Easing（optical_fluidity profile，与 B00 / P002–P006 一致） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ==================== 组件 Timeline（paused · seek-safe · 同时运动 ≤ 2） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* prefers-reduced-motion：剥离位移/缩放，仅保留 opacity 交叉淡变。
+   仅影响本地预览；daemon 渲染环境为 no-preference，输出始终全动效。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* ---------- Opening（0.00-1.14 容器建立，上一章产出凝结为本章输入） ----------
+   卡栈 → 语境 → 解释区 → 产出条自左侧飞入 → 凝结为内容核（条折叠退场，
+   核在原位成形；新对象由旧对象转化，不是独立入场） */
+tl.from("#ct-stack-back-2", R(
+  { x: 18, y: -8, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.02);
+tl.from("#ct-stack-back-1", R(
+  { x: 12, y: -5, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.06);
+tl.from("#ct-mechanism-shell", R(
+  { y: 18, opacity: 0, duration: 0.30, ease: E_ENTER },
+  { opacity: 0, duration: 0.26, ease: E_ENTER }), 0.08);
+tl.from("#ct-context", { opacity: 0, duration: 0.20, ease: E_ENTER }, 0.05);
+tl.from("#ct-explain", { opacity: 0, duration: 0.22, ease: E_ENTER }, 0.16);
+
+/* 产出条飞入（承接 P006 End 的产出标签语义） */
+tl.fromTo("#ct-strip",
+  R({ x: -560, opacity: 0 }, { x: 0, opacity: 0 }),
+  R({ x: 0, opacity: 1, duration: 0.40, ease: E_ENTER },
+    { opacity: 1, duration: 0.28, ease: E_ENTER }), 0.26);
+
+/* 凝结：条收拢退场，内容核于同一位置成形（轻微 scale 回弹） */
+tl.to("#ct-strip", R(
+  { scaleX: 0.2, opacity: 0, duration: 0.26, ease: E_MOVE },
+  { opacity: 0, duration: 0.22, ease: E_MOVE }), 0.74);
+tl.fromTo("#ct-core",
+  R({ scale: 0.5, opacity: 0 }, { scale: 1, opacity: 0 }),
+  R({ scale: 1, opacity: 1, duration: 0.30, ease: E_ENTER },
+    { opacity: 1, duration: 0.24, ease: E_ENTER }), 0.82);
+
+/* ---------- Build：逐个功能展现 ---------- */
+
+/* ① 折射分裂（1.14 起）：三条轨迹自核描画 → 三枚候选坯自核沿轨迹飞出
+     落位（from 核位偏移 + scale 0.3，终态即 CSS 布局）→ 核降 0.5 底稿。
+     轨迹是运动的实际载体（描画方向 = 飞行方向）。 */
+for (var k = 1; k <= 3; k++) {
+  tl.fromTo("#ct-link-" + k,
+    { strokeDasharray: 1, strokeDashoffset: 1 },
+    { strokeDashoffset: 0, duration: 0.30, ease: E_MOVE }, 1.14 + (k - 1) * 0.08);
+}
+for (var c = 1; c <= 3; c++) {
+  var dx = GEO.CORE.x - GEO.CAND_CENTER[c - 1].x;
+  var dy = GEO.CORE.y - GEO.CAND_CENTER[c - 1].y;
+  tl.fromTo("#ct-cand-" + c,
+    R({ x: dx, y: dy, scale: 0.3, opacity: 0 }, { x: 0, y: 0, scale: 1, opacity: 0 }),
+    R({ x: 0, y: 0, scale: 1, opacity: 1, duration: 0.42, ease: E_MOVE },
+      { opacity: 1, duration: 0.30, ease: E_ENTER }),
+    1.22 + (c - 1) * 0.10);
+}
+tl.to("#ct-core", { opacity: 0.5, duration: 0.20, ease: E_MOVE }, 1.74);
+
+/* ② 逐枚显影（2.14 / 2.84 / 3.54）：当前候选框亮（唯一玻璃面）→
+     方向标注 → 标题擦写写入 → 封面骨架生长 → 框熄；
+     非当前候选退 0.55 底稿，比较前谁也不压过谁 */
+var PASS_T = [2.14, 2.84, 3.54];
+PASS_T.forEach(function (t, i) {
+  var n = i + 1;
+  var g = GEO.GLASS[i];
+  tl.set("#ct-glass", { left: g.left + "px", top: g.top + "px", width: g.width + "px", height: g.height + "px" }, t);
+  /* 亮度移交：当前候选恢复 1，其余退底稿 */
+  for (var o = 1; o <= 3; o++) {
+    tl.to("#ct-cand-" + o, { opacity: o === n ? 1 : 0.55, duration: 0.18, ease: E_MOVE }, t);
+  }
+  tl.fromTo("#ct-glass",
+    { opacity: 0 },
+    { opacity: 1, duration: 0.14, ease: E_ENTER }, t + 0.02);
+  tl.fromTo("#ct-cand-" + n + " .dir",
+    { opacity: 0 },
+    { opacity: 1, duration: 0.12, ease: E_ENTER }, t + 0.10);
+  /* 标题行擦写（文字即材料，reduced 降为仅 opacity） */
+  var titles = document.querySelectorAll("#ct-cand-" + n + " .ti");
+  titles.forEach(function (ti, r) {
+    tl.fromTo(ti,
+      R({ clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", opacity: 0 }),
+      R({ clipPath: "inset(0% 0% 0% 0%)", duration: 0.28, ease: E_ENTER },
+        { opacity: 1, duration: 0.20, ease: E_ENTER }),
+      t + 0.16 + r * 0.10);
+  });
+  /* 封面骨架生长（reduced 分支 from 直接带 scaleX:1，避免降级下不可见） */
+  var blocks = document.querySelectorAll("#ct-cand-" + n + " .ph, #ct-cand-" + n + " .sub");
+  blocks.forEach(function (b, bi) {
+    tl.fromTo(b,
+      R({ scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 0 }),
+      R({ scaleX: 1, opacity: 1, duration: 0.20, ease: E_ENTER },
+        { opacity: 1, duration: 0.18, ease: E_ENTER }),
+      t + 0.22 + bi * 0.06);
+  });
+  tl.to("#ct-glass", { opacity: 0, duration: 0.12, ease: E_MOVE }, t + 0.56);
+});
+
+/* ③ 比较态（4.16 起）：三枚回到同亮度（无赢家）；空选定位槽出现 →
+     「待人选定」章落在槽上沿（本章核心状态标记：候选供人比较选定，
+     没有真实数据时不存在确定赢家） */
+tl.to(".ct-cand", { opacity: 1, duration: 0.18, ease: E_MOVE }, 4.16);
+tl.fromTo("#ct-slot",
+  R({ scale: 0.96, opacity: 0 }, { opacity: 0 }),
+  R({ scale: 1, opacity: 1, duration: 0.22, ease: E_ENTER },
+    { opacity: 1, duration: 0.20, ease: E_ENTER }), 4.36);
+tl.fromTo("#ct-stamp-wrap",
+  R({ y: -24, scale: 1.25, opacity: 0 }, { opacity: 0 }),
+  R({ y: 0, scale: 1, opacity: 1, duration: 0.28, ease: E_ENTER },
+    { opacity: 1, duration: 0.24, ease: E_ENTER }), 4.66);
+tl.fromTo("#ct-output",
+  R({ y: 14, opacity: 0 }, { opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.20, ease: E_ENTER },
+    { opacity: 1, duration: 0.18, ease: E_ENTER }), 4.94);
+
+/* ---------- Hero 5.14-5.36：完整关系可读，无新动效 ---------- */
+
+/* ---------- End（5.36-5.60）：语境与解释区退位，核 / 候选 / 空槽 / 章 / 产出保持可辨 ---------- */
+tl.to("#ct-context, #ct-explain", { opacity: 0.35, duration: 0.18, ease: E_MOVE }, 5.36);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["cover-title-core"] = tl;
+</script>
+
+</template>
+</body>
+</html>

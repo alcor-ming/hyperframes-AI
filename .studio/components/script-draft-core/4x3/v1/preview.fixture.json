@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "component_ref": "script-draft-core/4x3@v1",
+  "slots": {},
+  "timing": {
+    "time_scale": 1
+  },
+  "key_times_seconds": [
+    0,
+    2.13,
+    4.26
+  ]
+}

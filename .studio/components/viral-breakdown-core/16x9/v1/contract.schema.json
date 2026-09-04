@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "component_ref": "viral-breakdown-core/16x9@v1",
+  "ratio": "16x9",
+  "slots": {
+    "required": [],
+    "properties": {}
+  },
+  "timing": {
+    "duration_seconds": 6.64,
+    "allowed_time_scale": {
+      "minimum": 0.8,
+      "maximum": 1.2
+    }
+  },
+  "assets": {
+    "allowed_types": [],
+    "runtime_network": false
+  }
+}

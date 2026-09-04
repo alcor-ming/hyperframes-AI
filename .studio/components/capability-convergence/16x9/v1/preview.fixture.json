@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "component_ref": "capability-convergence/16x9@v1",
+  "slots": {
+    "context": "P007 / 13 \u00b7 \u8de8\u6a21\u5757\u5f52\u7eb3",
+    "items": [
+      {
+        "index": "02",
+        "skill": "Agent Browser",
+        "result": "\u5b8c\u6574\u7f51\u9875\u5185\u5bb9"
+      },
+      {
+        "index": "03",
+        "skill": "\u529e\u516c\u6587\u4ef6\u56db\u4ef6\u5957",
+        "result": "\u591a\u79cd\u6587\u4ef6\u8f93\u5165\u4e0e\u6587\u4ef6\u64cd\u4f5c"
+      },
+      {
+        "index": "04",
+        "skill": "Local Whisper",
+        "result": "\u9010\u5b57\u7a3f / \u6458\u8981 / \u53ef\u7f16\u8f91\u6587\u5b57"
+      },
+      {
+        "index": "05",
+        "skill": "Video Downloader",
+        "result": "\u5206\u4ef6\u7d20\u6750\u4e0e\u7b14\u8bb0"
+      },
+      {
+        "index": "06",
+        "skill": "Web Search",
+        "result": "\u65e5\u671f / \u4f5c\u8005 / \u539f\u6587\u94fe\u63a5"
+      }
+    ],
+    "proposition": "05 \u6761\u7ed3\u679c\u75d5\u8ff9 \u2192 01 \u5171\u540c\u80fd\u529b",
+    "core_name": "\u83b7\u53d6\u8d44\u8baf",
+    "summary_emphasis": "\u53bb\u54ea\u91cc\u627e\u3001\u600e\u4e48\u62ff\u3001\u62ff\u5230\u540e\u600e\u4e48\u6574\u7406",
+    "summary_suffix": "\uff0c\u90fd\u662f\u628a\u5916\u90e8\u5185\u5bb9\u53d8\u6210\u53ef\u7528\u8d44\u8baf\u3002",
+    "handoff_label": "P008"
+  },
+  "surfaces": {
+    "convergence_field": {
+      "kind": "active_media_card",
+      "mode": "none",
+      "fallback": "programmatic"
+    }
+  }
+}

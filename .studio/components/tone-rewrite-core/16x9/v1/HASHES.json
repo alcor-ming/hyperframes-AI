@@ -1,0 +1,35 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "asset_ref": "tone-rewrite-core/16x9@v1",
+  "package_sha256": "c8fd2101f30e53b7c43354d1186f98b95b9c326352e1cabe06ee621c206b6f5d",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "338820aa7e1557612400d426ab3196d90b089a46837f23a2fc19b0d55b8d4756"
+    },
+    {
+      "path": "assets/vendor/gsap/CustomEase.min.js",
+      "sha256": "1d8a8575a2525f10b0ede48c915b6ad3738d09a2eeb0600f18fd0049aa24802d"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "89e957c374ecf1d7af7ad38f705230436e0884d94c5c3f310958a171fc4c325b"
+    },
+    {
+      "path": "component.html",
+      "sha256": "ec560b03e9a704e627c4ea7650cfbfb5f139778e223c4f29f9b49d5aacf8eab3"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "d40ef07ac9106f0002ff74a0f4bd59e12b9933720186a3c9d01630796823c972"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "08e1b1bc5b6546cdce2f798b1e01365dd7c9727bcad0fcb2655f0c5fc79b53aa"
+    }
+  ]
+}

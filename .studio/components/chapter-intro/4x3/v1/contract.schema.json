@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "component_ref": "chapter-intro/4x3@v1",
+  "ratio": "4x3",
+  "slots": {
+    "required": [],
+    "properties": {}
+  },
+  "timing": {
+    "duration_seconds": 1.6,
+    "allowed_time_scale": {
+      "minimum": 0.8,
+      "maximum": 1.2
+    }
+  },
+  "assets": {
+    "allowed_types": [],
+    "runtime_network": false
+  }
+}

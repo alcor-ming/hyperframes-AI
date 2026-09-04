@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>script-draft-core/16x9@v1</title>
+</head>
+<body>
+<template id="script-draft-core-template">
+<!--
+  ==========================================================================
+  P004 ｜ 口播脚本机制详解核心（ScriptDraftCore）· 组件原型 rev.3（按 Draft rev.3 重新冻结）
+  重新冻结说明：视觉、布局、时序与内部动效不变；本原型语汇可供后续参考，
+  但不作为未设计 Anchor 的固定模板，Preview 技术键不形成最终 Slot API。
+  rev.3（2026-08-23 用户确认锁定，机制卡片整合 pass）：画布现为 1920×1080（16:9），
+  将主题输入、文档生长与解释区统一收进一张机制主卡；主卡后方保留两层
+  错位卡背，明确后续机制以新卡覆盖、旧卡留边的重叠堆叠关系。内部视觉
+  隐喻、Preview 数据能力、几何、功能顺序与总时长不变。
+  rev.2（2026-08-23，反 PPT 动效 pass，来自用户反馈"太像 PPT 展示"）：
+  Opening 改为容器先建立、内容依序写入（主题源条 scaleX"写下"、骨架逐条
+  补齐），不再整页淡入；飞行条显形时微抬 y−6 预示离卡；段条生长带轻微
+  上浮；修复 reduced-motion 下 scaleX(0) 初始态元素永久不可见（段条 /
+  封合线 / 主题源条）。几何、Preview 数据能力、总时长不变。
+  依据：ANIMATION_DRAFT.md rev.3 · COMPONENT_SPLIT.md rev.3（用户已确认）
+  版面纪律：沿用 P002 topic-radar-core-prototype.html rev.4 锁定语汇 +
+  P003 viral-breakdown-core-prototype.html rev.2 锁定材质（投影收紧染色 /
+  平面玻璃 / 飞行件浮起投影 / 虚线槽位提亮）。
+  --------------------------------------------------------------------------
+  本章要解释的关系：一句主题 → 初稿段落生长 → 待审阅的脚本初稿
+  （Skill 降低面对空白文档的启动成本，但结果仍需人工审阅 —— Draft 事实边界；
+  不表示事实已核验或内容可以无人审核直接发布）
+  --------------------------------------------------------------------------
+  视觉隐喻：文档生长。左侧「一句主题」是输入，文档板既是生长现场也是
+  产出容器：主题条飞入标题位 → 段落骨架依阅读顺序生长 → 「待审阅」章
+  落在文首，明示产出物的状态边界。
+  --------------------------------------------------------------------------
+  功能事件切分（严格依次登场，单帧一个主焦点，同时运动 ≤ 2）：
+    ① 主题落文档  主题卡入镜（Opening）→ 标题位玻璃框亮 → 主题条离卡
+                  飞入文档标题槽 → 源条降底稿（0.35）→ 落定回弹 → 框熄
+    ② 初稿段落生长 生长区玻璃框亮（全帧唯一玻璃面）→ 8 根段条 + 落款行
+                  依阅读顺序同向 stagger 生长（同向流 = 单一事件）→ 框熄
+    ③ 待审阅落章  「待审阅」状态章落在文首右侧（本章核心状态标记）
+  --------------------------------------------------------------------------
+  核心 Preview 数据（技术键不是最终 Slot API）:
+    doc_title   产出容器标签（默认"脚本初稿"）
+    result_tag  本章产出凝练标签（供 P005 ChapterIntro previous_context 引用）
+    paragraphs  段落骨架模式 [[w px, ...], ...]（确定性数据，无随机数；
+                原型 3 段 8 条，写死在 Preview 数据）
+    explain     文字解释区（左下，宽 460 两行以内；原型为骨架占位，
+                正式文案须来自 Script，注入 #sc-explain）
+  可选 Preview 数据:
+    context_label  组件语境标签（默认"机制详解 · 04"）
+    source_label   输入卡标签（默认"一句主题"）
+    signoff_w      落款行宽度 px（默认 180；0 = 不生成落款行）
+    review_stamp   状态章文字（默认"待审阅"）
+  --------------------------------------------------------------------------
+  四状态时间表（总长 4.26s = 本原型 Preview 时长，不冻结固定前导或最终 Scene 时长）:
+    Opening  0.00-1.16   容器先建立、内容依序写入：语境/卡壳/文档壳 →
+                         卡标签/解释区 → 关系线描画 → 主题源条"写下"(0.80)
+                         → 支撑骨架逐条补齐
+    Build    1.16-3.84   ①主题落文档 1.16 起（显形微抬 y−6 预示离卡）→
+                         ②段落生长 2.20 起 → ③落章 3.10 → 封合 3.34 →
+                         标题转亮 3.52 → 产出标签 3.62
+    Hero     3.84-4.08   输入（主题底稿）→ 处理（生长现场）→ 输出（初稿 +
+                         待审阅章）完整关系首次同时可读
+    End      4.08-4.26   主题卡 / 语境 / 解释区 / 关系线退位 0.35；
+                         文档板与产出标签保持可辨，供下一章 ChapterIntro 承接
+  --------------------------------------------------------------------------
+  运动约束（optical_fluidity）:
+    进场 easing   cubic-bezier(0.23,1,0.32,1)  → CustomEase "hfEnter"
+    画面内变化    cubic-bezier(0.77,0,0.175,1) → CustomEase "hfMove"
+    单帧主强调色唯一（var(--hf-color-accent-primary)）：①② 仅当前玻璃生长框描边，③ 起移交
+    「待审阅」章描边；玻璃框同一时刻只亮一个（①框熄 2.14 < ②框亮 2.20，
+    ②框熄 3.08 < ③章落 3.10）。关系青（var(--hf-color-accent-primary)）仅 1px 关系线与
+    文档封合细线。
+  --------------------------------------------------------------------------
+  Seek-safe：全部状态由单条 paused GSAP timeline 驱动；无 wall clock、
+  无无限循环、无随机数（段落模式写在 Preview 数据里）、无运行时网络；GSAP 使用共享本地文件。
+  reduced-motion 兜底：位移/缩放全剥离（飞行 → 原地交叉淡变，生长条 →
+  仅 opacity，落章 → 仅 opacity），保留 opacity 交叉淡变。
+  底部「原型检查工具」为验收用脚手架，正式生产翻译时由 Codex 移除。
+  ==========================================================================
+-->
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+    --glass-fill: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  #root {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+    margin: 0;
+  }
+
+  .sc-stage {
+    width: 100%;
+    height: 100%;
+    padding: 72px 120px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* --- 机制卡片栈：本章是一张完整主卡；后续机制覆盖其上时，旧卡仅留边 --- */
+  .sc-stack-card,
+  .sc-mechanism-shell {
+    position: absolute;
+    left: 56px;
+    top: 64px;
+    width: 1808px;
+    height: 964px;
+    border-radius: 30px;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .sc-stack-card {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 52px rgba(2, 7, 11, 0.28);
+  }
+  .sc-stack-card.back-2 {
+    left: 88px;
+    top: 24px;
+    opacity: 0.26;
+  }
+  .sc-stack-card.back-1 {
+    left: 72px;
+    top: 44px;
+    opacity: 0.52;
+  }
+  .sc-mechanism-shell {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 28px 72px rgba(2, 7, 11, 0.46);
+  }
+
+  /* --- 顶部：组件语境标签（结构性占位，非文案） --- */
+  .sc-context {
+    position: absolute;
+    left: 120px;
+    top: 64px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  /* --- 关系线层：1px 关系青细线（SVG，唯一允许的关系色用法） --- */
+  .sc-links {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .sc-links path {
+    stroke: var(--relation);
+    stroke-width: 1;
+    fill: none;
+    opacity: 0.35;
+  }
+
+  /* --- 左：主题卡（实心深层面板，输入证据；主题条被提取后源条降底稿） --- */
+  .sc-card {
+    position: absolute;
+    left: 120px;
+    top: 380px;
+    width: 320px;
+    height: 220px;
+    border-radius: 20px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 36px rgba(2, 7, 11, 0.5);
+    box-sizing: border-box;
+  }
+  .sc-card-tag {
+    position: absolute;
+    left: 24px;
+    top: 24px;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  /* 主题源条：比骨架亮一级的实体条（本章输入对象）；Opening 段 scaleX
+     左起"写下"（初始 scaleX(0) 隐藏，reduced 分支由 fromTo 直接置 1 仅淡入）；
+     飞行件离卡后降为 0.35 底稿 */
+  .sc-theme-src {
+    position: absolute;
+    left: 24px;
+    top: 72px;
+    width: 240px;
+    height: 18px;
+    border-radius: 5px;
+    background: rgba(247, 251, 255, 0.55);
+    transform-origin: left center;
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  .sc-card .bar {
+    position: absolute;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .sc-card .sub1 { left: 24px; top: 118px; width: 62%; height: 11px; }
+  .sc-card .sub2 { left: 24px; top: 142px; width: 40%; height: 11px; background: rgba(255, 255, 255, 0.07); }
+
+  /* --- 生长框：当前正在写入的文档区域（玻璃面 + 唯一主强调色描边；
+         标题框与段落框同一时刻只亮一个，保持单帧唯一玻璃面） --- */
+  .sc-glass {
+    position: absolute;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(10, 132, 255, 0.65);
+    box-sizing: border-box;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .sc-glass-title { left: 796px; top: 352px; width: 808px; height: 36px; }
+  .sc-glass-grow  { left: 796px; top: 412px; width: 808px; height: 320px; }
+
+  /* --- 中右：文档板（实心深层面板；既是生长现场也是产出容器） --- */
+  .sc-doc {
+    position: absolute;
+    left: 760px;
+    top: 250px;
+    width: 880px;
+    height: 600px;
+    border-radius: 20px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 36px rgba(2, 7, 11, 0.5);
+    box-sizing: border-box;
+  }
+  .sc-doc-title {
+    position: absolute;
+    left: 36px;
+    top: 34px;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-2); /* 封合后转 text-1 */
+  }
+  /* 文档封合细线：落章完成后从左生长（关系青 1px 细线级用法） */
+  .sc-doc-seal {
+    position: absolute;
+    left: 36px;
+    top: 72px;
+    width: 808px;
+    height: 1px;
+    background: var(--relation);
+    opacity: 0.55;
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+  /* 「待审阅」状态章：wrapper 承载定位与入场动效，内层静态 -8° 章面旋转 */
+  .sc-stamp-wrap {
+    position: absolute;
+    left: 716px;
+    top: 20px;
+    width: 124px;
+    height: 44px;
+    opacity: 0;
+    will-change: transform;
+  }
+  .sc-stamp {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-8deg);
+    border: 1.5px solid rgba(10, 132, 255, 0.85);
+    border-radius: 8px;
+    background: rgba(10, 132, 255, 0.08);
+    box-sizing: border-box;
+    color: var(--text-1);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-indent: 0.1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* 标题槽：主题条落位处（虚线槽 = 待填入，条落定后覆盖其上） */
+  .sc-title-slot {
+    position: absolute;
+    left: 36px;
+    top: 102px;
+    width: 808px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    box-sizing: border-box;
+  }
+  /* 段落骨架条：由 Slot paragraphs 注入，transform-origin 左，scaleX 生长 */
+  .sc-para {
+    position: absolute;
+    height: 13px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+    transform-origin: left center;
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  .sc-para.signoff {
+    height: 11px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  /* --- 飞行主题条：离卡的输入对象（布局由卡与文档承担，此层只管运动） --- */
+  .sc-field {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .sc-flybar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 240px;
+    height: 18px;
+    border-radius: 5px;
+    background: rgba(247, 251, 255, 0.75);
+    box-shadow: 0 10px 28px rgba(2, 7, 11, 0.45);
+    opacity: 0;
+    will-change: transform;
+  }
+
+  /* --- 左下：文字解释区（EXPLAIN SLOT，骨架占位；正式文案由此注入） --- */
+  .sc-explain {
+    position: absolute;
+    left: 120px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sc-explain-tag {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .sc-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .sc-explain .bar.b1 { width: 88%; }
+  .sc-explain .bar.b2 { width: 62%; background: rgba(255, 255, 255, 0.08); }
+
+  /* --- 本章产出标签（End 状态的凝练结果，供下一章承接） --- */
+  .sc-output {
+    position: absolute;
+    left: 760px;
+    top: 884px;
+    width: 880px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    color: var(--text-1);
+    opacity: 0;
+    box-sizing: border-box;
+  }
+  .sc-output .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+  /* ============ 原型检查工具（验收脚手架，非正式组件） ============ */
+
+  .harness {
+    display: none;
+    position: absolute;
+    top: 1128px;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    z-index: 99;
+    background: var(--elevated);
+    border-top: 1px dashed rgba(255, 255, 255, 0.25);
+    font-family: var(--hf-font-mono);
+    font-size: 13px;
+    color: var(--text-2);
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .h-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .h-brand {
+    color: var(--text-3);
+    margin-right: 8px;
+  }
+  .harness button, .harness select {
+    font: inherit;
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: transform 140ms cubic-bezier(0.2, 0, 0, 1), background-color 140ms;
+  }
+  .harness button:hover { background: rgba(255, 255, 255, 0.12); }
+  .harness button:active { transform: translateY(1px) scale(0.98); }
+  .harness button:focus-visible, .harness select:focus-visible, #hScrub:focus-visible {
+    outline: 2px solid var(--active);
+    outline-offset: 2px;
+  }
+  .harness button i {
+    font-style: normal;
+    color: var(--hf-color-text-secondary);
+    margin-left: 6px;
+  }
+  .h-phase-label {
+    margin-left: auto;
+    color: var(--relation);
+  }
+  #hScrub {
+    flex: 1;
+    min-width: 200px;
+    accent-color: var(--active);
+  }
+  #hTime {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+    min-width: 110px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .harness button, .harness select { transition: none; }
+    .harness button:active { transform: none; }
+  }
+
+  #root[data-composition-id="script-draft-core"] { background: transparent; margin: 0; }
+</style>
+
+<!-- ==================== 组件本体 ==================== -->
+<div data-hf-id="hf-znkp" id="root" data-composition-id="script-draft-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-width="1920" data-height="1080" data-start="0" data-duration="4.26" data-track-index="0">
+  <div data-hf-id="hf-53ab" class="sc-stage">
+
+    <!-- 当前机制主卡 + 两层旧卡留边：后续机制以同尺寸卡片覆盖上来 -->
+    <div data-hf-id="hf-jj2n" class="sc-stack-card back-2" id="sc-stack-back-2" aria-hidden="true"></div>
+    <div data-hf-id="hf-5yah" class="sc-stack-card back-1" id="sc-stack-back-1" aria-hidden="true"></div>
+    <div data-hf-id="hf-lgvn" class="sc-mechanism-shell" id="sc-mechanism-shell" aria-hidden="true"></div>
+
+    <div data-hf-id="hf-18qs" class="sc-context" id="sc-context">机制详解 · 04</div>
+
+    <!-- 关系线：主题卡 → 文档标题位（Opening 段描画，指向主题源条高度） -->
+    <svg data-hf-id="hf-6rim" class="sc-links" width="1920" height="1080" viewBox="0 0 1920 1080" aria-hidden="true">
+      <path data-hf-id="hf-dik6" id="sc-link" d="M 444 461 C 560 461, 650 461, 756 461" pathLength="1" />
+    </svg>
+
+    <!-- 左：主题卡（骨架占位，不含真实主题文案） -->
+    <div data-hf-id="hf-5igk" class="sc-card" id="sc-card">
+      <span data-hf-id="hf-mdcj" class="sc-card-tag" id="sc-card-tag">一句主题</span>
+      <div data-hf-id="hf-egpi" class="sc-theme-src" id="sc-theme-src"></div>
+      <div data-hf-id="hf-mnaq" class="bar sub1"></div>
+      <div data-hf-id="hf-ip6p" class="bar sub2"></div>
+    </div>
+
+    <!-- 生长框 ×2：同一时刻只亮一个；DOM 序必须在文档板之后，
+         玻璃面压在文档内容上方（处理层盖在读稿区上，bar 在框下生长） -->
+    <!-- 中右：文档板（段落骨架由 Slot 注入） -->
+    <div data-hf-id="hf-konu" class="sc-doc" id="sc-doc">
+      <div data-hf-id="hf-stn8" class="sc-doc-title" id="sc-doc-title">脚本初稿</div>
+      <div data-hf-id="hf-gueg" class="sc-doc-seal" id="sc-doc-seal"></div>
+      <div data-hf-id="hf-8p4o" class="sc-stamp-wrap" id="sc-stamp-wrap">
+        <div data-hf-id="hf-f4ir" class="sc-stamp" id="sc-stamp">待审阅</div>
+      </div>
+      <div data-hf-id="hf-bmky" class="sc-title-slot" id="sc-title-slot"></div>
+    </div>
+
+    <div data-hf-id="hf-acf1" class="sc-glass sc-glass-title" id="sc-glass-title"></div>
+    <div data-hf-id="hf-rvaj" class="sc-glass sc-glass-grow" id="sc-glass-grow"></div>
+
+    <!-- 左下：文字解释区（骨架占位，正式文案经 Slot 注入） -->
+    <div data-hf-id="hf-l2vx" class="sc-explain" id="sc-explain" data-slot="explain">
+      <span data-hf-id="hf-ley7" class="sc-explain-tag">EXPLAIN SLOT</span>
+      <div data-hf-id="hf-1iyu" class="bar b1"></div>
+      <div data-hf-id="hf-xkut" class="bar b2"></div>
+    </div>
+
+    <!-- 本章产出标签 -->
+    <div data-hf-id="hf-v58u" class="sc-output" id="sc-output">
+      <span data-hf-id="hf-9gry" class="dot"></span><span data-hf-id="hf-wltd" id="sc-output-t">产出 · 脚本初稿</span>
+    </div>
+
+    <!-- 飞行层 -->
+    <div data-hf-id="hf-0obr" class="sc-field" id="sc-field" data-layout-ignore="">
+      <div data-hf-id="hf-mba9" class="sc-flybar" id="sc-theme-fly"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+/* ===== 默认 Preview 数据（占位骨架，无真实主题/脚本文案；技术键不是最终 Slot API） =====
+   段落骨架为确定性模式（w 为条宽 px，相对文档内容区左缘 52px），
+   全部写死在数据里：无随机数，seek 任意时刻状态确定。 */
+var SLOT_DATA = {
+  context_label: "机制详解 · 04",
+  source_label: "一句主题",
+  doc_title: "脚本初稿",
+  result_tag: "产出 · 脚本初稿",
+  review_stamp: "待审阅",
+  paragraphs: [
+    [720, 610, 390],
+    [690, 520],
+    [710, 550, 320]
+  ],
+  signoff_w: 180
+};
+
+/* ==================== 几何常量（1920×1080 画布，与 CSS 布局一致） ==================== */
+var GEO = {
+  /* 主题条起飞点：主题卡内源条（卡 88,380 + 内偏移 24,72） */
+  THEME_FROM: { x: 144, y: 452 },
+  /* 主题条落点：文档标题槽内（文档 560,250 + 内偏移 52,111） */
+  THEME_TO: { x: 812, y: 361 },
+  /* 段落条位（文档内局部坐标；x 一律 52，y 依块序 + 块内行序） */
+  PARA_X: 52,
+  BLOCK_Y: [178, 280, 357],  /* 三段首行 y（文档局部） */
+  ROW_STEP: 25,              /* 块内行距 */
+  SIGNOFF_Y: 462             /* 落款行 y（文档局部） */
+};
+
+/* ==================== Preview 数据注入（同步执行，渲染前就绪） ==================== */
+(function injectSlots(d) {
+  document.getElementById("sc-context").textContent = d.context_label;
+  document.getElementById("sc-card-tag").textContent = d.source_label;
+  document.getElementById("sc-doc-title").textContent = d.doc_title;
+  document.getElementById("sc-output-t").textContent = d.result_tag;
+  document.getElementById("sc-stamp").textContent = d.review_stamp;
+
+  /* 段落骨架条 + 落款行（依 paragraphs 模式生成，追加顺序即 stagger 顺序） */
+  var doc = document.getElementById("sc-doc");
+  d.paragraphs.forEach(function (block, b) {
+    block.forEach(function (w, r) {
+      var bar = document.createElement("div");
+      bar.className = "sc-para";
+      bar.style.left = GEO.PARA_X + "px";
+      bar.style.top = (GEO.BLOCK_Y[b] + r * GEO.ROW_STEP) + "px";
+      bar.style.width = w + "px";
+      doc.appendChild(bar);
+    });
+  });
+  if (d.signoff_w > 0) {
+    var signoff = document.createElement("div");
+    signoff.className = "sc-para signoff";
+    signoff.style.left = GEO.PARA_X + "px";
+    signoff.style.top = GEO.SIGNOFF_Y + "px";
+    signoff.style.width = d.signoff_w + "px";
+    doc.appendChild(signoff);
+  }
+})(SLOT_DATA);
+
+/* ==================== Easing（optical_fluidity profile，与 ChapterIntro / P002 / P003 一致） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ==================== 组件 Timeline（paused · seek-safe · 同时运动 ≤ 2） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* prefers-reduced-motion：剥离位移/缩放，仅保留 opacity 交叉淡变。
+   仅影响本地预览；daemon 渲染环境为 no-preference，输出始终全动效。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* ---------- Opening（0.00-1.16 容器先建立，内容依序写入，不整页淡入） ----------
+   语境 → 主题卡壳 → 文档壳 → 卡标签 → 解释区 → 关系线描画 →
+   主题源条"写下"（scaleX 左起生长）→ 支撑骨架逐条补齐 */
+tl.from("#sc-stack-back-2", R(
+  { x: 18, y: -8, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.02);
+tl.from("#sc-stack-back-1", R(
+  { x: 12, y: -5, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.06);
+tl.from("#sc-mechanism-shell", R(
+  { y: 18, opacity: 0, duration: 0.30, ease: E_ENTER },
+  { opacity: 0, duration: 0.26, ease: E_ENTER }), 0.08);
+tl.from("#sc-context", { opacity: 0, duration: 0.20, ease: E_ENTER }, 0.05);
+tl.from("#sc-card", R(
+  { y: 24, opacity: 0, duration: 0.36, ease: E_ENTER },
+  { opacity: 0, duration: 0.32, ease: E_ENTER }), 0.10);
+tl.from("#sc-doc", R(
+  { y: 16, opacity: 0, duration: 0.26, ease: E_ENTER },
+  { opacity: 0, duration: 0.26, ease: E_ENTER }), 0.26);
+tl.from("#sc-card-tag", { opacity: 0, duration: 0.14, ease: E_ENTER }, 0.46);
+tl.from("#sc-explain", { opacity: 0, duration: 0.22, ease: E_ENTER }, 0.54);
+tl.fromTo("#sc-link",
+  { strokeDasharray: 1, strokeDashoffset: 1 },
+  { strokeDashoffset: 0, duration: 0.28, ease: E_MOVE }, 0.64);
+/* 主题源条写入；reduced 分支 from 直接带 scaleX:1（仅 opacity 淡入，
+   避免初始 scaleX(0) 在剥离缩放后永久不可见） */
+tl.fromTo("#sc-theme-src",
+  R({ scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 0 }),
+  R({ scaleX: 1, opacity: 1, duration: 0.26, ease: E_ENTER },
+    { opacity: 1, duration: 0.22, ease: E_ENTER }), 0.80);
+tl.from("#sc-card .sub1", R(
+  { y: 6, opacity: 0, duration: 0.16, ease: E_ENTER },
+  { opacity: 0, duration: 0.16, ease: E_ENTER }), 0.98);
+tl.from("#sc-card .sub2", R(
+  { y: 6, opacity: 0, duration: 0.16, ease: E_ENTER },
+  { opacity: 0, duration: 0.16, ease: E_ENTER }), 1.05);
+
+/* ---------- Build：逐个功能展现 ---------- */
+
+/* ① 主题落文档（1.16 起）：标题位生长框亮 → 主题条显形并微抬 y−6
+     （"被拿起"的物理预示）→ hfMove 飞入标题槽 → 源条降底稿 →
+     落定回弹 → 框熄。任意时刻同时运动 ≤ 2。 */
+tl.fromTo("#sc-glass-title",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: E_ENTER }, 1.16);
+tl.fromTo("#sc-theme-fly",
+  R({ x: GEO.THEME_FROM.x, y: GEO.THEME_FROM.y, opacity: 0 },
+    { x: GEO.THEME_TO.x, y: GEO.THEME_TO.y, opacity: 0 }),
+  R({ x: GEO.THEME_FROM.x, y: GEO.THEME_FROM.y - 6, opacity: 1, duration: 0.16, ease: E_ENTER },
+    { opacity: 1, duration: 0.16, ease: E_ENTER }), 1.28);
+tl.to("#sc-theme-fly", R(
+  { x: GEO.THEME_TO.x, y: GEO.THEME_TO.y, duration: 0.40, ease: E_MOVE },
+  { opacity: 1, duration: 0.18, ease: E_MOVE }), 1.44);
+tl.to("#sc-theme-src", { opacity: 0.35, duration: 0.18, ease: E_MOVE }, 1.54);
+if (!REDUCED) {
+  tl.fromTo("#sc-theme-fly", { scale: 0.965 }, { scale: 1, duration: 0.18, ease: E_ENTER }, 1.84);
+}
+tl.to("#sc-glass-title", { opacity: 0, duration: 0.16, ease: E_MOVE }, 1.98);
+
+/* ② 初稿段落生长（2.20 起）：生长区框亮 → 8 根段条 + 落款行依阅读顺序
+     同向 stagger 生长（scaleX + 轻微上浮 y3→0，同向流 = 单一事件）→ 框熄 */
+tl.fromTo("#sc-glass-grow",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.16, ease: E_ENTER }, 2.20);
+tl.fromTo(".sc-para",
+  R({ scaleX: 0, y: 3, opacity: 0 }, { scaleX: 1, y: 0, opacity: 0 }),
+  R({ scaleX: 1, y: 0, opacity: 1, duration: 0.20, stagger: 0.05, ease: E_ENTER },
+    { opacity: 1, duration: 0.18, stagger: 0.05, ease: E_ENTER }), 2.32);
+/* 末条落定：2.32 + 8×0.05 + 0.20 = 2.92 */
+tl.to("#sc-glass-grow", { opacity: 0, duration: 0.16, ease: E_MOVE }, 2.92);
+
+/* ③ 待审阅落章（3.10 起，本章核心状态标记）：
+     章面 -8° 为静态 CSS，入场只动 wrapper 的 y/scale/opacity */
+tl.fromTo("#sc-stamp-wrap",
+  R({ y: -24, scale: 1.25, opacity: 0 }, { opacity: 0 }),
+  R({ y: 0, scale: 1, opacity: 1, duration: 0.31, ease: E_ENTER },
+    { opacity: 1, duration: 0.26, ease: E_ENTER }), 3.10);
+
+/* ---------- Build 收束（3.34-3.84）：封合 + 标题转亮 + 产出标签 ---------- */
+/* 封合线 reduced 分支 from 直接带 scaleX:1（同主题源条，避免降级下不可见） */
+tl.fromTo("#sc-doc-seal",
+  R({ scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 0 }),
+  R({ scaleX: 1, opacity: 0.55, duration: 0.22, ease: E_MOVE },
+    { opacity: 0.55, duration: 0.20, ease: E_MOVE }), 3.34);
+tl.to("#sc-doc-title", { color: "var(--hf-color-text-primary)", duration: 0.14, ease: E_MOVE }, 3.52);
+tl.fromTo("#sc-output",
+  R({ y: 14, opacity: 0 }, { opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.22, ease: E_ENTER },
+    { opacity: 1, duration: 0.20, ease: E_ENTER }),
+  3.62);
+
+/* ---------- Hero 3.84-4.08：完整关系可读，无新动效 ---------- */
+
+/* ---------- End（4.08-4.26）：输入与语境退位，文档与产出保持可辨 ---------- */
+tl.to("#sc-card, #sc-context, #sc-explain, #sc-link", { opacity: 0.35, duration: 0.18, ease: E_MOVE }, 4.08);
+tl.to("#sc-glass-title, #sc-glass-grow", { opacity: 0, duration: 0.12, ease: E_MOVE }, 4.08);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["script-draft-core"] = tl;
+</script>
+
+
+</template>
+</body>
+</html>

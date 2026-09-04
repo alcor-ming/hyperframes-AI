@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>viral-breakdown-core/16x9@v1</title>
+</head>
+<body>
+<template id="viral-breakdown-core-template">
+<!--
+  ==========================================================================
+  P003 ｜ 爆款拆解机制详解核心（ViralBreakdownCore）· 组件原型 rev.2（按 Draft rev.3 重新冻结）
+  依据：ANIMATION_DRAFT.md rev.3 · COMPONENT_SPLIT.md rev.3（用户已确认）
+  重新冻结说明：视觉、布局、时序与内部动效不变；本原型语汇可供后续参考，
+  但不作为未设计 Anchor 的固定模板，Preview 技术键不形成最终 Slot API。
+  rev.2 材质打磨（反模板化 pass；版式 / 几何 / 时序 / Preview 数据能力不变）：
+    双面板投影收紧并按画布色染色、提取框去渐变改平面玻璃（描边提亮）、
+    结构层加浮起投影强化"抬出标本"纵深、槽位虚线提亮、检查工具去 emoji。
+  版面纪律：沿用 P002 topic-radar-core-prototype.html rev.4 锁定语汇
+  （三语汇材质 / 主舞台流动 + 左下 EXPLAIN SLOT + 右下产出标签 /
+  逐个功能展现 / 双 easing / 单 paused timeline / 验收工具条同款）。
+  --------------------------------------------------------------------------
+  本章要解释的关系：一条爆款内容 → 逐层拆解 → 可参考的结构与假设
+  （产物是可参考的结构，不是复制即可成功的保证 —— Draft 事实边界）
+  --------------------------------------------------------------------------
+  视觉隐喻：X 光分层。原卡是标本，三个结构层被依次"提取"出来，
+  落入右侧结果容器；被提取的原区域随之降为标本底稿（0.35）。
+  --------------------------------------------------------------------------
+  功能事件切分（严格依次登场，单帧一个主焦点，同时运动 ≤ 2）：
+    ① 内容卡入镜   标本卡进场就位，关系线描画
+    ② 拆出 Hook 层  提取框亮起 → Hook 层离卡 → 落入槽位一
+    ③ 拆出卖点顺序  卡内三段卖点乱序标序（2·3·1）→ 顺序结构层离卡，
+                    飞行途中三段归位为 1·2·3（本章核心动作）
+    ④ 拆出节奏标记  卡底节奏刻度逐格亮起 → 节奏层离卡入槽
+  --------------------------------------------------------------------------
+  核心 Preview 数据（技术键不是最终 Slot API）:
+    layers          三个结构层的标签 { hook, points, rhythm }
+                    （原型为结构性占位；正式文案须来自 Script）
+    rhythm_ticks    节奏刻度模式 [{ x, h }]（确定性数据，无随机数）
+    container_title 产出容器标签（默认"拆解结构"）
+    result_tag      本章产出凝练标签（供下一章 ChapterIntro previous_context 引用）
+    explain         文字解释区（左下，宽 460 两行以内；原型为骨架占位，
+                    正式文案须来自 Script，注入 #vd-explain）
+  可选 Preview 数据:
+    context_label   组件语境标签（默认"机制详解 · 03"）
+    points_count    卖点段数（默认 3）
+    points_order    卡内卖点乱序排列（默认 [2,3,1]，自上而下；
+                    提取层飞行途中归位为 1·2·3）
+  --------------------------------------------------------------------------
+  四状态时间表（总长 6.64s = 本原型 Preview 时长，不冻结固定前导或最终 Scene 时长）:
+    Opening  0.00-0.25   舞台可见：语境 / 解释区建立，卡与容器进场
+    Build    0.25-6.05   ①卡入镜 0.10 → ②Hook 1.10 起 → ③卖点顺序 2.50 起 →
+                         ④节奏 4.15 起 → 容器封合 5.65 → 产出标签 5.85
+    Hero     6.05-6.25   输入（标本卡）→ 处理（三层提取）→ 输出（拆解结构）
+                         完整关系首次同时可读
+    End      6.25-6.64   原卡与语境退位（0.35），结果容器与产出标签保持可辨，
+                         凝练结果供下一章 ChapterIntro 承接
+  --------------------------------------------------------------------------
+  运动约束（optical_fluidity）:
+    进场 easing   cubic-bezier(0.23,1,0.32,1)  → CustomEase "hfEnter"
+    画面内变化    cubic-bezier(0.77,0,0.175,1) → CustomEase "hfMove"
+    单帧主强调色唯一（var(--hf-color-accent-primary)，仅当前提取框描边）；关系青（var(--hf-color-accent-primary)）
+    仅用于 1px 关系线与容器封合细线；提取框同一时刻只亮一个，
+    保持"单帧唯一玻璃面"纪律。
+  --------------------------------------------------------------------------
+  Seek-safe：全部状态由单条 paused GSAP timeline 驱动；无 wall clock、
+  无无限循环、无随机数（刻度模式写在 Preview 数据里）、无运行时网络；GSAP 使用共享本地文件。
+  底部「原型检查工具」为验收用脚手架，正式生产翻译时由 Codex 移除。
+  ==========================================================================
+-->
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+    --glass-fill: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  #root {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+    margin: 0;
+  }
+
+  .vd-stage {
+    width: 100%;
+    height: 100%;
+    padding: 72px 120px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* --- 顶部：组件语境标签（结构性占位，非文案） --- */
+  .vd-context {
+    position: absolute;
+    left: 120px;
+    top: 64px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  /* --- 关系线层：1px 关系青细线（SVG，唯一允许的关系色用法） --- */
+  .vd-links {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .vd-links path {
+    stroke: var(--relation);
+    stroke-width: 1;
+    fill: none;
+    opacity: 0.35;
+  }
+
+  /* --- 左：标本内容卡（实心深层面板，骨架占位，不含真实内容） --- */
+  .vd-card {
+    position: absolute;
+    left: 150px;
+    top: 250px;
+    width: 380px;
+    height: 600px;
+    border-radius: 20px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 36px rgba(2, 7, 11, 0.5);
+  }
+  .vd-card .vd-region {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .vd-bar {
+    position: absolute;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+  /* Hook 区：封面块 + 标题 + 副行 */
+  .vd-cover {
+    position: absolute;
+    left: 24px;
+    top: 24px;
+    width: 332px;
+    height: 176px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-sizing: border-box;
+  }
+  .vd-cover::after { /* 封面块内的骨架行：暗示图上有标题 */
+    content: "";
+    position: absolute;
+    left: 16px;
+    bottom: 14px;
+    width: 44%;
+    height: 12px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .vd-title { left: 24px; top: 220px; height: 16px; width: 68%; background: rgba(255, 255, 255, 0.16); }
+  .vd-sub   { left: 24px; top: 248px; height: 11px; width: 42%; background: rgba(255, 255, 255, 0.08); }
+
+  /* 卖点区：三行「序号章 + 条目骨架条」，序号章默认隐藏，事件③亮起 */
+  .vd-row {
+    position: absolute;
+    left: 24px;
+    width: 332px;
+    height: 30px;
+  }
+  .vd-row .idx {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(10, 132, 255, 0.75);
+    box-sizing: border-box;
+    color: var(--text-1);
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .vd-row .bar {
+    position: absolute;
+    left: 58px;
+    top: 6px;
+    height: 13px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+
+  /* 节奏区：标尺线 + 刻度（刻度由 Slot 数据注入）+ 底行 */
+  .vd-ruler {
+    position: absolute;
+    left: 24px;
+    top: 510px;
+    width: 332px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.18);
+  }
+  .vd-tick {
+    position: absolute;
+    width: 3px;
+    border-radius: 1.5px;
+    background: rgba(247, 251, 255, 0.55);
+    transform-origin: bottom center;
+    opacity: 0;
+  }
+  .vd-rsub { left: 24px; top: 536px; height: 10px; width: 55%; background: rgba(255, 255, 255, 0.08); }
+
+  /* --- 提取框：当前正在拆解的区域（玻璃面 + 唯一主强调色描边；
+         三个框同一时刻只亮一个，保持单帧唯一玻璃面） --- */
+  .vd-glass {
+    position: absolute;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(10, 132, 255, 0.65);
+    box-sizing: border-box;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .vd-glass-hook   { left: 158px; top: 262px; width: 364px; height: 258px; }
+  .vd-glass-points { left: 158px; top: 544px; width: 364px; height: 164px; }
+  .vd-glass-rhythm { left: 158px; top: 724px; width: 364px; height: 84px; }
+
+  /* --- 右：拆解结果容器（实心深层面板，非玻璃） --- */
+  .vd-result {
+    position: absolute;
+    left: 1390px;
+    top: 250px;
+    width: 380px;
+    height: 600px;
+    border-radius: 20px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 36px rgba(2, 7, 11, 0.5);
+    padding: 28px 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .vd-result-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-2); /* 封合后转 text-1 */
+  }
+  /* 容器封合细线：三层全部落位后从左生长（关系青 1px 细线级用法） */
+  .vd-result-seal {
+    height: 1px;
+    background: var(--relation);
+    opacity: 0.55;
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+  .vd-slot {
+    height: 140px;
+    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    position: relative;
+    flex: none;
+  }
+
+  /* --- 结构层：从原卡提取、飞入槽位的层（实心面板 + 骨架 + 结构标签） --- */
+  .vd-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 332px;
+    height: 140px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: var(--hf-color-surface);
+    box-shadow: 0 10px 28px rgba(2, 7, 11, 0.45); /* 飞行期浮起投影，强化"抬出标本"的纵深 */
+    box-sizing: border-box;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    opacity: 0;
+    will-change: transform;
+  }
+  .vd-layer-tag {
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  /* Hook 层：封面缩略块 + 两行骨架 */
+  .vd-hook-body {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .vd-hook-thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    flex: none;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-sizing: border-box;
+  }
+  .vd-hook-bars {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .vd-hook-bars .bar {
+    height: 12px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .vd-hook-bars .bar.b1 { width: 82%; }
+  .vd-hook-bars .bar.b2 { width: 52%; background: rgba(255, 255, 255, 0.09); }
+  /* 卖点顺序层：三行「序号 + 条」，绝对定位以便飞行途中独立归位 */
+  .vd-pts-row {
+    position: absolute;
+    left: 20px;
+    width: 292px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    will-change: transform;
+  }
+  #vd-pts-1 { top: 48px; }
+  #vd-pts-2 { top: 78px; }
+  #vd-pts-3 { top: 108px; }
+  .vd-pts-row .n {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    flex: none;
+    border: 1.5px solid rgba(10, 132, 255, 0.6);
+    box-sizing: border-box;
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .vd-pts-row .bar {
+    height: 10px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  /* 节奏层：迷你标尺 + 刻度（与卡内同模式，由 Slot 注入） */
+  .vd-rhy-strip {
+    position: relative;
+    height: 48px;
+    flex: none;
+  }
+  .vd-rhy-strip .line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.18);
+  }
+  .vd-rhy-tick {
+    position: absolute;
+    width: 3px;
+    border-radius: 1.5px;
+    background: rgba(247, 251, 255, 0.55);
+    bottom: 8px;
+  }
+
+  /* --- 左下：文字解释区（EXPLAIN SLOT，骨架占位；正式文案由此注入） --- */
+  .vd-explain {
+    position: absolute;
+    left: 120px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .vd-explain-tag {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .vd-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .vd-explain .bar.b1 { width: 88%; }
+  .vd-explain .bar.b2 { width: 62%; background: rgba(255, 255, 255, 0.08); }
+
+  /* --- 本章产出标签（End 状态的凝练结果，供下一章承接） --- */
+  .vd-output {
+    position: absolute;
+    left: 1390px;
+    top: 892px;
+    width: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    color: var(--text-1);
+    opacity: 0;
+    box-sizing: border-box;
+  }
+  .vd-output .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+  /* --- 飞行层容器：离卡结构层的运动层（布局由卡与容器承担） --- */
+  .vd-field {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* ============ 原型检查工具（验收脚手架，非正式组件） ============ */
+
+  .harness {
+    display: none;
+    position: absolute;
+    top: 1128px;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    z-index: 99;
+    background: var(--elevated);
+    border-top: 1px dashed rgba(255, 255, 255, 0.25);
+    font-family: var(--hf-font-mono);
+    font-size: 13px;
+    color: var(--text-2);
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .h-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .h-brand {
+    color: var(--text-3);
+    margin-right: 8px;
+  }
+  .harness button, .harness select {
+    font: inherit;
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: transform 140ms cubic-bezier(0.2, 0, 0, 1), background-color 140ms;
+  }
+  .harness button:hover { background: rgba(255, 255, 255, 0.12); }
+  .harness button:active { transform: translateY(1px) scale(0.98); }
+  .harness button:focus-visible, .harness select:focus-visible, #hScrub:focus-visible {
+    outline: 2px solid var(--active);
+    outline-offset: 2px;
+  }
+  .harness button i {
+    font-style: normal;
+    color: var(--text-3);
+    margin-left: 6px;
+  }
+  .h-phase-label {
+    margin-left: auto;
+    color: var(--relation);
+  }
+  #hScrub {
+    flex: 1;
+    min-width: 200px;
+    accent-color: var(--active);
+  }
+  #hTime {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+    min-width: 110px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .harness button, .harness select { transition: none; }
+    .harness button:active { transform: none; }
+  }
+
+  #root[data-composition-id="viral-breakdown-core"] { background: transparent; margin: 0; }
+</style>
+
+<!-- ==================== 组件本体 ==================== -->
+<div data-hf-id="hf-63tw" id="root" data-composition-id="viral-breakdown-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-width="1920" data-height="1080" data-start="0" data-duration="6.64" data-track-index="0">
+  <div data-hf-id="hf-dfmf" class="vd-stage">
+
+    <div data-hf-id="hf-j05x" class="vd-context" id="vd-context">机制详解 · 03</div>
+
+    <!-- 关系线：标本卡 → 结果容器（Opening 段描画） -->
+    <svg data-hf-id="hf-26qe" class="vd-links" width="1920" height="1080" viewBox="0 0 1920 1080" aria-hidden="true">
+      <path data-hf-id="hf-pw4x" id="vd-link" d="M 538 550 C 760 550, 1160 550, 1382 550" pathLength="1" />
+    </svg>
+
+    <!-- 左：标本内容卡（骨架占位，不含真实爆款内容） -->
+    <div data-hf-id="hf-hlxo" class="vd-card" id="vd-card">
+      <div data-hf-id="hf-wy4w" class="vd-region" id="vd-region-hook">
+        <div data-hf-id="hf-gh48" class="vd-cover"></div>
+        <div data-hf-id="hf-9nk1" class="vd-bar vd-title"></div>
+        <div data-hf-id="hf-6n9p" class="vd-bar vd-sub"></div>
+      </div>
+      <div data-hf-id="hf-rzvg" class="vd-region" id="vd-region-points">
+        <div data-hf-id="hf-nqzn" class="vd-row" style="top:306px">
+          <span data-hf-id="hf-2b27" class="idx" id="vd-idx-0"></span>
+          <span data-hf-id="hf-b5wu" class="bar" style="width:72%"></span>
+        </div>
+        <div data-hf-id="hf-mphf" class="vd-row" style="top:360px">
+          <span data-hf-id="hf-ycy6" class="idx" id="vd-idx-1"></span>
+          <span data-hf-id="hf-efb2" class="bar" style="width:58%"></span>
+        </div>
+        <div data-hf-id="hf-hys1" class="vd-row" style="top:414px">
+          <span data-hf-id="hf-s78d" class="idx" id="vd-idx-2"></span>
+          <span data-hf-id="hf-nw2v" class="bar" style="width:66%"></span>
+        </div>
+      </div>
+      <div data-hf-id="hf-pvx1" class="vd-region" id="vd-region-rhythm">
+        <div data-hf-id="hf-5fdt" class="vd-ruler"></div>
+        <!-- 节奏刻度由 Slot 数据注入 -->
+        <div data-hf-id="hf-fe1h" class="vd-bar vd-rsub"></div>
+      </div>
+    </div>
+
+    <!-- 提取框 ×3（同一时刻只亮一个） -->
+    <div data-hf-id="hf-sxm7" class="vd-glass vd-glass-hook" id="vd-glass-hook"></div>
+    <div data-hf-id="hf-jwqb" class="vd-glass vd-glass-points" id="vd-glass-points"></div>
+    <div data-hf-id="hf-6u9p" class="vd-glass vd-glass-rhythm" id="vd-glass-rhythm"></div>
+
+    <!-- 右：拆解结果容器（槽位与层标签由 Slot 注入） -->
+    <div data-hf-id="hf-2lfi" class="vd-result" id="vd-result">
+      <div data-hf-id="hf-gocg" class="vd-result-title" id="vd-result-title">拆解结构</div>
+      <div data-hf-id="hf-5daa" class="vd-result-seal" id="vd-result-seal"></div>
+    </div>
+
+    <!-- 左下：文字解释区（骨架占位，正式文案经 Slot 注入） -->
+    <div data-hf-id="hf-4cnd" class="vd-explain" id="vd-explain" data-slot="explain">
+      <span data-hf-id="hf-i6bb" class="vd-explain-tag">EXPLAIN SLOT</span>
+      <div data-hf-id="hf-1iyu" class="bar b1"></div>
+      <div data-hf-id="hf-xkut" class="bar b2"></div>
+    </div>
+
+    <!-- 本章产出标签 -->
+    <div data-hf-id="hf-2rw2" class="vd-output" id="vd-output">
+      <span data-hf-id="hf-9gry" class="dot"></span><span data-hf-id="hf-l57z" id="vd-output-t">产出 · 拆解结构</span>
+    </div>
+
+    <!-- 飞行层 -->
+    <div data-hf-id="hf-a36z" class="vd-field" id="vd-field" data-layout-ignore=""></div>
+
+  </div>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+/* ===== 默认 Preview 数据（占位骨架，无真实爆款内容/文案；技术键不是最终 Slot API） =====
+   节奏刻度为确定性模式（x 相对标尺左缘 24px，h 为刻度高度），
+   全部写死在数据里：无随机数，seek 任意时刻状态确定。 */
+var SLOT_DATA = {
+  context_label: "机制详解 · 03",
+  container_title: "拆解结构",
+  result_tag: "产出 · 拆解结构",
+  layer_labels: { hook: "Hook 层", points: "卖点顺序", rhythm: "节奏标记" },
+  points_count: 3,
+  points_order: [2, 3, 1],
+  rhythm_ticks: [
+    { x: 16,  h: 14 }, { x: 61,  h: 22 }, { x: 108, h: 10 },
+    { x: 156, h: 26 }, { x: 204, h: 16 }, { x: 258, h: 20 },
+    { x: 308, h: 12 }
+  ]
+};
+
+/* ==================== 几何常量（1920×1080 画布，与 CSS 布局一致） ==================== */
+var GEO = {
+  /* 三个结构层的起飞点：覆盖各自源区域中心（层尺寸 332×140） */
+  LAYER_FROM: {
+    hook:   { x: 174, y: 317 },  /* Hook 区中心 (340, 387) */
+    points: { x: 174, y: 554 },  /* 卖点区中心 (340, 624) */
+    rhythm: { x: 174, y: 708 }   /* 节奏区中心 (340, 778) */
+  },
+  /* 容器内槽位左缘与顶边（容器 1390,250，padding 28/24，标题+封合约 70） */
+  SLOT_X: 1414,
+  SLOT_Y: function (k) { return 344 + k * 166; }
+};
+
+/* ==================== Preview 数据注入（同步执行，渲染前就绪） ==================== */
+(function injectSlots(d) {
+  document.getElementById("vd-context").textContent = d.context_label;
+  document.getElementById("vd-result-title").textContent = d.container_title;
+  document.getElementById("vd-output-t").textContent = d.result_tag;
+
+  /* 卡内卖点序号：乱序（Slot points_order），提取层内才是归位的 1·2·3 */
+  d.points_order.forEach(function (n, i) {
+    document.getElementById("vd-idx-" + i).textContent = n;
+  });
+
+  /* 卡内节奏刻度（相对卡左缘：24 + x，底部对齐标尺顶 510） */
+  var rhythmRegion = document.getElementById("vd-region-rhythm");
+  d.rhythm_ticks.forEach(function (t) {
+    var tick = document.createElement("span");
+    tick.className = "vd-tick";
+    tick.style.left = (24 + t.x) + "px";
+    tick.style.top = (510 - t.h) + "px";
+    tick.style.height = t.h + "px";
+    rhythmRegion.appendChild(tick);
+  });
+
+  /* 容器槽位 + 飞行结构层 */
+  var result = document.getElementById("vd-result");
+  var field = document.getElementById("vd-field");
+  var order = ["hook", "points", "rhythm"];
+
+  order.forEach(function (key, k) {
+    var slot = document.createElement("div");
+    slot.className = "vd-slot";
+    result.appendChild(slot);
+
+    var layer = document.createElement("div");
+    layer.className = "vd-layer";
+    layer.id = "vd-layer-" + key;
+
+    var tag = document.createElement("span");
+    tag.className = "vd-layer-tag";
+    tag.textContent = d.layer_labels[key];
+    layer.appendChild(tag);
+
+    if (key === "hook") {
+      var body = document.createElement("div");
+      body.className = "vd-hook-body";
+      body.innerHTML = '<span class="vd-hook-thumb"></span>' +
+        '<span class="vd-hook-bars"><span class="bar b1"></span><span class="bar b2"></span></span>';
+      layer.appendChild(body);
+    } else if (key === "points") {
+      for (var i = 0; i < d.points_count; i++) {
+        var row = document.createElement("div");
+        row.className = "vd-pts-row";
+        row.id = "vd-pts-" + (i + 1); /* 序号即归位目标：1·2·3 */
+        row.innerHTML = '<span class="n">' + (i + 1) + '</span>' +
+          '<span class="bar" style="width:' + [62, 48, 56][i % 3] + '%"></span>';
+        layer.appendChild(row);
+      }
+    } else {
+      var strip = document.createElement("div");
+      strip.className = "vd-rhy-strip";
+      strip.innerHTML = '<span class="line"></span>';
+      d.rhythm_ticks.forEach(function (t) {
+        var tick = document.createElement("span");
+        tick.className = "vd-rhy-tick";
+        tick.style.left = (t.x * 0.82) + "px";
+        tick.style.height = (t.h * 0.9) + "px";
+        strip.appendChild(tick);
+      });
+      layer.appendChild(strip);
+    }
+    field.appendChild(layer);
+  });
+})(SLOT_DATA);
+
+/* ==================== Easing（optical_fluidity profile，与 ChapterIntro / P002 一致） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ==================== 组件 Timeline（paused · seek-safe · 同时运动 ≤ 2） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* prefers-reduced-motion：剥离位移/缩放，仅保留 opacity 交叉淡变。
+   仅影响本地预览；daemon 渲染环境为 no-preference，输出始终全动效。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* ---------- Opening（0.00-0.25 建立，关系线 0.40 描画） ---------- */
+tl.from("#vd-context", { opacity: 0, duration: 0.20, ease: E_ENTER }, 0.05);
+tl.from("#vd-explain", { opacity: 0, duration: 0.24, ease: E_ENTER }, 0.18);
+tl.from("#vd-card", R(
+  { y: 24, opacity: 0, duration: 0.40, ease: E_ENTER },
+  { opacity: 0, duration: 0.32, ease: E_ENTER }), 0.10);
+tl.from("#vd-result", { opacity: 0, duration: 0.28, ease: E_ENTER }, 0.18);
+tl.fromTo("#vd-link",
+  { strokeDasharray: 1, strokeDashoffset: 1 },
+  { strokeDashoffset: 0, duration: 0.30, ease: E_MOVE }, 0.40);
+
+/* ---------- Build：逐个功能展现 ----------
+   每个提取事件同一结构：提取框亮起（唯一玻璃面 + 唯一强调色）→
+   结构层在源区域就位 → hfMove 离卡入槽 → 源区域降为底稿 → 框熄。
+   层移动与框熄灭错开，任意时刻同时运动 ≤ 2。 */
+function extract(key, glassSel, tGlass, tMove) {
+  var from = GEO.LAYER_FROM[key];
+  var layer = "#vd-layer-" + key;
+  var slot = { x: GEO.SLOT_X, y: GEO.SLOT_Y({ hook: 0, points: 1, rhythm: 2 }[key]) };
+
+  /* 提取框亮起 */
+  tl.fromTo(glassSel,
+    { opacity: 0 },
+    { opacity: 1, duration: 0.25, ease: E_ENTER }, tGlass);
+  /* 结构层在源区域上方显形（读作"这一层被抬出标本"） */
+  tl.fromTo(layer,
+    R({ x: from.x, y: from.y, opacity: 0 }, { x: slot.x, y: slot.y, opacity: 0 }),
+    R({ x: from.x, y: from.y, opacity: 1, duration: 0.20, ease: E_ENTER },
+      { opacity: 1, duration: 0.20, ease: E_ENTER }), tGlass + 0.10);
+  /* 离卡入槽；源区域同步降为底稿 */
+  tl.to(layer, R(
+    { x: slot.x, y: slot.y, duration: 0.70, ease: E_MOVE },
+    { opacity: 1, duration: 0.20, ease: E_MOVE }), tMove);
+  tl.to("#vd-region-" + key, { opacity: 0.35, duration: 0.22, ease: E_MOVE }, tMove + 0.10);
+  /* 落定回弹：入槽后一次 0.965→1 的触觉收尾（reduced-motion 剥离） */
+  if (!REDUCED) {
+    tl.fromTo(layer, { scale: 0.965 }, { scale: 1, duration: 0.24, ease: E_ENTER }, tMove + 0.64);
+  }
+  /* 框熄（层到位后） */
+  tl.to(glassSel, { opacity: 0, duration: 0.22, ease: E_MOVE }, tMove + 0.68);
+}
+
+/* ② 拆出 Hook 层（1.10 起） */
+extract("hook", "#vd-glass-hook", 1.10, 1.45);
+
+/* ③ 拆出卖点顺序（2.50 起）：卡内三段乱序标序（同向 stagger 流 = 单一事件），
+     顺序结构层以乱序形态离卡，飞行途中三段归位 1·2·3（本章核心动作） */
+tl.to("#vd-idx-0, #vd-idx-1, #vd-idx-2",
+  { opacity: 1, duration: 0.20, stagger: 0.12, ease: E_ENTER }, 2.50);
+/* 层显形前，三段先置于乱序相对位移（与卡内 2·3·1 视觉序一致） */
+tl.set("#vd-pts-1", { y: 60 }, 2.99);
+tl.set("#vd-pts-2", { y: -30 }, 2.99);
+tl.set("#vd-pts-3", { y: -30 }, 2.99);
+extract("points", "#vd-glass-points", 2.90, 3.25);
+/* 飞行途中归位（3.55 起，与层移动并行为第二事件；reduced 下瞬时就位） */
+if (REDUCED) {
+  tl.set("#vd-pts-1, #vd-pts-2, #vd-pts-3", { y: 0 }, 3.55);
+} else {
+  tl.to("#vd-pts-1", { y: 0, duration: 0.42, ease: E_MOVE }, 3.55);
+  tl.to("#vd-pts-2", { y: 0, duration: 0.42, ease: E_MOVE }, 3.61);
+  tl.to("#vd-pts-3", { y: 0, duration: 0.42, ease: E_MOVE }, 3.67);
+}
+
+/* ④ 拆出节奏标记（4.15 起）：刻度逐格亮起（同向 stagger 流 = 单一事件），
+     再提取节奏层 */
+tl.fromTo(".vd-tick",
+  R({ scaleY: 0, opacity: 0 }, { scaleY: 1, opacity: 0 }),
+  R({ scaleY: 1, opacity: 1, duration: 0.18, stagger: 0.07, ease: E_ENTER },
+    { opacity: 1, duration: 0.18, stagger: 0.07, ease: E_ENTER }), 4.15);
+extract("rhythm", "#vd-glass-rhythm", 4.70, 5.05);
+/* 节奏层到位：5.05 + 0.70 = 5.75；框熄 5.73 + 0.22 ≈ 5.95 */
+
+/* ---------- Build 收束（5.65-6.05）：容器封合 + 产出标签 ---------- */
+tl.to("#vd-result-seal", R(
+  { scaleX: 1, duration: 0.40, ease: E_MOVE },
+  { opacity: 0.55, duration: 0.30, ease: E_MOVE }), 5.85);
+tl.to("#vd-result-title", { color: "var(--hf-color-text-primary)", duration: 0.30, ease: E_MOVE }, 5.95);
+tl.fromTo("#vd-output",
+  R({ y: 14, opacity: 0 }, { opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.30, ease: E_ENTER },
+    { opacity: 1, duration: 0.24, ease: E_ENTER }),
+  6.05);
+
+/* ---------- Hero 6.05-6.25：完整关系可读，无新动效 ---------- */
+
+/* ---------- End（6.25-6.64）：原卡与语境退位，容器与产出保持可辨 ---------- */
+tl.to("#vd-card, #vd-context, #vd-explain, #vd-link", { opacity: 0.35, duration: 0.20, ease: E_MOVE }, 6.28);
+tl.to("#vd-glass-hook, #vd-glass-points, #vd-glass-rhythm", { opacity: 0, duration: 0.15, ease: E_MOVE }, 6.28);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["viral-breakdown-core"] = tl;
+</script>
+
+
+</template>
+</body>
+</html>

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>opening-weave-core/16x9@v1</title>
+<!--
+  P001 ｜开场（OpeningWeaveCore）· rev.2
+  依据：ANIMATION_DRAFT.md rev.3、
+  .hyperframes-cache/p001-opening-weave/ANTI_PPT_PLAN.md（已批准）、
+  用户 rev.2 指令（3D 球体粒子系统 → 凝聚为可编辑数量的一条线；
+  引线不得超出壳卡边框）。
+
+  单一状态链（粒子球 → 凝聚成线 → 激活引出）：
+  粒子自远处汇聚成球面（Fibonacci 分布）→ 球体绕世界 Y 轴连续旋转，
+  四枚图标预留位绑定在球面顶点上随行 → 旋转减速，粒子与图标位
+  向心凝聚为一条横线（节点数量由 ICON_SLOTS 可编辑）→
+  「选题」端点亮、结果短语浮现 → 激活流沿链掠过，
+  引出线止于壳卡内侧（1840px），方向交给 P002。
+
+  确定性说明：旋转角是 GSAP tween 的状态量，旋转矩阵在 onUpdate 中
+  手动计算并做透视投影——视觉上等同 rAF 驱动的连续旋转，
+  但保持 paused timeline、seek-safe、无 wall clock 的契约。
+
+  明确排除：不使用环形 / 闭环构图，不与 P012 首尾呼应；
+  本章为通用「凝聚成线」开场组件，当前项目只是参考样例。
+
+  事实边界：「十个 Skill」是本视频的功能分类，不是平台官方套装；
+  不伪造平台数据；画面文字只承担定位与结论。
+
+  HyperFrames：单一 paused GSAP timeline；无随机数、wall clock、
+  运行时网络、无限循环或异步建表。总长 4.80s，仅为 Preview 时长。
+
+  rev.2：视觉核心由「散件贯穿」改为「粒子球凝聚成线」。
+  rev.4：画布转为 1920×1080，引出线止于 1840（壳卡内缘），不越框。
+  rev.3：修复 seek 时粒子层不渲染；投影更新由 GSAP tween 的
+  onUpdate 驱动，正式 sub-composition 不包含本地检查脚手架。
+-->
+</head>
+<body>
+<template>
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+  }
+
+  * { box-sizing: border-box; }
+
+  html,
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: transparent;
+  }
+
+  #root {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    margin: 0;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+  }
+
+  .ow-clip,
+  .ow-stage,
+  .ow-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .ow-bg { background: transparent; }
+
+  .ow-stack-card,
+  .ow-shell {
+    position: absolute;
+    left: 56px;
+    top: 64px;
+    width: 1808px;
+    height: 964px;
+    border-radius: 30px;
+    pointer-events: none;
+  }
+
+  .ow-stack-card {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 52px rgba(2, 7, 11, 0.28);
+  }
+
+  .ow-stack-card.back-2 {
+    left: 88px;
+    top: 24px;
+    opacity: 0.26;
+  }
+
+  .ow-stack-card.back-1 {
+    left: 72px;
+    top: 44px;
+    opacity: 0.52;
+  }
+
+  .ow-shell {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 28px 72px rgba(2, 7, 11, 0.46);
+  }
+
+  .ow-context {
+    position: absolute;
+    left: 88px;
+    top: 64px;
+    color: var(--text-3);
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+
+  /* 粒子场：所有粒子/图标位的位置由投影脚本写入 transform */
+  .ow-field {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .ow-particle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--relation);
+    will-change: transform, opacity;
+  }
+
+  /* 图标预留位：球面顶点上的纹理贴图槽（虚线框 = 待注入图标），
+     凝聚后成为线节点 */
+  .ow-tile {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    border: 1.5px dashed rgba(247, 251, 255, 0.45);
+    border-radius: 8px;
+    background: rgba(11, 23, 32, 0.85);
+    will-change: transform, opacity;
+  }
+
+  .ow-tile-glow {
+    position: absolute;
+    inset: -6px;
+    border: 2px solid var(--relation);
+    border-radius: 12px;
+    opacity: 0;
+  }
+
+  .ow-tile-label {
+    position: absolute;
+    top: 118%;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--text-2);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    opacity: 0;
+  }
+
+  .ow-svg {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    pointer-events: none;
+  }
+
+  .ow-thread {
+    fill: none;
+    stroke: rgba(84, 215, 255, 0.55);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  /* 引出线：止于 16:9 壳卡内缘（1840），不越框 */
+  .ow-lead {
+    fill: none;
+    stroke: rgba(84, 215, 255, 0.45);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .ow-halo {
+    fill: none;
+    stroke: var(--active);
+    stroke-width: 2;
+    opacity: 0;
+    transform-origin: center;
+    transform-box: fill-box;
+  }
+
+  .ow-dot {
+    position: absolute;
+    left: 0;
+    top: 474px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--relation);
+    box-shadow: 0 0 14px rgba(84, 215, 255, 0.55);
+    opacity: 0;
+    will-change: transform, opacity;
+  }
+
+  /* 结果短语：线成形后浮现，是结果不是标题页 */
+  .ow-phrase {
+    position: absolute;
+    left: 0;
+    top: 392px;
+    width: 1920px;
+    text-align: center;
+    color: var(--text-1);
+    font-size: 22px;
+    font-weight: 620;
+    letter-spacing: 0.06em;
+    opacity: 0;
+  }
+
+  .ow-explain {
+    position: absolute;
+    left: 88px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .ow-explain-tag {
+    color: var(--text-3);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .ow-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .ow-explain .bar:nth-child(2) { width: 88%; }
+  .ow-explain .bar:nth-child(3) {
+    width: 62%;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+
+  #root[data-composition-id="opening-weave-core"] { background: transparent; margin: 0; }
+</style>
+
+<div data-hf-id="hf-2c9f" id="root" data-composition-id="opening-weave-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-start="0" data-width="1920" data-height="1080" data-duration="4.80">
+  <section data-hf-id="hf-qzl7" id="ow-scene" class="ow-clip clip" data-start="0" data-duration="4.80" data-track-index="1">
+    <div data-hf-id="hf-d8e8" class="ow-bg" data-layout-ignore="" aria-hidden="true"></div>
+    <div data-hf-id="hf-zpdv" class="ow-stage">
+      <div data-hf-id="hf-6zx0" class="ow-stack-card back-2" id="ow-stack-back-2" data-layout-ignore="" aria-hidden="true"></div>
+      <div data-hf-id="hf-t766" class="ow-stack-card back-1" id="ow-stack-back-1" data-layout-ignore="" aria-hidden="true"></div>
+      <div data-hf-id="hf-sure" class="ow-shell" id="ow-shell" data-layout-ignore="" aria-hidden="true"></div>
+
+      <div data-hf-id="hf-6iw8" class="ow-context" id="ow-context">开场 · 01</div>
+
+      <!-- 横链、引出线、「选题」端 halo -->
+      <svg data-hf-id="hf-xf57" class="ow-svg" id="ow-svg" viewBox="0 0 1920 1080" width="1920" height="1080" aria-label="粒子球凝聚成一条环节的示意">
+        <path data-hf-id="hf-keo1" class="ow-thread" id="ow-thread" d="M360 480 L1560 480" />
+        <path data-hf-id="hf-jzyt" class="ow-lead" id="ow-lead" d="M1560 480 L1840 480" />
+        <circle data-hf-id="hf-x032" class="ow-halo" id="ow-halo" cx="360" cy="480" r="22" />
+      </svg>
+
+      <!-- 粒子与图标预留位由初始化脚本生成到 #ow-field -->
+      <div data-hf-id="hf-kcpy" class="ow-field" id="ow-field"></div>
+
+      <div data-hf-id="hf-wi2v" class="ow-dot" id="ow-dot" aria-hidden="true"></div>
+
+      <div data-hf-id="hf-40cn" class="ow-phrase" id="ow-phrase">不是十个工具，是一套关系</div>
+
+      <div data-hf-id="hf-n3lp" class="ow-explain" id="ow-explain" data-slot="explain">
+        <span data-hf-id="hf-jabj" class="ow-explain-tag">EXPLAIN SLOT</span>
+        <div data-hf-id="hf-ufsv" class="bar"></div>
+        <div data-hf-id="hf-c51b" class="bar"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+(function () {
+var DUR = 4.80;
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ===== 可编辑旋钮（Preview 数据，非最终 Slot API） ===== */
+var PARTICLE_COUNT = 64;                          /* 粒子总数 */
+var ICON_SLOTS = ["选题", "制作", "素材", "复盘"]; /* 图标预留位 = 线节点，数量可编辑 */
+var LINE_X0 = 360;
+var LINE_X1 = 1560;
+var LINE_Y = 480;
+
+/* 球体参数 */
+var CX = 960;
+var CY = 470;
+var RADIUS = 230;
+var PERSP = 900;
+var TILT = 0.42;               /* 绕世界 X 轴的固定倾角 */
+var GOLDEN = Math.PI * (3 - Math.sqrt(5));
+
+var NODE_N = ICON_SLOTS.length;
+var field = document.getElementById("ow-field");
+
+/* Fibonacci 球面分布（确定数，无随机） */
+function spherePoint(i, n) {
+  var y = 1 - (2 * (i + 0.5)) / n;
+  var r = Math.sqrt(Math.max(0, 1 - y * y));
+  var th = i * GOLDEN;
+  return { x: r * Math.cos(th), y: y, z: r * Math.sin(th) };
+}
+
+/* 图标预留位绑定的球面顶点索引 */
+function tileVertex(k, m, n) {
+  return Math.floor((k + 0.5) * n / m) % n;
+}
+
+var particles = [];
+var i;
+for (i = 0; i < PARTICLE_COUNT; i++) {
+  var p = document.createElement("div");
+  p.className = "ow-particle";
+  p.setAttribute("aria-hidden", "true");
+  field.appendChild(p);
+  particles.push({ el: p, base: spherePoint(i, PARTICLE_COUNT) });
+}
+
+var tiles = [];
+for (i = 0; i < NODE_N; i++) {
+  var t = document.createElement("div");
+  t.className = "ow-tile";
+  t.id = "ow-tile-" + i;
+  t.setAttribute("data-layout-allow-overflow", "true");
+  var glow = document.createElement("i");
+  glow.className = "ow-tile-glow";
+  glow.id = "ow-glow-" + i;
+  var label = document.createElement("span");
+  label.className = "ow-tile-label";
+  label.id = "ow-tile-label-" + i;
+  label.textContent = ICON_SLOTS[i];
+  t.appendChild(glow);
+  t.appendChild(label);
+  field.appendChild(t);
+  tiles.push({
+    el: t,
+    base: spherePoint(tileVertex(i, NODE_N, PARTICLE_COUNT), PARTICLE_COUNT)
+  });
+}
+
+/* 横链与引出线：破折隐藏，待描画 */
+var thread = document.getElementById("ow-thread");
+var threadLen = thread.getTotalLength();
+thread.style.strokeDasharray = String(threadLen);
+thread.style.strokeDashoffset = String(threadLen);
+var lead = document.getElementById("ow-lead");
+var leadLen = lead.getTotalLength();
+lead.style.strokeDasharray = String(leadLen);
+lead.style.strokeDashoffset = String(leadLen);
+
+/* ===== 投影：状态量全部由 GSAP tween 驱动，render 为纯函数 ===== */
+var state = {
+  rot: 0,        /* 世界 Y 轴旋转角 */
+  gather: REDUCED ? 1 : 0,  /* 0=远处散点 1=球面 */
+  morph: 0,      /* 0=球体 1=横线 */
+  fade: 0,       /* 整体淡入 */
+  partFade: 1,   /* 粒子在成线后退为淡纹理 */
+  labelFade: 0   /* 节点短名 */
+};
+
+function lineX(k) {
+  return NODE_N === 1 ? (LINE_X0 + LINE_X1) / 2
+    : LINE_X0 + (LINE_X1 - LINE_X0) * k / (NODE_N - 1);
+}
+
+function project(base, radiusScale) {
+  /* 绕世界 Y 轴旋转，再绕 X 轴固定倾斜 */
+  var ca = Math.cos(state.rot), sa = Math.sin(state.rot);
+  var x = base.x * ca + base.z * sa;
+  var z1 = -base.x * sa + base.z * ca;
+  var ct = Math.cos(TILT), st = Math.sin(TILT);
+  var y = base.y * ct - z1 * st;
+  var z = base.y * st + z1 * ct;
+  var rr = RADIUS * radiusScale;
+  return { x: CX + x * rr, y: CY + y * rr, z: z };
+}
+
+function render() {
+  var m = state.morph;
+  var g = state.gather;
+  var radiusScale = 2.1 - 1.1 * g;   /* 汇聚：2.1R → 1R */
+  var k;
+  for (k = 0; k < particles.length; k++) {
+    var pt = project(particles[k].base, radiusScale);
+    /* 粒子沿全线均匀落位（数量与节点无关，形成粒子线） */
+    var tx = LINE_X0 + (LINE_X1 - LINE_X0) * k / (particles.length - 1);
+    var x = pt.x + (tx - pt.x) * m;
+    var y = pt.y + (LINE_Y - pt.y) * m;
+    var persp = PERSP / (PERSP - pt.z);
+    var s = persp + (1 - persp) * m;
+    var front = 0.35 + 0.65 * (pt.z / RADIUS + 1) / 2;
+    var op = state.fade * state.partFade * (front + (0.9 - front) * m);
+    var el = particles[k].el.style;
+    el.transform = "translate3d(" + (x - 3) + "px," + (y - 3) + "px,0) scale(" + s.toFixed(3) + ")";
+    el.opacity = op.toFixed(3);
+  }
+  for (k = 0; k < tiles.length; k++) {
+    var tp = project(tiles[k].base, radiusScale);
+    var txx = lineX(k);
+    var x2 = tp.x + (txx - tp.x) * m;
+    var y2 = tp.y + (LINE_Y - tp.y) * m;
+    var ps = PERSP / (PERSP - tp.z);
+    var s2 = ps + (1 - ps) * m;
+    var fr = 0.45 + 0.55 * (tp.z / RADIUS + 1) / 2;
+    var el2 = tiles[k].el.style;
+    el2.transform = "translate3d(" + (x2 - 15) + "px," + (y2 - 15) + "px,0) scale(" + s2.toFixed(3) + ")";
+    el2.opacity = (state.fade * (fr + (1 - fr) * m)).toFixed(3);
+  }
+}
+
+render();
+
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* ---------- Opening：卡栈、语境 ---------- */
+tl.from("#ow-stack-back-2", R(
+  { x: 18, y: -8, opacity: 0, duration: 0.28, ease: E_ENTER },
+  { opacity: 0, duration: 0.22, ease: E_ENTER }), 0.10);
+tl.from("#ow-stack-back-1", R(
+  { x: 12, y: -5, opacity: 0, duration: 0.28, ease: E_ENTER },
+  { opacity: 0, duration: 0.22, ease: E_ENTER }), 0.16);
+tl.from("#ow-shell", R(
+  { y: 18, opacity: 0, duration: 0.36, ease: E_ENTER },
+  { opacity: 0, duration: 0.28, ease: E_ENTER }), 0.20);
+tl.from("#ow-context", { opacity: 0, duration: 0.22, ease: E_ENTER }, 0.22);
+tl.from("#ow-explain", { opacity: 0, duration: 0.24, ease: E_ENTER }, 0.32);
+
+/* ---------- Build：粒子汇聚成球，绕世界 Y 轴连续旋转 ---------- */
+tl.to(state, R(
+  { fade: 1, duration: 0.40, ease: "power1.out", onUpdate: render },
+  { fade: 1, duration: 0.30, ease: "power1.out", onUpdate: render }), 0.40);
+if (!REDUCED) {
+  tl.to(state, {
+    gather: 1, duration: 0.70, ease: E_ENTER, onUpdate: render
+  }, 0.40);
+  /* 连续旋转：匀速段 + 进入凝聚前的减速段（无 wall clock） */
+  tl.to(state, { rot: 6.9, duration: 1.90, ease: "none", onUpdate: render }, 0.40);
+  tl.to(state, { rot: 7.5, duration: 0.40, ease: "power2.out", onUpdate: render }, 2.30);
+}
+
+/* ---------- Hero：凝聚为可编辑数量的一条线 ---------- */
+tl.to(state, R(
+  { morph: 1, duration: 1.10, ease: E_MOVE, onUpdate: render },
+  { morph: 1, duration: 0.01, ease: "none", onUpdate: render }), 2.60);
+tl.to("#ow-thread", {
+  strokeDashoffset: 0,
+  duration: R(0.50, 0.30),
+  ease: R("power1.inOut", "power1.out")
+}, 3.30);
+tl.to(state, {
+  partFade: 0.18, duration: 0.22, ease: "power1.out", onUpdate: render
+}, 3.72);
+for (i = 0; i < NODE_N; i++) {
+  tl.to("#ow-tile-label-" + i, {
+    opacity: 1, duration: 0.22, ease: "power1.out"
+  }, 3.58 + i * 0.06);
+}
+
+/* 「选题」端点亮，结果短语浮现 */
+tl.to("#ow-tile-0", {
+  borderColor: "var(--hf-color-accent-primary)",
+  backgroundColor: "rgba(10, 132, 255, 0.25)",
+  duration: 0.24,
+  ease: "power1.out"
+}, 3.86);
+tl.fromTo("#ow-halo",
+  R({ scale: 0.6, opacity: 0 }, { scale: 1, opacity: 0 }),
+  R({ scale: 1, opacity: 1, duration: 0.28, ease: "back.out(1.4)" },
+    { opacity: 1, duration: 0.20, ease: "power1.out" }), 3.86);
+tl.fromTo("#ow-phrase",
+  R({ y: 10, opacity: 0 }, { y: 0, opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.26, ease: E_ENTER },
+    { opacity: 1, duration: 0.22, ease: E_ENTER }), 3.94);
+
+/* ---------- 激活流沿链掠过，引出线止于壳卡内侧 ---------- */
+var SWEEP_START = 4.06;
+var SWEEP_DUR = 0.44;
+var FLASH = [4.09, 4.17, 4.28, 4.39];
+tl.fromTo("#ow-dot",
+  { opacity: 0 },
+  { opacity: 1, duration: R(0.06, 0.16), ease: "power1.out" }, SWEEP_START);
+tl.fromTo("#ow-dot",
+  { x: 354 }, { x: 1814, duration: R(SWEEP_DUR, 0.01), ease: "none" }, SWEEP_START);
+tl.to("#ow-dot", { opacity: 0, duration: 0.10, ease: "power1.in" }, 4.42);
+
+for (i = 0; i < NODE_N; i++) {
+  tl.to("#ow-glow-" + i, { opacity: 0.85, duration: 0.08, ease: "power1.out" }, FLASH[i]);
+  tl.to("#ow-glow-" + i, { opacity: 0, duration: 0.16, ease: "power1.in" }, FLASH[i] + 0.08);
+}
+
+tl.to("#ow-lead", {
+  strokeDashoffset: 0,
+  duration: R(0.14, 0.20),
+  ease: R("none", "power1.out")
+}, 4.39);
+
+/* ---------- End：语境退位，画面保持 ---------- */
+tl.to("#ow-context, #ow-explain", { opacity: 0.35, duration: 0.18, ease: E_MOVE }, 4.56);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["opening-weave-core"] = tl;
+
+console.assert(
+  document.querySelector("[data-composition-id='opening-weave-core']") &&
+  window.__timelines["opening-weave-core"] === tl &&
+  tl.duration() <= DUR &&
+  tiles.length === NODE_N,
+  "P001 HyperFrames composition contract failed"
+);
+})();
+</script>
+
+</template>
+</body>
+</html>
