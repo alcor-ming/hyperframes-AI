@@ -1,0 +1,35 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "asset_ref": "rich-skill-explanation/16x9@v1",
+  "package_sha256": "220dcb7575aaf0c48bb7bbd2e09d9c8bcd8d0ad4f67729b9e3e6badba5055198",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "618a17ccbbe1223788cd73276d6071ad11990019a4c4252b8cd7bece402dffae"
+    },
+    {
+      "path": "assets/vendor/gsap/CustomEase.min.js",
+      "sha256": "1d8a8575a2525f10b0ede48c915b6ad3738d09a2eeb0600f18fd0049aa24802d"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "89e957c374ecf1d7af7ad38f705230436e0884d94c5c3f310958a171fc4c325b"
+    },
+    {
+      "path": "component.html",
+      "sha256": "fd56bbb853c29870e879bb0648e815cd072189c578af60f1d255f76f29002fb9"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "ac01709e5193c23a04854ca123fe0f880a2a429f7230245a15cc40cb0c622260"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "927f265e7a89cea85f809faea025b2b74cd16f75d9ada99b1e9404c802cdcd8f"
+    }
+  ]
+}

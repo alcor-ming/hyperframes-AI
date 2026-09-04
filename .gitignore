@@ -5,6 +5,7 @@ idea.md
 /assets/
 /canvas/
 /outputs/
+/dist/
 /works/
 /.studio/.runtime/
 __pycache__/

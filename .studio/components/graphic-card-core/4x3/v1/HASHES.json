@@ -1,0 +1,35 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "asset_ref": "graphic-card-core/4x3@v1",
+  "package_sha256": "30785285144c4674e8cbbefd248cbe5a37229f75c68089e2aa8a72f90a4a1c25",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "5583a9bf855f32a2b93d4abee7814ad65c5602682838796a49bd1c22010d15b4"
+    },
+    {
+      "path": "assets/vendor/gsap/CustomEase.min.js",
+      "sha256": "1d8a8575a2525f10b0ede48c915b6ad3738d09a2eeb0600f18fd0049aa24802d"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "c6efe371ad1066d59f942621f24baed484db0d92f6fce43871c6506295525b7e"
+    },
+    {
+      "path": "component.html",
+      "sha256": "fc2dab3072a266bc8662ea69cd63dec623871a2b575047648a8e2559af41e988"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "5c505e7249dacd1e864d068819abbf7cab27c3f0b2b0f7db3710138e40e66ef8"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "8eae01f801f89bcf2a8e5c68e64f7fa20b4a287cc4974037f6b9d754ad26f406"
+    }
+  ]
+}

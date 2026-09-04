@@ -56,13 +56,13 @@ The subtemplate defines presentation architecture only. Component selection, com
 
 Use `tokens.json` as authority.
 
-- Deep blue-black canvas, never generic pure black.
-- White carries claims and primary text.
-- Cool cyan carries relationships, routes and inactive data.
-- Active blue carries the current decision or selected object.
-- Only one of cyan/blue may be the dominant accent in a frame.
-- Accent coverage target: under 5% of the frame.
-- Additional tokenized accents may distinguish semantic states or peer chapters, but each frame keeps one dominant accent.
+- Use the cold graphite-blue ladder: `#0F1216` canvas, `#161A21` first-level surfaces, and `#1B1F27` raised or selected surfaces.
+- Use `#272D38` for borders and grids; do not create structure with bright white rules.
+- Electric cyan `#5AC8FA` is the primary accent for data, labels, stamps and paths.
+- Amber `#E8B563` is the only secondary accent and is reserved for small badges or reuse stamps.
+- Cyan carries about 80% of accent usage. Use no more than two accent colors in one frame, with total accent coverage under 5%.
+- Primary, secondary and tertiary text are `#E8EAEE`, `#9AA3B2` and `#5C6572`; use the tertiary tone only for non-essential scales and annotations.
+- Do not add saturated chapter colors. Distinguish peers through structure, labels and motion instead of expanding the palette.
 
 ## Typography
 

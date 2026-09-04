@@ -1,0 +1,31 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "asset_ref": "rse-functional-background/4x3@v1",
+  "package_sha256": "c8223a69eb22114a955eba2d79a089a7211e8eb0487b300e49947d1301034325",
+  "files": [
+    {
+      "path": "BACKGROUND.md",
+      "sha256": "0f6f1d676c45feb7e36e848a2af7223f6271c623fdcdbdf24153f55fbe618156"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "background.html",
+      "sha256": "3a92e745efa8a31724f6a91931d6c98d79c110c65550f325b35aa4f5ffe3174b"
+    },
+    {
+      "path": "background.schema.json",
+      "sha256": "b80a1fed419a16dd30044c8063a65f51a9e0854ede1d76390be929a4b4a35d73"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "86824e9b3e3e1fbf63e73877fbb906749ca71a5bedd023ac34cc0050c006586f"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "b8c541d1f44e257f5dcfc524886a927bf63c7d5b304044b7a328cf904d491f86"
+    }
+  ]
+}

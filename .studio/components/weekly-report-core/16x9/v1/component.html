@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>weekly-report-core/16x9@v1</title>
+</head>
+<body>
+<template id="weekly-report-core-template">
+<!--
+  P011 ｜账号周报（WeeklyReportCore）· rev.1
+  依据：ANIMATION_DRAFT.md rev.3、P010_HANDOFF.md、
+  .hyperframes-cache/p011-weekly-report/ANTI_PPT_PLAN.md（已批准）。
+
+  单一状态链（周轨装订 + 册页翻折）：
+  P010 实验卡停靠待安位 → 周轨生长 → 三次发布散痕逐次吸附落位、
+  牵出溯源线（选题 / 脚本 / 素材）→ 脊线贯通装订成册 →
+  相对起落刻痕（无数字）→ 册页右缘翻折，实验卡翻入「下周」位 →
+  闭环弧线递向 P012。
+
+  事实边界：没有真实后台数据；发布痕为无内容线框，指标仅为相对
+  起落刻痕（无数字、无百分比）；如实标注「示意汇总 · 依赖数据源与口径」。
+
+  HyperFrames：单一 paused GSAP timeline；无随机数、wall clock、
+  运行时网络、无限循环或异步建表。总长 6.40s，仅为 Preview 时长。
+-->
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+  }
+
+  * { box-sizing: border-box; }
+
+  html,
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: transparent;
+  }
+
+  #root {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    margin: 0;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+  }
+
+  .wr-clip,
+  .wr-stage,
+  .wr-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .wr-bg { background: transparent; }
+
+  .wr-stack-card,
+  .wr-shell {
+    position: absolute;
+    left: 56px;
+    top: 64px;
+    width: 1808px;
+    height: 964px;
+    border-radius: 30px;
+    pointer-events: none;
+  }
+
+  .wr-stack-card {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 52px rgba(2, 7, 11, 0.28);
+  }
+
+  .wr-stack-card.back-2 {
+    left: 88px;
+    top: 24px;
+    opacity: 0.26;
+  }
+
+  .wr-stack-card.back-1 {
+    left: 72px;
+    top: 44px;
+    opacity: 0.52;
+  }
+
+  .wr-shell {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 28px 72px rgba(2, 7, 11, 0.46);
+  }
+
+  .wr-context {
+    position: absolute;
+    left: 120px;
+    top: 64px;
+    color: var(--text-3);
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+
+  /* P010 实验卡：先停靠右上待安位，翻折时移入「下周」位 */
+  .wr-experiment {
+    position: absolute;
+    left: 1480px;
+    top: 148px;
+    width: 312px;
+    height: 132px;
+    padding: 16px 20px;
+    border: 1px solid rgba(255, 255, 255, 0.17);
+    border-radius: 16px;
+    background: var(--elevated);
+    box-shadow: 0 18px 44px rgba(2, 7, 11, 0.50);
+    opacity: 0;
+    transform-origin: left top;
+    will-change: transform, opacity;
+  }
+
+  .wr-experiment-kicker {
+    color: var(--text-3);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+
+  .wr-experiment-copy {
+    margin-top: 6px;
+    color: var(--text-1);
+    font-size: 26px;
+    font-weight: 680;
+    letter-spacing: 0.02em;
+  }
+
+  .wr-pending {
+    position: absolute;
+    right: 14px;
+    top: 14px;
+    padding: 5px 10px;
+    border: 1px solid rgba(10, 132, 255, 0.52);
+    border-radius: 999px;
+    color: var(--hf-color-accent-primary);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+
+  /* 周轨：细刻度带，不是表格也不是面板 */
+  .wr-track {
+    position: absolute;
+    left: 160px;
+    top: 480px;
+    width: 1600px;
+    height: 220px;
+    z-index: 2;
+  }
+
+  .wr-ticks i {
+    position: absolute;
+    top: 68px;
+    width: 2px;
+    height: 24px;
+    background: rgba(247, 251, 255, 0.22);
+    opacity: 0;
+    transform-origin: center bottom;
+    will-change: transform, opacity;
+  }
+
+  .wr-ticks i:nth-child(1) { left: 80px; }
+  .wr-ticks i:nth-child(2) { left: 320px; }
+  .wr-ticks i:nth-child(3) { left: 560px; }
+  .wr-ticks i:nth-child(4) { left: 800px; }
+  .wr-ticks i:nth-child(5) { left: 1040px; }
+  .wr-ticks i:nth-child(6) { left: 1280px; }
+  .wr-ticks i:nth-child(7) { left: 1520px; }
+
+  .wr-days span {
+    position: absolute;
+    top: 104px;
+    color: var(--text-3);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    transform: translateX(-50%);
+    opacity: 0;
+  }
+
+  .wr-days span:nth-child(1) { left: 81px; }
+  .wr-days span:nth-child(2) { left: 321px; }
+  .wr-days span:nth-child(3) { left: 561px; }
+  .wr-days span:nth-child(4) { left: 801px; }
+  .wr-days span:nth-child(5) { left: 1041px; }
+  .wr-days span:nth-child(6) { left: 1281px; }
+  .wr-days span:nth-child(7) { left: 1521px; }
+
+  /* 发布散痕：无内容线框，落位后内部实框亮起完成"装订" */
+  .wr-anchor {
+    position: absolute;
+    width: 130px;
+    height: 86px;
+    padding: 14px 14px;
+    border: 1px dashed rgba(255, 255, 255, 0.28);
+    border-radius: 10px;
+    background: rgba(11, 23, 32, 0.72);
+    z-index: 1;
+    opacity: 0;
+    will-change: transform, opacity;
+  }
+
+  .wr-anchor-frame {
+    position: absolute;
+    inset: -1px;
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(2, 7, 11, 0.42);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .wr-anchor-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .wr-anchor-bars span {
+    display: block;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(247, 251, 255, 0.14);
+  }
+
+  .wr-anchor-bars span:nth-child(1) { width: 78px; }
+  .wr-anchor-bars span:nth-child(2) { width: 52px; }
+
+  #wr-anchor-1 { left: 175px; top: 700px; }
+  #wr-anchor-2 { left: 895px; top: 180px; }
+  #wr-anchor-3 { left: -210px; top: 517px; }
+
+  /* 相对起落刻痕：无数字，仅方向与相对高度 */
+  .wr-bar {
+    position: absolute;
+    width: 3px;
+    border-radius: 2px;
+    opacity: 0;
+    will-change: transform, opacity;
+  }
+
+  #wr-bar-1 {
+    left: 420px;
+    top: 526px;
+    height: 34px;
+    background: rgba(84, 215, 255, 0.55);
+    transform-origin: center bottom;
+  }
+
+  #wr-bar-2 {
+    left: 1140px;
+    top: 544px;
+    height: 16px;
+    background: rgba(84, 215, 255, 0.55);
+    transform-origin: center bottom;
+  }
+
+  #wr-bar-3 {
+    left: 1580px;
+    top: 560px;
+    height: 22px;
+    background: rgba(247, 251, 255, 0.30);
+    transform-origin: center top;
+  }
+
+  /* 册页右缘：翻折的 pivot */
+  .wr-fold {
+    position: absolute;
+    left: 1680px;
+    top: 478px;
+    width: 2px;
+    height: 164px;
+    background: rgba(247, 251, 255, 0.25);
+    opacity: 0;
+    transform-origin: left center;
+    will-change: transform, opacity;
+  }
+
+  .wr-ink {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    pointer-events: none;
+  }
+
+  .wr-base {
+    fill: none;
+    stroke: rgba(247, 251, 255, 0.22);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .wr-spine {
+    fill: none;
+    stroke: rgba(84, 215, 255, 0.70);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+
+  .wr-stitch {
+    stroke: var(--relation);
+    stroke-width: 3;
+    stroke-linecap: round;
+    opacity: 0;
+    transform-origin: center;
+    transform-box: fill-box;
+    will-change: transform, opacity;
+  }
+
+  .wr-trace-line {
+    fill: none;
+    stroke: rgba(84, 215, 255, 0.40);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .wr-loop {
+    fill: none;
+    stroke: rgba(84, 215, 255, 0.45);
+    stroke-width: 2;
+    stroke-dasharray: 4 7;
+    stroke-linecap: round;
+  }
+
+  .wr-loop-dot {
+    fill: var(--relation);
+    opacity: 0;
+  }
+
+  .wr-line-label {
+    position: absolute;
+    color: var(--text-3);
+    font-size: 13px;
+    letter-spacing: 0.07em;
+    opacity: 0;
+  }
+
+  #wr-label-1 { left: 76px; top: 656px; }
+  #wr-label-2 { left: 756px; top: 664px; }
+  #wr-label-3 { left: 1226px; top: 666px; }
+
+  .wr-note {
+    position: absolute;
+    left: 160px;
+    top: 660px;
+    color: var(--text-3);
+    font-size: 13px;
+    letter-spacing: 0.07em;
+    opacity: 0;
+  }
+
+  .wr-output {
+    position: absolute;
+    left: 160px;
+    top: 700px;
+    color: var(--relation);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    opacity: 0;
+  }
+
+  .wr-next-label {
+    position: absolute;
+    left: 1700px;
+    top: 592px;
+    color: var(--text-2);
+    font-size: 13px;
+    letter-spacing: 0.07em;
+    white-space: nowrap;
+    opacity: 0;
+  }
+
+  .wr-loop-label {
+    position: absolute;
+    left: 900px;
+    top: 758px;
+    color: var(--text-3);
+    font-size: 13px;
+    letter-spacing: 0.07em;
+    opacity: 0;
+  }
+
+  .wr-explain {
+    position: absolute;
+    left: 120px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .wr-explain-tag {
+    color: var(--text-3);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .wr-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .wr-explain .bar:nth-child(2) { width: 88%; }
+  .wr-explain .bar:nth-child(3) {
+    width: 62%;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .harness {
+    display: none;
+    position: absolute;
+    top: 1128px;
+    left: 0;
+    right: 0;
+    z-index: 99;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
+    background: var(--elevated);
+    color: var(--text-2);
+    font: 13px var(--hf-font-mono);
+  }
+
+  .h-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .h-brand {
+    margin-right: 8px;
+    color: var(--text-3);
+  }
+
+  .harness button,
+  .harness select {
+    padding: 4px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-1);
+    cursor: pointer;
+    font: inherit;
+    transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 140ms;
+  }
+
+  .harness button:hover { background: rgba(255, 255, 255, 0.12); }
+  .harness button:active { transform: translateY(1px) scale(0.98); }
+
+  .harness button:focus-visible,
+  .harness select:focus-visible,
+  #hScrub:focus-visible {
+    outline: 2px solid var(--active);
+    outline-offset: 2px;
+  }
+
+  .harness button i {
+    margin-left: 6px;
+    color: var(--text-3);
+    font-style: normal;
+  }
+
+  .h-phase-label {
+    margin-left: auto;
+    color: var(--relation);
+  }
+
+  #hScrub {
+    flex: 1;
+    min-width: 200px;
+    accent-color: var(--active);
+  }
+
+  #hTime {
+    min-width: 110px;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .harness button,
+    .harness select { transition: none; }
+    .harness button:active { transform: none; }
+  }
+
+  #root[data-composition-id="weekly-report-core"] { background: transparent; margin: 0; }
+</style>
+
+<div data-hf-id="hf-8284" id="root" data-composition-id="weekly-report-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-start="0" data-width="1920" data-height="1080" data-duration="6.40">
+  <section data-hf-id="hf-etgf" id="wr-scene" class="wr-clip clip" data-start="0" data-duration="6.40" data-track-index="1">
+    <div data-hf-id="hf-il67" class="wr-bg" data-layout-ignore="" aria-hidden="true"></div>
+    <div data-hf-id="hf-lyaq" class="wr-stage">
+      <div data-hf-id="hf-3h20" class="wr-stack-card back-2" id="wr-stack-back-2" data-layout-ignore="" aria-hidden="true"></div>
+      <div data-hf-id="hf-6o5e" class="wr-stack-card back-1" id="wr-stack-back-1" data-layout-ignore="" aria-hidden="true"></div>
+      <div data-hf-id="hf-t1dy" class="wr-shell" id="wr-shell" data-layout-ignore="" aria-hidden="true"></div>
+
+      <div data-hf-id="hf-ceqm" class="wr-context" id="wr-context">机制详解 · 11</div>
+
+      <svg data-hf-id="hf-qkpw" class="wr-ink" viewBox="0 0 1920 1080" width="1920" height="1080" aria-hidden="true">
+        <path data-hf-id="hf-jcg3" class="wr-base" id="wr-base" d="M240 560 L1680 560" />
+        <path data-hf-id="hf-e979" class="wr-spine" id="wr-spine" d="M240 560 L1440 560" />
+        <line data-hf-id="hf-9p5u" class="wr-stitch" id="wr-stitch-1" x1="240" y1="544" x2="240" y2="576" />
+        <line data-hf-id="hf-wvk7" class="wr-stitch" id="wr-stitch-2" x1="960" y1="544" x2="960" y2="576" />
+        <line data-hf-id="hf-nlk6" class="wr-stitch" id="wr-stitch-3" x1="1440" y1="544" x2="1440" y2="576" />
+        <path data-hf-id="hf-ff7i" class="wr-trace-line" id="wr-line-1" d="M190 572 C130 600 110 630 100 650" />
+        <path data-hf-id="hf-cy1w" class="wr-trace-line" id="wr-line-2" d="M910 572 C840 608 810 638 780 658" />
+        <path data-hf-id="hf-vxtx" class="wr-trace-line" id="wr-line-3" d="M1390 572 C1320 608 1280 640 1250 660" />
+        <path data-hf-id="hf-ct1v" class="wr-loop" id="wr-loop" d="M1760 616 C1700 710 1320 782 960 786" />
+        <circle data-hf-id="hf-dtvb" class="wr-loop-dot" id="wr-loop-dot" cx="960" cy="786" r="6" />
+      </svg>
+
+      <div data-hf-id="hf-m3yl" class="wr-track">
+        <div data-hf-id="hf-45qv" class="wr-ticks" aria-hidden="true">
+          <i data-hf-id="hf-wt6k"></i><i data-hf-id="hf-zeb8"></i><i data-hf-id="hf-y7e5"></i><i data-hf-id="hf-ylp6"></i><i data-hf-id="hf-0l8b"></i><i data-hf-id="hf-0zjc"></i><i data-hf-id="hf-zsm9"></i>
+        </div>
+        <div data-hf-id="hf-gvie" class="wr-days" id="wr-days" aria-label="一周七天刻度">
+          <span data-hf-id="hf-9vjn">一</span><span data-hf-id="hf-m6on">二</span><span data-hf-id="hf-73eg">三</span><span data-hf-id="hf-8nm6">四</span><span data-hf-id="hf-j08f">五</span><span data-hf-id="hf-ysv8">六</span><span data-hf-id="hf-trik">日</span>
+        </div>
+      </div>
+
+      <div data-hf-id="hf-y8bo" class="wr-anchor" id="wr-anchor-1" aria-label="第一次发布痕迹，落位于周一">
+        <div data-hf-id="hf-5z9j" class="wr-anchor-frame" id="wr-frame-1" aria-hidden="true"></div>
+        <div data-hf-id="hf-v37b" class="wr-anchor-bars" aria-hidden="true"><span data-hf-id="hf-uckh"></span><span data-hf-id="hf-l73p"></span></div>
+      </div>
+      <div data-hf-id="hf-ucim" class="wr-anchor" id="wr-anchor-2" aria-label="第二次发布痕迹，落位于周四">
+        <div data-hf-id="hf-v3rw" class="wr-anchor-frame" id="wr-frame-2" aria-hidden="true"></div>
+        <div data-hf-id="hf-rf1z" class="wr-anchor-bars" aria-hidden="true"><span data-hf-id="hf-me0s"></span><span data-hf-id="hf-lzpr"></span></div>
+      </div>
+      <div data-hf-id="hf-2e64" class="wr-anchor" id="wr-anchor-3" aria-label="第三次发布痕迹，落位于周六">
+        <div data-hf-id="hf-vvfp" class="wr-anchor-frame" id="wr-frame-3" aria-hidden="true"></div>
+        <div data-hf-id="hf-r0qy" class="wr-anchor-bars" aria-hidden="true"><span data-hf-id="hf-n6mu"></span><span data-hf-id="hf-msbt"></span></div>
+      </div>
+
+      <div data-hf-id="hf-j94l" class="wr-bar" id="wr-bar-1" aria-hidden="true"></div>
+      <div data-hf-id="hf-n78m" class="wr-bar" id="wr-bar-2" aria-hidden="true"></div>
+      <div data-hf-id="hf-r5cn" class="wr-bar" id="wr-bar-3" aria-hidden="true"></div>
+
+      <div data-hf-id="hf-gdv5" class="wr-fold" id="wr-fold" aria-hidden="true"></div>
+
+      <div data-hf-id="hf-1rj4" class="wr-line-label" id="wr-label-1">选题</div>
+      <div data-hf-id="hf-rpzw" class="wr-line-label" id="wr-label-2">脚本</div>
+      <div data-hf-id="hf-is8b" class="wr-line-label" id="wr-label-3">素材</div>
+
+      <div data-hf-id="hf-d8h2" class="wr-note" id="wr-note">示意汇总 · 依赖数据源与口径</div>
+      <div data-hf-id="hf-8i18" class="wr-output" id="wr-output">产出 · 账号周报</div>
+      <div data-hf-id="hf-hpa4" class="wr-next-label" id="wr-next-label">下周 · 待验证</div>
+      <div data-hf-id="hf-thga" class="wr-loop-label" id="wr-loop-label">P012 · 回到下一轮选题</div>
+
+      <article data-hf-id="hf-7c1s" class="wr-experiment" id="wr-experiment" aria-label="上一章产出的下一次实验卡">
+        <div data-hf-id="hf-xdwb" class="wr-experiment-kicker">下一次实验</div>
+        <div data-hf-id="hf-3phl" class="wr-experiment-copy">结果前置</div>
+        <div data-hf-id="hf-o0ir" class="wr-pending">待验证</div>
+      </article>
+
+      <div data-hf-id="hf-x315" class="wr-explain" id="wr-explain" data-slot="explain">
+        <span data-hf-id="hf-medy" class="wr-explain-tag">EXPLAIN SLOT</span>
+        <div data-hf-id="hf-ufsv" class="bar"></div>
+        <div data-hf-id="hf-c51b" class="bar"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+var DUR = 6.40;
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* 所有描线路径初始化：dasharray = 长度，dashoffset = 长度（未画状态） */
+function prepDraw(id) {
+  var el = document.getElementById(id);
+  var len = el.getTotalLength();
+  el.style.strokeDasharray = String(len);
+  el.style.strokeDashoffset = String(len);
+  return len;
+}
+var baseLen = prepDraw("wr-base");
+var spineLen = prepDraw("wr-spine");
+var line1Len = prepDraw("wr-line-1");
+var line2Len = prepDraw("wr-line-2");
+var line3Len = prepDraw("wr-line-3");
+/* 闭环弧线自身带虚线外观，改用透明度显现，不做描边 */
+var loopLen = document.getElementById("wr-loop").getTotalLength();
+
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* ---------- Opening：卡栈、语境、P010 实验卡停靠待安位 ---------- */
+tl.from("#wr-stack-back-2", R(
+  { x: 18, y: -8, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.10);
+tl.from("#wr-stack-back-1", R(
+  { x: 12, y: -5, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.14);
+tl.from("#wr-shell", R(
+  { y: 18, opacity: 0, duration: 0.30, ease: E_ENTER },
+  { opacity: 0, duration: 0.26, ease: E_ENTER }), 0.16);
+tl.from("#wr-context", { opacity: 0, duration: 0.20, ease: E_ENTER }, 0.13);
+tl.from("#wr-explain", { opacity: 0, duration: 0.22, ease: E_ENTER }, 0.22);
+
+tl.fromTo("#wr-experiment",
+  R({ x: -1820, opacity: 0 }, { x: 0, opacity: 0 }),
+  R({ x: 0, opacity: 1, duration: 0.50, ease: E_ENTER },
+    { opacity: 1, duration: 0.30, ease: E_ENTER }), 0.30);
+
+/* ---------- 周轨生长：基线描出，刻度与星期字渐次立起 ---------- */
+tl.to("#wr-base", {
+  strokeDashoffset: 0,
+  duration: R(0.60, 0.24),
+  ease: R("power2.out", "power1.out")
+}, 0.90);
+tl.fromTo(".wr-ticks i",
+  R({ scaleY: 0, opacity: 0 }, { scaleY: 1, opacity: 0 }),
+  R({ scaleY: 1, opacity: 1, duration: 0.24, ease: E_ENTER, stagger: 0.05 },
+    { opacity: 1, duration: 0.20, ease: E_ENTER, stagger: 0.05 }), 1.16);
+tl.fromTo(".wr-days span",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: E_ENTER, stagger: 0.05 }, 1.30);
+
+/* ---------- Beat 2：第一枚散痕吸附落位（周一），牵出溯源线 ---------- */
+tl.fromTo("#wr-anchor-1",
+  R({ y: 24, opacity: 0 }, { y: 0, opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.30, ease: E_ENTER },
+    { opacity: 1, duration: 0.22, ease: E_ENTER }), 1.56);
+tl.to("#wr-anchor-1", R(
+  { y: -183, duration: 0.50, ease: E_MOVE },
+  { y: -183, duration: 0.01, ease: "none" }), 1.90);
+tl.fromTo("#wr-frame-1",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.18, ease: "power1.out" }, 2.40);
+tl.to("#wr-line-1", {
+  strokeDashoffset: 0,
+  duration: R(0.35, 0.14),
+  ease: R("power2.out", "power1.out")
+}, 2.44);
+tl.fromTo("#wr-label-1",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: "power1.out" }, 2.60);
+
+/* ---------- Beat 3：第二枚散痕自上降入落位（周四） ---------- */
+tl.fromTo("#wr-anchor-2",
+  R({ y: -20, opacity: 0 }, { y: 0, opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.30, ease: E_ENTER },
+    { opacity: 1, duration: 0.22, ease: E_ENTER }), 2.70);
+tl.to("#wr-anchor-2", R(
+  { y: 337, duration: 0.50, ease: E_MOVE },
+  { y: 337, duration: 0.01, ease: "none" }), 3.02);
+tl.fromTo("#wr-frame-2",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.18, ease: "power1.out" }, 3.52);
+tl.to("#wr-line-2", {
+  strokeDashoffset: 0,
+  duration: R(0.35, 0.14),
+  ease: R("power2.out", "power1.out")
+}, 3.56);
+tl.fromTo("#wr-label-2",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: "power1.out" }, 3.72);
+
+/* ---------- Beat 4：第三枚散痕自左滑入落位（周六） ---------- */
+tl.fromTo("#wr-anchor-3",
+  R({ x: 0, opacity: 0 }, { x: 0, opacity: 0 }),
+  R({ x: 1585, opacity: 1, duration: 0.50, ease: E_ENTER },
+    { x: 1585, opacity: 1, duration: 0.01, ease: "none" }), 3.80);
+tl.fromTo("#wr-frame-3",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.18, ease: "power1.out" }, 4.30);
+tl.to("#wr-line-3", {
+  strokeDashoffset: 0,
+  duration: R(0.30, 0.12),
+  ease: R("power2.out", "power1.out")
+}, 4.34);
+tl.fromTo("#wr-label-3",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: "power1.out" }, 4.50);
+
+/* ---------- 装订：脊线贯通三锚点，订口缝线弹出，册缘出现 ---------- */
+tl.to("#wr-spine", {
+  strokeDashoffset: 0,
+  duration: R(0.40, 0.16),
+  ease: R("power2.inOut", "power1.out")
+}, 4.56);
+tl.fromTo(".wr-stitch",
+  R({ scaleY: 0, opacity: 0 }, { scaleY: 1, opacity: 0 }),
+  R({ scaleY: 1, opacity: 1, duration: 0.24, ease: "back.out(1.6)", stagger: 0.07 },
+    { opacity: 1, duration: 0.18, ease: "power1.out", stagger: 0.07 }), 4.60);
+tl.fromTo("#wr-fold",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: "power1.out" }, 4.72);
+
+/* ---------- Beat 5：相对起落刻痕生长（无数字）+ 口径注记 ---------- */
+tl.fromTo(".wr-bar",
+  R({ scaleY: 0, opacity: 0 }, { scaleY: 1, opacity: 0 }),
+  R({ scaleY: 1, opacity: 1, duration: 0.30, ease: E_ENTER, stagger: 0.09 },
+    { opacity: 1, duration: 0.20, ease: E_ENTER, stagger: 0.09 }), 4.96);
+tl.fromTo("#wr-note",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.22, ease: "power1.out" }, 5.16);
+
+/* ---------- Beat 6：册页右缘翻折，实验卡翻入「下周」位 ---------- */
+tl.to("#wr-fold", R(
+  { scaleX: 0.12, opacity: 0.28, duration: 0.45, ease: E_MOVE },
+  { opacity: 0.28, duration: 0.20, ease: E_MOVE }), 5.44);
+tl.to("#wr-experiment", R(
+  { x: 120, y: 338, scale: 0.62, duration: 0.55, ease: E_MOVE },
+  { x: 120, y: 338, scale: 0.62, duration: 0.01, ease: "none" }), 5.48);
+tl.fromTo("#wr-next-label",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.20, ease: "power1.out" }, 5.86);
+
+/* ---------- End：产出标签、闭环弧线，溯源线退底稿 ---------- */
+tl.fromTo("#wr-output",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.22, ease: E_ENTER }, 6.04);
+tl.fromTo("#wr-loop",
+  { opacity: 0 },
+  { opacity: 1, duration: R(0.30, 0.14), ease: "power1.out" }, 6.06);
+tl.fromTo("#wr-loop-dot",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.16, ease: "power1.out" }, 6.20);
+tl.fromTo("#wr-loop-label",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.18, ease: "power1.out" }, 6.14);
+tl.to(".wr-trace-line, .wr-line-label", {
+  opacity: 0.30,
+  duration: 0.24,
+  ease: E_MOVE
+}, 6.08);
+tl.to(".wr-days span", { opacity: 0.40, duration: 0.22, ease: E_MOVE }, 6.08);
+tl.to("#wr-context, #wr-explain", { opacity: 0.35, duration: 0.20, ease: E_MOVE }, 6.20);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["weekly-report-core"] = tl;
+
+console.assert(
+  document.querySelector("[data-composition-id='weekly-report-core']") &&
+  window.__timelines["weekly-report-core"] === tl &&
+  tl.duration() <= DUR &&
+  loopLen > 0,
+  "P011 HyperFrames composition contract failed"
+);
+</script>
+
+
+</template>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=1080">
+    <title>rse-functional-background/4x3@v1</title>
+    <style>
+      :root {
+        --canvas: var(--hf-color-canvas);
+        --surface: var(--hf-color-surface);
+        --surface-raised: color-mix(in srgb, var(--hf-color-surface) 94%, var(--hf-color-text-primary));
+        --cyan: var(--hf-color-accent-primary);
+        --rule: color-mix(in srgb, var(--hf-color-text-secondary) 28%, transparent);
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        width: 1440px;
+        height: 1080px;
+        margin: 0;
+        overflow: hidden;
+        background: var(--canvas);
+      }
+      [data-composition-id="rse-functional-background"] {
+        position: relative;
+        width: 1440px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--canvas);
+      }
+      .clip, .backdrop, .grid-field, .grain { position: absolute; inset: 0; }
+      .backdrop {
+        background:
+          radial-gradient(ellipse at 24% 18%, rgba(115, 139, 131, 0.08), transparent 64%),
+          radial-gradient(circle at 30% 20%, var(--surface-raised) 0%, var(--surface) 48%, var(--canvas) 100%);
+      }
+      .ambient {
+        position: absolute;
+        left: -10px;
+        top: -190px;
+        width: 936px;
+        height: 936px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(75, 78, 99, 0.82) 0%, rgba(70, 83, 94, 0.55) 32%, rgba(39, 39, 43, 0.08) 58%, transparent 80%);
+        opacity: 0.78;
+      }
+      .grid-field {
+        background-image:
+          radial-gradient(circle, rgba(115, 139, 131, 0.48) 0 1px, transparent 1.5px),
+          linear-gradient(var(--rule) 1px, transparent 1px),
+          linear-gradient(90deg, var(--rule) 1px, transparent 1px),
+          linear-gradient(rgba(71, 80, 92, 0.46) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(71, 80, 92, 0.46) 1px, transparent 1px);
+        background-size: 52px 52px, 52px 52px, 52px 52px, 13px 13px, 13px 13px;
+        opacity: 0.24;
+        -webkit-mask-image: radial-gradient(ellipse 48% 42% at 50% 57%, rgba(0, 0, 0, 0.3) 0 38%, rgba(0, 0, 0, 0.58) 62%, var(--hf-color-text-primary) 100%);
+        mask-image: radial-gradient(ellipse 48% 42% at 50% 57%, rgba(0, 0, 0, 0.3) 0 38%, rgba(0, 0, 0, 0.58) 62%, var(--hf-color-text-primary) 100%);
+      }
+      .grain {
+        inset: -24px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' seed='8' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.36'/%3E%3C/svg%3E");
+        background-size: 300px 300px;
+        opacity: 0.055;
+      }
+    </style>
+  </head>
+  <body>
+    <template>
+    <script src="assets/vendor/gsap/gsap.min.js"></script>
+    <div id="root" data-composition-id="rse-functional-background" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1},{"id":"background_field_mode","type":"enum","label":"Background field mode","default":"none","options":[{"value":"none","label":"Programmatic fallback"}]},{"id":"background_field_path","type":"string","label":"Background field path","default":""}]' data-start="0" data-duration="48" data-width="1440" data-height="1080">
+      <div id="background-plate" class="clip" data-start="0" data-duration="48" data-track-index="0" data-layout-ignore data-visual-surface="background_field" data-surface-kind="active_media_card" data-surface-modes="none" data-surface-fallback="programmatic" data-surface-mode="none">
+        <div class="backdrop"></div>
+        <div class="ambient"></div>
+        <div class="grid-field"></div>
+        <div class="grain"></div>
+      </div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      tl.from(".backdrop", { opacity: 0, duration: 0.44, ease: "power2.out" }, 0.1)
+        .from(".ambient", { scale: 0.94, opacity: 0, duration: 0.72, ease: "expo.out" }, 0.16)
+        .from(".grid-field", { opacity: 0, duration: 0.52, ease: "sine.out" }, 0.22)
+        .from(".grain", { opacity: 0, duration: 0.4, ease: "power1.out" }, 0.28)
+        .to(".ambient", { x: 26, y: 18, scale: 1.03, duration: 23.5, ease: "sine.inOut" }, 0.9)
+        .to(".ambient", { x: 0, y: 0, scale: 1, duration: 23.5, ease: "sine.inOut" }, 24.4)
+        .to(".grain", { x: -48, y: 32, duration: 47.4, ease: "none" }, 0.35);
+      const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+        ? window.__hyperframes.getVariables()
+        : {};
+      const timeScale = Number(runtimeValues.time_scale);
+      if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+      window.__timelines["rse-functional-background"] = tl;
+    </script>
+    </template>
+  </body>
+</html>

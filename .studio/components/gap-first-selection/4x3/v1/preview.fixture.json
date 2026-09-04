@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "component_ref": "gap-first-selection/4x3@v1",
+  "slots": {
+    "context": "13 / 13 · 选择与收尾",
+    "pool_label": "工具候选",
+    "candidates": [
+      {"anchor": "C01", "mode": "collect", "tone": "agent", "label": "采集工具"},
+      {"anchor": "C02", "mode": "transform", "tone": "warm", "label": "转换工具"},
+      {"anchor": "C03", "mode": "organize", "tone": "warm", "label": "整理工具"},
+      {"anchor": "C04", "mode": "media", "tone": "mint", "label": "媒体工具"},
+      {"anchor": "C05", "mode": "search", "tone": "cool", "label": "检索工具"},
+      {"anchor": "C06", "mode": "knowledge", "tone": "mint", "label": "知识工具"},
+      {"anchor": "C07", "mode": "summarize", "tone": "cool", "label": "摘要工具"},
+      {"anchor": "C08", "mode": "build", "tone": "warm", "label": "生成工具"},
+      {"anchor": "C09", "mode": "persist", "tone": "violet", "label": "记忆工具"},
+      {"anchor": "C10", "mode": "improve", "tone": "violet", "label": "复盘工具"}
+    ],
+    "selected_index": 8,
+    "warning": "别一次全装",
+    "warning_detail": "先看你的流程卡在哪里",
+    "workflow_label": "你的日常工作流",
+    "workflow_nodes": ["收集", "整理", "输出", "复盘"],
+    "bottleneck_kicker": "bottleneck_label",
+    "bottleneck_label": "卡在反复重做",
+    "trial_prefix": "只装匹配的一个，",
+    "trial_emphasis": "连续试用三天",
+    "usage_label": "用过",
+    "hero_kicker": "先找缺口，再选工具",
+    "question": "你现在最头疼的是什么问题？",
+    "primary_cta": "评论区告诉我",
+    "secondary_primary": "清单扣 1",
+    "secondary_secondary": "关注，继续拆工作流"
+  },
+  "surfaces": {
+    "selection_flow": {"kind": "active_media_card", "mode": "none", "fallback": "programmatic"}
+  }
+}

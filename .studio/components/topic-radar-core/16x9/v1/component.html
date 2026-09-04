@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>topic-radar-core/16x9@v1</title>
+</head>
+<body>
+<template id="topic-radar-core-template">
+<!--
+  ==========================================================================
+  P002 ｜ 选题雷达机制详解核心（TopicRadarCore）· 组件原型 rev.4（按 Draft rev.3 重新冻结）
+  依据：ANIMATION_DRAFT.md rev.3 · COMPONENT_SPLIT.md rev.3（用户已确认）
+  重新冻结说明：视觉、布局、时序与内部动效不变；本原型语汇可供后续参考，
+  但不作为未设计 Anchor 的固定模板，Preview 技术键不形成最终 Slot API。
+  rev.2 变更：按用户反馈新增左下文字解释区（EXPLAIN SLOT，骨架条占位），
+  Opening 随三区建立、End 随来源区退位；信号节奏与几何未动。
+  rev.3 变更：两个来源标签下的空白区补为来源卡片（实心面板 + 骨架占位），
+  信号改为从对应类别卡片右缘发出（hot/peer 各自在卡内纵向排队）；
+  卡片随 Opening 进场、End 随来源区退位。信号节奏（0.32s 间距）未动。
+  rev.4 变更：来源卡质感差异化——热点卡在骨架条上方加信号点阵装饰
+  （疏密/明暗不一的散点，暗示"热点是嘈杂信号场"）；同行内容卡改为
+  笔记列表形态（三行「列表符号 + 条目骨架条」，暗示"同行内容是被
+  逐条研读的对象"）。装饰全部为静态骨架，不进 timeline，无新强调色。
+  设计原则：逐个功能展现（单帧一个主焦点，同时运动事件 ≤ 2；
+  同向 stagger 流视为单一事件，沿用 ChapterIntro rev.5 纪律）。
+  原型阶段只看设计不写文案：功能标签为结构性占位，信号/选题均用
+  骨架图形，不含真实热点、榜单、热度数值（Draft 事实边界）。
+  --------------------------------------------------------------------------
+  本章要解释的关系：热点/同行内容 → 相关性判断 → 选题池
+  （热点只是输入，经过过滤才成为可用选题）
+  --------------------------------------------------------------------------
+  功能事件切分（依次登场）：
+    ① 信号汇入    两类来源信号沿各自泳道流向判断区
+    ② 相关性筛    逐条过闸：通过者点亮闸口继续前进，不相关者拦截退场
+    ③ 汇入选题池  通过者落入池内槽位，凝练为本章产出
+  --------------------------------------------------------------------------
+  核心 Preview 数据（技术键不是最终 Slot API）:
+    signals     信号数组 [{ lane: 0-7, pass: bool, cat: "hot"|"peer" }]
+                （原型为占位骨架；正式数据须来自 Script，且不得伪造热度/榜单）
+    pool_title  产出容器标签（默认"选题池"）
+    result_tag  本章产出凝练标签（供下一章 ChapterIntro previous_context 引用）
+    explain     文字解释区（左下，宽 460 两行以内；原型为骨架占位，
+                正式文案须来自 Script，注入 #tr-explain）
+  可选 Preview 数据:
+    gate_label  判断区标签（默认"相关性"）
+    source_labels  { hot: "热点信号", peer: "同行内容" }
+  --------------------------------------------------------------------------
+  四状态时间表（总长 5.8s = 本原型 Preview 时长，不冻结固定前导或最终 Scene 时长）:
+    Opening  0.00-0.25  舞台可见：三区标签与关系线建立，信号未出
+    Build    0.25-5.30  ①信号流 0.30 起 → ②逐条过闸（首个 0.90 起）→
+                        ③落池成卡（首卡 1.52 起）→ 池封合 4.35 → 产出标签 5.00
+    Hero     5.30-5.50  输入（信号源）→ 处理（闸）→ 输出（满池）完整关系
+                        首次同时可读
+    End      5.50-5.80  来源区与闸退位（0.35），池与产出标签保持可辨，
+                        凝练结果供下一章 ChapterIntro 承接
+  --------------------------------------------------------------------------
+  运动约束（optical_fluidity）:
+    进场 easing   cubic-bezier(0.23,1,0.32,1)  → CustomEase "hfEnter"
+    画面内变化    cubic-bezier(0.77,0,0.175,1) → CustomEase "hfMove"
+    单帧主强调色唯一（var(--hf-color-accent-primary)，仅闸口透镜）；关系青（var(--hf-color-accent-primary)）仅用于
+    1px 关系线与池封合细线；全帧仅闸口面板一个主要玻璃材质面。
+  --------------------------------------------------------------------------
+  Seek-safe：全部状态由单条 paused GSAP timeline 驱动；无 wall clock、
+  无无限循环、无未播种随机数（信号泳道/过闸结果全部写在 Preview 数据里）、
+  无运行时网络；GSAP 使用共享本地文件。任意时间 seek 与顺序播放状态一致。
+  底部「原型检查工具」为验收用脚手架，正式生产翻译时由 Codex 移除。
+  ==========================================================================
+-->
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+    --glass-fill: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  #root {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+    margin: 0;
+  }
+
+  .tr-stage {
+    width: 100%;
+    height: 100%;
+    padding: 72px 120px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* --- 顶部：组件语境标签（结构性占位，非文案） --- */
+  .tr-context {
+    position: absolute;
+    left: 120px;
+    top: 64px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  /* --- 关系线层：1px 关系青细线（SVG，唯一允许的关系色用法） --- */
+  .tr-links {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .tr-links path {
+    stroke: var(--relation);
+    stroke-width: 1;
+    fill: none;
+    opacity: 0.35;
+  }
+
+  /* --- 左：信号来源区（纯标签 + 图例，信号本体在 .tr-field 层） --- */
+  .tr-src-label {
+    position: absolute;
+    left: 120px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 20px;
+    color: var(--text-2);
+  }
+  .tr-src-label .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .tr-src-hot  { top: 356px; }
+  .tr-src-peer { top: 612px; }
+  .tr-src-hot .dot  { background: rgba(247, 251, 255, 0.85); }
+  .tr-src-peer .dot { background: rgba(168, 187, 200, 0.55); }
+
+  /* 来源卡片：标签下的实心深层面板（非玻璃），骨架占位；
+     信号从卡片右缘按类别纵向发出 */
+  .tr-src-card {
+    position: absolute;
+    left: 120px;
+    width: 300px;
+    height: 170px;
+    border-radius: 16px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.30);
+    padding: 22px 22px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tr-card-hot  { top: 396px; }
+  .tr-card-peer { top: 652px; }
+  .tr-src-card .bar {
+    height: 12px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .tr-src-card .bar.is-title {
+    height: 16px;
+    width: 48%;
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .tr-src-card .bar.w-85 { width: 85%; }
+  .tr-src-card .bar.w-70 { width: 70%; }
+  .tr-src-card .bar.w-55 { width: 55%; background: rgba(255, 255, 255, 0.07); }
+
+  /* 热点卡专属：信号点阵（静态装饰，确定性位置，无随机） */
+  .tr-dotfield {
+    position: relative;
+    height: 44px;
+    flex: none;
+  }
+  .tr-dotfield i {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(247, 251, 255, 0.85);
+  }
+  /* 同行卡专属：笔记列表行（列表符号 + 条目骨架条） */
+  .tr-note {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: none;
+  }
+  .tr-note .mark {
+    width: 10px;
+    height: 10px;
+    flex: none;
+    border-radius: 3px;
+    border: 1.5px solid rgba(168, 187, 200, 0.55);
+    box-sizing: border-box;
+  }
+  .tr-note .bar {
+    height: 11px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+
+  /* --- 中：相关性闸（全帧唯一玻璃材质面 + 唯一主强调色透镜） --- */
+  .tr-gate {
+    position: absolute;
+    left: 860px;
+    top: 280px;
+    width: 200px;
+    height: 600px;
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.10),
+      0 24px 64px rgba(0, 0, 0, 0.30);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+  }
+  .tr-lens-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+  }
+  .tr-lens {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1.5px solid rgba(10, 132, 255, 0.75);
+    box-shadow:
+      inset 0 0 24px rgba(10, 132, 255, 0.18),
+      0 0 32px rgba(10, 132, 255, 0.12);
+  }
+  /* 过闸脉冲环：每次放行扩散一次（GSAP 驱动，无限位循环） */
+  .tr-pulse {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--active);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .tr-gate-label {
+    font-size: 20px;
+    color: var(--text-2);
+    letter-spacing: 0.04em;
+  }
+
+  /* --- 右：选题池（实心深层面板，非玻璃） --- */
+  .tr-pool {
+    position: absolute;
+    left: 1470px;
+    top: 300px;
+    width: 330px;
+    height: 560px;
+    border-radius: 20px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    padding: 28px 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .tr-pool-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-2); /* 封合后转 text-1 */
+  }
+  /* 池封合细线：全部落位后从左生长（关系青 1px 细线级用法） */
+  .tr-pool-seal {
+    height: 1px;
+    background: var(--relation);
+    opacity: 0.55;
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+  .tr-slot {
+    height: 56px;
+    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.14);
+    position: relative;
+  }
+  /* 落池选题卡：骨架条占位，不含真实选题文案 */
+  .tr-chip {
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    opacity: 0;
+  }
+  .tr-chip .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: none;
+    background: rgba(247, 251, 255, 0.85);
+  }
+  .tr-chip .bar {
+    height: 10px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .tr-chip .bar.b1 { width: 55%; }
+  .tr-chip .bar.b2 { width: 30%; background: rgba(255, 255, 255, 0.09); }
+
+  /* --- 左下：文字解释区（EXPLAIN SLOT，骨架占位；正式文案由此注入） --- */
+  .tr-explain {
+    position: absolute;
+    left: 120px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tr-explain-tag {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .tr-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .tr-explain .bar.b1 { width: 88%; }
+  .tr-explain .bar.b2 { width: 62%; background: rgba(255, 255, 255, 0.08); }
+
+  /* --- 本章产出标签（End 状态的凝练结果，供下一章承接） --- */
+  .tr-result {
+    position: absolute;
+    left: 1470px;
+    top: 892px;
+    width: 330px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    color: var(--text-1);
+    opacity: 0;
+  }
+  .tr-result .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+  /* --- 信号层：流动的数据对象（定位装饰层，布局由三区承担） --- */
+  .tr-field {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .tr-sig {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    will-change: transform;
+  }
+  .tr-sig .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex: none;
+    background: rgba(247, 251, 255, 0.85);
+    box-shadow: 0 0 12px rgba(247, 251, 255, 0.25);
+  }
+  .tr-sig.peer .dot {
+    background: rgba(168, 187, 200, 0.55);
+    box-shadow: none;
+  }
+  .tr-sig .tail {
+    width: 22px;
+    height: 2px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  /* ============ 原型检查工具（验收脚手架，非正式组件） ============ */
+
+  .harness {
+    display: none;
+    position: absolute;
+    top: 1128px;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    z-index: 99;
+    background: var(--elevated);
+    border-top: 1px dashed rgba(255, 255, 255, 0.25);
+    font-family: var(--hf-font-mono);
+    font-size: 13px;
+    color: var(--text-2);
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .h-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .h-brand {
+    color: var(--text-3);
+    margin-right: 8px;
+  }
+  .harness button, .harness select {
+    font: inherit;
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: transform 140ms cubic-bezier(0.2, 0, 0, 1), background-color 140ms;
+  }
+  .harness button:hover { background: rgba(255, 255, 255, 0.12); }
+  .harness button:active { transform: translateY(1px) scale(0.98); }
+  .harness button:focus-visible, .harness select:focus-visible, #hScrub:focus-visible {
+    outline: 2px solid var(--active);
+    outline-offset: 2px;
+  }
+  .harness button i {
+    font-style: normal;
+    color: var(--text-3);
+    margin-left: 6px;
+  }
+  .h-phase-label {
+    margin-left: auto;
+    color: var(--relation);
+  }
+  #hScrub {
+    flex: 1;
+    min-width: 200px;
+    accent-color: var(--active);
+  }
+  #hTime {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+    min-width: 110px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .harness button, .harness select { transition: none; }
+    .harness button:active { transform: none; }
+  }
+
+  #root[data-composition-id="topic-radar-core"] { background: transparent; margin: 0; }
+</style>
+
+<!-- ==================== 组件本体 ==================== -->
+<div data-hf-id="hf-qqjv" id="root" data-composition-id="topic-radar-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-width="1920" data-height="1080" data-start="0" data-duration="5.8" data-track-index="0">
+  <div data-hf-id="hf-k2sn" class="tr-stage">
+
+    <div data-hf-id="hf-g716" class="tr-context" id="tr-context">机制详解 · 02</div>
+
+    <!-- 关系线：来源 → 闸 → 池（Opening 段描画） -->
+    <svg data-hf-id="hf-uzmm" class="tr-links" width="1920" height="1080" viewBox="0 0 1920 1080" aria-hidden="true">
+      <path data-hf-id="hf-ipga" id="tr-link-in" d="M 428 580 C 560 580, 700 580, 888 580" pathLength="1" />
+      <path data-hf-id="hf-9549" id="tr-link-out" d="M 1032 580 C 1170 580, 1320 580, 1466 580" pathLength="1" />
+    </svg>
+
+    <!-- 左：来源标签 + 来源卡片（骨架占位） -->
+    <div data-hf-id="hf-72qs" class="tr-src-label tr-src-hot" id="tr-src-hot"><span data-hf-id="hf-9gry" class="dot"></span><span data-hf-id="hf-fk7y" id="tr-src-hot-t">热点信号</span></div>
+    <div data-hf-id="hf-bkmw" class="tr-src-label tr-src-peer" id="tr-src-peer"><span data-hf-id="hf-zcc2" class="dot"></span><span data-hf-id="hf-j7xr" id="tr-src-peer-t">同行内容</span></div>
+    <div data-hf-id="hf-f24u" class="tr-src-card tr-card-hot" id="tr-card-hot">
+      <div data-hf-id="hf-k49n" class="tr-dotfield" aria-hidden="true">
+        <i data-hf-id="hf-w9ni" style="left:6px;   top:26px; width:6px;  height:6px;  opacity:0.9"></i>
+        <i data-hf-id="hf-y463" style="left:30px;  top:8px;  width:4px;  height:4px;  opacity:0.45"></i>
+        <i data-hf-id="hf-bbnq" style="left:52px;  top:30px; width:8px;  height:8px;  opacity:0.7"></i>
+        <i data-hf-id="hf-q7ab" style="left:84px;  top:14px; width:4px;  height:4px;  opacity:0.3"></i>
+        <i data-hf-id="hf-dzcj" style="left:106px; top:32px; width:5px;  height:5px;  opacity:0.55"></i>
+        <i data-hf-id="hf-y0hd" style="left:132px; top:6px;  width:7px;  height:7px;  opacity:0.8"></i>
+        <i data-hf-id="hf-ywer" style="left:158px; top:24px; width:4px;  height:4px;  opacity:0.35"></i>
+        <i data-hf-id="hf-u0z9" style="left:180px; top:10px; width:6px;  height:6px;  opacity:0.6"></i>
+        <i data-hf-id="hf-scrf" style="left:206px; top:30px; width:4px;  height:4px;  opacity:0.25"></i>
+        <i data-hf-id="hf-0srk" style="left:228px; top:14px; width:7px;  height:7px;  opacity:0.75"></i>
+      </div>
+      <div data-hf-id="hf-2q5s" class="bar w-70"></div>
+      <div data-hf-id="hf-t60j" class="bar w-55"></div>
+    </div>
+    <div data-hf-id="hf-79nw" class="tr-src-card tr-card-peer" id="tr-card-peer">
+      <div data-hf-id="hf-go9j" class="tr-note"><span data-hf-id="hf-zeo6" class="mark"></span><span data-hf-id="hf-vgo4" class="bar" style="width:78%"></span></div>
+      <div data-hf-id="hf-06hj" class="tr-note"><span data-hf-id="hf-b4zu" class="mark"></span><span data-hf-id="hf-5qer" class="bar" style="width:62%"></span></div>
+      <div data-hf-id="hf-zs6i" class="tr-note"><span data-hf-id="hf-bjav" class="mark"></span><span data-hf-id="hf-dltt" class="bar" style="width:70%; background:rgba(255,255,255,0.07)"></span></div>
+    </div>
+
+    <!-- 中：相关性闸（唯一玻璃面） -->
+    <div data-hf-id="hf-6zjm" class="tr-gate" id="tr-gate">
+      <div data-hf-id="hf-tjuk" class="tr-lens-wrap">
+        <div data-hf-id="hf-6u4f" class="tr-lens"></div>
+        <div data-hf-id="hf-p59e" class="tr-pulse" id="tr-pulse"></div>
+      </div>
+      <div data-hf-id="hf-c406" class="tr-gate-label" id="tr-gate-label">相关性</div>
+    </div>
+
+    <!-- 右：选题池 -->
+    <div data-hf-id="hf-l858" class="tr-pool" id="tr-pool">
+      <div data-hf-id="hf-f8fh" class="tr-pool-title" id="tr-pool-title">选题池</div>
+      <div data-hf-id="hf-qi9u" class="tr-pool-seal" id="tr-pool-seal"></div>
+      <!-- 槽位与选题卡由 Slot 注入 -->
+    </div>
+
+    <!-- 左下：文字解释区（骨架占位，正式文案经 Slot 注入） -->
+    <div data-hf-id="hf-2ud1" class="tr-explain" id="tr-explain" data-slot="explain">
+      <span data-hf-id="hf-uppf" class="tr-explain-tag">EXPLAIN SLOT</span>
+      <div data-hf-id="hf-1iyu" class="bar b1"></div>
+      <div data-hf-id="hf-xkut" class="bar b2"></div>
+    </div>
+
+    <!-- 本章产出标签 -->
+    <div data-hf-id="hf-8q5i" class="tr-result" id="tr-result">
+      <span data-hf-id="hf-zqn3" class="dot"></span><span data-hf-id="hf-2fmu" id="tr-result-t">产出 · 选题池</span>
+    </div>
+
+    <!-- 信号层 -->
+    <div data-hf-id="hf-algr" class="tr-field" id="tr-field" data-layout-ignore=""></div>
+
+  </div>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+/* ===== 默认 Preview 数据（占位骨架，无真实热点/榜单/文案；技术键不是最终 Slot API） =====
+   泳道 0-7 对应 y = 320 + lane*64；pass 决定过闸结果。
+   全部写死在数据里：无随机数，seek 任意时刻状态确定。 */
+var SLOT_DATA = {
+  gate_label: "相关性",
+  source_labels: { hot: "热点信号", peer: "同行内容" },
+  pool_title: "选题池",
+  result_tag: "产出 · 选题池",
+  signals: [
+    { lane: 0, pass: true,  cat: "hot"  },
+    { lane: 2, pass: false, cat: "peer" },
+    { lane: 5, pass: true,  cat: "hot"  },
+    { lane: 1, pass: true,  cat: "peer" },
+    { lane: 6, pass: false, cat: "hot"  },
+    { lane: 3, pass: true,  cat: "peer" },
+    { lane: 7, pass: false, cat: "hot"  },
+    { lane: 4, pass: true,  cat: "peer" }
+  ]
+};
+
+/* ==================== 几何常量（1920×1080 画布，与 CSS 布局一致） ==================== */
+var GEO = {
+  /* 信号按类别从来源卡片右缘发出：hot 卡 y 396-566，peer 卡 y 652-822 */
+  SIG_Y: function (cat, idx) { return (cat === "peer" ? 676 : 420) + idx * 32; },
+  SIG_START_X: 428,         /* 来源卡片右缘（120 + 300 + 8） */
+  SIG_GATE_X: 806,          /* 抵达闸口前沿（闸面板左缘 860） */
+  POOL_SLOT_X: 1494,        /* 池内槽位左缘 */
+  POOL_SLOT_Y: function (k) { return 396 + k * 78; }, /* 池 padding 28 + 标题/封合约 68 */
+  POOL_SLOTS: 5
+};
+
+/* ==================== Preview 数据注入（同步执行，渲染前就绪） ==================== */
+(function injectSlots(d) {
+  document.getElementById("tr-gate-label").textContent = d.gate_label;
+  document.getElementById("tr-src-hot-t").textContent = d.source_labels.hot;
+  document.getElementById("tr-src-peer-t").textContent = d.source_labels.peer;
+  document.getElementById("tr-pool-title").textContent = d.pool_title;
+  document.getElementById("tr-result-t").textContent = d.result_tag;
+
+  var pool = document.getElementById("tr-pool");
+  var passCount = d.signals.filter(function (s) { return s.pass; }).length;
+  for (var k = 0; k < Math.min(passCount, GEO.POOL_SLOTS); k++) {
+    var slot = document.createElement("div");
+    slot.className = "tr-slot";
+    var chip = document.createElement("div");
+    chip.className = "tr-chip";
+    chip.id = "tr-chip-" + k;
+    chip.innerHTML = '<span class="dot"></span><span class="bar b1"></span><span class="bar b2"></span>';
+    slot.appendChild(chip);
+    pool.appendChild(slot);
+  }
+
+  var field = document.getElementById("tr-field");
+  d.signals.forEach(function (s, i) {
+    var el = document.createElement("div");
+    el.className = "tr-sig " + (s.cat === "peer" ? "peer" : "hot");
+    el.id = "tr-sig-" + i;
+    el.innerHTML = '<span class="dot"></span><span class="tail"></span>';
+    field.appendChild(el);
+  });
+})(SLOT_DATA);
+
+/* ==================== Easing（optical_fluidity profile，与 ChapterIntro 一致） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ==================== 组件 Timeline（paused · seek-safe · 同时运动 ≤ 2） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* prefers-reduced-motion：剥离位移/缩放，仅保留 opacity 交叉淡变。
+   仅影响本地预览；daemon 渲染环境为 no-preference，输出始终全动效。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* ---------- Opening（0.00-0.25）：三区建立，关系线描画 ---------- */
+tl.from("#tr-context", { opacity: 0, duration: 0.20, ease: E_ENTER }, 0.05);
+tl.from("#tr-explain", { opacity: 0, duration: 0.24, ease: E_ENTER }, 0.18);
+tl.from("#tr-src-hot, #tr-src-peer", R(
+  { x: -16, opacity: 0, duration: 0.24, stagger: 0.08, ease: E_ENTER },
+  { opacity: 0, duration: 0.24, stagger: 0.08, ease: E_ENTER }), 0.08);
+tl.from("#tr-card-hot, #tr-card-peer", R(
+  { y: 18, opacity: 0, duration: 0.26, stagger: 0.08, ease: E_ENTER },
+  { opacity: 0, duration: 0.26, stagger: 0.08, ease: E_ENTER }), 0.12);
+tl.from("#tr-gate", { opacity: 0, duration: 0.24, ease: E_ENTER }, 0.12);
+tl.from("#tr-pool", { opacity: 0, duration: 0.24, ease: E_ENTER }, 0.16);
+tl.fromTo("#tr-link-in",
+  { strokeDasharray: 1, strokeDashoffset: 1 },
+  { strokeDashoffset: 0, duration: 0.30, ease: E_MOVE }, 0.10);
+tl.fromTo("#tr-link-out",
+  { strokeDasharray: 1, strokeDashoffset: 1 },
+  { strokeDashoffset: 0, duration: 0.30, ease: E_MOVE }, 0.14);
+
+/* ---------- Build：逐个功能展现 ----------
+   每条信号：汇入（0.30 + i*0.32，0.55s）→ 过闸（+0.60）→
+   通过：脉冲 + 继续前行 0.70s → 落池成卡；拦截：回退 100px 淡出。
+   信号间距 0.32s，同向流视为单一事件；闸口脉冲为同时段第二事件。
+   信号 y 由类别内序号决定（从对应来源卡片右缘发出）。 */
+var passIdx = 0;
+var catIdx = { hot: 0, peer: 0 };
+SLOT_DATA.signals.forEach(function (s, i) {
+  var sig = "#tr-sig-" + i;
+  var yLane = GEO.SIG_Y(s.cat, catIdx[s.cat]++);
+  var tEnter = 0.30 + i * 0.32;
+  var tGate = tEnter + 0.60;
+
+  /* ① 信号汇入（来源区 → 闸口） */
+  tl.fromTo(sig,
+    R({ x: GEO.SIG_START_X, y: yLane, opacity: 0 },
+      { x: GEO.SIG_GATE_X, y: yLane, opacity: 0 }),
+    R({ x: GEO.SIG_GATE_X, y: yLane, opacity: 1, duration: 0.55, ease: E_ENTER },
+      { opacity: 1, duration: 0.40, ease: E_ENTER }),
+    tEnter);
+
+  if (s.pass) {
+    var k = passIdx++;
+    /* ②a 放行：闸口脉冲（主强调色唯一动效点） */
+    tl.fromTo("#tr-pulse",
+      { scale: 0.65, opacity: 0.85 },
+      R({ scale: 1.4, opacity: 0, duration: 0.32, ease: E_ENTER },
+        { opacity: 0, duration: 0.20, ease: E_ENTER }),
+      tGate);
+    /* ③a 通过者落池：先移动到槽位，再淡化为卡 */
+    tl.to(sig, R(
+      { x: GEO.POOL_SLOT_X + 14, y: GEO.POOL_SLOT_Y(k) + 20, duration: 0.70, ease: E_MOVE },
+      { opacity: 1, duration: 0.20, ease: E_MOVE }), tGate + 0.06);
+    tl.to(sig, { opacity: 0, duration: 0.18, ease: E_MOVE }, tGate + 0.66);
+    tl.fromTo("#tr-chip-" + k,
+      R({ opacity: 0, scaleX: 0.6 }, { opacity: 0 }),
+      R({ opacity: 1, scaleX: 1, duration: 0.30, ease: E_ENTER },
+        { opacity: 1, duration: 0.24, ease: E_ENTER }),
+      tGate + 0.64);
+  } else {
+    /* ②b 拦截：退回来源方向并淡出（不进入池，不产生新焦点色） */
+    tl.to(sig, R(
+      { x: GEO.SIG_GATE_X - 100, opacity: 0, duration: 0.45, ease: E_MOVE },
+      { opacity: 0, duration: 0.30, ease: E_MOVE }),
+      tGate);
+  }
+});
+/* 最后一条信号过闸完成：0.30 + 7*0.32 + 0.60 + 0.94 ≈ 4.08 */
+
+/* ---------- Build 收束（4.35-5.30）：池封合 + 产出标签 ---------- */
+tl.to("#tr-pool-seal", R(
+  { scaleX: 1, duration: 0.40, ease: E_MOVE },
+  { opacity: 0.55, duration: 0.30, ease: E_MOVE }), 4.35);
+tl.to("#tr-pool-title", { color: "var(--hf-color-text-primary)", duration: 0.30, ease: E_MOVE }, 4.45);
+tl.fromTo("#tr-result",
+  R({ y: 14, opacity: 0 }, { opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.30, ease: E_ENTER },
+    { opacity: 1, duration: 0.24, ease: E_ENTER }),
+  5.00);
+
+/* ---------- Hero 5.30-5.50：完整关系可读，无新动效 ---------- */
+
+/* ---------- End（5.50-5.80）：来源与闸退位，池与产出保持可辨 ---------- */
+tl.to("#tr-src-hot, #tr-src-peer, #tr-card-hot, #tr-card-peer, #tr-context, #tr-explain, #tr-link-in", { opacity: 0.35, duration: 0.20, ease: E_MOVE }, 5.50);
+tl.to("#tr-gate, #tr-link-out", R(
+  { opacity: 0.35, scale: 0.98, duration: 0.22, ease: E_MOVE },
+  { opacity: 0.35, duration: 0.22, ease: E_MOVE }), 5.56);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["topic-radar-core"] = tl;
+</script>
+
+
+</template>
+</body>
+</html>

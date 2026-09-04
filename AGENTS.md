@@ -80,3 +80,12 @@
 - Work 和 Variant 的创建、指针、等待、Park、Draft 注册、Final、Archive 与 Reopen 只通过 `./work` 管理。
 - CLI 只管理生命周期和文件一致性；内容判断与视觉选择仍由 Agent 负责，确定性的解析、时间与格式处理交给对应 Skill 脚本。
 - Final 是本地交付物，不表示已保存到平台草稿箱或已发布；两者分别需要外部动作，且草稿授权绝不包含发布。
+
+## Release 与 Codex App 部署
+
+- WSL Git 仓只负责开发和构建；Windows Codex App 原生运行 Windows x64 Release，并打开 `%LOCALAPPDATA%\HyperFramesAI\current`。不得把 Windows 旧仓恢复为运行真源。
+- Harness Release 使用 `harness-YYYY.MM.PATCH`，只通过 `./release build` 从干净、已标记且与 upstream 同步的提交构建；脚本不代替用户执行 commit、tag 或 push。
+- Windows Release 是内置固定 CPython 与依赖的 ZIP。Codex App 解压后只通过 `release.ps1 install` 验证并安装到 `%LOCALAPPDATA%\HyperFramesAI\releases\<tag>`，以 junction 切换 `current` 和 `previous`；回滚只使用 `release.ps1 rollback`。
+- Windows 共享 ASR 只通过包内 `asr-wsl.cmd` 调用固定的 `Ubuntu` 和 `/home/jym/workspace/_external/scripts/asr.sh`。桥接器必须拒绝 `D:\AI\AI+hyperframes` 外的输入或输出，并把 WSL 内的 `wslpath` 路径转换、ASR 可用性检查和转录合并为一次 `wsl.exe --distribution Ubuntu --exec /bin/sh -c <fixed-script>` 调用，任务参数经 `WSLENV` 传递，并原样传递 stdout、stderr 与退出码。Windows Codex 沙盒可复用 WSL ASR、模型和 GPU，但未获得包内 `asr-wsl.cmd transcribe-faster` 顶层 argv 前缀的持久授权时，每次 ASR 作业仍可能需要用户审批；不得授权任意 `wsl.exe` 命令。
+- `D:\AI\AI+hyperframes` 始终只是 WorkStore。部署只能在其中绑定和维护 `works/` 与 `.runtime/`，不得写入 Harness 源码、运行时或 Release。
+- 升级或回滚后新建 Codex App 会话。旧 Release 不自动删除，清理需要单独明确授权。

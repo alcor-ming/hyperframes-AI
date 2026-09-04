@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>graphic-card-core/16x9@v1</title>
+<!--
+  ==========================================================================
+  P008 ｜ 图文卡片机制详解核心（GraphicCardCore）· 组件原型 rev.1（已冻结）
+  依据：ANIMATION_DRAFT.md rev.3 · COMPONENT_SPLIT.md rev.7（P008 已冻结）· anti-PPT skill（motion-native 重构流程）
+  版面纪律：沿用 P002 rev.4 锁定语汇 + P004 rev.3 机制卡栈（后续机制以
+  同尺寸新卡覆盖、旧卡留边）+ P007 rev.1 承接（输入即「产出 · 标题候选 ×3」）。
+  --------------------------------------------------------------------------
+  本章要解释的关系：同一份结构化内容 → 转成信息图 / 清单图 / 对比图等
+  不同发布形态。价值来自内容结构复用与视觉重组，而不是重新编造信息
+  —— Draft 事实边界；不冒充平台官方模板、不虚构发布成功。
+  --------------------------------------------------------------------------
+  视觉隐喻：同构换装 + 压印留痕。刻意区别于 P007 的「折射发散」：
+  P007 是一份内容在空间上分裂为多个候选供人选（多对象共存、空槽收尾）；
+  P008 是同一份结构在时间上连续换装（单对象多状态、痕迹留存）：
+    · 上一章产出条飞入舞台，凝结为「内容结构」栏（字段清单全程在场，
+      是复用的来源）；
+    · 空卡壳入场，第一种形态（信息图）骨架拼装，字段文字自结构栏
+      写入卡槽，结构栏 → 卡片描出 1px 关系青细迹；
+    · 换装 ×2：旧骨架散、新骨架聚（清单图 → 对比图），字段文字不离场、
+      不重新打字，直接滑到新槽位——文字层跨形态连续即「不重新编造信息」
+      的视觉证据；
+    · 每种形态成形即「压印」：一枚小样自卡片压出，存入底部产出屉，
+      屉注「本地产出 · 未发布」（不虚构发布成功的视觉形态）；
+    · End 保留结构栏、终态卡片、三枚小样与产出标签，供 P009（素材归档）
+      承接。
+  --------------------------------------------------------------------------
+  反 PPT 检查（anti-PPT skill §6 强制重写条件对照）：
+    · 无三种形态并排等大展示——形态在同一卡片上历时切换（同对象顺序态），
+      小样是次级痕迹而非并列候选，不与 P007 折射发散撞车；
+    · 新对象由旧对象生成——小样自卡片压出、卡片内容自结构栏写入；
+    · 文字即运动材料——字段文字滑移留位，切换时不重打；
+    · 无平台 logo / 官方模板皮肤 / 发布成功标记（事实边界）；
+    · 删除动画后静态截图只剩终态卡片与小样，换装过程不可读
+      （通过无动画测试）；
+    · 单帧一个主焦点：当前成形的卡片。
+  --------------------------------------------------------------------------
+  核心 Preview 数据（技术键不是最终 Slot API）:
+    fields       五个结构字段 [{ key, text }, ...]（标题 / 要点×3 / 注；
+                 接近真实中文长度的占位样例，正式文案须来自 Script）
+    forms        三种形态名 ["信息图", "清单图", "对比图"]（骨架版式写死）
+    result_tag   本章产出凝练标签（供 P009 ChapterIntro previous_context 引用）
+    explain      文字解释区（左下，骨架占位，正式文案注入 #gc-explain）
+  可选 Preview 数据:
+    context_label  组件语境标签（默认 "机制详解 · 08"）
+    input_label    输入条标签（默认 "产出 · 标题候选 ×3"，承接 P007 result_tag）
+    rail_label     结构栏标题（默认 "内容结构"）
+    dock_note      产出屉注记（默认 "本地产出 · 未发布"）
+  --------------------------------------------------------------------------
+  四状态时间表（总长 6.10s = 本原型 Preview 时长，不冻结固定前导或最终 Scene 时长）:
+    Opening  0.00-1.70   卡栈 / 语境 / 解释区建立 → 标题候选产出条飞入（0.26）
+                         → 凝结为内容结构栏（0.90）→ 字段清单写入（1.02 起）
+                         → 空卡壳入场 + 形态签（1.42 / 1.56）
+    Build    1.70-5.56   ①信息图：骨架拼装（1.70）→ 青迹描画（1.86）→
+                         字段写入卡槽（1.98）→ 压印小样①（2.70）
+                         ②换装清单图（3.10：骨架散聚 + 文字滑移）→ 压印②（3.94）
+                         ③换装对比图（4.34）→ 压印③（5.18）→ 产出标签（5.36）
+    Hero     5.56-5.84   结构栏 → 青迹 → 终态卡片 → 产出屉完整关系可读
+    End      5.84-6.10   语境与解释区退位 0.35；结构栏 / 青迹 / 卡片 / 小样 /
+                         产出标签保持可辨，供下一章 ChapterIntro 承接
+  --------------------------------------------------------------------------
+  运动约束（optical_fluidity）:
+    进场 easing   cubic-bezier(0.23,1,0.32,1)  → CustomEase "hfEnter"
+    画面内变化    cubic-bezier(0.77,0,0.175,1) → CustomEase "hfMove"
+    单帧主强调色唯一（var(--hf-color-accent-primary)）：仅当前形态签值；本章无玻璃面。
+    关系青（var(--hf-color-accent-primary)）仅结构栏 → 卡片的三条 1px 细迹 + 输入条 / 产出点。
+    无渐变、无光晕、无粒子、无 3D、无虚构数据、无平台皮肤。
+  --------------------------------------------------------------------------
+  Seek-safe：全部状态由单条 paused GSAP timeline 驱动；无 wall clock、
+  无无限循环、无随机数、无运行时网络；GSAP 使用共享本地文件。
+  形态签值不做运行期文字替换（set 不可回退），三个签值预写堆叠、
+  仅 opacity 交叉淡变，保证任意 seek 一致。
+  reduced-motion 兜底：位移/缩放全剥离（飞入 / 换装滑移 → 原地淡入，
+  擦写 → 仅 opacity，压印 → 仅 opacity）。
+  ==========================================================================
+-->
+</head>
+<body>
+<template id="graphic-card-core-template">
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  #root {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: relative;
+    background: transparent;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+    margin: 24px auto 120px; /* 预览页居中；渲染时由框架接管 */
+  }
+
+  .gc-stage {
+    width: 100%;
+    height: 100%;
+    padding: 72px 88px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* --- 机制卡片栈：本章是一张完整主卡；后续机制覆盖其上时，旧卡仅留边 --- */
+  .gc-stack-card,
+  .gc-mechanism-shell {
+    position: absolute;
+    left: 56px;
+    top: 64px;
+    width: 1808px;
+    height: 964px;
+    border-radius: 30px;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .gc-stack-card {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 52px rgba(2, 7, 11, 0.28);
+  }
+  .gc-stack-card.back-2 {
+    left: 88px;
+    top: 24px;
+    opacity: 0.26;
+  }
+  .gc-stack-card.back-1 {
+    left: 72px;
+    top: 44px;
+    opacity: 0.52;
+  }
+  .gc-mechanism-shell {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 28px 72px rgba(2, 7, 11, 0.46);
+  }
+
+  /* --- 顶部：组件语境标签（结构性占位，非文案） --- */
+  .gc-context {
+    position: absolute;
+    left: 88px;
+    top: 64px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  /* --- 结构栏 → 卡片的复用细迹：1px 关系青（描画后常驻 0.3） --- */
+  .gc-links {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .gc-links path {
+    stroke: var(--relation);
+    stroke-width: 1;
+    fill: none;
+    opacity: 0.3;
+  }
+
+  /* --- 输入条：上一章产出（飞入后凝结为内容结构栏） --- */
+  .gc-strip {
+    position: absolute;
+    left: 170px;
+    top: 394px;
+    width: 264px;
+    height: 52px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 16px;
+    color: var(--text-2);
+    box-sizing: border-box;
+    opacity: 0;
+    will-change: transform;
+  }
+  .gc-strip .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+  /* --- 内容结构栏：本章的不变量（复用来源，全程在场） --- */
+  .gc-rail {
+    position: absolute;
+    left: 150px;
+    top: 230px;
+    width: 300px;
+    height: 380px;
+    border-radius: 16px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 14px 36px rgba(2, 7, 11, 0.5);
+    box-sizing: border-box;
+    opacity: 0;
+    transform-origin: center center;
+    will-change: transform;
+  }
+  .gc-rail-label {
+    position: absolute;
+    left: 20px;
+    top: 16px;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .gc-rail-row {
+    position: absolute;
+    left: 20px;
+    right: 16px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    clip-path: inset(0% 100% 0% 0%);
+    will-change: clip-path;
+  }
+  .gc-rail-row .key {
+    flex: none;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: var(--text-3);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .gc-rail-row .txt {
+    font-size: 14px;
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  /* --- 活版卡片：本章 Hero Subject（同一份内容的当前发布形态） --- */
+  .gc-card {
+    position: absolute;
+    left: 650px;
+    top: 190px;
+    width: 590px;
+    height: 620px;
+    border-radius: 20px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 22px 56px rgba(2, 7, 11, 0.55);
+    box-sizing: border-box;
+    opacity: 0;
+    transform-origin: center bottom;
+    will-change: transform;
+  }
+
+  /* 形态签：当前形态名（全帧唯一主强调色文本；三值预写堆叠，仅淡变） */
+  .gc-formtag {
+    position: absolute;
+    left: 650px;
+    top: 148px;
+    height: 26px;
+    font-size: 16px;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    opacity: 0;
+  }
+  .gc-formtag .fv {
+    position: absolute;
+    left: 86px;
+    top: 0;
+    color: var(--active);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .gc-formtag .fv.v2, .gc-formtag .fv.v3 { opacity: 0; }
+
+  /* 三套骨架线框（每种形态一组块；换装时旧散新聚，文字层不动） */
+  .gc-skel {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .gc-skel .bk {
+    position: absolute;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-sizing: border-box;
+    transform-origin: left center;
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  .gc-skel .ln {
+    position: absolute;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.14);
+    transform-origin: left center;
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  .gc-skel .cb {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    border: 1.5px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.03);
+    box-sizing: border-box;
+    transform-origin: left center;
+    transform: scaleX(0);
+    opacity: 0;
+  }
+
+  /* 字段文字层：跨形态连续（换装时滑移留位，不消失重打） */
+  .gc-f {
+    position: absolute;
+    white-space: nowrap;
+    color: var(--text-1);
+    clip-path: inset(0% 100% 0% 0%);
+    opacity: 0;
+    transform-origin: left top;
+    will-change: transform, clip-path;
+  }
+  #gc-f-title { left: 28px; top: 42px; font-size: 28px; font-weight: 600; }
+  #gc-f-p1 { left: 28px; top: 138px; font-size: 20px; }
+  #gc-f-p2 { left: 28px; top: 258px; font-size: 20px; }
+  #gc-f-p3 { left: 28px; top: 378px; font-size: 20px; }
+  #gc-f-foot { left: 28px; top: 556px; font-size: 14px; color: var(--text-3); }
+
+  /* --- 产出屉：每种形态成形压出一枚小样（痕迹，非并列候选） --- */
+  .gc-dock-note {
+    position: absolute;
+    left: 650px;
+    top: 836px;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    opacity: 0;
+  }
+  .gc-thumb {
+    position: absolute;
+    top: 860px;
+    width: 128px;
+    height: 92px;
+    border-radius: 10px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 10px 26px rgba(2, 7, 11, 0.45);
+    box-sizing: border-box;
+    opacity: 0;
+    will-change: transform;
+  }
+  #gc-thumb-1 { left: 650px; }
+  #gc-thumb-2 { left: 794px; }
+  #gc-thumb-3 { left: 938px; }
+  .gc-thumb .m {
+    position: absolute;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .gc-thumb .ml {
+    position: absolute;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .gc-thumb .tl {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 7px;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--text-3);
+  }
+
+  /* --- 左下：文字解释区（EXPLAIN SLOT，骨架占位；正式文案由此注入） --- */
+  .gc-explain {
+    position: absolute;
+    left: 88px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .gc-explain-tag {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .gc-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .gc-explain .bar.b1 { width: 88%; }
+  .gc-explain .bar.b2 { width: 62%; background: rgba(255, 255, 255, 0.08); }
+
+  /* --- 本章产出标签（End 状态的凝练结果，供下一章承接） --- */
+  .gc-output {
+    position: absolute;
+    left: 1260px;
+    top: 876px;
+    width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    color: var(--text-1);
+    opacity: 0;
+    box-sizing: border-box;
+  }
+  .gc-output .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+
+  #root[data-composition-id="graphic-card-core"] { background: transparent; margin: 0; }
+</style>
+
+<!-- ==================== 组件本体 ==================== -->
+<div data-hf-id="hf-bwx2" id="root" data-composition-id="graphic-card-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-width="1920" data-height="1080" data-start="0" data-duration="6.10" data-track-index="0">
+  <div data-hf-id="hf-ek67" class="gc-stage">
+
+    <!-- 当前机制主卡 + 两层旧卡留边：后续机制以同尺寸卡片覆盖上来 -->
+    <div data-hf-id="hf-bmt3" class="gc-stack-card back-2" id="gc-stack-back-2" aria-hidden="true"></div>
+    <div data-hf-id="hf-1xy9" class="gc-stack-card back-1" id="gc-stack-back-1" aria-hidden="true"></div>
+    <div data-hf-id="hf-8sc3" class="gc-mechanism-shell" id="gc-mechanism-shell" aria-hidden="true"></div>
+
+    <div data-hf-id="hf-rgm0" class="gc-context" id="gc-context">机制详解 · 08</div>
+
+    <!-- 复用细迹：内容结构栏 → 卡片（描画后常驻，证明内容来源） -->
+    <svg data-hf-id="hf-fbw2" class="gc-links" width="1920" height="1080" viewBox="0 0 1920 1080" aria-hidden="true">
+      <path data-hf-id="hf-3h1h" id="gc-link-1" d="M 450 320 C 520 316, 586 314, 650 312" pathLength="1" />
+      <path data-hf-id="hf-05gj" id="gc-link-2" d="M 450 420 C 522 420, 586 420, 650 420" pathLength="1" />
+      <path data-hf-id="hf-5sn2" id="gc-link-3" d="M 450 520 C 520 524, 586 526, 650 528" pathLength="1" />
+    </svg>
+
+    <!-- 输入条（上一章产出）与内容结构栏（本章不变量） -->
+    <div data-hf-id="hf-0fk6" class="gc-strip" id="gc-strip">
+      <span data-hf-id="hf-9gry" class="dot"></span><span data-hf-id="hf-pq1n" id="gc-strip-t">产出 · 标题候选 ×3</span>
+    </div>
+    <div data-hf-id="hf-9678" class="gc-rail" id="gc-rail">
+      <span data-hf-id="hf-3mmm" class="gc-rail-label" id="gc-rail-label">内容结构</span>
+      <!-- 字段行由 Slot fields 注入（.gc-rail-row：key 芯片 + 短文本） -->
+    </div>
+
+    <!-- 形态签：当前形态（三值预写堆叠，仅 opacity 交叉淡变） -->
+    <div data-hf-id="hf-sfyj" class="gc-formtag" id="gc-formtag">
+      当前形态
+      <span data-hf-id="hf-8nrr" class="fv v1" id="gc-fv-1">信息图</span>
+      <span data-hf-id="hf-7kf7" class="fv v2" id="gc-fv-2">清单图</span>
+      <span data-hf-id="hf-5zk0" class="fv v3" id="gc-fv-3">对比图</span>
+    </div>
+
+    <!-- 活版卡片：骨架层（三套线框）在下，字段文字层在上（跨形态连续） -->
+    <div data-hf-id="hf-fh04" class="gc-card" id="gc-card">
+      <!-- 形态① 信息图骨架：三条递减横档（与要点文案量级语义一致） -->
+      <div data-hf-id="hf-buiw" class="gc-skel" id="gc-skel-1">
+        <div data-hf-id="hf-d7k9" class="bk" style="left:28px;top:132px;width:534px;height:56px;"></div>
+        <div data-hf-id="hf-hsyu" class="bk" style="left:28px;top:252px;width:400px;height:56px;"></div>
+        <div data-hf-id="hf-d725" class="bk" style="left:28px;top:372px;width:280px;height:56px;"></div>
+      </div>
+      <!-- 形态② 清单图骨架：三个空勾选框 + 行分隔细线（空框 = 未发布待办） -->
+      <div data-hf-id="hf-mq0j" class="gc-skel" id="gc-skel-2">
+        <div data-hf-id="hf-67be" class="cb" style="left:28px;top:106px;"></div>
+        <div data-hf-id="hf-6ai9" class="cb" style="left:28px;top:226px;"></div>
+        <div data-hf-id="hf-ds3w" class="cb" style="left:28px;top:346px;"></div>
+        <div data-hf-id="hf-ycie" class="ln" style="left:28px;top:166px;width:534px;"></div>
+        <div data-hf-id="hf-yyq9" class="ln" style="left:28px;top:286px;width:534px;"></div>
+        <div data-hf-id="hf-47m7" class="ln" style="left:28px;top:406px;width:534px;"></div>
+      </div>
+      <!-- 形态③ 对比图骨架：左主档 + 右双档 + 档内分隔（要点按文案量级分组） -->
+      <div data-hf-id="hf-irwi" class="gc-skel" id="gc-skel-3">
+        <div data-hf-id="hf-rw2f" class="bk" style="left:28px;top:100px;width:252px;height:360px;"></div>
+        <div data-hf-id="hf-mu04" class="bk" style="left:308px;top:100px;width:254px;height:360px;"></div>
+        <div data-hf-id="hf-go4o" class="ln" style="left:308px;top:250px;width:254px;"></div>
+      </div>
+      <!-- 字段文字层：由 Slot fields 注入，初始几何 = 形态① -->
+    </div>
+
+    <!-- 产出屉：三枚压印小样 + 屉注（本地产出 · 未发布） -->
+    <div data-hf-id="hf-rmio" class="gc-dock-note" id="gc-dock-note">本地产出 · 未发布</div>
+    <div data-hf-id="hf-l938" class="gc-thumb" id="gc-thumb-1">
+      <div data-hf-id="hf-0f97" class="m" style="left:12px;top:10px;width:82px;height:10px;"></div>
+      <div data-hf-id="hf-u2tq" class="m" style="left:12px;top:26px;width:62px;height:10px;"></div>
+      <div data-hf-id="hf-sl1e" class="m" style="left:12px;top:42px;width:46px;height:10px;"></div>
+      <span data-hf-id="hf-f414" class="tl" id="gc-thumb-t1">信息图</span>
+    </div>
+    <div data-hf-id="hf-w4kv" class="gc-thumb" id="gc-thumb-2">
+      <div data-hf-id="hf-4p1d" class="m" style="left:12px;top:8px;width:10px;height:10px;border-radius:3px;background:none;border:1px solid rgba(255,255,255,0.22);"></div>
+      <div data-hf-id="hf-11tf" class="m" style="left:12px;top:26px;width:10px;height:10px;border-radius:3px;background:none;border:1px solid rgba(255,255,255,0.22);"></div>
+      <div data-hf-id="hf-18fb" class="m" style="left:12px;top:44px;width:10px;height:10px;border-radius:3px;background:none;border:1px solid rgba(255,255,255,0.22);"></div>
+      <div data-hf-id="hf-ihoi" class="ml" style="left:28px;top:11px;width:62px;"></div>
+      <div data-hf-id="hf-553a" class="ml" style="left:28px;top:29px;width:50px;"></div>
+      <div data-hf-id="hf-flff" class="ml" style="left:28px;top:47px;width:40px;"></div>
+      <span data-hf-id="hf-nq23" class="tl" id="gc-thumb-t2">清单图</span>
+    </div>
+    <div data-hf-id="hf-pyv2" class="gc-thumb" id="gc-thumb-3">
+      <div data-hf-id="hf-v964" class="m" style="left:12px;top:8px;width:42px;height:52px;"></div>
+      <div data-hf-id="hf-i6om" class="m" style="left:62px;top:8px;width:54px;height:23px;"></div>
+      <div data-hf-id="hf-4evc" class="m" style="left:62px;top:37px;width:54px;height:23px;"></div>
+      <span data-hf-id="hf-0d85" class="tl" id="gc-thumb-t3">对比图</span>
+    </div>
+
+    <!-- 左下：文字解释区（骨架占位，正式文案经 Slot 注入） -->
+    <div data-hf-id="hf-lojp" class="gc-explain" id="gc-explain" data-slot="explain">
+      <span data-hf-id="hf-jk1n" class="gc-explain-tag">EXPLAIN SLOT</span>
+      <div data-hf-id="hf-1iyu" class="bar b1"></div>
+      <div data-hf-id="hf-xkut" class="bar b2"></div>
+    </div>
+
+    <!-- 本章产出标签 -->
+    <div data-hf-id="hf-eila" class="gc-output" id="gc-output">
+      <span data-hf-id="hf-zcc2" class="dot"></span><span data-hf-id="hf-ejzy" id="gc-output-t">产出 · 图文卡片 ×3</span>
+    </div>
+
+  </div>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+/* ===== 默认 Preview 数据（占位样例，接近真实中文长度；技术键不是最终 Slot API） =====
+   fields 为确定性结构字段：key = 字段芯片标注，text = 短文本（卡片与结构栏
+   同源展示）。forms 为三种发布形态名（骨架版式写死在 CSS / 骨架层）。
+   无随机数，seek 任意时刻状态确定。
+   事实边界：无平台官方模板皮肤、无发布成功标记、无虚构数据指标。 */
+var SLOT_DATA = {
+  context_label: "机制详解 · 08",
+  input_label: "产出 · 标题候选 ×3",
+  rail_label: "内容结构",
+  dock_note: "本地产出 · 未发布",
+  result_tag: "产出 · 图文卡片 ×3",
+  forms: ["信息图", "清单图", "对比图"],
+  fields: [
+    { key: "T", text: "做号一年，我把时间花在哪了" },
+    { key: "①", text: "写脚本占了一半" },
+    { key: "②", text: "拍摄不到两成" },
+    { key: "③", text: "剩下都在改" },
+    { key: "注", text: "源自人话稿 · 已终审" }
+  ]
+};
+
+/* ==================== 几何常量（1920×1080 画布，与 CSS 布局一致） ==================== */
+   /* 字段文字三个形态态（卡片绝对坐标增量，相对 CSS 基位 = 形态①）：
+      x / y 为位移增量，s 为相对基字号的缩放（transformOrigin left top） */
+var FORM_STATES = {
+  title: [ { x: 0,   y: 0,   s: 1     },
+           { x: 0,   y: -10, s: 0.857 },
+           { x: 0,   y: -10, s: 0.857 } ],
+  p1:    [ { x: 0,   y: 0,   s: 1   },
+           { x: 52,  y: -22, s: 1   },
+           { x: 24,  y: 100, s: 1   } ],
+  p2:    [ { x: 0,   y: 0,   s: 1   },
+           { x: 52,  y: -22, s: 1   },
+           { x: 302, y: -90, s: 0.9 } ],
+  p3:    [ { x: 0,   y: 0,   s: 1   },
+           { x: 52,  y: -22, s: 1   },
+           { x: 302, y: -82, s: 0.9 } ],
+  foot:  [ { x: 0,   y: 0,   s: 1 },
+           { x: 360, y: 0,   s: 1 },
+           { x: 0,   y: 0,   s: 1 } ]
+};
+/* 压印小样起点：卡片底边中心（945, 810）；小样终点中心由各 CSS 位计算 */
+var PRESS_FROM = { x: 945, y: 810 };
+var THUMB_CENTER = [ { x: 714, y: 906 }, { x: 858, y: 906 }, { x: 1002, y: 906 } ];
+
+/* ==================== Preview 数据注入（同步执行，渲染前就绪） ==================== */
+(function injectSlots(d) {
+  document.getElementById("gc-context").textContent = d.context_label;
+  document.getElementById("gc-strip-t").textContent = d.input_label;
+  document.getElementById("gc-rail-label").textContent = d.rail_label;
+  document.getElementById("gc-dock-note").textContent = d.dock_note;
+  document.getElementById("gc-output-t").textContent = d.result_tag;
+  d.forms.forEach(function (f, i) {
+    document.getElementById("gc-fv-" + (i + 1)).textContent = f;
+    document.getElementById("gc-thumb-t" + (i + 1)).textContent = f;
+  });
+
+  /* 结构栏字段行：key 芯片 + 短文本（与卡片文字同源） */
+  var rail = document.getElementById("gc-rail");
+  d.fields.forEach(function (fd, i) {
+    var row = document.createElement("div");
+    row.className = "gc-rail-row";
+    row.style.top = (56 + i * 62) + "px";
+    var k = document.createElement("span");
+    k.className = "key";
+    k.textContent = fd.key;
+    var t = document.createElement("span");
+    t.className = "txt";
+    t.textContent = fd.text;
+    row.appendChild(k);
+    row.appendChild(t);
+    rail.appendChild(row);
+  });
+
+  /* 卡片字段文字层：五个 span，初始几何 = 形态①（CSS 基位） */
+  var card = document.getElementById("gc-card");
+  var ids = ["title", "p1", "p2", "p3", "foot"];
+  d.fields.forEach(function (fd, i) {
+    var s = document.createElement("span");
+    s.className = "gc-f";
+    s.id = "gc-f-" + ids[i];
+    s.textContent = i === 0 || i === 4 ? fd.text : fd.key + " " + fd.text;
+    card.appendChild(s);
+  });
+})(SLOT_DATA);
+
+/* ==================== Easing（optical_fluidity profile，与 B00 / P002–P007 一致） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ==================== 组件 Timeline（paused · seek-safe · 同时运动 ≤ 2） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* prefers-reduced-motion：剥离位移/缩放，仅保留 opacity 交叉淡变。
+   仅影响本地预览；daemon 渲染环境为 no-preference，输出始终全动效。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* ---------- Opening（0.00-1.70 容器建立，上一章产出凝结为本章输入） ----------
+   卡栈 → 语境 → 解释区 → 产出条自左侧飞入 → 凝结为内容结构栏（条纵向收拢
+   退场，栏在同一中心纵向生长；新对象由旧对象转化）→ 字段清单写入 →
+   空卡壳入场 + 形态签 */
+tl.from("#gc-stack-back-2", R(
+  { x: 18, y: -8, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.02);
+tl.from("#gc-stack-back-1", R(
+  { x: 12, y: -5, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.06);
+tl.from("#gc-mechanism-shell", R(
+  { y: 18, opacity: 0, duration: 0.30, ease: E_ENTER },
+  { opacity: 0, duration: 0.26, ease: E_ENTER }), 0.08);
+tl.from("#gc-context", { opacity: 0, duration: 0.20, ease: E_ENTER }, 0.05);
+tl.from("#gc-explain", { opacity: 0, duration: 0.22, ease: E_ENTER }, 0.16);
+
+/* 产出条飞入（承接 P007 End 的产出标签语义） */
+tl.fromTo("#gc-strip",
+  R({ x: -560, opacity: 0 }, { x: 0, opacity: 0 }),
+  R({ x: 0, opacity: 1, duration: 0.40, ease: E_ENTER },
+    { opacity: 1, duration: 0.28, ease: E_ENTER }), 0.26);
+
+/* 凝结：条纵向收拢退场，结构栏于同一中心纵向生长（transformOrigin center） */
+tl.to("#gc-strip", R(
+  { scaleY: 0.1, opacity: 0, duration: 0.26, ease: E_MOVE },
+  { opacity: 0, duration: 0.22, ease: E_MOVE }), 0.82);
+tl.fromTo("#gc-rail",
+  R({ scaleY: 0.06, opacity: 0 }, { scaleY: 1, opacity: 0 }),
+  R({ scaleY: 1, opacity: 1, duration: 0.32, ease: E_ENTER },
+    { opacity: 1, duration: 0.24, ease: E_ENTER }), 0.90);
+
+/* 字段清单写入（结构栏内容 = 本章不变量，先行可读） */
+document.querySelectorAll(".gc-rail-row").forEach(function (row, i) {
+  tl.fromTo(row,
+    R({ clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", opacity: 0 }),
+    R({ clipPath: "inset(0% 0% 0% 0%)", duration: 0.24, ease: E_ENTER },
+      { opacity: 1, duration: 0.20, ease: E_ENTER }),
+    1.02 + i * 0.06);
+});
+
+/* 空卡壳入场 + 形态签（当前形态 = 全帧唯一主强调色文本） */
+tl.fromTo("#gc-card",
+  R({ y: 26, scale: 0.96, opacity: 0 }, { y: 0, scale: 1, opacity: 0 }),
+  R({ y: 0, scale: 1, opacity: 1, duration: 0.34, ease: E_ENTER },
+    { opacity: 1, duration: 0.26, ease: E_ENTER }), 1.42);
+tl.fromTo("#gc-formtag",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.18, ease: E_ENTER }, 1.56);
+
+/* ---------- Build：逐个功能展现 ---------- */
+
+/* ① 信息图成形（1.70 起）：骨架横档拼装 → 结构栏 → 卡片青迹描画 →
+     字段文字写入卡槽（结构栏退 0.5：来源在场但不抢焦点） */
+document.querySelectorAll("#gc-skel-1 .bk").forEach(function (b, i) {
+  tl.fromTo(b,
+    R({ scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 0 }),
+    R({ scaleX: 1, opacity: 1, duration: 0.22, ease: E_ENTER },
+      { opacity: 1, duration: 0.18, ease: E_ENTER }),
+    1.70 + i * 0.08);
+});
+for (var k = 1; k <= 3; k++) {
+  tl.fromTo("#gc-link-" + k,
+    { strokeDasharray: 1, strokeDashoffset: 1 },
+    { strokeDashoffset: 0, duration: 0.28, ease: E_MOVE }, 1.86 + (k - 1) * 0.07);
+}
+["title", "p1", "p2", "p3", "foot"].forEach(function (f, i) {
+  tl.fromTo("#gc-f-" + f,
+    R({ clipPath: "inset(0% 100% 0% 0%)", opacity: 0 }, { clipPath: "inset(0% 0% 0% 0%)", opacity: 0 }),
+    R({ clipPath: "inset(0% 0% 0% 0%)", opacity: 1, duration: 0.26, ease: E_ENTER },
+      { opacity: 1, duration: 0.20, ease: E_ENTER }),
+    1.98 + i * 0.09);
+});
+tl.to(".gc-rail-row, .gc-rail-label", { opacity: 0.5, duration: 0.20, ease: E_MOVE }, 1.98);
+
+/* 压印（每种形态成形后）：卡片轻压回弹 + 小样自卡片底边压出入屉 */
+function press(t, n) {
+  tl.to("#gc-card", R(
+    { scale: 0.985, duration: 0.10, ease: E_MOVE },
+    { opacity: 0.82, duration: 0.10, ease: E_MOVE }), t);
+  tl.to("#gc-card", R(
+    { scale: 1, duration: 0.14, ease: E_ENTER },
+    { opacity: 1, duration: 0.12, ease: E_ENTER }), t + 0.10);
+  var dx = PRESS_FROM.x - THUMB_CENTER[n - 1].x;
+  var dy = PRESS_FROM.y - THUMB_CENTER[n - 1].y;
+  tl.fromTo("#gc-thumb-" + n,
+    R({ x: dx, y: dy, scale: 0.5, opacity: 0 }, { x: 0, y: 0, scale: 1, opacity: 0 }),
+    R({ x: 0, y: 0, scale: 1, opacity: 1, duration: 0.32, ease: E_ENTER },
+      { opacity: 1, duration: 0.24, ease: E_ENTER }), t + 0.08);
+}
+tl.fromTo("#gc-dock-note",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.18, ease: E_ENTER }, 2.62);
+press(2.62, 1);
+
+/* ② 换装 → 清单图（3.10 起）：旧骨架散、新骨架聚；字段文字不离场，
+     直接滑到新槽位（文字层跨形态连续 = 不重新编造信息的证据）；
+     形态签三值预写堆叠，仅 opacity 交叉淡变（set 不可回退，不做文字替换） */
+function remorph(t, fromN, toN, stateIdx) {
+  tl.to("#gc-skel-" + fromN, R(
+    { y: -10, opacity: 0, duration: 0.20, ease: E_MOVE },
+    { opacity: 0, duration: 0.18, ease: E_MOVE }), t);
+  var blocks = document.querySelectorAll("#gc-skel-" + toN + " .bk, #gc-skel-" + toN + " .cb, #gc-skel-" + toN + " .ln");
+  blocks.forEach(function (b, i) {
+    tl.fromTo(b,
+      R({ scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 0 }),
+      R({ scaleX: 1, opacity: 1, duration: 0.20, ease: E_ENTER },
+        { opacity: 1, duration: 0.16, ease: E_ENTER }),
+      t + 0.12 + i * 0.05);
+  });
+  ["title", "p1", "p2", "p3", "foot"].forEach(function (f, i) {
+    var st = FORM_STATES[f][stateIdx];
+    tl.to("#gc-f-" + f, R(
+      { x: st.x, y: st.y, scale: st.s, duration: 0.40, ease: E_MOVE },
+      { x: 0, y: 0, scale: 1, duration: 0.01, ease: E_MOVE }),
+      t + 0.06 + i * 0.04);
+  });
+  tl.to("#gc-fv-" + fromN, { opacity: 0, duration: 0.12, ease: E_MOVE }, t + 0.18);
+  tl.to("#gc-fv-" + toN, { opacity: 1, duration: 0.12, ease: E_ENTER }, t + 0.26);
+}
+remorph(3.10, 1, 2, 1);
+press(3.86, 2);
+
+/* ③ 换装 → 对比图（4.34 起）：同上，要点按文案量级分组（左主档 / 右双档） */
+remorph(4.34, 2, 3, 2);
+press(5.10, 3);
+
+/* 产出标签（End 状态的凝练结果，供 P009 承接） */
+tl.fromTo("#gc-output",
+  R({ y: 14, opacity: 0 }, { y: 0, opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.20, ease: E_ENTER },
+    { opacity: 1, duration: 0.18, ease: E_ENTER }), 5.36);
+
+/* ---------- Hero 5.56-5.84：完整关系可读，无新动效 ---------- */
+
+/* ---------- End（5.84-6.10）：语境与解释区退位，结构栏 / 青迹 / 卡片 /
+     小样 / 产出标签保持可辨 ---------- */
+tl.to("#gc-context, #gc-explain", { opacity: 0.35, duration: 0.18, ease: E_MOVE }, 5.84);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["graphic-card-core"] = tl;
+</script>
+
+</template>
+</body>
+</html>

@@ -1,0 +1,177 @@
+{
+  "schema_version": 2,
+  "component_ref": "gap-first-selection/16x9@v1",
+  "ratio": "16x9",
+  "slots": {
+    "required": [
+      "context",
+      "pool_label",
+      "candidates",
+      "selected_index",
+      "warning",
+      "warning_detail",
+      "workflow_label",
+      "workflow_nodes",
+      "bottleneck_kicker",
+      "bottleneck_label",
+      "trial_prefix",
+      "trial_emphasis",
+      "usage_label",
+      "hero_kicker",
+      "question",
+      "primary_cta",
+      "secondary_primary",
+      "secondary_secondary"
+    ],
+    "properties": {
+      "context": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      },
+      "pool_label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16
+      },
+      "candidates": {
+        "type": "array",
+        "minItems": 10,
+        "maxItems": 10,
+        "items": {
+          "type": "object",
+          "required": [
+            "anchor",
+            "mode",
+            "tone",
+            "label"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "anchor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 12
+            },
+            "mode": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 28
+            },
+            "tone": {
+              "type": "string",
+              "pattern": "^(agent|warm|mint|cool|violet)$"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 24
+            }
+          }
+        }
+      },
+      "selected_index": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10
+      },
+      "warning": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16
+      },
+      "warning_detail": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 30
+      },
+      "workflow_label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20
+      },
+      "workflow_nodes": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10
+        }
+      },
+      "bottleneck_kicker": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 24
+      },
+      "bottleneck_label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 24
+      },
+      "trial_prefix": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20
+      },
+      "trial_emphasis": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16
+      },
+      "usage_label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 8
+      },
+      "hero_kicker": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 24
+      },
+      "question": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 30
+      },
+      "primary_cta": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20
+      },
+      "secondary_primary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16
+      },
+      "secondary_secondary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      }
+    }
+  },
+  "visual_surfaces": [
+    {
+      "surface_id": "selection_flow",
+      "kind": "active_media_card",
+      "modes": [
+        "none"
+      ],
+      "required": true,
+      "fallback": "programmatic"
+    }
+  ],
+  "assets": {
+    "allowed_types": [],
+    "runtime_network": false
+  },
+  "timing": {
+    "duration_seconds": 16.964,
+    "allowed_time_scale": {
+      "min": 0.8,
+      "max": 1.2
+    }
+  }
+}

@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>material-archive-core/16x9@v1</title>
+<!--
+  ==========================================================================
+  P009 ｜ 素材归档机制详解核心（MaterialArchiveCore）· 组件原型 rev.1（已冻结）
+  依据：ANIMATION_DRAFT.md rev.3 · COMPONENT_SPLIT.md rev.8（P009 已冻结）
+  · anti-PPT skill（motion-native 重构流程）
+  版面纪律：沿用 P002 rev.4 锁定语汇 + P004 rev.3 机制卡栈（后续机制以
+  同尺寸新卡覆盖、旧卡留边）+ P008 rev.1 承接（输入即「产出 · 图文卡片 ×3」）。
+  --------------------------------------------------------------------------
+  本章要解释的关系：散落的截图 / 视频 / 链接 → 按项目组织归档，
+  并保留来源、权利、日期与标签 → 进入上下文后可查找、可追溯、可复用
+  —— Draft 事实边界；归档不等于备份，也不自动形成版权授权。
+  --------------------------------------------------------------------------
+  视觉隐喻：散件上签入架。文件夹图标与「截图/视频/链接」三栏是 PPT 与
+  AI 模板的双重红线——它们说不出本章真正的价值（溯源元数据）：
+    · 上一章产出条飞入，滑向右侧并凝结为「项目架」（产出进入项目上下文）；
+    · 三件异构素材（截图 / 视频 / 链接，形状尺寸互异、散落带倾角）；
+    · 逐件归档：当前素材升至焦点位（其余退底稿），溯源签在其下方
+      展开，四行字段（来源 / 权利 / 日期 / 标签）逐行写入——权利值
+      如实书写（本人自截 / 本人自录 / 仅存档原文），不声称获得授权；
+    · 素材缩为架位缩略件，溯源签随行贴入架位（元数据随行 = 可追溯）；
+    · 检索证据：「检索 · 封面」签出现，命中条目的架位左缘亮起，
+      其余退底稿——可查找是动作，不是修辞；
+    · 架注「归档 ≠ 备份 · ≠ 版权授权」全程在场（事实边界的视觉形态）；
+    · End 保留项目架、三条归档条目、检索命中与产出标签，供 P010
+      （数据复盘）承接。
+  --------------------------------------------------------------------------
+  反 PPT 检查（anti-PPT skill §6 强制重写条件对照）：
+    · 无文件夹图标、无类型三栏——条目经逐件动作装配，素材形状互异；
+    · 新对象由旧对象生成——项目架由产出条凝结，条目由散落素材转化；
+    · 文字即运动材料——溯源字段逐行写入并随素材入位，不是装饰标注；
+    · 无「已备份 / 已授权」虚假标记——权利字段如实、架注写明边界；
+    · 删除动画后静态截图只剩架位结果，上签过程不可读（通过无动画测试）；
+    · 单帧一个主焦点：当前归档的素材（检索节拍时为命中条目）。
+  --------------------------------------------------------------------------
+  核心 Preview 数据（技术键不是最终 Slot API）:
+    items        三件素材 [{ kind, meta:{来源, 权利, 日期, 标签} }, ...]
+                 （形状线框写死；元数据为占位样例，正式数据须来自真实归档）
+    result_tag   本章产出凝练标签（供 P010 ChapterIntro previous_context 引用）
+    explain      文字解释区（左下，骨架占位，正式文案注入 #ma-explain）
+  可选 Preview 数据:
+    context_label  组件语境标签（默认 "机制详解 · 09"）
+    input_label    输入条标签（默认 "产出 · 图文卡片 ×3"，承接 P008 result_tag）
+    shelf_label    项目架标题（默认 "项目 · 做号一年"）
+    shelf_note     架注（默认 "归档 ≠ 备份 · ≠ 版权授权"）
+    search_label   检索签（默认 "封面"；演示按标签查找，非真实检索接口）
+  --------------------------------------------------------------------------
+  四状态时间表（总长 6.60s = 本原型 Preview 时长，不冻结固定前导或最终 Scene 时长）:
+    Opening  0.00-1.86   卡栈 / 语境 / 解释区建立 → 产出条飞入（0.26）→
+                         滑向右侧凝结为项目架（0.82-1.20）→ 三个虚线架位
+                         （1.32）→ 三件散落素材入场（1.50 起）
+    Build    1.86-6.10   ①截图：升焦点（1.86）→ 溯源签四行写入（2.08 起）
+                         → 携签入架位（2.60）
+                         ②视频：同上（3.08 / 3.30 / 3.82）
+                         ③链接：同上（4.30 / 4.52 / 5.04）
+                         检索证据：检索签（5.52）→ 命中亮缘 + 其余退位（5.66）
+                         → 产出标签（5.90）
+    Hero     6.10-6.36   项目架 + 三条目 + 溯源签 + 检索命中完整关系可读
+    End      6.36-6.60   语境与解释区退位 0.35；架 / 条目 / 签 / 命中 / 产出
+                         标签保持可辨，供下一章 ChapterIntro 承接
+  --------------------------------------------------------------------------
+  运动约束（optical_fluidity）:
+    进场 easing   cubic-bezier(0.23,1,0.32,1)  → CustomEase "hfEnter"
+    画面内变化    cubic-bezier(0.77,0,0.175,1) → CustomEase "hfMove"
+    单帧主强调色唯一（var(--hf-color-accent-primary)）：仅检索签值 + 命中架位左缘；
+    本章无玻璃面、无轨迹线。关系青（var(--hf-color-accent-primary)）仅输入条 / 产出点。
+    无渐变、无光晕、无粒子、无 3D、无虚构数据、无平台皮肤。
+  --------------------------------------------------------------------------
+  Seek-safe：全部状态由单条 paused GSAP timeline 驱动；无 wall clock、
+  无无限循环、无随机数、无运行时网络；GSAP 使用共享本地文件。
+  素材倾角为确定性常量，非随机。
+  reduced-motion 兜底：位移/缩放/倾角全剥离（飞入 / 升位 / 入架 →
+  原地淡入，写入 → 仅 opacity）。
+  正式以 HyperFrames sub-composition 运输，不包含原型检查脚手架。
+  ==========================================================================
+-->
+</head>
+<body>
+<template>
+<style>
+
+  :root {
+    --canvas: var(--hf-color-canvas);
+    --elevated: var(--hf-color-surface);
+    --text-1: var(--hf-color-text-primary);
+    --text-2: var(--hf-color-text-secondary);
+    --text-3: var(--hf-color-text-secondary);
+    --relation: var(--hf-color-accent-primary);
+    --active: var(--hf-color-accent-primary);
+    --glass-border: rgba(255, 255, 255, 0.16);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* ============ 组件本体（正式翻译边界内） ============ */
+
+  #root {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    color: var(--text-1);
+    font-family: var(--hf-font-body);
+    margin: 0;
+  }
+
+  .ma-stage {
+    width: 100%;
+    height: 100%;
+    padding: 72px 88px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* --- 机制卡片栈：本章是一张完整主卡；后续机制覆盖其上时，旧卡仅留边 --- */
+  .ma-stack-card,
+  .ma-mechanism-shell {
+    position: absolute;
+    left: 56px;
+    top: 64px;
+    width: 1808px;
+    height: 964px;
+    border-radius: 30px;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .ma-stack-card {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 52px rgba(2, 7, 11, 0.28);
+  }
+  .ma-stack-card.back-2 {
+    left: 88px;
+    top: 24px;
+    opacity: 0.26;
+  }
+  .ma-stack-card.back-1 {
+    left: 72px;
+    top: 44px;
+    opacity: 0.52;
+  }
+  .ma-mechanism-shell {
+    background: var(--hf-color-canvas);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 28px 72px rgba(2, 7, 11, 0.46);
+  }
+
+  /* --- 顶部：组件语境标签（结构性占位，非文案） --- */
+  .ma-context {
+    position: absolute;
+    left: 88px;
+    top: 64px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  /* --- 输入条：上一章产出（飞入后滑向右侧，凝结为项目架） --- */
+  .ma-strip {
+    position: absolute;
+    left: 140px;
+    top: 394px;
+    width: 264px;
+    height: 52px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 16px;
+    color: var(--text-2);
+    box-sizing: border-box;
+    opacity: 0;
+    will-change: transform;
+  }
+  .ma-strip .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+  /* --- 项目架：本章的目的地容器（产出条凝结而来） --- */
+  .ma-shelf {
+    position: absolute;
+    left: 1360px;
+    top: 190px;
+    width: 380px;
+    height: 628px;
+    border-radius: 20px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 44px rgba(2, 7, 11, 0.5);
+    box-sizing: border-box;
+    opacity: 0;
+    will-change: transform;
+  }
+  .ma-shelf-label {
+    position: absolute;
+    left: 24px;
+    top: 20px;
+    font-size: 15px;
+    letter-spacing: 0.06em;
+    color: var(--text-2);
+    font-weight: 600;
+  }
+  .ma-shelf-line {
+    position: absolute;
+    left: 24px;
+    top: 52px;
+    width: 332px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .ma-shelf-note {
+    position: absolute;
+    left: 1360px;
+    top: 842px;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    opacity: 0;
+  }
+
+  /* 架位：虚线待填（条目入位后由 .ma-fill 实框覆盖标记已归档） */
+  .ma-slot {
+    position: absolute;
+    left: 1392px;
+    width: 316px;
+    height: 158px;
+    border-radius: 14px;
+    border: 1.5px dashed rgba(255, 255, 255, 0.20);
+    box-sizing: border-box;
+    opacity: 0;
+  }
+  #ma-slot-1 { top: 252px; }
+  #ma-slot-2 { top: 438px; }
+  #ma-slot-3 { top: 624px; }
+  .ma-fill {
+    position: absolute;
+    left: 1392px;
+    width: 316px;
+    height: 158px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.03);
+    box-sizing: border-box;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #ma-fill-1 { top: 252px; }
+  #ma-fill-2 { top: 438px; }
+  #ma-fill-3 { top: 624px; }
+
+  /* --- 散落素材：三件异构线框（形状 / 尺寸 / 倾角互异，CSS 基位 = 散落态） --- */
+  .ma-item {
+    position: absolute;
+    border-radius: 12px;
+    background: var(--elevated);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 30px rgba(2, 7, 11, 0.45);
+    box-sizing: border-box;
+    opacity: 0;
+    transform-origin: left top;
+    will-change: transform;
+  }
+  .ma-item .b {
+    position: absolute;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .ma-item .blk {
+    position: absolute;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.07);
+  }
+  /* 截图 200×140，散落倾角 -6° */
+  #ma-item-1 { left: 170px; top: 270px; width: 200px; height: 140px; transform: rotate(-6deg); }
+  /* 视频 220×130，散落倾角 +4°（含播放头刻度线） */
+  #ma-item-2 { left: 150px; top: 480px; width: 220px; height: 130px; transform: rotate(4deg); }
+  /* 链接 170×70，散落倾角 -3° */
+  #ma-item-3 { left: 210px; top: 690px; width: 170px; height: 70px; transform: rotate(-3deg); }
+
+  /* --- 溯源签：本章 Hero 动作载体（四行字段写入，随素材入架位） ---
+     CSS 基位 = 焦点位（素材下方）；入架时整体位移 + 缩放贴入架位右侧 */
+  .ma-tag {
+    position: absolute;
+    width: 190px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: var(--elevated);
+    box-shadow: 0 10px 26px rgba(2, 7, 11, 0.45);
+    box-sizing: border-box;
+    padding: 12px 14px;
+    opacity: 0;
+    transform-origin: left top;
+    will-change: transform;
+  }
+  #ma-tag-1 { left: 380px; top: 500px; }
+  #ma-tag-2 { left: 370px; top: 500px; }
+  #ma-tag-3 { left: 390px; top: 470px; }
+  .ma-tr {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+    font-size: 13px;
+    white-space: nowrap;
+    clip-path: inset(0% 100% 0% 0%);
+    will-change: clip-path;
+  }
+  .ma-tr .k {
+    flex: none;
+    min-width: 30px;
+    color: var(--text-3);
+  }
+  .ma-tr .v {
+    color: var(--text-1);
+  }
+
+  /* --- 检索签：按标签查找（证据节拍；签值蓝色 = 全帧唯一主强调色） --- */
+  .ma-chip {
+    position: absolute;
+    left: 1360px;
+    top: 140px;
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    color: var(--text-2);
+    box-sizing: border-box;
+    opacity: 0;
+    will-change: transform;
+  }
+  .ma-chip .cv {
+    color: var(--active);
+    font-weight: 600;
+  }
+
+  /* 命中架位左缘（蓝色 3px，纵向生长） */
+  .ma-edge {
+    position: absolute;
+    left: 1392px;
+    top: 252px;
+    width: 3px;
+    height: 158px;
+    border-radius: 2px;
+    background: var(--active);
+    transform-origin: center top;
+    transform: scaleY(0);
+  }
+
+  /* --- 左下：文字解释区（EXPLAIN SLOT，骨架占位；正式文案由此注入） --- */
+  .ma-explain {
+    position: absolute;
+    left: 88px;
+    top: 928px;
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .ma-explain-tag {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    font-weight: 600;
+  }
+  .ma-explain .bar {
+    height: 14px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .ma-explain .bar.b1 { width: 88%; }
+  .ma-explain .bar.b2 { width: 62%; background: rgba(255, 255, 255, 0.08); }
+
+  /* --- 本章产出标签（End 状态的凝练结果，供下一章承接） --- */
+  .ma-output {
+    position: absolute;
+    left: 1408px;
+    top: 876px;
+    width: 330px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    color: var(--text-1);
+    opacity: 0;
+    box-sizing: border-box;
+  }
+  .ma-output .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--relation);
+  }
+
+
+  #root[data-composition-id="material-archive-core"] { background: transparent; margin: 0; }
+</style>
+
+<!-- ==================== 组件本体 ==================== -->
+<div data-hf-id="hf-9j4u" id="root" data-composition-id="material-archive-core" data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-width="1920" data-height="1080" data-start="0" data-duration="6.60" data-track-index="0">
+  <div data-hf-id="hf-4uan" class="ma-stage">
+
+    <!-- 当前机制主卡 + 两层旧卡留边：后续机制以同尺寸卡片覆盖上来 -->
+    <div data-hf-id="hf-5vsf" class="ma-stack-card back-2" id="ma-stack-back-2" aria-hidden="true"></div>
+    <div data-hf-id="hf-h97p" class="ma-stack-card back-1" id="ma-stack-back-1" aria-hidden="true"></div>
+    <div data-hf-id="hf-nw5z" class="ma-mechanism-shell" id="ma-mechanism-shell" aria-hidden="true"></div>
+
+    <div data-hf-id="hf-dka3" class="ma-context" id="ma-context">机制详解 · 09</div>
+
+    <!-- 输入条（上一章产出）与项目架（本章目的地容器） -->
+    <div data-hf-id="hf-vhq2" class="ma-strip" id="ma-strip">
+      <span data-hf-id="hf-9gry" class="dot"></span><span data-hf-id="hf-ft05" id="ma-strip-t">产出 · 图文卡片 ×3</span>
+    </div>
+    <div data-hf-id="hf-ofwa" class="ma-shelf" id="ma-shelf">
+      <span data-hf-id="hf-0998" class="ma-shelf-label" id="ma-shelf-label">项目 · 做号一年</span>
+      <div data-hf-id="hf-dgvk" class="ma-shelf-line"></div>
+    </div>
+    <div data-hf-id="hf-nsl2" class="ma-shelf-note" id="ma-shelf-note">归档 ≠ 备份 · ≠ 版权授权</div>
+
+    <!-- 三个虚线架位 + 已归档实框（条目入位时淡入） -->
+    <div data-hf-id="hf-4mvm" class="ma-slot" id="ma-slot-1"></div>
+    <div data-hf-id="hf-0orl" class="ma-slot" id="ma-slot-2"></div>
+    <div data-hf-id="hf-zx3s" class="ma-slot" id="ma-slot-3"></div>
+    <div data-hf-id="hf-xz1g" class="ma-fill" id="ma-fill-1"></div>
+    <div data-hf-id="hf-6mxb" class="ma-fill" id="ma-fill-2"></div>
+    <div data-hf-id="hf-2ota" class="ma-fill" id="ma-fill-3"></div>
+
+    <!-- 检索签 + 命中架位左缘 -->
+    <div data-hf-id="hf-vojr" class="ma-chip" id="ma-chip">
+      检索 · <span data-hf-id="hf-85ub" class="cv" id="ma-chip-v">封面</span>
+    </div>
+    <div data-hf-id="hf-0sic" class="ma-edge" id="ma-edge-1"></div>
+
+    <!-- 三件散落素材（异构线框；CSS 基位 = 散落态，含倾角） -->
+    <div data-hf-id="hf-kc00" class="ma-item" id="ma-item-1">
+      <div data-hf-id="hf-pud1" class="b" style="left:14px;top:14px;width:120px;height:12px;"></div>
+      <div data-hf-id="hf-u2tg" class="blk" style="left:14px;top:36px;width:172px;height:64px;"></div>
+      <div data-hf-id="hf-jktk" class="b" style="left:14px;top:112px;width:100px;height:10px;"></div>
+    </div>
+    <div data-hf-id="hf-szvv" class="ma-item" id="ma-item-2">
+      <div data-hf-id="hf-5muv" class="blk" style="left:14px;top:14px;width:192px;height:78px;"></div>
+      <div data-hf-id="hf-397h" class="b" style="left:14px;top:104px;width:192px;height:8px;"></div>
+      <div data-hf-id="hf-7re2" class="b" style="left:86px;top:100px;width:3px;height:16px;border-radius:2px;background:rgba(255,255,255,0.4);"></div>
+    </div>
+    <div data-hf-id="hf-p1ru" class="ma-item" id="ma-item-3">
+      <div data-hf-id="hf-y76d" class="b" style="left:14px;top:16px;width:90px;height:10px;"></div>
+      <div data-hf-id="hf-gvs0" class="b" style="left:14px;top:38px;width:130px;height:10px;"></div>
+    </div>
+
+    <!-- 三张溯源签（字段行由 Slot items 注入；CSS 基位 = 焦点位） -->
+    <div data-hf-id="hf-gkig" class="ma-tag" id="ma-tag-1"></div>
+    <div data-hf-id="hf-p8eb" class="ma-tag" id="ma-tag-2"></div>
+    <div data-hf-id="hf-laaa" class="ma-tag" id="ma-tag-3"></div>
+
+    <!-- 左下：文字解释区（骨架占位，正式文案经 Slot 注入） -->
+    <div data-hf-id="hf-45qh" class="ma-explain" id="ma-explain" data-slot="explain">
+      <span data-hf-id="hf-4yyv" class="ma-explain-tag">EXPLAIN SLOT</span>
+      <div data-hf-id="hf-1iyu" class="bar b1"></div>
+      <div data-hf-id="hf-xkut" class="bar b2"></div>
+    </div>
+
+    <!-- 本章产出标签 -->
+    <div data-hf-id="hf-2r6m" class="ma-output" id="ma-output">
+      <span data-hf-id="hf-zcc2" class="dot"></span><span data-hf-id="hf-sjfz" id="ma-output-t">产出 · 归档条目 ×3</span>
+    </div>
+
+  </div>
+</div>
+
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script src="assets/vendor/gsap/CustomEase.min.js"></script>
+<script>
+(function () {
+/* ===== 默认 Preview 数据（占位样例；技术键不是最终 Slot API） =====
+   items 为确定性数据：kind = 素材类型（线框形状写死），meta = 溯源字段
+   （来源 / 权利 / 日期 / 标签）。权利值如实书写（本人自截 / 本人自录 /
+   仅存档原文），不声称获得授权；search_label 仅演示按标签查找。
+   无随机数（散落倾角为常量），seek 任意时刻状态确定。
+   事实边界：归档 ≠ 备份 · ≠ 版权授权（架注全程在场）。 */
+var SLOT_DATA = {
+  context_label: "机制详解 · 09",
+  input_label: "产出 · 图文卡片 ×3",
+  shelf_label: "项目 · 做号一年",
+  shelf_note: "归档 ≠ 备份 · ≠ 版权授权",
+  search_label: "封面",
+  result_tag: "产出 · 归档条目 ×3",
+  items: [
+    { kind: "截图", meta: [["来源", "手机相册"], ["权利", "本人自截"], ["日期", "08-22"], ["标签", "封面 · 参考"]] },
+    { kind: "视频", meta: [["来源", "相机导入"], ["权利", "本人自录"], ["日期", "08-23"], ["标签", "B-roll"]] },
+    { kind: "链接", meta: [["来源", "浏览器收藏"], ["权利", "仅存档原文"], ["日期", "08-24"], ["标签", "选题 · 参考"]] }
+  ]
+};
+
+/* ==================== 几何常量（1920×1080 画布；增量相对各 CSS 基位） ==================== */
+var GEO = {
+  /* 素材升焦点位（相对散落基位的位移 + 缩放，倾角归 0） */
+  FOCUS: [
+    { x: 210, y: 50,   s: 1.15 },
+    { x: 220, y: -150, s: 1.12 },
+    { x: 180, y: -340, s: 1.15 }
+  ],
+  /* 素材入架位（缩为架位左侧缩略件） */
+  DOCK_ITEM: [
+    { x: 1238, y: 6,   s: 0.60 },
+    { x: 1258, y: -18, s: 0.55 },
+    { x: 1198, y: -42, s: 0.65 }
+  ],
+  /* 溯源签入架位（贴入架位右侧） */
+  DOCK_TAG: [
+    { x: 1158, y: -220, s: 0.85 },
+    { x: 1168, y: -34,  s: 0.85 },
+    { x: 1148, y: 182,  s: 0.85 }
+  ],
+  /* 输入条滑向项目架的凝结点 */
+  STRIP_TO: { x: 1224, y: -180 }
+};
+
+/* ==================== Preview 数据注入（同步执行，渲染前就绪） ==================== */
+(function injectSlots(d) {
+  document.getElementById("ma-context").textContent = d.context_label;
+  document.getElementById("ma-strip-t").textContent = d.input_label;
+  document.getElementById("ma-shelf-label").textContent = d.shelf_label;
+  document.getElementById("ma-shelf-note").textContent = d.shelf_note;
+  document.getElementById("ma-chip-v").textContent = d.search_label;
+  document.getElementById("ma-output-t").textContent = d.result_tag;
+
+  /* 溯源签字段行：key（来源/权利/日期/标签）+ 值 */
+  d.items.forEach(function (it, i) {
+    var tag = document.getElementById("ma-tag-" + (i + 1));
+    it.meta.forEach(function (pair) {
+      var row = document.createElement("div");
+      row.className = "ma-tr";
+      var k = document.createElement("span");
+      k.className = "k";
+      k.textContent = pair[0];
+      var v = document.createElement("span");
+      v.className = "v";
+      v.textContent = pair[1];
+      row.appendChild(k);
+      row.appendChild(v);
+      tag.appendChild(row);
+    });
+  });
+})(SLOT_DATA);
+
+/* ==================== Easing（optical_fluidity profile，与 B00 / P002–P008 一致） ==================== */
+var E_ENTER = "expo.out";
+var E_MOVE = "power3.inOut";
+if (window.CustomEase) {
+  gsap.registerPlugin(CustomEase);
+  CustomEase.create("hfEnter", "0.23,1,0.32,1");
+  CustomEase.create("hfMove", "0.77,0,0.175,1");
+  E_ENTER = "hfEnter";
+  E_MOVE = "hfMove";
+}
+
+/* ==================== 组件 Timeline（paused · seek-safe · 同时运动 ≤ 2） ==================== */
+window.__timelines = window.__timelines || {};
+var tl = gsap.timeline({ paused: true });
+
+/* prefers-reduced-motion：剥离位移/缩放/倾角，仅保留 opacity 交叉淡变。
+   仅影响本地预览；daemon 渲染环境为 no-preference，输出始终全动效。 */
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function R(full, reduced) { return REDUCED ? reduced : full; }
+
+/* ---------- Opening（0.00-1.86 容器建立，上一章产出凝结为本章目的地） ----------
+   卡栈 → 语境 → 解释区 → 产出条自左侧飞入 → 滑向右侧凝结为项目架
+   （产出进入项目上下文）→ 虚线架位 → 散落素材入场 */
+tl.from("#ma-stack-back-2", R(
+  { x: 18, y: -8, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.02);
+tl.from("#ma-stack-back-1", R(
+  { x: 12, y: -5, opacity: 0, duration: 0.24, ease: E_ENTER },
+  { opacity: 0, duration: 0.20, ease: E_ENTER }), 0.06);
+tl.from("#ma-mechanism-shell", R(
+  { y: 18, opacity: 0, duration: 0.30, ease: E_ENTER },
+  { opacity: 0, duration: 0.26, ease: E_ENTER }), 0.08);
+tl.from("#ma-context", { opacity: 0, duration: 0.20, ease: E_ENTER }, 0.05);
+tl.from("#ma-explain", { opacity: 0, duration: 0.22, ease: E_ENTER }, 0.16);
+
+/* 产出条飞入（承接 P008 End 的产出标签语义） */
+tl.fromTo("#ma-strip",
+  R({ x: -560, opacity: 0 }, { x: 0, opacity: 0 }),
+  R({ x: 0, opacity: 1, duration: 0.40, ease: E_ENTER },
+    { opacity: 1, duration: 0.28, ease: E_ENTER }), 0.26);
+
+/* 滑向项目架并凝结：条收拢退场，项目架于同位成形 */
+tl.to("#ma-strip", R(
+  { x: GEO.STRIP_TO.x, y: GEO.STRIP_TO.y, duration: 0.32, ease: E_MOVE },
+  { opacity: 0, duration: 0.24, ease: E_MOVE }), 0.82);
+tl.to("#ma-strip", R(
+  { scaleX: 0.1, opacity: 0, duration: 0.24, ease: E_MOVE },
+  { opacity: 0, duration: 0.20, ease: E_MOVE }), 1.14);
+tl.fromTo("#ma-shelf",
+  R({ scaleX: 0.6, opacity: 0 }, { scaleX: 1, opacity: 0 }),
+  R({ scaleX: 1, opacity: 1, duration: 0.30, ease: E_ENTER },
+    { opacity: 1, duration: 0.24, ease: E_ENTER }), 1.20);
+tl.fromTo("#ma-shelf-note",
+  { opacity: 0 },
+  { opacity: 1, duration: 0.18, ease: E_ENTER }, 1.28);
+
+/* 虚线架位（待填） */
+for (var s = 1; s <= 3; s++) {
+  tl.fromTo("#ma-slot-" + s,
+    R({ scaleY: 0.9, opacity: 0 }, { scaleY: 1, opacity: 0 }),
+    R({ scaleY: 1, opacity: 1, duration: 0.22, ease: E_ENTER },
+      { opacity: 1, duration: 0.18, ease: E_ENTER }), 1.32 + (s - 1) * 0.07);
+}
+
+/* 散落素材入场（保持各自倾角；reduced 下倾角保留但剥离位移） */
+for (var m = 1; m <= 3; m++) {
+  tl.fromTo("#ma-item-" + m,
+    R({ x: -40, opacity: 0 }, { x: 0, opacity: 0 }),
+    R({ x: 0, opacity: 1, duration: 0.30, ease: E_ENTER },
+      { opacity: 1, duration: 0.24, ease: E_ENTER }), 1.50 + (m - 1) * 0.08);
+}
+
+/* ---------- Build：逐件归档（升焦点 → 上签 → 携签入架） ---------- */
+function archive(t0, n) {
+  var f = GEO.FOCUS[n - 1], di = GEO.DOCK_ITEM[n - 1], dt = GEO.DOCK_TAG[n - 1];
+  /* 当前素材升焦点位（倾角归 0），未处理素材退底稿 */
+  tl.to("#ma-item-" + n, R(
+    { x: f.x, y: f.y, scale: f.s, rotation: 0, duration: 0.36, ease: E_MOVE },
+    { duration: 0.01, ease: E_MOVE }), t0);
+  for (var o = 1; o <= 3; o++) {
+    if (o > n) {
+      tl.to("#ma-item-" + o, { opacity: 0.55, duration: 0.18, ease: E_MOVE }, t0);
+    }
+  }
+  /* 溯源签展开 + 四行字段逐行写入（权利值如实） */
+  tl.fromTo("#ma-tag-" + n,
+    { opacity: 0 },
+    { opacity: 1, duration: 0.16, ease: E_ENTER }, t0 + 0.16);
+  document.querySelectorAll("#ma-tag-" + n + " .ma-tr").forEach(function (row, r) {
+    tl.fromTo(row,
+      R({ clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)" }),
+      R({ clipPath: "inset(0% 0% 0% 0%)", duration: 0.22, ease: E_ENTER },
+        { duration: 0.01, ease: E_ENTER }),
+      t0 + 0.22 + r * 0.08);
+  });
+  /* 携签入架：素材缩为架位缩略件，溯源签贴入架位右侧；实框标记已归档。
+     reduced 分支不做位移也不退场（保持散落基位可见，仅跳过动作） */
+  tl.to("#ma-item-" + n, R(
+    { x: di.x, y: di.y, scale: di.s, rotation: 0, duration: 0.34, ease: E_MOVE },
+    { duration: 0.01, ease: E_MOVE }), t0 + 0.74);
+  tl.to("#ma-tag-" + n, R(
+    { x: dt.x, y: dt.y, scale: dt.s, duration: 0.34, ease: E_MOVE },
+    { duration: 0.01, ease: E_MOVE }), t0 + 0.74);
+  tl.fromTo("#ma-fill-" + n,
+    { opacity: 0 },
+    { opacity: 1, duration: 0.18, ease: E_ENTER }, t0 + 0.82);
+}
+archive(1.86, 1);
+archive(3.08, 2);
+archive(4.30, 3);
+
+/* 检索证据（5.52 起）：检索签出现 → 命中架位左缘亮起，其余条目退底稿
+   （可查找是动作，不是修辞） */
+tl.fromTo("#ma-chip",
+  R({ x: 160, opacity: 0 }, { x: 0, opacity: 0 }),
+  R({ x: 0, opacity: 1, duration: 0.28, ease: E_ENTER },
+    { opacity: 1, duration: 0.22, ease: E_ENTER }), 5.52);
+tl.to("#ma-edge-1", R(
+  { scaleY: 1, duration: 0.26, ease: E_ENTER },
+  { scaleY: 1, duration: 0.01, ease: E_ENTER }), 5.66);
+tl.to("#ma-item-2, #ma-tag-2, #ma-item-3, #ma-tag-3", { opacity: 0.55, duration: 0.20, ease: E_MOVE }, 5.66);
+
+/* 产出标签（End 状态的凝练结果，供 P010 承接） */
+tl.fromTo("#ma-output",
+  R({ y: 14, opacity: 0 }, { y: 0, opacity: 0 }),
+  R({ y: 0, opacity: 1, duration: 0.20, ease: E_ENTER },
+    { opacity: 1, duration: 0.18, ease: E_ENTER }), 5.90);
+
+/* ---------- Hero 6.10-6.36：完整关系可读，无新动效 ---------- */
+
+/* ---------- End（6.36-6.60）：语境与解释区退位，架 / 条目 / 签 / 命中 /
+     产出标签保持可辨 ---------- */
+tl.to("#ma-context, #ma-explain", { opacity: 0.35, duration: 0.18, ease: E_MOVE }, 6.36);
+
+const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+  ? window.__hyperframes.getVariables()
+  : {};
+const timeScale = Number(runtimeValues.time_scale);
+if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+window.__timelines["material-archive-core"] = tl;
+})();
+</script>
+
+</template>
+</body>
+</html>

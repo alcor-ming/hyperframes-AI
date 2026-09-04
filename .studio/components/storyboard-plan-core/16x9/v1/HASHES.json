@@ -1,0 +1,31 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "asset_ref": "storyboard-plan-core/16x9@v1",
+  "package_sha256": "ee6d273fcf1b5e8aa9f73fa07d9adde2f0cc9f379b4203e4741c9668f654f3dc",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "7350c3ebafbc75a897669316cbf50cc0674d6e170b2cc452ad6dd6dc3396469f"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "89e957c374ecf1d7af7ad38f705230436e0884d94c5c3f310958a171fc4c325b"
+    },
+    {
+      "path": "component.html",
+      "sha256": "4e45b62f164f196723567d01005d2c7890b39152aeec866461ad29a93eebbbf0"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "1b4bf1f02afeba3c3c8a6bd2f6156799a13ac5061a3abeb61c685413b8fdf805"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "3008c9fcde1bedfd83a1fdec37da426c9811314fe452c472bd03c609fa1968e8"
+    }
+  ]
+}

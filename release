@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Build the immutable Windows Harness release consumed by Codex App."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import zipfile
+
+
+REPO = Path(__file__).resolve().parent
+RUNTIME_LOCK = REPO / "windows-runtime.lock.json"
+LOCAL_SKILLS = {
+    "dbs": "b0290051cf5563047d5b0a5a3e55dcf046c2dff1a1b66e299825a4462c9507ce",
+    "dbs-ai-check": "1f2703581914ae9bff5384196a08138fa55e64f70ad4427d95ee220c7ee5e2d9",
+    "dbs-content": "7c563a272d2d2e6715fba39441aee06acb4fec18dc88724e0236c05a815d1cac",
+    "dbs-resonate": "c441e1b6f443324e9fdb54266930642f704af6e95ee72a3fb72be91d2fa4001e",
+    "dbs-spread": "84daa2f4cb15b0078bc46ace0b780e61528adf5c9d5416497a67ef17e2820c5f",
+    "dbs-xhs-title": "4474ad23c2a904215d146ab8093d72b1469fc7a96ab37d68d479590f07b0c793",
+    "design-taste-frontend": "eb6d1b2e9c86123ebd153123e1f12e16955c7d43a1ec28495c48f29f2641481e",
+}
+VERSION_PATTERN = re.compile(r"^(?:harness-)?(\d{4}\.\d{2}\.\d+)$")
+
+
+class ReleaseError(RuntimeError):
+    pass
+
+
+def run(*args: str, cwd: Path = REPO, capture: bool = False) -> str:
+    result = subprocess.run(
+        args, cwd=cwd, check=True, text=True, stdout=subprocess.PIPE if capture else None
+    )
+    return result.stdout.strip() if capture else ""
+
+
+def version_tag(value: str) -> tuple[str, str]:
+    match = VERSION_PATTERN.fullmatch(value)
+    if not match:
+        raise ReleaseError("Version must look like 2026.09.1 or harness-2026.09.1")
+    version = match.group(1)
+    return version, f"harness-{version}"
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def directory_sha256(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file() and "__pycache__" not in p.parts):
+        if path.suffix in {".pyc", ".pyo"}:
+            continue
+        relative = path.relative_to(root).as_posix().encode()
+        digest.update(len(relative).to_bytes(4, "big"))
+        digest.update(relative)
+        digest.update(bytes.fromhex(sha256(path)))
+    return digest.hexdigest()
+
+
+def release_checks(root: Path) -> None:
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-q"],
+        cwd=root,
+        env=env,
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable, ".agents/skills/hyperframes-codex-workflow/scripts/validate_package.py"],
+        cwd=root,
+        env=env,
+        check=True,
+    )
+
+
+def stage_runtime(staging: Path, cache: Path) -> dict[str, str]:
+    lock = json.loads(RUNTIME_LOCK.read_text(encoding="utf-8"))
+    assets = lock.get("assets")
+    if lock.get("target") != "windows-x64" or not isinstance(assets, list) or not assets:
+        raise ReleaseError("Invalid Windows runtime lock")
+    runtime = staging / "runtime" / "python"
+    site_packages = runtime / "Lib" / "site-packages"
+    runtime.mkdir(parents=True)
+    site_packages.mkdir(parents=True)
+    hashes: dict[str, str] = {}
+    for asset in assets:
+        source = cache / asset["file"]
+        if not source.is_file() or sha256(source) != asset["sha256"]:
+            raise ReleaseError(f"Missing or invalid locked runtime asset: {source}")
+        hashes[asset["file"]] = asset["sha256"]
+        with zipfile.ZipFile(source) as bundle:
+            bundle.extractall(runtime if asset["kind"] == "python" else site_packages)
+    pth_files = list(runtime.glob("python*._pth"))
+    if len(pth_files) != 1:
+        raise ReleaseError("Embedded Python ._pth file is missing")
+    lines = [line for line in pth_files[0].read_text(encoding="utf-8").splitlines() if line != "#import site"]
+    lines.extend(["Lib/site-packages", "import site"])
+    pth_files[0].write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return hashes
+
+
+def write_zip(source: Path, archive: Path, prefix: str, timestamp: int) -> None:
+    dt = datetime.fromtimestamp(timestamp, timezone.utc)
+    zip_time = (max(dt.year, 1980), dt.month, dt.day, dt.hour, dt.minute, dt.second)
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
+        for path in sorted(p for p in source.rglob("*") if p.is_file()):
+            info = zipfile.ZipInfo(f"{prefix}/{path.relative_to(source).as_posix()}", zip_time)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (0o755 if os.access(path, os.X_OK) else 0o644) << 16
+            bundle.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+
+
+def verified_archive(archive: Path) -> str:
+    checksum = archive.with_suffix(archive.suffix + ".sha256")
+    if not archive.is_file() or not checksum.is_file():
+        raise ReleaseError("Archive and matching .sha256 file are required")
+    fields = checksum.read_text(encoding="ascii").strip().split()
+    if len(fields) != 2 or fields[1] != archive.name or fields[0] != sha256(archive):
+        raise ReleaseError(f"Checksum verification failed: {archive}")
+    with zipfile.ZipFile(archive) as bundle:
+        roots = {Path(name).parts[0] for name in bundle.namelist() if name}
+        bad = [name for name in bundle.namelist() if ".." in Path(name).parts or Path(name).is_absolute()]
+    if len(roots) != 1 or bad:
+        raise ReleaseError("Release ZIP must contain one safe top-level directory")
+    return roots.pop()
+
+
+def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
+    version, tag = version_tag(version_value)
+    if run("git", "status", "--porcelain", capture=True):
+        raise ReleaseError("Refusing to build from a dirty working tree")
+    head = run("git", "rev-parse", "HEAD", capture=True)
+    tagged = run("git", "rev-parse", f"{tag}^{{commit}}", capture=True)
+    if tagged != head:
+        raise ReleaseError(f"{tag} does not point at HEAD")
+    try:
+        upstream = run("git", "rev-parse", "@{upstream}", capture=True)
+    except subprocess.CalledProcessError as exc:
+        raise ReleaseError("The current branch needs an upstream before release") from exc
+    if upstream != head:
+        raise ReleaseError("Refusing to build from a branch that is not synchronized with upstream")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    archive = output_dir / f"hyperframes-ai-harness-{version}-windows-x64.zip"
+    checksum = archive.with_suffix(archive.suffix + ".sha256")
+    if archive.exists() or checksum.exists():
+        raise ReleaseError(f"Release artifact already exists: {archive}")
+
+    with tempfile.TemporaryDirectory() as temporary:
+        staging = Path(temporary) / tag
+        staging.mkdir()
+        git_tar = Path(temporary) / "tracked.tar"
+        run("git", "archive", "--format=tar", "-o", str(git_tar), tag)
+        with tarfile.open(git_tar) as bundle:
+            bundle.extractall(staging, filter="data")
+
+        dependency_hashes: dict[str, str] = {}
+        for name, locked_hash in LOCAL_SKILLS.items():
+            source = REPO / ".agents" / "skills" / name
+            if not (source / "SKILL.md").is_file() or directory_sha256(source) != locked_hash:
+                raise ReleaseError(f"Missing or changed local release dependency: {name}")
+            shutil.copytree(source, staging / ".agents" / "skills" / name)
+            dependency_hashes[name] = locked_hash
+
+        runtime_hashes = stage_runtime(staging, runtime_cache)
+        timestamp = int(run("git", "show", "-s", "--format=%ct", f"{tag}^{{commit}}", capture=True))
+        files = {
+            path.relative_to(staging).as_posix(): sha256(path)
+            for path in sorted(p for p in staging.rglob("*") if p.is_file())
+        }
+        manifest = {
+            "schema_version": 2,
+            "release": tag,
+            "commit": head,
+            "target": "windows-x64",
+            "built_at": datetime.fromtimestamp(timestamp, timezone.utc).isoformat(timespec="seconds"),
+            "workstore": r"D:\AI\AI+hyperframes",
+            "runtime_asset_sha256": runtime_hashes,
+            "local_skill_sha256": dependency_hashes,
+            "files": files,
+        }
+        (staging / ".release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        release_checks(staging)
+        write_zip(staging, archive, tag, timestamp)
+
+    checksum.write_text(f"{sha256(archive)}  {archive.name}\n", encoding="ascii")
+    print(archive)
+    return archive
+
+
+def parser() -> argparse.ArgumentParser:
+    command = argparse.ArgumentParser(description=__doc__)
+    subcommands = command.add_subparsers(dest="command", required=True)
+    build_parser = subcommands.add_parser("build")
+    build_parser.add_argument("version")
+    build_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
+    build_parser.add_argument("--runtime-cache", type=Path, required=True)
+    verify_parser = subcommands.add_parser("verify")
+    verify_parser.add_argument("archive", type=Path)
+    return command
+
+
+def main(arguments: list[str] | None = None) -> int:
+    args = parser().parse_args(arguments)
+    try:
+        if args.command == "build":
+            build(args.version, args.output_dir.resolve(), args.runtime_cache.resolve())
+        else:
+            print(verified_archive(args.archive.resolve()))
+    except (ReleaseError, subprocess.CalledProcessError, OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
+        print(f"release: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

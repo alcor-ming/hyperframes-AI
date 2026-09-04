@@ -64,4 +64,34 @@ Draft 与 Final 生命周期：
 
 外部 WorkStore 的 `works/`、旧 `tasks/`、媒体、工程、Draft、Final 和运行状态不进入开发仓或 Git。Harness 不实现下载后端，而是调用独立的 `trendradar-media`；它不公开发布内容，也不内置 ASR 模型。经用户对准确 Work/Variant 明确授权，可使用其已登录的 Windows Chrome 保存小红书创作者平台草稿，但绝不点击发布。
 
+## 固定 Release 与 Codex App 部署
+
+开发和构建只在本 WSL Git 仓进行。Windows Codex App 原生运行解压后的 Windows x64 ZIP，并打开固定入口 `%LOCALAPPDATA%\HyperFramesAI\current`。Harness 安装在 `%LOCALAPPDATA%\HyperFramesAI\releases\<tag>`；作品仍只写入 `D:\AI\AI+hyperframes`，不得把 Harness 文件铺入 WorkStore。
+
+Release 使用 `harness-YYYY.MM.PATCH`。构建要求工作树干净、对应 tag 指向当前提交、分支已推送，并提供与 `windows-runtime.lock.json` 一致的运行时缓存：
+
+```bash
+./release build 2026.09.1 --runtime-cache /path/to/windows-runtime-cache
+./release verify dist/hyperframes-ai-harness-2026.09.1-windows-x64.zip
+```
+
+ZIP 内置 Windows CPython、Python 依赖、`work.cmd`、`work.ps1` 和 `release.ps1`。Codex App 解压 ZIP 后执行：
+
+```powershell
+.\release.ps1 verify
+.\release.ps1 install
+.\release.ps1 status
+.\release.ps1 rollback
+```
+
+安装会验证 Manifest 与 WorkStore，然后以 Windows junction 切换 `current` 并保留 `previous`。升级或回滚后新建 Codex App 会话。旧 Release 不自动删除。
+
+Windows 侧共享 ASR 由包内 `asr-wsl.cmd` 桥接到固定的 `Ubuntu` 和 `/home/jym/workspace/_external/scripts/asr.sh`；`HYPERFRAMES_ASR_SCRIPT` 仅可指定另一 Windows 入口。桥接器拒绝 WorkStore 外的输入和输出，并把路径转换、可用性检查和转录合并为唯一一次固定调用：
+
+```text
+wsl.exe --distribution Ubuntu --exec /bin/sh -c <fixed-script>
+```
+
+任务参数只经 `WSLENV` 传入，路径由 WSL 内的 `wslpath` 转换；stdout、stderr 和退出码原样返回。Windows Codex 沙盒已确认能复用 WSL ASR、模型和 GPU，但未持久授权时每次调用仍可能先报 `Wsl/Service/E_ACCESSDENIED` 并要求审批。Codex 规则只匹配 Agent 发起的顶层 argv，因此应持久批准包内 `asr-wsl.cmd transcribe-faster` 前缀；不得批准任意 `wsl.exe` 命令。
+
 完整产品契约以 `.studio/` 和 `AGENTS.md` 为准。

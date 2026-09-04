@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+      <title>capability-convergence/16x9@v1</title>
+  </head>
+  <body>
+    <template id="capability-convergence-template">
+    <script src="assets/vendor/gsap/gsap.min.js"></script>
+    <style>
+      :root {
+        --canvas: var(--hf-color-canvas);
+        --panel-l1: var(--hf-color-surface);
+        --panel-l2: color-mix(in srgb, var(--hf-color-surface) 94%, var(--hf-color-text-primary));
+        --ink: var(--hf-color-text-primary);
+        --muted: var(--hf-color-text-secondary);
+        --dim: color-mix(in srgb, var(--hf-color-text-secondary) 62%, transparent);
+        --mint: var(--hf-color-accent-primary);
+        --agent: var(--hf-color-accent-primary);
+        --input: var(--hf-color-accent-primary);
+        --video: var(--hf-color-accent-secondary);
+        --search: var(--hf-color-accent-primary);
+        --rule: color-mix(in srgb, var(--hf-color-text-secondary) 28%, transparent);
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        width: 1920px;
+        height: 1080px;
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+      body { color: var(--ink); font-family: var(--hf-font-body); }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: transparent;
+      }
+      .clip { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .scene {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        padding: 54px 96px 44px;
+        overflow: hidden;
+      }
+      .field-glow {
+        position: absolute;
+        left: 702px;
+        top: 306px;
+        width: 516px;
+        height: 516px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(90, 200, 250, 0.08), transparent 70%);
+        pointer-events: none;
+      }
+      .grid {
+        position: absolute;
+        inset: 0;
+        opacity: 0.09;
+        background-image: repeating-linear-gradient(90deg, transparent 0 95px, var(--rule) 96px);
+        pointer-events: none;
+      }
+      .header, .footer {
+        position: relative;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-family: var(--hf-font-mono);
+        font-size: 17px;
+        font-variant-numeric: tabular-nums;
+      }
+      .header { height: 52px; border-bottom: 1px solid var(--rule); }
+      .component-id { color: var(--mint); font-weight: 700; }
+      .section-index { color: var(--muted); }
+      .footer {
+        position: absolute;
+        left: 96px;
+        right: 96px;
+        bottom: 44px;
+        height: 48px;
+        border-top: 1px solid var(--rule);
+        color: var(--dim);
+      }
+      .footer-label { color: var(--muted); }
+      .count-stack { position: relative; width: 132px; height: 24px; color: var(--mint); }
+      .count-state { position: absolute; inset: 0; opacity: 0; text-align: right; }
+      #count-0 { opacity: 1; }
+      .convergence-field { position: absolute; inset: 126px 0 96px; }
+      .paths, .spokes {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 858px;
+        overflow: visible;
+      }
+      .flow-path, .spoke {
+        fill: none;
+        stroke-linecap: round;
+        stroke-dasharray: 1;
+        stroke-dashoffset: 1;
+      }
+      .flow-path { stroke-width: 1.6; opacity: 0; }
+      .spoke { stroke: rgba(90, 200, 250, 0.48); stroke-width: 1.2; opacity: 0; }
+      #path-1 { stroke: var(--agent); }
+      #path-2, #path-3 { stroke: var(--input); }
+      #path-4 { stroke: var(--video); }
+      #path-5 { stroke: var(--search); }
+      .trace {
+        position: absolute;
+        z-index: 7;
+        top: 58px;
+        width: 232px;
+      }
+      #trace-1 { left: 100px; --trace-color: var(--agent); }
+      #trace-2 { left: 472px; --trace-color: var(--input); }
+      #trace-3 { left: 844px; --trace-color: var(--input); }
+      #trace-4 { left: 1216px; --trace-color: var(--video); }
+      #trace-5 { left: 1588px; --trace-color: var(--search); }
+      .trace-head {
+        display: flex;
+        align-items: center;
+        width: 232px;
+        min-height: 34px;
+        gap: 9px;
+        transform-origin: center;
+        will-change: transform, opacity;
+      }
+      .trace-chip {
+        flex: 0 0 auto;
+        width: 13px;
+        height: 13px;
+        background: var(--trace-color);
+        box-shadow: 0 0 18px color-mix(in srgb, var(--trace-color) 45%, transparent);
+      }
+      .trace-index {
+        color: var(--trace-color);
+        font-family: var(--hf-font-mono);
+        font-size: 15px;
+      }
+      .trace-skill {
+        min-width: 0;
+        color: var(--ink);
+        font-family: var(--hf-font-display);
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.08;
+        white-space: nowrap;
+      }
+      .trace-result {
+        margin-top: 10px;
+        padding-left: 47px;
+        color: var(--muted);
+        font-size: 16px;
+        font-weight: 350;
+        line-height: 1.42;
+      }
+      .ring-system {
+        position: absolute;
+        z-index: 3;
+        left: 768px;
+        top: 228px;
+        width: 384px;
+        height: 384px;
+        transform-origin: center;
+      }
+      .ring-system svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .ring-ghost {
+        fill: none;
+        stroke: rgba(90, 200, 250, 0.28);
+        stroke-width: 2;
+        stroke-dasharray: 3 7;
+      }
+      .ring-complete {
+        fill: none;
+        stroke: var(--mint);
+        stroke-width: 3;
+        opacity: 0;
+      }
+      .ring-segment {
+        fill: none;
+        stroke-width: 8;
+        stroke-linecap: round;
+        stroke-dasharray: 17 83;
+        opacity: 0.13;
+        transform-box: view-box;
+        transform-origin: 50% 50%;
+      }
+      #segment-1 { stroke: var(--agent); stroke-dashoffset: 0; }
+      #segment-2 { stroke: var(--input); stroke-dashoffset: -20; }
+      #segment-3 { stroke: var(--input); stroke-dashoffset: -40; }
+      #segment-4 { stroke: var(--video); stroke-dashoffset: -60; }
+      #segment-5 { stroke: var(--search); stroke-dashoffset: -80; }
+      .core-proposition, .core-name, .core-summary {
+        position: absolute;
+        z-index: 6;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+      }
+      .core-proposition {
+        top: 302px;
+        width: 520px;
+        color: var(--mint);
+        font-family: var(--hf-font-mono);
+        font-size: 23px;
+        font-weight: 700;
+      }
+      .core-name {
+        top: 370px;
+        color: var(--ink);
+        font-family: var(--hf-font-display);
+        font-size: 70px;
+        font-weight: 800;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .core-summary {
+        top: 708px;
+        width: 840px;
+        color: var(--muted);
+        font-size: 22px;
+        font-weight: 400;
+        line-height: 1.48;
+      }
+      .core-summary strong { color: var(--mint); font-weight: 700; }
+      .handoff-marker {
+        position: absolute;
+        z-index: 6;
+        left: 936px;
+        top: 790px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 7px;
+        color: var(--mint);
+        font-family: var(--hf-font-mono);
+        font-size: 14px;
+      }
+      .handoff-line { width: 1px; height: 30px; background: var(--mint); transform-origin: top center; }
+      @media (prefers-reduced-motion: reduce) {
+        .scene, .scene * { animation: none !important; transition: none !important; }
+        .field-glow, .grid, .header, .footer, .ring-system, .ring-complete,
+        .core-proposition, .core-name, .core-summary, .handoff-marker { opacity: 1 !important; }
+        .ring-ghost, .flow-path { opacity: 0 !important; }
+        .ring-segment { opacity: 1 !important; transform: none !important; }
+        .spoke { opacity: 0.28 !important; stroke-dashoffset: 0 !important; }
+        .trace-result { opacity: 0 !important; }
+        .trace-head { opacity: 0.42 !important; scale: 0.82 !important; }
+        #trace-1 .trace-head { transform: translate(744px, 35px) !important; }
+        #trace-2 .trace-head { transform: translate(667px, 250px) !important; }
+        #trace-3 .trace-head { transform: translate(182px, 592px) !important; }
+        #trace-4 .trace-head { transform: translate(-554px, 592px) !important; }
+        #trace-5 .trace-head { transform: translate(-1039px, 250px) !important; }
+        .count-state { opacity: 0 !important; }
+        #count-5 { opacity: 1 !important; transform: none !important; }
+      }
+
+  #root[data-composition-id="capability-convergence"] { background: transparent; margin: 0; }
+</style>
+    <div data-hf-id="hf-yi0q" id="root" data-composition-id="capability-convergence" data-composition-variables='[{"id":"context","type":"string","label":"Context","default":"P007 / 13 · 跨模块归纳"},{"id":"items","type":"array","label":"Capability items","default":[{"index":"02","skill":"Agent Browser","result":"完整网页内容"},{"index":"03","skill":"办公文件四件套","result":"多种文件输入与文件操作"},{"index":"04","skill":"Local Whisper","result":"逐字稿 / 摘要 / 可编辑文字"},{"index":"05","skill":"Video Downloader","result":"分件素材与笔记"},{"index":"06","skill":"Web Search","result":"日期 / 作者 / 原文链接"}]},{"id":"proposition","type":"string","label":"Proposition","default":"05 条结果痕迹 → 01 共同能力"},{"id":"core_name","type":"string","label":"Core name","default":"获取资讯"},{"id":"summary_emphasis","type":"string","label":"Summary emphasis","default":"去哪里找、怎么拿、拿到后怎么整理"},{"id":"summary_suffix","type":"string","label":"Summary suffix","default":"，都是把外部内容变成可用资讯。"},{"id":"handoff_label","type":"string","label":"Handoff label","default":"P008"},{"id":"convergence_field_mode","type":"enum","label":"Convergence field mode","default":"none","options":[{"value":"none","label":"Programmatic fallback"}]},{"id":"convergence_field_path","type":"string","label":"Convergence field path","default":""},{"id":"time_scale","type":"number","label":"Time scale","default":1}]' data-start="0" data-duration="12.7" data-width="1920" data-height="1080">
+      <div data-hf-id="hf-kkdb" id="capability-convergence" class="clip" data-start="0" data-duration="12.7" data-track-index="1">
+        <section data-hf-id="hf-ws8k" class="scene">
+          <div data-hf-id="hf-6mqv" class="field-glow" data-layout-ignore=""></div>
+          <div data-hf-id="hf-80b5" class="grid" data-layout-ignore=""></div>
+          <header data-hf-id="hf-hr6f" class="header">
+            <div data-hf-id="hf-xsfc" class="component-id">capability-convergence@v1</div>
+            <div data-hf-id="hf-jx4h" class="section-index">P007 / 13 · 跨模組歸納</div>
+          </header>
+
+          <main data-hf-id="hf-ch80" class="convergence-field" data-visual-surface="convergence_field" data-surface-kind="active_media_card" data-surface-modes="none" data-surface-fallback="programmatic" data-surface-mode="none">
+            <svg data-hf-id="hf-wh2a" class="paths" viewBox="0 0 1920 858" aria-hidden="true" data-layout-ignore="">
+              <path data-hf-id="hf-lbgi" id="path-1" class="flow-path" pathLength="1" d="M 216 75 C 430 102 650 326 960 420" />
+              <path data-hf-id="hf-wo94" id="path-2" class="flow-path" pathLength="1" d="M 588 75 C 704 134 812 350 960 420" />
+              <path data-hf-id="hf-m1dr" id="path-3" class="flow-path" pathLength="1" d="M 960 75 C 960 176 960 312 960 420" />
+              <path data-hf-id="hf-awu2" id="path-4" class="flow-path" pathLength="1" d="M 1332 75 C 1216 140 1108 344 960 420" />
+              <path data-hf-id="hf-41va" id="path-5" class="flow-path" pathLength="1" d="M 1704 75 C 1490 104 1270 330 960 420" />
+            </svg>
+
+            <svg data-hf-id="hf-rv0v" class="spokes" viewBox="0 0 1920 858" aria-hidden="true" data-layout-ignore="">
+              <path data-hf-id="hf-joh9" id="spoke-1" class="spoke" pathLength="1" d="M 960 127 L 960 228" />
+              <path data-hf-id="hf-r4nr" id="spoke-2" class="spoke" pathLength="1" d="M 1255 325 L 1143 361" />
+              <path data-hf-id="hf-s015" id="spoke-3" class="spoke" pathLength="1" d="M 1142 667 L 1073 574" />
+              <path data-hf-id="hf-u92g" id="spoke-4" class="spoke" pathLength="1" d="M 778 667 L 847 574" />
+              <path data-hf-id="hf-1nj1" id="spoke-5" class="spoke" pathLength="1" d="M 665 325 L 777 361" />
+            </svg>
+
+            <article data-hf-id="hf-sikb" id="trace-1" class="trace">
+              <div data-hf-id="hf-y4kw" class="trace-head" data-layout-allow-overlap="" data-layout-allow-occlusion=""><span data-hf-id="hf-blvn" class="trace-chip"></span><span data-hf-id="hf-86gh" class="trace-index">02</span><span data-hf-id="hf-n12x" class="trace-skill">Agent Browser</span></div>
+              <div data-hf-id="hf-tvbe" class="trace-result">完整網頁內容</div>
+            </article>
+            <article data-hf-id="hf-hn2o" id="trace-2" class="trace">
+              <div data-hf-id="hf-78nc" class="trace-head" data-layout-allow-overlap="" data-layout-allow-occlusion=""><span data-hf-id="hf-58ub" class="trace-chip"></span><span data-hf-id="hf-8kri" class="trace-index">03</span><span data-hf-id="hf-sqvr" class="trace-skill">辦公文件四件套</span></div>
+              <div data-hf-id="hf-8ye6" class="trace-result">多種文件輸入與文件操作</div>
+            </article>
+            <article data-hf-id="hf-ieqh" id="trace-3" class="trace">
+              <div data-hf-id="hf-61q9" class="trace-head" data-layout-allow-overlap="" data-layout-allow-occlusion=""><span data-hf-id="hf-4uja" class="trace-chip"></span><span data-hf-id="hf-7duf" class="trace-index">04</span><span data-hf-id="hf-5bgx" class="trace-skill">Local Whisper</span></div>
+              <div data-hf-id="hf-jy6i" class="trace-result">逐字稿 / 摘要 / 可編輯文字</div>
+            </article>
+            <article data-hf-id="hf-9qum" id="trace-4" class="trace">
+              <div data-hf-id="hf-6g1a" class="trace-head" data-layout-allow-overlap="" data-layout-allow-occlusion=""><span data-hf-id="hf-4g89" class="trace-chip"></span><span data-hf-id="hf-7s5g" class="trace-index">05</span><span data-hf-id="hf-jp6e" class="trace-skill">Video Downloader</span></div>
+              <div data-hf-id="hf-9a5y" class="trace-result">分件素材與筆記</div>
+            </article>
+            <article data-hf-id="hf-doyn" id="trace-5" class="trace">
+              <div data-hf-id="hf-5947" class="trace-head" data-layout-allow-overlap="" data-layout-allow-occlusion=""><span data-hf-id="hf-41x8" class="trace-chip"></span><span data-hf-id="hf-6l8d" class="trace-index">06</span><span data-hf-id="hf-hcdm" class="trace-skill">Web Search</span></div>
+              <div data-hf-id="hf-6cv5" class="trace-result">日期 / 作者 / 原文連結</div>
+            </article>
+
+            <div data-hf-id="hf-3mxx" class="ring-system" data-layout-ignore="">
+              <svg data-hf-id="hf-2pxg" viewBox="0 0 384 384" aria-hidden="true">
+                <circle data-hf-id="hf-yb8o" class="ring-ghost" cx="192" cy="192" r="184" />
+                <circle data-hf-id="hf-xz8g" class="ring-complete" cx="192" cy="192" r="184" />
+                <g data-hf-id="hf-bpqu" transform="rotate(-90 192 192)">
+                  <circle data-hf-id="hf-sfqi" id="segment-1" class="ring-segment" pathLength="100" cx="192" cy="192" r="184" />
+                  <circle data-hf-id="hf-ul2v" id="segment-2" class="ring-segment" pathLength="100" cx="192" cy="192" r="184" />
+                  <circle data-hf-id="hf-2dg4" id="segment-3" class="ring-segment" pathLength="100" cx="192" cy="192" r="184" />
+                  <circle data-hf-id="hf-y8wx" id="segment-4" class="ring-segment" pathLength="100" cx="192" cy="192" r="184" />
+                  <circle data-hf-id="hf-4ava" id="segment-5" class="ring-segment" pathLength="100" cx="192" cy="192" r="184" />
+                </g>
+              </svg>
+            </div>
+
+            <div data-hf-id="hf-uncm" class="core-proposition">05 條結果痕跡 → 01 共同能力</div>
+            <div data-hf-id="hf-r75u" class="core-name">獲取資訊</div>
+            <div data-hf-id="hf-6e20" class="core-summary"><strong data-hf-id="hf-p89m">去哪裡找、怎麼拿、拿到後怎麼整理</strong>，都是把外部內容變成可用資訊。</div>
+            <div data-hf-id="hf-v36h" class="handoff-marker"><div data-hf-id="hf-1049" class="handoff-line"></div><span data-hf-id="hf-gwd5">P008</span></div>
+          </main>
+
+          <footer data-hf-id="hf-vadb" class="footer">
+            <span data-hf-id="hf-bohe" class="footer-label">P007 / CAPABILITY-CONVERGENCE@V1</span>
+            <span data-hf-id="hf-xl9j" class="count-stack" aria-label="匯聚進度">
+              <span data-hf-id="hf-2fgn" id="count-0" class="count-state" data-layout-allow-overlap>匯聚 0/5</span>
+              <span data-hf-id="hf-d1q9" id="count-1" class="count-state" data-layout-allow-overlap>匯聚 1/5</span>
+              <span data-hf-id="hf-krfr" id="count-2" class="count-state" data-layout-allow-overlap>匯聚 2/5</span>
+              <span data-hf-id="hf-343x" id="count-3" class="count-state" data-layout-allow-overlap>匯聚 3/5</span>
+              <span data-hf-id="hf-tfxr" id="count-4" class="count-state" data-layout-allow-overlap>匯聚 4/5</span>
+              <span data-hf-id="hf-pi89" id="count-5" class="count-state" data-layout-allow-overlap>匯聚 5/5</span>
+            </span>
+          </footer>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const DEFAULT_ITEMS = [
+        { index: "02", skill: "Agent Browser", result: "完整网页内容" },
+        { index: "03", skill: "办公文件四件套", result: "多种文件输入与文件操作" },
+        { index: "04", skill: "Local Whisper", result: "逐字稿 / 摘要 / 可编辑文字" },
+        { index: "05", skill: "Video Downloader", result: "分件素材与笔记" },
+        { index: "06", skill: "Web Search", result: "日期 / 作者 / 原文链接" }
+      ];
+      const RUNTIME_VALUES = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+        ? window.__hyperframes.getVariables()
+        : {};
+      const textSlot = (name, fallback) => typeof RUNTIME_VALUES[name] === "string" ? RUNTIME_VALUES[name] : fallback;
+      const runtimeItems = Array.isArray(RUNTIME_VALUES.items) && RUNTIME_VALUES.items.length === 5
+        ? RUNTIME_VALUES.items
+        : DEFAULT_ITEMS;
+      const items = runtimeItems.map((item, index) => {
+        const fallback = DEFAULT_ITEMS[index];
+        return item && typeof item === "object" && !Array.isArray(item) ? {
+          index: typeof item.index === "string" ? item.index : fallback.index,
+          skill: typeof item.skill === "string" ? item.skill : fallback.skill,
+          result: typeof item.result === "string" ? item.result : fallback.result
+        } : fallback;
+      });
+
+      document.querySelector(".section-index").textContent = textSlot("context", "P007 / 13 · 跨模块归纳");
+      items.forEach((item, index) => {
+        const trace = document.querySelector(`#trace-${index + 1}`);
+        trace.querySelector(".trace-index").textContent = item.index;
+        trace.querySelector(".trace-skill").textContent = item.skill;
+        trace.querySelector(".trace-result").textContent = item.result;
+      });
+      document.querySelector(".core-proposition").textContent = textSlot("proposition", "05 条结果痕迹 → 01 共同能力");
+      document.querySelector(".core-name").textContent = textSlot("core_name", "获取资讯");
+      const summary = document.querySelector(".core-summary");
+      const emphasis = document.createElement("strong");
+      emphasis.textContent = textSlot("summary_emphasis", "去哪里找、怎么拿、拿到后怎么整理");
+      summary.replaceChildren(emphasis, document.createTextNode(textSlot("summary_suffix", "，都是把外部内容变成可用资讯。")));
+      document.querySelector(".handoff-marker span").textContent = textSlot("handoff_label", "P008");
+
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const traces = [
+        { head: "#trace-1 .trace-head", result: "#trace-1 .trace-result", path: "#path-1", segment: "#segment-1", spoke: "#spoke-1", start: 2.30, mid: [410, 126], center: [744, 345], orbit: [744, 35] },
+        { head: "#trace-2 .trace-head", result: "#trace-2 .trace-result", path: "#path-2", segment: "#segment-2", spoke: "#spoke-2", start: 3.40, mid: [230, 170], center: [372, 345], orbit: [667, 250] },
+        { head: "#trace-3 .trace-head", result: "#trace-3 .trace-result", path: "#path-3", segment: "#segment-3", spoke: "#spoke-3", start: 4.50, mid: [0, 190], center: [0, 345], orbit: [182, 592] },
+        { head: "#trace-4 .trace-head", result: "#trace-4 .trace-result", path: "#path-4", segment: "#segment-4", spoke: "#spoke-4", start: 5.60, mid: [-230, 170], center: [-372, 345], orbit: [-554, 592] },
+        { head: "#trace-5 .trace-head", result: "#trace-5 .trace-result", path: "#path-5", segment: "#segment-5", spoke: "#spoke-5", start: 6.70, mid: [-410, 126], center: [-744, 345], orbit: [-1039, 250] }
+      ];
+
+      tl.from(".grid", { opacity: 0, duration: 0.45, ease: "power2.out" }, 0.12)
+        .from(".field-glow", { scale: 0.84, opacity: 0, duration: 0.72, ease: "sine.out" }, 0.16)
+        .from(".header", { y: -18, opacity: 0, duration: 0.44, ease: "expo.out" }, 0.18)
+        .from(".footer", { y: 16, opacity: 0, duration: 0.38, ease: "power2.out" }, 0.36)
+        .from(".trace-head", { y: 20, opacity: 0, duration: 0.4, stagger: 0.08, ease: "power3.out" }, 0.32)
+        .from(".trace-result", { y: 12, opacity: 0, duration: 0.36, stagger: 0.08, ease: "sine.out" }, 0.54)
+        .from(".ring-system", { scale: 0.94, opacity: 0, duration: 0.46, ease: "power2.out" }, 1.78)
+        .from("#count-0", { y: 8, opacity: 0, duration: 0.3, ease: "power2.out" }, 1.88);
+
+      traces.forEach((trace, index) => {
+        const arrival = trace.start + 1.28;
+        tl.to(trace.result, { y: -8, opacity: 0, duration: 0.28, ease: "power2.in" }, trace.start)
+          .to(trace.path, { strokeDashoffset: 0, opacity: 0.62, duration: 1.1, ease: "sine.inOut" }, trace.start + 0.08)
+          .to(trace.head, {
+            keyframes: [
+              { x: trace.mid[0], y: trace.mid[1], scale: 0.96, duration: 0.46, ease: "power2.in" },
+              { x: trace.center[0], y: trace.center[1], scale: 0.84, duration: 0.74, ease: "power3.out" }
+            ]
+          }, trace.start + 0.08)
+          .to(trace.segment, { opacity: 1, scale: 1.025, duration: 0.13, repeat: 1, yoyo: true, ease: "power2.out" }, arrival - 0.08)
+          .to(trace.head, { scale: 0.68, opacity: 0, duration: 0.18, ease: "power2.out" }, arrival - 0.02)
+          .to(`#count-${index}`, { y: -8, opacity: 0, duration: 0.16, ease: "power2.in" }, arrival - 0.04)
+          .to(`#count-${index + 1}`, { y: 0, opacity: 1, duration: 0.2, ease: "power2.out" }, arrival + 0.02);
+      });
+
+      tl.to(".ring-ghost", { opacity: 0, duration: 0.28, ease: "power2.out" }, 8.18)
+        .to(".ring-complete", { opacity: 0.9, duration: 0.3, ease: "power2.out" }, 8.18)
+        .to(".ring-system", { scale: 1.06, duration: 0.2, repeat: 1, yoyo: true, ease: "power2.out" }, 8.22)
+        .to(".flow-path", { opacity: 0, duration: 0.32, ease: "power2.out" }, 8.32);
+
+      traces.forEach((trace, index) => {
+        tl.to(trace.head, { x: trace.orbit[0], y: trace.orbit[1], scale: 0.82, opacity: 0.42, duration: 0.62, ease: "power3.out" }, 8.46 + index * 0.07)
+          .to(trace.spoke, { strokeDashoffset: 0, opacity: 0.28, duration: 0.44, ease: "sine.out" }, 8.62 + index * 0.07);
+      });
+
+      tl.from(".core-proposition", { y: 16, opacity: 0, duration: 0.42, ease: "power2.out" }, 9.28)
+        .from(".core-name", { y: 24, opacity: 0, duration: 0.58, ease: "expo.out" }, 9.56)
+        .from(".core-summary", { y: 18, opacity: 0, duration: 0.5, ease: "power3.out" }, 10.12)
+        .from(".handoff-marker", { y: 14, opacity: 0, duration: 0.36, ease: "power2.out" }, 10.78)
+        .from(".handoff-line", { scaleY: 0, duration: 0.32, ease: "expo.out" }, 10.84)
+        .to(".ring-system", { scale: 1.018, duration: 0.74, ease: "sine.inOut" }, 11.08)
+        .to(".ring-system", { scale: 1, duration: 0.74, ease: "sine.inOut" }, 11.82);
+
+      const timeScale = Number(RUNTIME_VALUES.time_scale);
+      if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+      window.__timelines["capability-convergence"] = tl;
+    </script>
+    </template>
+  </body>
+</html>

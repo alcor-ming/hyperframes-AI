@@ -298,6 +298,10 @@ class PodcastQuotePipelineTest(unittest.TestCase):
             value["quality"]["issues"],
         )
 
+    def test_windows_asr_ignores_script_override(self) -> None:
+        configured = PIPELINE.resolve_asr_script("C:/untrusted.exe", platform="nt")
+        self.assertEqual(PIPELINE.PACKAGED_ASR_BRIDGE, configured)
+
     def test_run_asr_requires_character_timestamps(self) -> None:
         video = self.root / "source-video.mp4"
         video.write_bytes(b"video")

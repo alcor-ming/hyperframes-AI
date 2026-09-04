@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "component_ref": "rich-skill-explanation/16x9@v1",
+  "fixture_id": "browser-click",
+  "description": "Typical two-statement Skill explanation with a finite browser interaction and captured result.",
+  "slots": {
+    "context": "\u80fd\u529b\u8be6\u89e3 \u00b7 \u591a\u6587\u5b57\u7ec4\u4ef6",
+    "sequence_index": 2,
+    "sequence_total": 13,
+    "title": "Agent Browser",
+    "subtitle": "\u901a\u8fc7\u5b9e\u9645\u7f51\u9875\u64cd\u4f5c\u83b7\u5f97\u5b8c\u6574\u5185\u5bb9",
+    "address": "example.com/article",
+    "result_label": "\u4ea7\u51fa \u00b7 \u5b8c\u6574\u7f51\u9875\u5185\u5bb9",
+    "demo_type": "browser-click",
+    "duration_seconds": 12.27,
+    "segment_1_label": "\u5b83\u4f1a\u505a\u4ec0\u4e48",
+    "segment_1_text": "\u5b83\u4f1a\u771f\u7684\u53bb\u70b9\u6309\u94ae\u3001\u5c55\u5f00\u4e0b\u62c9\u83dc\u5355\u3001\u70b9\u5f00\u6298\u53e0\u5185\u5bb9\uff0c\u9700\u8981\u65f6\u8fd8\u80fd\u622a\u56fe\u7559\u5b58",
+    "segment_2_label": "\u4ec0\u4e48\u65f6\u5019\u7528\u5b83",
+    "segment_2_text": "\u666e\u901a\u6293\u53d6\u62ff\u4e0d\u5230\u5b8c\u6574\u5185\u5bb9\u7684\u7f51\u9875\uff0c\u5c31\u4ea4\u7ed9\u5b83\u5b9e\u9645\u6253\u5f00\u518d\u8bfb",
+    "segment_3_mode": "none",
+    "segment_3_label": null,
+    "segment_3_text": null,
+    "segment_3_note": null
+  },
+  "surfaces": {
+    "demo_primary": {
+      "kind": "active_media_card",
+      "mode": "none",
+      "fallback": "programmatic"
+    }
+  }
+}

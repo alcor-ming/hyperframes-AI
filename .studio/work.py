@@ -4,16 +4,18 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime
-import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import sys
 import tempfile
+import time
 from typing import Any, Iterable
 import unicodedata
 import uuid
@@ -98,6 +100,60 @@ def atomic_write(path: Path, content: str) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def stale_naming_lock(lock: Path) -> bool:
+    owner = lock / "owner.json"
+    try:
+        data = json.loads(owner.read_text(encoding="utf-8"))
+        pid = int(data["pid"])
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return False
+    if data.get("host") != socket.gethostname() or data.get("platform") != sys.platform or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except (PermissionError, OSError):
+        return False
+    return False
+
+
+@contextmanager
+def naming_lock(root: Path, timeout: float = 30.0) -> Iterable[None]:
+    """Use one atomic directory lock that Windows and WSL can both observe."""
+    lock = runtime_root(root) / "naming.lock.d"
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            if stale_naming_lock(lock):
+                (lock / "owner.json").unlink(missing_ok=True)
+                try:
+                    lock.rmdir()
+                except FileNotFoundError:
+                    pass
+                continue
+            if time.monotonic() >= deadline:
+                owner = lock / "owner.json"
+                detail = owner.read_text(encoding="utf-8").strip() if owner.is_file() else "unknown owner"
+                raise HarnessError(f"Timed out waiting for naming lock {lock}: {detail}")
+            time.sleep(0.1)
+    try:
+        write_json(
+            lock / "owner.json",
+            {"pid": os.getpid(), "host": socket.gethostname(), "platform": sys.platform, "acquired_at": now()},
+        )
+        yield
+    finally:
+        (lock / "owner.json").unlink(missing_ok=True)
+        try:
+            lock.rmdir()
+        except FileNotFoundError:
+            pass
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
@@ -484,8 +540,7 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
     ):
         raise HarnessError("podcast_quote_image does not accept video Template, Profile, Ratio, or subject options")
     ensure_roots(root)
-    with (runtime_root(root) / "naming.lock").open("w", encoding="utf-8") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with naming_lock(root):
         rows = list_work_rows(root)
         existing_ids = {row["id"] for row in rows}
         number = next_work_number(rows, args.workflow)
@@ -592,8 +647,7 @@ def command_name(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError("Work name must contain 1-40 characters on one line")
 
     ensure_roots(root)
-    with (runtime_root(root) / "naming.lock").open("w", encoding="utf-8") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with naming_lock(root):
         metadata_path = work / "WORK.md"
         metadata = read_frontmatter(metadata_path)
         workflow = work_workflow(work)

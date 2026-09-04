@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "component_ref": "rse-knowledge-roundtrip/16x9@v1",
+  "slots": {},
+  "timing": {
+    "time_scale": 1
+  },
+  "key_times_seconds": [
+    0,
+    2.4,
+    6,
+    9.5,
+    11.9
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "schema_version": 2,
+  "type": "object",
+  "component_ref": "rich-skill-explanation/16x9@v1",
+  "ratio": "16x9",
+  "slots": {
+    "required": [
+      "context",
+      "sequence_index",
+      "sequence_total",
+      "title",
+      "subtitle",
+      "address",
+      "result_label",
+      "demo_type",
+      "duration_seconds",
+      "segment_1_label",
+      "segment_1_text",
+      "segment_2_label",
+      "segment_2_text",
+      "segment_3_mode"
+    ],
+    "properties": {
+      "context": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      },
+      "sequence_index": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20
+      },
+      "sequence_total": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 24
+      },
+      "subtitle": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32
+      },
+      "address": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "result_label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32
+      },
+      "demo_type": {
+        "type": "string",
+        "pattern": "^(browser-click|skill-create|file-download)$"
+      },
+      "duration_seconds": {
+        "type": "number",
+        "minimum": 9.6,
+        "maximum": 14.27
+      },
+      "segment_1_label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20
+      },
+      "segment_1_text": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 42
+      },
+      "segment_2_label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 20
+      },
+      "segment_2_text": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 42
+      },
+      "segment_3_mode": {
+        "type": "string",
+        "pattern": "^(none|text|skeleton)$"
+      },
+      "segment_3_label": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 20
+      },
+      "segment_3_text": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 42
+      },
+      "segment_3_note": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 120
+      }
+    }
+  },
+  "visual_surfaces": [
+    {
+      "surface_id": "demo_primary",
+      "kind": "active_media_card",
+      "modes": [
+        "none"
+      ],
+      "required": true,
+      "fallback": "programmatic"
+    }
+  ],
+  "timing": {
+    "default_duration_seconds": 12.27,
+    "allowed_time_scale": {
+      "minimum": 0.8,
+      "maximum": 1.2
+    },
+    "key_times_seconds": [
+      0,
+      3,
+      8.5,
+      11.35,
+      12.27
+    ]
+  },
+  "assets": {
+    "required": false,
+    "allowed_types": [],
+    "runtime_network": false
+  }
+}

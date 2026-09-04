@@ -23,12 +23,20 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 SCHEMA_VERSION = 1
 WORKFLOW = "podcast_quote_image"
-ASR_SCRIPT = Path("/home/jym/workspace/_external/scripts/asr.sh")
+PACKAGED_ASR_BRIDGE = Path(__file__).resolve().parents[4] / "asr-wsl.cmd"
+ASR_SCRIPT = str(
+    PACKAGED_ASR_BRIDGE
+    if os.name == "nt"
+    else os.environ.get("HYPERFRAMES_ASR_SCRIPT") or "/home/jym/workspace/_external/scripts/asr.sh"
+)
+WINDOWS_FONTS = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
 FONT_CANDIDATES = (
     Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"),
     Path("/usr/share/fonts/opentype/source-han-sans/SourceHanSansSC-Bold.otf"),
     Path("/mnt/c/Windows/Fonts/msyhbd.ttc"),
     Path("/mnt/c/Windows/Fonts/msyh.ttc"),
+    WINDOWS_FONTS / "msyhbd.ttc",
+    WINDOWS_FONTS / "msyh.ttc",
 )
 ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 MEDIA_JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -47,6 +55,12 @@ XHS_TOPIC_NAME_MAX = 30
 
 class PipelineError(RuntimeError):
     pass
+
+
+def resolve_asr_script(value: str, platform: str | None = None) -> Path:
+    if (platform or os.name) == "nt":
+        return PACKAGED_ASR_BRIDGE
+    return Path(value).expanduser().resolve()
 
 
 def now() -> str:
@@ -338,7 +352,7 @@ def resolve_segments(
 def run_asr(video: Path, output_dir: Path, language: str, asr_script: Path) -> Path:
     if not video.is_file():
         raise PipelineError(f"Video is missing: {video}")
-    if not asr_script.is_file() or not os.access(asr_script, os.X_OK):
+    if not asr_script.is_file() or (os.name != "nt" and not os.access(asr_script, os.X_OK)):
         raise PipelineError(f"Shared ASR dispatcher is unavailable: {asr_script}")
     output_dir.mkdir(parents=True, exist_ok=True)
     command = [
@@ -513,12 +527,15 @@ def command_resolve(args: argparse.Namespace) -> None:
     if transcript_path is None and subtitle_path is None and args.run_asr:
         if not args.video:
             raise PipelineError("--video is required with --run-asr")
+        if os.name != "nt" and not args.asr_script:
+            raise PipelineError("Set HYPERFRAMES_ASR_SCRIPT or pass --asr-script with --run-asr")
         video = Path(args.video).expanduser().resolve()
+        asr_script = resolve_asr_script(args.asr_script)
         transcript_path = run_asr(
             video,
             Path(args.asr_output_dir).expanduser().resolve(),
             args.language,
-            Path(args.asr_script).expanduser().resolve(),
+            asr_script,
         )
     if transcript_path is None and subtitle_path is None:
         raise PipelineError("Provide --transcript or --subtitle, or explicitly use --run-asr")
@@ -757,6 +774,13 @@ def command_align(args: argparse.Namespace) -> None:
 
 def ffmpeg_executable() -> str:
     executable = shutil.which("ffmpeg")
+    if not executable:
+        try:
+            import imageio_ffmpeg
+
+            executable = imageio_ffmpeg.get_ffmpeg_exe()
+        except (ImportError, RuntimeError):
+            pass
     if not executable:
         raise PipelineError("ffmpeg is required")
     return executable
@@ -1470,7 +1494,7 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--subtitle")
     resolve.add_argument("--language", default="auto")
     resolve.add_argument("--run-asr", action="store_true")
-    resolve.add_argument("--asr-script", default=str(ASR_SCRIPT))
+    resolve.add_argument("--asr-script", default=ASR_SCRIPT)
     resolve.add_argument("--asr-output-dir", default=".runtime/asr")
     resolve.add_argument("--out", required=True)
     resolve.set_defaults(handler=command_resolve)

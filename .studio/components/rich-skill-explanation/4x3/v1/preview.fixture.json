@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "component_ref": "rich-skill-explanation/4x3@v1",
+  "fixture_id": "browser-click",
+  "description": "Typical two-statement Skill explanation with a finite browser interaction and captured result.",
+  "slots": {
+    "context": "能力详解 · 多文字组件",
+    "sequence_index": 2,
+    "sequence_total": 13,
+    "title": "Agent Browser",
+    "subtitle": "通过实际网页操作获得完整内容",
+    "address": "example.com/article",
+    "result_label": "产出 · 完整网页内容",
+    "demo_type": "browser-click",
+    "duration_seconds": 12.27,
+    "segment_1_label": "它会做什么",
+    "segment_1_text": "它会真的去点按钮、展开下拉菜单、点开折叠内容，需要时还能截图留存",
+    "segment_2_label": "什么时候用它",
+    "segment_2_text": "普通抓取拿不到完整内容的网页，就交给它实际打开再读",
+    "segment_3_mode": "none",
+    "segment_3_label": null,
+    "segment_3_text": null,
+    "segment_3_note": null
+  },
+  "surfaces": {
+    "demo_primary": {
+      "kind": "active_media_card",
+      "mode": "none",
+      "fallback": "programmatic"
+    }
+  }
+}
