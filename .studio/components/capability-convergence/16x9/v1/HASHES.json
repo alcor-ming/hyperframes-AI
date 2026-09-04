@@ -1,7 +1,7 @@
 {
   "algorithm": "asset-package-sha256-v1",
   "asset_ref": "capability-convergence/16x9@v1",
-  "package_sha256": "59c71a1e14745771ec85c2a6a049a742181b6e519f78c1c384069142282514d0",
+  "package_sha256": "7ace5ed7ece9521a35b814915e51e94d160cb0e5a7f3329e3732a7da701fdf50",
   "files": [
     {
       "path": "COMPONENT.md",
@@ -17,7 +17,7 @@
     },
     {
       "path": "component.html",
-      "sha256": "4c4544f98f6fc22d8a633864bacfdc86ed2045790b3b32b93768c46a92445805"
+      "sha256": "811aefcbd51c9cb9622b9ad0dfece2ce81f06144275dc7e5e896c5aa9ec92d1f"
     },
     {
       "path": "contract.schema.json",

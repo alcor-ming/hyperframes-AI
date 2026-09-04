@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -38,6 +39,12 @@ class ReleaseCliTest(unittest.TestCase):
         self.assertEqual(("2026.09.1", "harness-2026.09.1"), RELEASE.version_tag("2026.09.1"))
         with self.assertRaises(RELEASE.ReleaseError):
             RELEASE.version_tag("v1")
+
+    def test_build_rejects_any_upstream_divergence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            with mock.patch.object(RELEASE, "run", side_effect=["", "head", "head", "other"]):
+                with self.assertRaisesRegex(RELEASE.ReleaseError, "not synchronized"):
+                    RELEASE.build("2026.09.1", Path(temporary) / "out", Path(temporary) / "cache")
 
 
 if __name__ == "__main__":

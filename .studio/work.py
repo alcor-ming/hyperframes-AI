@@ -102,6 +102,24 @@ def atomic_write(path: Path, content: str) -> None:
         raise
 
 
+def stale_naming_lock(lock: Path) -> bool:
+    owner = lock / "owner.json"
+    try:
+        data = json.loads(owner.read_text(encoding="utf-8"))
+        pid = int(data["pid"])
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return False
+    if data.get("host") != socket.gethostname() or data.get("platform") != sys.platform or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except (PermissionError, OSError):
+        return False
+    return False
+
+
 @contextmanager
 def naming_lock(root: Path, timeout: float = 30.0) -> Iterable[None]:
     """Use one atomic directory lock that Windows and WSL can both observe."""
@@ -112,6 +130,13 @@ def naming_lock(root: Path, timeout: float = 30.0) -> Iterable[None]:
             lock.mkdir()
             break
         except FileExistsError:
+            if stale_naming_lock(lock):
+                (lock / "owner.json").unlink(missing_ok=True)
+                try:
+                    lock.rmdir()
+                except FileNotFoundError:
+                    pass
+                continue
             if time.monotonic() >= deadline:
                 owner = lock / "owner.json"
                 detail = owner.read_text(encoding="utf-8").strip() if owner.is_file() else "unknown owner"

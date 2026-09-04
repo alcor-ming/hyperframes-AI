@@ -272,7 +272,7 @@
             <div data-hf-id="hf-jx4h" class="section-index">P007 / 13 · 跨模組歸納</div>
           </header>
 
-          <main data-hf-id="hf-ch80" class="convergence-field">
+          <main data-hf-id="hf-ch80" class="convergence-field" data-visual-surface="convergence_field" data-surface-kind="active_media_card" data-surface-modes="none" data-surface-fallback="programmatic" data-surface-mode="none">
             <svg data-hf-id="hf-wh2a" class="paths" viewBox="0 0 1920 858" aria-hidden="true" data-layout-ignore="">
               <path data-hf-id="hf-lbgi" id="path-1" class="flow-path" pathLength="1" d="M 216 75 C 430 102 650 326 960 420" />
               <path data-hf-id="hf-wo94" id="path-2" class="flow-path" pathLength="1" d="M 588 75 C 704 134 812 350 960 420" />
@@ -346,6 +346,44 @@
     </div>
 
     <script>
+      const DEFAULT_ITEMS = [
+        { index: "02", skill: "Agent Browser", result: "完整网页内容" },
+        { index: "03", skill: "办公文件四件套", result: "多种文件输入与文件操作" },
+        { index: "04", skill: "Local Whisper", result: "逐字稿 / 摘要 / 可编辑文字" },
+        { index: "05", skill: "Video Downloader", result: "分件素材与笔记" },
+        { index: "06", skill: "Web Search", result: "日期 / 作者 / 原文链接" }
+      ];
+      const RUNTIME_VALUES = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
+        ? window.__hyperframes.getVariables()
+        : {};
+      const textSlot = (name, fallback) => typeof RUNTIME_VALUES[name] === "string" ? RUNTIME_VALUES[name] : fallback;
+      const runtimeItems = Array.isArray(RUNTIME_VALUES.items) && RUNTIME_VALUES.items.length === 5
+        ? RUNTIME_VALUES.items
+        : DEFAULT_ITEMS;
+      const items = runtimeItems.map((item, index) => {
+        const fallback = DEFAULT_ITEMS[index];
+        return item && typeof item === "object" && !Array.isArray(item) ? {
+          index: typeof item.index === "string" ? item.index : fallback.index,
+          skill: typeof item.skill === "string" ? item.skill : fallback.skill,
+          result: typeof item.result === "string" ? item.result : fallback.result
+        } : fallback;
+      });
+
+      document.querySelector(".section-index").textContent = textSlot("context", "P007 / 13 · 跨模块归纳");
+      items.forEach((item, index) => {
+        const trace = document.querySelector(`#trace-${index + 1}`);
+        trace.querySelector(".trace-index").textContent = item.index;
+        trace.querySelector(".trace-skill").textContent = item.skill;
+        trace.querySelector(".trace-result").textContent = item.result;
+      });
+      document.querySelector(".core-proposition").textContent = textSlot("proposition", "05 条结果痕迹 → 01 共同能力");
+      document.querySelector(".core-name").textContent = textSlot("core_name", "获取资讯");
+      const summary = document.querySelector(".core-summary");
+      const emphasis = document.createElement("strong");
+      emphasis.textContent = textSlot("summary_emphasis", "去哪里找、怎么拿、拿到后怎么整理");
+      summary.replaceChildren(emphasis, document.createTextNode(textSlot("summary_suffix", "，都是把外部内容变成可用资讯。")));
+      document.querySelector(".handoff-marker span").textContent = textSlot("handoff_label", "P008");
+
       window.__timelines = window.__timelines || {};
       const tl = gsap.timeline({ paused: true });
       const traces = [
@@ -399,12 +437,9 @@
         .to(".ring-system", { scale: 1.018, duration: 0.74, ease: "sine.inOut" }, 11.08)
         .to(".ring-system", { scale: 1, duration: 0.74, ease: "sine.inOut" }, 11.82);
 
-      const runtimeValues = (window.__hyperframes && typeof window.__hyperframes.getVariables === "function")
-  ? window.__hyperframes.getVariables()
-  : {};
-const timeScale = Number(runtimeValues.time_scale);
-if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
-window.__timelines["capability-convergence"] = tl;
+      const timeScale = Number(RUNTIME_VALUES.time_scale);
+      if (Number.isFinite(timeScale) && timeScale > 0) tl.timeScale(timeScale);
+      window.__timelines["capability-convergence"] = tl;
     </script>
     </template>
   </body>

@@ -192,6 +192,22 @@ class RatioAssetMigrationTest(unittest.TestCase):
         for root in roots:
             verify_hashes(root)
 
+    def test_capability_convergence_16x9_applies_declared_slots(self) -> None:
+        source = (
+            REPO / ".studio" / "components" / "capability-convergence" / "16x9" / "v1" / "component.html"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            'textSlot("context"',
+            "RUNTIME_VALUES.items",
+            'textSlot("proposition"',
+            'textSlot("core_name"',
+            'textSlot("summary_emphasis"',
+            'textSlot("summary_suffix"',
+            'textSlot("handoff_label"',
+            'data-visual-surface="convergence_field"',
+        ):
+            self.assertIn(marker, source)
+
 
 if __name__ == "__main__":
     unittest.main()

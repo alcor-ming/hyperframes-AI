@@ -41,6 +41,25 @@ class WorkCliTest(unittest.TestCase):
         work_id = self.invoke("new", title, "--workflow", workflow)
         return work_id, self.root / "works" / "active" / work_id
 
+    def test_naming_lock_recovers_dead_local_owner(self) -> None:
+        lock = self.root / ".studio" / ".runtime" / "naming.lock.d"
+        lock.mkdir(parents=True)
+        (lock / "owner.json").write_text(
+            json.dumps(
+                {
+                    "pid": 12345,
+                    "host": WORK_CLI.socket.gethostname(),
+                    "platform": WORK_CLI.sys.platform,
+                    "acquired_at": WORK_CLI.now(),
+                }
+            ),
+            encoding="utf-8",
+        )
+        with mock.patch.object(WORK_CLI.os, "kill", side_effect=ProcessLookupError):
+            with WORK_CLI.naming_lock(self.root, timeout=0.01):
+                self.assertEqual(WORK_CLI.os.getpid(), json.loads((lock / "owner.json").read_text())["pid"])
+        self.assertFalse(lock.exists())
+
     def prepare_package_final(self, name: str = "quote-final", marker: bytes = b"one") -> Path:
         directory = self.root / name
         directory.mkdir()

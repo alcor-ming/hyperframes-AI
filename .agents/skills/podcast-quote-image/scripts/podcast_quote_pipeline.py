@@ -23,10 +23,11 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 SCHEMA_VERSION = 1
 WORKFLOW = "podcast_quote_image"
-ASR_SCRIPT = os.environ.get("HYPERFRAMES_ASR_SCRIPT") or (
-    str(Path(__file__).resolve().parents[4] / "asr-wsl.cmd")
+PACKAGED_ASR_BRIDGE = Path(__file__).resolve().parents[4] / "asr-wsl.cmd"
+ASR_SCRIPT = str(
+    PACKAGED_ASR_BRIDGE
     if os.name == "nt"
-    else "/home/jym/workspace/_external/scripts/asr.sh"
+    else os.environ.get("HYPERFRAMES_ASR_SCRIPT") or "/home/jym/workspace/_external/scripts/asr.sh"
 )
 WINDOWS_FONTS = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
 FONT_CANDIDATES = (
@@ -54,6 +55,12 @@ XHS_TOPIC_NAME_MAX = 30
 
 class PipelineError(RuntimeError):
     pass
+
+
+def resolve_asr_script(value: str, platform: str | None = None) -> Path:
+    if (platform or os.name) == "nt":
+        return PACKAGED_ASR_BRIDGE
+    return Path(value).expanduser().resolve()
 
 
 def now() -> str:
@@ -520,14 +527,15 @@ def command_resolve(args: argparse.Namespace) -> None:
     if transcript_path is None and subtitle_path is None and args.run_asr:
         if not args.video:
             raise PipelineError("--video is required with --run-asr")
-        if not args.asr_script:
+        if os.name != "nt" and not args.asr_script:
             raise PipelineError("Set HYPERFRAMES_ASR_SCRIPT or pass --asr-script with --run-asr")
         video = Path(args.video).expanduser().resolve()
+        asr_script = resolve_asr_script(args.asr_script)
         transcript_path = run_asr(
             video,
             Path(args.asr_output_dir).expanduser().resolve(),
             args.language,
-            Path(args.asr_script).expanduser().resolve(),
+            asr_script,
         )
     if transcript_path is None and subtitle_path is None:
         raise PipelineError("Provide --transcript or --subtitle, or explicitly use --run-asr")

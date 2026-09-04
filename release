@@ -149,10 +149,11 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
     if tagged != head:
         raise ReleaseError(f"{tag} does not point at HEAD")
     try:
-        if int(run("git", "rev-list", "--count", "@{upstream}..HEAD", capture=True)):
-            raise ReleaseError("Refusing to build commits that are ahead of the upstream branch")
+        upstream = run("git", "rev-parse", "@{upstream}", capture=True)
     except subprocess.CalledProcessError as exc:
         raise ReleaseError("The current branch needs an upstream before release") from exc
+    if upstream != head:
+        raise ReleaseError("Refusing to build from a branch that is not synchronized with upstream")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     archive = output_dir / f"hyperframes-ai-harness-{version}-windows-x64.zip"
