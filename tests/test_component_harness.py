@@ -3,10 +3,12 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -123,6 +125,44 @@ class ComponentHarnessTest(unittest.TestCase):
         with self.assertRaises(COMPONENT.ComponentError):
             COMPONENT.verify_installation(project)
 
+    def test_ratio_contract_install_verify_and_approval_boundary(self) -> None:
+        for component_id in ("chapter-intro", "capability-convergence"):
+            for ratio in ("4x3", "16x9"):
+                ref = f"{component_id}/{ratio}@v1"
+                self.assertEqual((f"{component_id}/{ratio}", 1), COMPONENT.parse_component_ref(ref))
+                source = REPO / ".studio" / "components" / component_id / ratio / "v1"
+                with self.assertRaisesRegex(COMPONENT.ComponentError, "library-approved"):
+                    COMPONENT.validate_component_release(source, expected_ref=ref)
+                # Approval is simulated only in this disposable contract fixture, never in the library.
+                public = self.root / "public" / ".studio" / "components" / component_id / ratio / "v1"
+                shutil.copytree(source, public)
+                metadata_path = public / "COMPONENT.md"
+                metadata_path.write_text(metadata_path.read_text(encoding="utf-8").replace(
+                    '"status": "migration-ready"', '"status": "library-approved"'
+                ), encoding="utf-8")
+                COMPONENT.write_hashes(public)
+                release = COMPONENT.validate_component_release(public, expected_ref=ref)
+                self.assertEqual(ratio, release["ratio"])
+                binding = self.binding()
+                binding.update(schema_version=2, component_ref=ref,
+                               slots=release["fixture"]["slots"], surfaces=release["fixture"].get("surfaces", {}))
+                binding["placement"]["width"] = 1440 if ratio == "4x3" else 1920
+                project = self.root / f"{component_id}-{ratio}"
+                project.mkdir()
+                result = COMPONENT.install_component(public, project, binding)
+                self.assertEqual(f"vendor/components/{component_id}/{ratio}/v1", result["component"]["vendor_path"])
+                COMPONENT.verify_installation(project, public_root=self.root / "public")
+                binding["placement"]["width"] += 100
+                with self.assertRaisesRegex(COMPONENT.ComponentError, "ratio"):
+                    COMPONENT.validate_binding(binding, release)
+                schema_path = public / "contract.schema.json"
+                schema = json.loads(schema_path.read_text(encoding="utf-8"))
+                schema["ratio"] = "4x3" if ratio == "16x9" else "16x9"
+                schema_path.write_text(json.dumps(schema), encoding="utf-8")
+                COMPONENT.write_hashes(public)
+                with self.assertRaisesRegex(COMPONENT.ComponentError, "ratio"):
+                    COMPONENT.validate_component_release(public)
+
     def test_binding_tamper_fails_lock_validation(self) -> None:
         project = self.root / "project"
         project.mkdir()
@@ -131,6 +171,31 @@ class ComponentHarnessTest(unittest.TestCase):
         binding_path.write_text(binding_path.read_text(encoding="utf-8").replace("选题雷达", "别的内容"), encoding="utf-8")
         with self.assertRaises(COMPONENT.ComponentError):
             COMPONENT.verify_installation(project)
+
+    def test_unapproved_component_only_runs_in_isolated_review(self) -> None:
+        store = self.root / "store"
+        for name in ("active", "parked", "archive"):
+            (store / "works" / name).mkdir(parents=True)
+        review = store / "review" / "candidate-001"
+        project = review / "works" / "active" / "example" / "variants" / "main" / "project"
+        project.mkdir(parents=True)
+        WORK.write_json(review / ".runtime" / "review.json", {"mode": "review", "review_id": review.name})
+        candidate = self.root / "candidate"
+        shutil.copytree(self.public, candidate)
+        metadata = candidate / "COMPONENT.md"
+        metadata.write_text(metadata.read_text(encoding="utf-8").replace("library-approved", "migration-ready"), encoding="utf-8")
+        COMPONENT.write_hashes(candidate)
+        with self.assertRaisesRegex(COMPONENT.ComponentError, "library-approved"):
+            COMPONENT.install_component(candidate, project, self.binding())
+        COMPONENT.install_component(candidate, project, self.binding(), review_root=review)
+        with self.assertRaisesRegex(COMPONENT.ComponentError, "production"):
+            COMPONENT.verify_installation(project)
+        with patch.dict(os.environ, {"HYPERFRAMES_AI_REVIEW": "1"}):
+            self.assertEqual(1, len(COMPONENT.verify_installation(project)["components"]))
+        production_project = store / "works" / "active" / "production" / "project"
+        production_project.mkdir(parents=True)
+        with self.assertRaisesRegex(COMPONENT.ComponentError, "isolated"):
+            COMPONENT.install_component(candidate, production_project, self.binding(), review_root=review)
 
     def test_binding_contract_rejects_bad_placement_timing_scale_and_assets(self) -> None:
         release = COMPONENT.validate_component_release(self.public)
@@ -362,6 +427,26 @@ class ComponentHarnessTest(unittest.TestCase):
         (asset_snapshot / "assets" / "evidence.svg").write_text("<svg><!-- tampered --></svg>", encoding="utf-8")
         with self.assertRaises(COMPONENT.ComponentError):
             COMPONENT.validate_snapshot_closure(source, asset_snapshot)
+
+    def test_effect_snapshot_closure_includes_runtime_media_and_dependencies(self) -> None:
+        source = self.root / "source"
+        source.mkdir()
+        for name in ("runtime", "effects", "media", "shaders", "models", "textures"):
+            (source / name).mkdir()
+            (source / name / "local.bin").write_bytes(b"frozen")
+        for name in ("index.html", "DESIGN.md", "project-config.json", "hyperframes.json",
+                     "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"):
+            (source / name).write_text("{}", encoding="utf-8")
+        (source / "compositions").mkdir()
+        snapshot = self.root / "snapshot"
+        WORK.copy_snapshot(source, snapshot)
+        COMPONENT.validate_snapshot_closure(source, snapshot)
+        for name in ("runtime", "effects", "media", "shaders", "models", "textures"):
+            target = snapshot / name / "local.bin"
+            target.write_bytes(b"changed")
+            with self.assertRaisesRegex(COMPONENT.ComponentError, name):
+                COMPONENT.validate_snapshot_closure(source, snapshot)
+            target.write_bytes(b"frozen")
 
     def test_snapshot_copies_optional_component_inputs_without_changing_legacy(self) -> None:
         project = self.root / "project"

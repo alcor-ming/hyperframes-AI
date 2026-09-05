@@ -4,6 +4,8 @@
 
 ## 快速开始
 
+Windows 日常创作打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`，使用其中的 `work.cmd`；下文 Bash 命令是相同 CLI 的 WSL 写法。WSL 开发仓不作为 Windows 的创作入口。正式 Work 由 Windows 写入；WSL 开发和回测使用冻结请求与隔离副本。
+
 ```bash
 ./work root show
 ./work new "作品标题" --workflow hyperframes_video
@@ -66,7 +68,7 @@ Draft 与 Final 生命周期：
 
 ## 固定 Release 与 Codex App 部署
 
-开发和构建只在本 WSL Git 仓进行。Windows Codex App 原生运行解压后的 Windows x64 ZIP，并打开固定入口 `%LOCALAPPDATA%\HyperFramesAI\current`。Harness 安装在 `%LOCALAPPDATA%\HyperFramesAI\releases\<tag>`；作品仍只写入 `D:\AI\AI+hyperframes`，不得把 Harness 文件铺入 WorkStore。
+开发和构建只在本 WSL Git 仓进行。Windows Codex App 打开固定薄入口 `%LOCALAPPDATA%\HyperFramesAI\workspace`，从不可变 `releases\<tag>` 或 `candidates\<build-id>` 运行；`current` / `previous` 保留稳定安装与回滚入口。作品仍写入 `D:\AI\AI+hyperframes`，其中 `requests/` 保存私有交接、`review/` 保存隔离副本，不放 Harness 或运行依赖。
 
 Release 使用 `harness-YYYY.MM.PATCH`。构建要求工作树干净、对应 tag 指向当前提交、分支已推送，并提供与 `windows-runtime.lock.json` 一致的运行时缓存：
 
@@ -75,16 +77,48 @@ Release 使用 `harness-YYYY.MM.PATCH`。构建要求工作树干净、对应 ta
 ./release verify dist/hyperframes-ai-harness-2026.09.1-windows-x64.zip
 ```
 
-ZIP 内置 Windows CPython、Python 依赖、`work.cmd`、`work.ps1` 和 `release.ps1`。Codex App 解压 ZIP 后执行：
+首次准备固定 Windows 依赖是显式下载步骤，需具备该下载授权；普通创作命令不下载依赖：
+
+```bash
+python3 .studio/prepare_windows_runtime.py prepare \
+  --cache /path/to/windows-runtime-cache --output-lock windows-runtime.lock.json
+```
+
+`windows-npm.lock.json` 固定完整依赖树。只有所有必需 Windows 文件已闭合并记录 SHA256，才移除 runtime lock 的 `pending_assets`；锁仍有缺项时构建明确失败，不生成只有 Python 的伪完整包。
+
+本机回测不要求先提交、标记或推送：
+
+```bash
+./release candidate review-001 --runtime-cache /path/to/windows-runtime-cache \
+  --include .studio/visual_plan.py --include .studio/visual_plan.html
+```
+
+候选按产品范围冻结当前源码；新增未跟踪文件需逐项 `--include`，示例不是所有新文件的清单。Manifest 记录 `channel=candidate`、基准 commit、dirty、源码文件及依赖哈希；默认输出 `dist/`。同一候选不可覆盖，重新构建使用新 ID。正式 `build` 的规则与 Git/公开发布授权不变。
+
+完整 ZIP 内置 Windows CPython、Python 依赖、Node、HF、GSAP/Three、Chromium、FFmpeg/ffprobe 及入口。Codex App 解压 ZIP 后执行（首次安装必须提供 WorkRoot）：
 
 ```powershell
 .\release.ps1 verify
-.\release.ps1 install
+.\release.ps1 install -WorkRoot D:\AI\AI+hyperframes
 .\release.ps1 status
 .\release.ps1 rollback
 ```
 
-安装会验证 Manifest 与 WorkStore，然后以 Windows junction 切换 `current` 并保留 `previous`。升级或回滚后新建 Codex App 会话。旧 Release 不自动删除。
+首次候选 ZIP 解压后执行 `release.ps1 install-candidate -WorkRoot D:\AI\AI+hyperframes`。可先从已安装候选目录运行 `work.cmd review init review-001`，只创建独立测试根、不改生产 Current，然后在固定工作台启动会话：
+
+```powershell
+.\start.ps1
+# 候选必须使用已准备好的隔离 Review WorkStore
+.\start.ps1 -Candidate candidate-review-001 -ReviewRoot D:\AI\AI+hyperframes\review\review-001
+```
+
+启动器输出 `sessions/<uuid>` 下的固定会话目录。Codex 后续仅使用该目录的 `work.cmd` / `work.ps1`，先运行 `work.cmd doctor` 查看实际版本、依赖、WorkRoot 与 Review 身份。安装包内的 `work.cmd session start --review-root <path>` 也可建立会话；未绑定会话的普通 Work 命令会拒绝运行。`preview open` / `preview render` 自动使用会话受控 HF，无需手填 `--hyperframes-dist`。
+
+稳定安装会验证 Manifest 与 WorkStore，再以 Windows junction 切换 `current` 并保留 `previous`；候选安装不改变稳定入口。配置、会话和缓存外置；会话固定实际包及其运行依赖，切换版本后开新会话，不热换 Skills 或播放器。回滚不删除 Work、旧快照、请求或 Final；旧包不自动清理。安装/回滚可带 `-CheckWork <id> -Variant <id>` 先检查目标版本能否读取指定 Work；未指定时会明确提示数据兼容性尚未验证。
+
+Windows 可以编排 Work-local HTML、文字、媒体 Slots、位置和时间；新组件内部、新 shader 或通用动作主体交给 WSL。`work request freeze` / `export` 冻结并导出实际输入，WSL 用 `request deliver` 交付，Windows 用 `request review` 建立隔离副本、`feedback` 记录反馈，明确批准后 `request accept` 接纳精确交付。完整参数见 [请求交接](.studio/workflow.md#windows-与-wsl-请求交接)。未批准实现仅在 Review 预演，不能正式安装、Finalize、归档完成或保存平台草稿；接纳交付不等于接受 Plan/Draft，不覆盖未受影响场景。
+
+Windows 原生、交互 WebGL、抓帧 WebGL、视频硬件编码和真实复用分别验证。构建或 Linux 测试通过不表示 Windows 已部署或硬件路径通过。目标与验收边界见 [Windows 工作台 PRD](docs/PRD/hyperframes-windows-workbench-wsl-handoff.md)。
 
 Windows 侧共享 ASR 由包内 `asr-wsl.cmd` 桥接到固定的 `Ubuntu` 和 `/home/jym/workspace/_external/scripts/asr.sh`；`HYPERFRAMES_ASR_SCRIPT` 仅可指定另一 Windows 入口。桥接器拒绝 WorkStore 外的输入和输出，并把路径转换、可用性检查和转录合并为唯一一次固定调用：
 

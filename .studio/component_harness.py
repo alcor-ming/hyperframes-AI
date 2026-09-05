@@ -17,6 +17,12 @@ import xml.etree.ElementTree as ET
 
 
 PACKAGE_ALGORITHM = "component-package-sha256-v1"
+ASSET_PACKAGE_ALGORITHM = "asset-package-sha256-v1"
+OPTIONAL_SNAPSHOT_ITEMS = (
+    "vendor", "component-bindings", "COMPONENT_LOCK.json", "scene-slots.json", "assets",
+    "runtime", "effects", "media", "shaders", "models", "textures", "hyperframes.json",
+    "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+)
 REQUIRED_RELEASE_FILES = (
     "COMPONENT.md",
     "component.html",
@@ -25,7 +31,7 @@ REQUIRED_RELEASE_FILES = (
     "HASHES.json",
 )
 COMPONENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-COMPONENT_REF_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_.-]*)@v([1-9][0-9]*)$")
+COMPONENT_REF_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_.-]*(?:/(?:4x3|16x9))?)@v([1-9][0-9]*)$")
 SAFE_RELATIVE_RE = re.compile(r"^[^/]+(?:/[^/]+)*$")
 SURFACE_KINDS = {
     "icon_node": {"none", "icon"},
@@ -143,6 +149,8 @@ def write_hashes(directory: Path) -> dict[str, Any]:
     metadata = _read_frontmatter(directory / "COMPONENT.md")
     component_id = metadata.get("component_id")
     version = metadata.get("version")
+    if metadata.get("contract") == "component-contract-v2":
+        component_id = f"{component_id}/{metadata.get('ratio')}"
     component_ref = f"{component_id}@v{version}" if component_id and version else None
     manifest = {
         "schema_version": 1,
@@ -151,13 +159,18 @@ def write_hashes(directory: Path) -> dict[str, Any]:
         "files": package_entries(directory),
         "package_sha256": component_package_sha256(directory),
     }
+    if metadata.get("contract") == "component-contract-v2":
+        manifest.pop("schema_version")
+        manifest["algorithm"] = ASSET_PACKAGE_ALGORITHM
+        manifest["asset_ref"] = manifest.pop("component_ref")
     _atomic_json(directory / "HASHES.json", manifest)
     return manifest
 
 
-def _validate_hashes(directory: Path) -> dict[str, Any]:
+def _validate_hashes(directory: Path, *, ratio_contract: bool = False) -> dict[str, Any]:
     hashes = _read_json(directory / "HASHES.json")
-    if hashes.get("schema_version") != 1 or hashes.get("algorithm") != PACKAGE_ALGORITHM:
+    expected_algorithm = ASSET_PACKAGE_ALGORITHM if ratio_contract else PACKAGE_ALGORITHM
+    if hashes.get("algorithm") != expected_algorithm or (not ratio_contract and hashes.get("schema_version") != 1):
         raise ComponentError("HASHES.json has an unsupported schema or algorithm")
     actual_entries = package_entries(directory)
     if hashes.get("files") != actual_entries:
@@ -169,6 +182,7 @@ def _validate_hashes(directory: Path) -> dict[str, Any]:
 
 
 def parse_component_ref(value: str) -> tuple[str, int]:
+    """Return the package path (including an optional ratio) and version."""
     match = COMPONENT_REF_RE.fullmatch(value)
     if not match:
         raise ComponentError(f"Invalid component ref: {value!r}")
@@ -301,7 +315,7 @@ def _check_value(value: Any, rule: dict[str, Any], path: str) -> None:
                     _check_value(child, child_rule, f"{path}.{name}")
 
 
-def validate_component_release(directory: Path, expected_ref: str | None = None) -> dict[str, Any]:
+def validate_component_release(directory: Path, expected_ref: str | None = None, *, allow_unapproved: bool = False) -> dict[str, Any]:
     """Validate one immutable Component Release and return its report."""
 
     directory = Path(directory)
@@ -319,30 +333,26 @@ def validate_component_release(directory: Path, expected_ref: str | None = None)
         raise ComponentError("COMPONENT.md component_id is invalid")
     if not isinstance(version, int) or isinstance(version, bool) or version < 1:
         raise ComponentError("COMPONENT.md version must be a positive integer")
-    component_ref = f"{component_id}@v{version}"
+    ratio_contract = metadata.get("contract") == "component-contract-v2"
+    ratio = metadata.get("ratio") if ratio_contract else None
+    if ratio_contract and ratio not in {"4x3", "16x9"}:
+        raise ComponentError("COMPONENT.md ratio must be 4x3 or 16x9")
+    component_ref = f"{component_id}/{ratio}@v{version}" if ratio_contract else f"{component_id}@v{version}"
     if expected_ref is not None and component_ref != expected_ref:
         raise ComponentError(f"Expected {expected_ref}, found {component_ref}")
-    if metadata.get("status") != "library-approved":
+    if metadata.get("status") != "library-approved" and not allow_unapproved:
         raise ComponentError("Component Release status must be library-approved")
-    for key in (
-        "profile",
-        "subtemplate",
+    legacy_fields = ("profile", "subtemplate", "state_change", "entry_contract", "exit_contract",
+                     "semantic_jobs", "anti_use_cases", "states", "visual_surfaces", "preview")
+    for key in (*(("theme_tokens",) if ratio_contract else legacy_fields),
         "communication_goal",
         "semantic_roles",
         "information_shapes",
-        "state_change",
         "evidence_modes",
         "content_density",
         "duration_range",
-        "entry_contract",
-        "exit_contract",
-        "semantic_jobs",
-        "anti_use_cases",
-        "states",
         "motion_recipe",
         "asset_contract",
-        "visual_surfaces",
-        "preview",
         "customization",
         "artifact",
     ):
@@ -351,18 +361,21 @@ def validate_component_release(directory: Path, expected_ref: str | None = None)
     required_meta, optional_meta = _metadata_slots(metadata)
 
     schema = _read_json(directory / "contract.schema.json")
-    if schema.get("schema_version") != 1:
-        raise ComponentError("contract.schema.json schema_version must be 1")
+    schema_version = 2 if ratio_contract else 1
+    if schema.get("schema_version") != schema_version:
+        raise ComponentError(f"contract.schema.json schema_version must be {schema_version}")
     if schema.get("component_ref") != component_ref:
         raise ComponentError("contract.schema.json component_ref does not match COMPONENT.md")
-    if schema.get("profile") != metadata.get("profile") or schema.get("subtemplate") != metadata.get("subtemplate"):
+    if ratio_contract and schema.get("ratio") != ratio:
+        raise ComponentError("contract.schema.json ratio does not match COMPONENT.md")
+    if not ratio_contract and (schema.get("profile") != metadata.get("profile") or schema.get("subtemplate") != metadata.get("subtemplate")):
         raise ComponentError("contract.schema.json profile/subtemplate does not match COMPONENT.md")
     required_schema, properties = _schema_slots(schema)
     metadata_names = [item["name"] for item in [*required_meta, *optional_meta]]
     if required_schema != [item["name"] for item in required_meta] or set(properties) != set(metadata_names):
         raise ComponentError("COMPONENT.md and contract.schema.json slots disagree")
-    surface_specs = _surface_specs(metadata["visual_surfaces"], "COMPONENT.md visual_surfaces")
-    schema_surface_specs = _surface_specs(schema.get("visual_surfaces"), "contract.schema.json visual_surfaces")
+    surface_specs = _surface_specs(metadata["visual_surfaces"], "COMPONENT.md visual_surfaces") if "visual_surfaces" in metadata else {}
+    schema_surface_specs = _surface_specs(schema["visual_surfaces"], "contract.schema.json visual_surfaces") if "visual_surfaces" in schema else {}
     if surface_specs != schema_surface_specs:
         raise ComponentError("COMPONENT.md and contract.schema.json visual_surfaces disagree")
     metadata_assets = metadata.get("asset_contract")
@@ -385,7 +398,7 @@ def validate_component_release(directory: Path, expected_ref: str | None = None)
         raise ComponentError("COMPONENT.md and contract.schema.json timeScale ranges disagree")
 
     fixture = _read_json(directory / "preview.fixture.json")
-    if fixture.get("schema_version") != 1 or fixture.get("component_ref") != component_ref:
+    if fixture.get("schema_version") != schema_version or fixture.get("component_ref") != component_ref:
         raise ComponentError("preview.fixture.json does not target this Component Release")
     fixture_slots = fixture.get("slots")
     if not isinstance(fixture_slots, dict):
@@ -396,7 +409,7 @@ def validate_component_release(directory: Path, expected_ref: str | None = None)
         raise ComponentError(f"preview.fixture.json slots mismatch: unknown={unknown}, missing={missing_fixture}")
     for name, value in fixture_slots.items():
         _check_value(value, properties[name], f"preview.fixture.json slots.{name}")
-    fixture_surfaces = fixture.get("surfaces")
+    fixture_surfaces = fixture.get("surfaces", {}) if ratio_contract else fixture.get("surfaces")
     if not isinstance(fixture_surfaces, dict) or set(fixture_surfaces) != set(surface_specs):
         raise ComponentError("preview.fixture.json surfaces must match the Component Surface contract")
     for surface_id, surface in fixture_surfaces.items():
@@ -414,17 +427,25 @@ def validate_component_release(directory: Path, expected_ref: str | None = None)
     artifact = metadata["artifact"]
     if not isinstance(artifact, dict) or not isinstance(artifact.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]):
         raise ComponentError("COMPONENT.md artifact.sha256 is required")
-    hashes = _validate_hashes(directory)
-    if hashes.get("component_ref") != component_ref:
+    hashes = _validate_hashes(directory, ratio_contract=ratio_contract)
+    if hashes.get("asset_ref" if ratio_contract else "component_ref") != component_ref:
         raise ComponentError("HASHES.json component_ref does not match COMPONENT.md")
     validate_surface_dom(directory / "component.html", surface_specs)
-    validate_component_transport(directory / "component.html", component_id, metadata_names, surface_specs)
+    validate_component_transport(directory / "component.html", component_id, metadata_names, surface_specs,
+                                 require_root_id=not ratio_contract)
+    if ratio_contract:
+        _, parser = _parse_html(directory / "component.html")
+        root = next(node["attrs"] for node in parser.nodes if node["attrs"].get("data-composition-id") == component_id)
+        dimensions = ("1440", "1080") if ratio == "4x3" else ("1920", "1080")
+        if (root.get("data-width"), root.get("data-height")) != dimensions:
+            raise ComponentError("component.html dimensions do not match the ratio contract")
     return {
         "component_ref": component_ref,
         "component_id": component_id,
         "version": version,
-        "profile": metadata["profile"],
-        "subtemplate": metadata["subtemplate"],
+        "profile": metadata.get("profile"),
+        "subtemplate": metadata.get("subtemplate"),
+        "ratio": ratio,
         "package_sha256": hashes["package_sha256"],
         "files": hashes["files"],
         "metadata": metadata,
@@ -442,8 +463,9 @@ def _safe_relative(value: str, label: str) -> str:
 
 
 def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(binding, dict) or binding.get("schema_version") != 1:
-        raise ComponentError("Binding schema_version must be 1")
+    schema_version = release["schema"]["schema_version"]
+    if not isinstance(binding, dict) or binding.get("schema_version") != schema_version:
+        raise ComponentError(f"Binding schema_version must be {schema_version}")
     if binding.get("component_ref") != release["component_ref"]:
         raise ComponentError("Binding component_ref does not match the Component Release")
     scene = binding.get("scene")
@@ -466,6 +488,10 @@ def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[s
         value = placement.get(key)
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
             raise ComponentError(f"Binding placement.{key} must be positive")
+    if release.get("ratio"):
+        width, height = map(int, release["ratio"].split("x"))
+        if abs(placement["width"] * height - placement["height"] * width) > 0.001:
+            raise ComponentError("Binding placement does not match the Component ratio")
     timing = binding.get("timing")
     if not isinstance(timing, dict):
         raise ComponentError("Binding timing must be an object")
@@ -492,9 +518,7 @@ def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[s
     surfaces = binding.get("surfaces")
     if not isinstance(surfaces, dict):
         raise ComponentError("Binding surfaces must be an object")
-    specs = release.get("surface_specs") or _surface_specs(
-        release.get("metadata", {}).get("visual_surfaces"), "Component visual_surfaces"
-    )
+    specs = release["surface_specs"]
     missing_surfaces = sorted(surface_id for surface_id, spec in specs.items() if spec["required"] and surface_id not in surfaces)
     unknown_surfaces = sorted(set(surfaces) - set(specs))
     if missing_surfaces or unknown_surfaces:
@@ -616,10 +640,12 @@ def validate_component_transport(
     component_id: str,
     slot_names: list[str],
     surface_specs: dict[str, dict[str, Any]],
+    *,
+    require_root_id: bool = True,
 ) -> dict[str, Any]:
     source, parser = _parse_html(Path(html_path))
     roots = [node for node in parser.nodes if node["attrs"].get("data-composition-id") == component_id]
-    if len(roots) != 1 or not roots[0]["in_template"] or not roots[0]["attrs"].get("id"):
+    if len(roots) != 1 or not roots[0]["in_template"] or (require_root_id and not roots[0]["attrs"].get("id")):
         raise ComponentError("component.html requires one matching composition root inside <template>")
     variables_raw = roots[0]["attrs"].get("data-composition-variables")
     try:
@@ -790,7 +816,7 @@ def _same_tree(left: Path, right: Path) -> bool:
     right_files = {path.relative_to(right).as_posix() for path in right.rglob("*") if path.is_file()}
     if left_files != right_files:
         return False
-    return all((left / relative).read_bytes() == (right / relative).read_bytes() for relative in left_files)
+    return all(file_sha256(left / relative) == file_sha256(right / relative) for relative in left_files)
 
 
 def _vendor_relative(component_id: str, version: int) -> str:
@@ -865,10 +891,16 @@ def install_component(
     *,
     binding_path: str | None = None,
     expected_ref: str | None = None,
+    review_root: Path | None = None,
 ) -> dict[str, Any]:
     """Vendor one validated release, bind one Scene, and update the Lock."""
 
-    release = validate_component_release(Path(release_directory), expected_ref=expected_ref)
+    if review_root is not None:
+        from work_requests import review_identity
+        review_identity(review_root)
+        if not Path(project).resolve().is_relative_to(Path(review_root).resolve() / "works" / "active"):
+            raise ComponentError("Candidate installation requires an isolated Review project")
+    release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=review_root is not None)
     project = Path(project)
     if project.is_symlink() or not project.is_dir():
         raise ComponentError(f"Work project is not a regular directory: {project}")
@@ -878,14 +910,15 @@ def install_component(
     scene = binding_data["scene"]
     binding_rel = _safe_relative(binding_path or f"component-bindings/{scene}.{release['component_id']}.json", "binding path")
     target_binding = project / binding_rel
-    vendor_path = project / _vendor_relative(release["component_id"], release["version"])
+    package_id, version = parse_component_ref(release["component_ref"])
+    vendor_path = project / _vendor_relative(package_id, version)
     lock_path = project / "COMPONENT_LOCK.json"
     lock = _read_json(lock_path) if lock_path.is_file() else {"schema_version": 1, "algorithm": PACKAGE_ALGORITHM, "components": []}
     components = _lock_components(lock)
     vendor_path.parent.mkdir(parents=True, exist_ok=True)
 
     if vendor_path.exists():
-        existing = validate_component_release(vendor_path, expected_ref=release["component_ref"])
+        existing = validate_component_release(vendor_path, expected_ref=release["component_ref"], allow_unapproved=review_root is not None)
         if existing["package_sha256"] != release["package_sha256"] or not _same_tree(Path(release_directory), vendor_path):
             raise ComponentError(f"Existing vendor copy differs: {vendor_path}")
     else:
@@ -894,7 +927,7 @@ def install_component(
             raise ComponentError(f"Refusing to reuse stale staging directory: {staging}")
         shutil.copytree(release_directory, staging)
         try:
-            installed = validate_component_release(staging, expected_ref=release["component_ref"])
+            installed = validate_component_release(staging, expected_ref=release["component_ref"], allow_unapproved=review_root is not None)
             if installed["package_sha256"] != release["package_sha256"] or not _same_tree(Path(release_directory), staging):
                 raise ComponentError("Vendor copy changed during installation")
             os.replace(staging, vendor_path)
@@ -916,6 +949,8 @@ def install_component(
         "surfaces": [surface_records[surface_id] for surface_id in sorted(surface_records)],
     }
     record = _lock_record(release, project, [binding_entry], vendor_path)
+    if review_root is not None:
+        record["review"] = review_identity(review_root)
     for index, existing in enumerate(components):
         if existing.get("component_ref") == record["component_ref"]:
             for key in ("public_package_sha256", "work_package_sha256", "vendor_path", "install_files"):
@@ -1115,22 +1150,12 @@ def validate_work_surface_inventory(project: Path) -> dict[str, Any]:
 
 
 def validate_snapshot_closure(source: Path, snapshot: Path) -> dict[str, Any]:
-    names = (
-        "index.html",
-        "compositions",
-        "DESIGN.md",
-        "project-config.json",
-        "vendor",
-        "component-bindings",
-        "COMPONENT_LOCK.json",
-        "scene-slots.json",
-        "assets",
-    )
+    names = ("index.html", "compositions", "DESIGN.md", "project-config.json") + OPTIONAL_SNAPSHOT_ITEMS
     checked: list[str] = []
     for name in names:
         original = Path(source) / name
         frozen = Path(snapshot) / name
-        if not original.exists():
+        if not original.exists() and not original.is_symlink():
             continue
         if original.is_symlink() or frozen.is_symlink() or not frozen.exists():
             raise ComponentError(f"Snapshot closure is missing or linked: {name}")
@@ -1149,6 +1174,8 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
     """Verify Work vendor, bindings, and lock records without repairing them."""
 
     project = Path(project)
+    from work_requests import project_review_root
+    review_root = project_review_root(project)
     lock_path = project / "COMPONENT_LOCK.json"
     if not lock_path.is_file():
         raise ComponentError(f"Missing Component lock: {lock_path}")
@@ -1166,7 +1193,9 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         component_id, version = parse_component_ref(ref)
         vendor_rel = _safe_relative(str(record.get("vendor_path", "")), "vendor path")
         vendor_path = project / vendor_rel
-        vendor = validate_component_release(vendor_path, expected_ref=ref)
+        if record.get("review") and review_root is None:
+            raise ComponentError("Review candidate cannot be used in production")
+        vendor = validate_component_release(vendor_path, expected_ref=ref, allow_unapproved=review_root is not None)
         if vendor["package_sha256"] != record.get("work_package_sha256"):
             raise ComponentError(f"Work package hash mismatch: {ref}")
         if vendor["package_sha256"] != record.get("public_package_sha256"):
@@ -1217,6 +1246,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
 
 __all__ = [
     "PACKAGE_ALGORITHM",
+    "OPTIONAL_SNAPSHOT_ITEMS",
     "ComponentError",
     "component_package_sha256",
     "file_sha256",

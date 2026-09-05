@@ -6,5 +6,5 @@ if not exist "%PYTHON%" (
   >&2 echo work: bundled Python runtime is missing: %PYTHON%
   exit /b 1
 )
-"%PYTHON%" "%~dp0.studio\work.py" %*
+"%PYTHON%" -B "%~dp0.studio\windows_runtime.py" %*
 exit /b %ERRORLEVEL%

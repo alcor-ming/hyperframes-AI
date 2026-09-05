@@ -32,12 +32,21 @@
 
 ## Animation Plan
 
-- `ANIMATION_PLAN.md` 是唯一视觉语义真源，正式 HTML 制作前必须为 `approved`。
+- `ANIMATION_PLAN.md` 是唯一视觉语义真源；Script / Research 就绪后允许批准前的 Work-local HTML、候选绑定与必要动效预演。正式 Draft 前必须一次确认 Plan 与同源快照，不新增审批。
 - Scene 同时引用 Script Anchor 与 `RESEARCH.md` 的对应依据，不复制全文或研究全文。
-- Scene 必须给出一个视觉目标、完整可读的 Hero State 和简短运动逻辑。
+- Scene 给出视觉目标、完整可读的 Hero State、实际上屏信息的唯一源码/Binding 引用，以及文字、动作、证据各自承担的职责、动态与稳定阅读区间。复杂场景才拆 Beat，不强制固定状态数。
 - `verbatim` Scene 直接使用 `SCRIPT.md` 原时间戳；有实际视频或音频时仍以实际媒体为最终时间权威。
-- Scene 数量、顺序、目标、Hero State、Template、Profile 或文案结构变化时，Plan Revision 加一并清除 Accepted Draft。
+- Scene 数量、顺序、目标、Hero State、Template、Profile 或文案结构变化时更新 Plan Revision，只重新确认受影响 Scene 与必要交接；历史 Accepted Draft / Final 不覆盖，新 Final 仍须有适用的 Accepted Draft。
 - 精确时间、easing、换行、安全区、性能和不改变 Hero State 的布局修复不增加 Plan Revision。
+
+## 信息型动效
+
+- 信息先完整，注意力再编排，动画服务解释。必要术语、结论、条件、步骤与例子不得因“反 PPT”删去或只留口播；正文可以丰富，不以短标注替代全部解释。
+- 文字按含义分组，已讲内容可保留为稳定上下文；通过焦点迁移、局部展开、证据放大或对象转化解释关系。对比表、列表、截图、标题和稳定阅读不是失败条件。
+- 每组必要信息有可辨识的阅读窗口；正文不持续漂移、缩放、模糊或被镜头遮挡。信息太多先改分组、时序与版面，仍无法容纳时只提出该段取舍，不无限缩字。
+- 关键隐喻说明对象代表什么、动作对应什么关系、观众应得出什么结论；保留并列、比较、因果的真实区别。概念示意、模拟操作与真实录屏不得混同，数字和成功状态需要证据或演示标记。
+- Three.js 服务空间层级、路径、聚合或遮挡，不用无指向粒子替代机制说明；长正文默认留在 DOM / SVG，空间镜头不能牺牲精确信息。没有必要时不使用 Three.js。
+- 阅读判断依据实际画幅、字体、文字、时长与显示尺寸，不设置通用字数、字号、动画比例或结尾 `0.4s` 门槛。不能因“可能更好看”推翻已确认方向。
 
 ## 排除项
 
