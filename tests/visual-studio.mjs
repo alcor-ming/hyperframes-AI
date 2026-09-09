@@ -1,5 +1,6 @@
 // Real pinned Studio integration with synthetic Review Works, not production acceptance.
 // Set HF_PACKAGE, PLAYWRIGHT_PACKAGE and CHROME_PATH to existing local dependencies.
+// GSAP_FILE defaults to the runtime's sibling gsap package; include its local MotionPathPlugin.
 // Windows also requires WORK_COMMAND=<session/work.cmd> and FIXTURE_ROOT=<bound Review root>.
 // WORK_COMMAND may be a JSON argv array; WSL defaults to python3 .studio/work.py.
 import assert from 'node:assert/strict';
@@ -92,12 +93,20 @@ async function fixture(label) {
   // Approved here denotes synthetic fixture input, never acceptance of a production Work.
   await fs.writeFile(plan, (await fs.readFile(plan, 'utf8')).replace('"draft"', '"approved"'));
   await fs.mkdir(path.join(project, 'compositions'), {recursive: true});
-  await fs.writeFile(path.join(project, 'DESIGN.md'), 'Synthetic Studio integration fixture. One static process; no production claim.');
+  await fs.writeFile(path.join(project, 'DESIGN.md'), 'Synthetic Studio process fixture; no production claim.');
   await fs.writeFile(path.join(project, 'project-config.json'), '{}');
+  if (label === 'A') {
+    const gsap = process.env.GSAP_FILE || path.join(HF_PACKAGE, '../gsap/dist/gsap.min.js');
+    await fs.mkdir(path.join(project, 'assets'));
+    for (const name of ['gsap.min.js', 'MotionPathPlugin.min.js'])
+      await fs.copyFile(path.join(path.dirname(gsap), name), path.join(project, 'assets', name));
+  }
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Studio fixture ${label}</title>
 <style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif;letter-spacing:0}main{width:960px;height:540px;background:#eef3f1;padding:48px;color:#162725}h1{font-size:38px;margin:0 0 20px}p{font-size:22px;margin:0 0 30px}.process{display:flex;align-items:center;gap:20px}.node{width:220px;height:170px;padding:24px;background:#fff;border-top:8px solid #188b72;font-size:26px}.node:last-child{border-color:#cf5068}span{font-size:32px}.footer{margin-top:34px;font-size:20px}</style></head><body>
-<main data-composition-id="studio-${label}" data-width="960" data-height="540" data-start="0" data-duration="1" data-no-timeline="true">
-<section id="S01" class="clip" data-start="0" data-duration="1" data-track-index="0"><h1 id="fixture-title">Studio ${label}: evidence to answer</h1><p>Keep the retrieved source attached to the answer.</p><div class="process"><div class="node">Question<br>Which policy?</div><span aria-hidden="true">&rarr;</span><div class="node">Evidence<br>Policy 7</div><span aria-hidden="true">&rarr;</span><div class="node">Answer<br>Source: Policy 7</div></div><p class="footer">A visible relationship, not a repeated explanation.</p></section></main></body></html>`;
+<main data-composition-id="studio-${label}" data-width="960" data-height="540" data-start="0" data-duration="1"${label === 'A' ? '' : ' data-no-timeline="true"'}>
+<section id="S01" class="clip" data-start="0" data-duration="1" data-track-index="0"><h1 id="fixture-title">Studio ${label}: evidence to answer</h1><p>Keep the retrieved source attached to the answer.</p><div class="process"><div class="node">Question<br>Which policy?</div><span aria-hidden="true">&rarr;</span><div class="node">Evidence<br>Policy 7</div><span aria-hidden="true">&rarr;</span><div class="node">Answer<br>Source: Policy 7</div></div><p class="footer">A visible relationship, not a repeated explanation.</p></section></main>
+${label === 'A' ? '<script src="assets/gsap.min.js"></script><script src="assets/MotionPathPlugin.min.js"></script><script>window.__timelines={"studio-A":gsap.timeline({paused:true}).to(".node:first-child",{y:8,duration:.4}).to({},{duration:.6})};</script>' : ''}
+</body></html>`;
   await fs.writeFile(path.join(project, 'index.html'), html);
   return {id, variant, project, label, run, html};
 }
