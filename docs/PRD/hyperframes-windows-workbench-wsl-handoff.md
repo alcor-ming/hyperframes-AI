@@ -1,12 +1,12 @@
 # Windows 创作工作台与 WSL 交接
 
-日期：2026-09-05
+日期：2026-09-07
 
-本文件收敛用户提供的《HyperFrames AI：Windows 创作工作台、WSL 开发与候选回测补充 PRD》v1.0 的实施边界。它补充 [可执行 Visual Plan PRD](./hyperframes-visual-plan-motion-reuse.md)，不重做已有播放、seek、Plan/Draft 分离、来源与依赖快照、局部差异、Range 或混合渲染。本文是目标与验收合同，不是 Windows 实机通过报告。
+本文件收敛 Windows 创作工作台、WSL 开发与候选回测的实施边界，并按轻量 Plan v2.0 更新制作时机。它补充 [轻量 Visual Plan PRD](./hyperframes-visual-plan-motion-reuse.md)，不重做已有播放、seek、Plan/Draft 分离、来源与依赖快照、局部差异、Range 或混合渲染。本文是目标与验收合同，不是 Windows 实机通过报告。
 
 ## 职责
 
-- Windows：正式 Work 生命周期、文案、Research、Plan、Slots、布局、时间、跨 Scene 编排、需求讨论及作品验收。
+- Windows：正式 Work 生命周期、文案、Research、Plan、实际文字的静态 HTML/CSS 布局样段、配色、效果方案、Slots、布局、时间、跨 Scene 编排、需求讨论及作品验收。
 - WSL：唯一 Git 开发仓、Harness、组件内部、新 shader、通用效果主体的开发与打包。只在冻结请求的私有复现副本中调试，不双写生产 Work。
 - Work-local 不是绕过开发边界的名称。新效果可交付为单个 Work 的补丁，不强制公共化；真实复用与用户认可后才考虑入库。
 - 不建设第二份源码仓、常驻调度服务、在线 Registry、新剪辑器或多轮审批链。
@@ -21,7 +21,7 @@ Windows 日常打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`。它是薄入口�
 
 ## 原生执行与候选
 
-Windows 原生 Work CLI、Visual Plan 和渲染依赖须闭合：固定 CPython、Node、HF、GSAP、Three、渲染浏览器、FFmpeg/ffprobe 与所需字体；由安装管理，普通渲染不运行浮动 npx/npm install。入口自动解析受控 HF 路径，不要求用户填写开发 dist。
+Windows 原生 Work CLI 与生产渲染依赖继续由安装管理：固定 CPython、Node、HF、GSAP、Three、渲染浏览器、FFmpeg/ffprobe 与字体，普通渲染不运行浮动 npx/npm install。入口自动解析受控 HF 路径。轻量布局 Plan 只需实际样段依赖，不以 HF/Three/FFmpeg 或正式音频就绪为前提；Draft 按需检测生产能力。不因此拆分产品或额外重打包完整运行时。
 
 已有 ASR/下载 Provider 沿用其受控入口；WSL Provider 不把整个创作流程变成 WSL 开发，也不成为所有用户的隐含依赖。缺 ASR 不阻塞已有音频的预览。权限受限时指出实际缺口，不关闭沙箱或授权任意 shell。
 
@@ -35,6 +35,8 @@ Windows 原生 Work CLI、Visual Plan 和渲染依赖须闭合：固定 CPython�
 
 Windows 拥有需求、反馈、验收；WSL 读取冻结 revision，拥有交付清单和技术结果，不共同编辑同一状态文件。更新请求保留旧 revision；缺上下文只返回该请求的聚焦问题。不增加默认需求批准门，继续制作不受影响 Scene。
 
+默认先由 Windows 提交全片方案和代表性布局样段，标清已展示设计与未实现动效/媒体；效果未交付但不影响布局判断时不阻塞 Plan。Plan 确认后按需冻结新组件、通用 GSAP 动作或 Three.js 效果请求，WSL 仍负责其主体开发。Draft 优先验证最不确定的镜头；只有会改变整体决策的风险才提前局部试做，不新增强制 Motion 审批。
+
 未批准组件只在隔离 Review 副本预演，不通过普通 install 的 force 后门。Review 标明候选和请求 revision，隔离生产 Current/接受状态；禁止正式 Finalize、归档完成和平台草稿，可生成测试视频。
 
 验收准确实现、依赖和实际输入后，公共组件按现有准入精确安装到目标 Work，其余 Work 不升级。Work-local 补丁应用前核对源快照，基础变化只比较受影响 Scene，不覆盖整片。仅元数据变更不重复验收效果；执行代码、资源、依赖或视觉默认值变化须验证受影响部分。组件、Plan、Draft 分开记录，但一句明确回复可同时涵盖。
@@ -42,7 +44,7 @@ Windows 拥有需求、反馈、验收；WSL 读取冻结 revision，拥有交�
 ## 验收与未验证项
 
 1. 候选准确包含本轮修改，不泄露私有输入；安装失败不改稳定入口。
-2. Windows 固定入口原生完成隔离 Work、Plan 和测试渲染，不依赖 WSL 活跃目录或全局依赖。
+2. Windows 固定入口原生完成隔离 Work 与轻量 Plan，不依赖 WSL 活跃目录、全片运行时或全局依赖；生产运行时就绪后另验测试渲染，不能用静态检查冒充。
 3. 长 Work 的副本、真实文字、Scene 定位、随机 seek、长音频 Range、GSAP/Three 生命周期保持正确，原件不变。
 4. 请求经真实内容、WSL 实现、Windows Review、反馈、明确验收及精确接纳完成往返。
 5. 候选/稳定版并存且会话不混版，未批准候选不能正式安装或 Finalize。

@@ -178,6 +178,39 @@ class WorkCliTest(unittest.TestCase):
         result = self.invoke("preview", "register", str(self.root / "missing.mp4"), expected=2)
         self.assertIn("requires workflow hyperframes_video", result)
 
+    def test_script_text_excludes_scene_index_and_preserves_legacy_anchors(self) -> None:
+        _, work = self.new_work()
+        script = work / "variants" / "main" / "SCRIPT.md"
+        narration = "<!-- P001 -->\nOriginal narration.\n\n<!-- P002 -->\nSecond paragraph."
+        header = '---\n{"revision":1}\n---\n\n'
+        script.write_text(header + narration + "\n", encoding="utf-8")
+        original = self.invoke("script", "text")
+        anchored = self.invoke("script", "text", "--anchors")
+        self.assertEqual(narration, anchored)
+        self.assertNotIn("P001", original)
+        index = ("<!-- scene-index:start -->\n## Scene index (not narration)\n"
+                 "| Scene | Anchor | Budget | Research direction |\n"
+                 "| S02 | P002 | 12s | This must never be spoken |\n<!-- scene-index:end -->")
+        for content in (index + "\n\n" + narration, narration + "\n\n" + index):
+            script.write_text(header + content + "\n", encoding="utf-8")
+            self.assertEqual(original, self.invoke("script", "text"))
+            self.assertEqual(anchored, self.invoke("script", "text", "--anchors"))
+        for content in (index.replace("<!-- scene-index:end -->", ""), index + index):
+            script.write_text(header + narration + content, encoding="utf-8")
+            self.assertIn("paired scene-index", self.invoke("script", "text", expected=2))
+
+    def test_legacy_draft_without_research_keeps_original_lifecycle(self) -> None:
+        _, work = self.new_work()
+        movie = self.prepare_preview(work)
+        variant = work / "variants" / "main"
+        self.update_frontmatter(variant / "ANIMATION_PLAN.md", research_revision=None)
+        (variant / "RESEARCH.md").unlink()
+        self.assertEqual("draft-v001", self.invoke("preview", "register", str(movie)))
+        preview = variant / "previews" / "draft-v001"
+        self.assertNotIn("input_sha256", WORK_CLI.preview_metadata(preview))
+        self.assertEqual("draft-v001", self.invoke("preview", "accept", "draft-v001"))
+        self.assertTrue(Path(self.invoke("finalize", str(movie), "--qa-passed")).is_file())
+
     def test_podcast_workflow_rejects_video_options_before_creation(self) -> None:
         result = self.invoke(
             "new",

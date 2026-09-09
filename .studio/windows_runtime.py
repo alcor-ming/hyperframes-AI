@@ -81,8 +81,11 @@ def start_session(root: Path, home: Path, review_root: Path | None = None) -> Pa
     for name, value in (("session.json", binding), ("local.json", config)):
         (directory / name).write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
     # Each launcher carries its own binding; changing current cannot affect it.
+    runtime_prefix = "%~dp0" + os.path.relpath(root.resolve(), directory.resolve()).replace("/", "\\").replace("%", "%%")
     (directory / "work.cmd").write_text(
-        '@echo off\nsetlocal\npowershell.exe -NoLogo -NoProfile -File "%~dp0work.ps1" %*\n'
+        '@echo off\nsetlocal DisableDelayedExpansion\nset "PYTHONUTF8=1"\n'
+        'set "HYPERFRAMES_AI_SESSION=%~dp0session.json"\n'
+        f'"{runtime_prefix}\\runtime\\python\\python.exe" -B "{runtime_prefix}\\.studio\\windows_runtime.py" %*\n'
         'exit /b %ERRORLEVEL%\n', encoding="ascii")
     (directory / "work.ps1").write_text(
         '$env:HYPERFRAMES_AI_SESSION = Join-Path $PSScriptRoot "session.json"\n'

@@ -4,7 +4,7 @@
 
 ## 快速开始
 
-Windows 日常创作打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`，使用其中的 `work.cmd`；下文 Bash 命令是相同 CLI 的 WSL 写法。WSL 开发仓不作为 Windows 的创作入口。正式 Work 由 Windows 写入；WSL 开发和回测使用冻结请求与隔离副本。
+Windows 日常创作打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`，先运行 `start.ps1`，再使用返回会话目录内的 `work.cmd`；下文 Bash 命令是相同 CLI 的 WSL 写法。WSL 开发仓不作为 Windows 的创作入口。正式 Work 由 Windows 写入；WSL 开发和回测使用冻结请求与隔离副本。
 
 ```bash
 ./work root show
@@ -40,6 +40,19 @@ Windows 日常创作打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`，使用其�
 ```
 
 后台 Work 在创建时已经获得稳定序号；转录完成后只补充嘉宾名 + 核心主题，再完成 3 个文章方案并停在 `article_selection`。HyperFrames 视频在 Script 稳定后只补充核心主题。Work ID 与目录名始终不变，重复命名保留原序号；`work list` 按位置、Workflow 和序号排列。用户只需确认 1 个方案；单个 Work 失败不阻塞同批其他 Work。
+
+视频 `SCRIPT.md` 的口播正文可附成对 `scene-index` 注释包围的非口播 Scene 索引；需要配音、统计或对齐文本时使用 `./work script text`，索引不会混入。`RESEARCH.md` 只按当前 Scene / Anchor 的内容缺口补充资料依据和采用信息，不规定视觉实现。Plan 引用 Script、Research 或素材，不再复制一份信息稿。
+
+视频默认 Plan 是全片简短方案与一个代表性静态布局样段；样段使用实际内容、配色与画幅，素材已清楚呈现的信息不强制重复覆盖，未接入媒体用语义占位。Script / Research 就绪后，将样段放在当前 Variant 的 `layout/index.html`，再登记和查看：
+
+```bash
+./work preview register --purpose plan --kind layout --sample-dir layout --scene S01
+./work preview open plan-v001
+# 用户确认样段设计和实施方向后
+./work preview accept plan-v001
+```
+
+样段不要求 HF、Three、FFmpeg 或正式音频；接受不等于动画通过或 Draft 接受。Draft 复用已确认部分，优先验证最不确定镜头，再补全其余 Scene。换行、分组和等义精简由同一主模型原位处理，核心内容或结论变化才提出局部取舍；Revision 留痕不把局部修改变成全片刷新。完整可执行预演保留为显式选择的高级路径，旧命令与记录语义不变。具体样段约定见 [创作工作流](.studio/workflow.md)。
 
 Draft 与 Final 生命周期：
 
@@ -112,7 +125,9 @@ python3 .studio/prepare_windows_runtime.py prepare \
 .\start.ps1 -Candidate candidate-review-001 -ReviewRoot D:\AI\AI+hyperframes\review\review-001
 ```
 
-启动器输出 `sessions/<uuid>` 下的固定会话目录。Codex 后续仅使用该目录的 `work.cmd` / `work.ps1`，先运行 `work.cmd doctor` 查看实际版本、依赖、WorkRoot 与 Review 身份。安装包内的 `work.cmd session start --review-root <path>` 也可建立会话；未绑定会话的普通 Work 命令会拒绝运行。`preview open` / `preview render` 自动使用会话受控 HF，无需手填 `--hyperframes-dist`。
+启动器输出 `sessions/<uuid>` 下的固定会话目录。Codex 后续仅使用该目录的 `work.cmd` / `work.ps1`，先运行 `work.cmd doctor` 查看实际版本、依赖、WorkRoot 与 Review 身份。安装包内的 `work.cmd session start --review-root <path>` 也可建立会话；未绑定会话的普通 Work 命令会拒绝运行。可执行预演的 `preview open` / `preview render` 自动使用会话受控 HF，无需手填 `--hyperframes-dist`；静态样段查看不加载 HF，doctor 的生产依赖缺失不能冒充已具备渲染能力，也不阻止不依赖它们的布局查看。
+
+会话 `work.cmd` 直接调用固定版本的内置 Python，不启动子 `powershell.exe -File`；`work.ps1` 仅保留为兼容入口。旧会话文件不会自动重写，入口修复后须选择新候选并创建新会话。安装根以当前 Codex App 内的 `%LOCALAPPDATA%` 或安装时的 `-ReleaseRoot` 为准，不能假设它与外部终端相同。若沙箱仍拒绝入口，保留准确命令和错误，不修改执行策略或把审批后通过当成沙箱验收。
 
 稳定安装会验证 Manifest 与 WorkStore，再以 Windows junction 切换 `current` 并保留 `previous`；候选安装不改变稳定入口。配置、会话和缓存外置；会话固定实际包及其运行依赖，切换版本后开新会话，不热换 Skills 或播放器。回滚不删除 Work、旧快照、请求或 Final；旧包不自动清理。安装/回滚可带 `-CheckWork <id> -Variant <id>` 先检查目标版本能否读取指定 Work；未指定时会明确提示数据兼容性尚未验证。
 

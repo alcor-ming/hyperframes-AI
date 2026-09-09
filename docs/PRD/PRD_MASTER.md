@@ -219,8 +219,8 @@ Open Design `Hyperframes` 项目中的组合预览、缺失 HTML 的孤立 artif
 
 ## PRD 索引
 
-- [Windows 创作工作台与 WSL 交接](./hyperframes-windows-workbench-wsl-handoff.md)：2026-09-05 部署补充，固定创作入口、不可变候选、私有请求与隔离回测；不重做 Visual Plan，不替代正式发布授权或实机验证。
-- [可执行视觉 Plan、信息型动效与效果复用升级 PRD](./hyperframes-visual-plan-motion-reuse.md)：2026-09-05 专项迭代，允许批准前同源 Work-local 预演，不新增审批；保留本主 PRD 未来设计与整库范围，不宣称整库迁移或真实返工改善已完成。
+- [Windows 创作工作台与 WSL 交接](./hyperframes-windows-workbench-wsl-handoff.md)：2026-09-07 更新制作时机，Windows 先完成布局样段与需求，Plan 后按需交接 WSL 新效果；固定入口、不可变候选、私有请求和隔离回测不变。
+- [轻量视觉 Plan、信息型动效与效果复用升级 PRD](./hyperframes-visual-plan-motion-reuse.md)：2026-09-07 v2.0 默认全片简短方案加一个代表性布局样段，主要动作与媒体在 Draft 完成；完整可执行预演保留高级选择，Plan 不等于 Draft 接受。保留本主 PRD 未来设计与整库范围，不宣称真实 token 或返工已经下降。
 - [组件与动效模块 PRD](./hyperframes-component-motion.md)
 - [决策台账](./_ledger/component-driven-motion-vnext.md)
 - [rnskill 动效分层研究](./_research/rnskill-motion-layering.md)

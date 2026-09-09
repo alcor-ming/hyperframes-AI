@@ -1,7 +1,8 @@
-"""Read-only Visual Plan projection on the installed HyperFrames player."""
+"""Read-only layout samples and executable Visual Plans."""
 
 from functools import partial
 from html.parser import HTMLParser
+from html import escape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import hashlib
 import json
@@ -58,12 +59,26 @@ def scene_projection(project, plan_text):
     return sorted(scenes, key=lambda scene: scene["start"])
 
 
-def validate_dependencies(project):
+def layout_projection(project, plan_text, scene_ids):
+    rows = set(re.findall(r"^\|\s*(S\d+)\s*\|", plan_text, re.MULTILINE))
+    nodes = Composition((project / "index.html").read_text(encoding="utf-8")).nodes
+    ids = {a.get("data-scene-id", a.get("id")) for _, a in nodes}
+    if not scene_ids or len(set(scene_ids)) != len(scene_ids) or set(scene_ids) - rows or set(scene_ids) - ids:
+        raise VisualPlanError("Layout sample needs unique --scene IDs present in both Plan and HTML")
+    canvases = [a for _, a in nodes if "data-width" in a and "data-height" in a]
+    if not canvases or any(not a[k].isdigit() or not 0 < int(a[k]) <= 16384 for a in canvases for k in ("data-width", "data-height")):
+        raise VisualPlanError("Layout sample needs a positive data-width/data-height canvas")
+    return [{"id": sid, "source": "index.html"} for sid in scene_ids]
+
+
+def validate_dependencies(project, *, layout=False):
     """Check literal local references; browser QA must also check dynamic asset loads."""
     project = project.resolve()
     visited = set()
 
     def visit(path):
+        if layout and any(p.is_symlink() for p in (path, *path.parents) if p.is_relative_to(project)):
+            raise VisualPlanError(f"Layout dependency cannot be a symlink: {path}")
         path = path.resolve()
         if not path.is_relative_to(project) or not path.is_file():
             raise VisualPlanError(f"Dependency is missing or outside snapshot: {path}")
@@ -76,10 +91,16 @@ def validate_dependencies(project):
         refs = []
         if path.suffix == ".html":
             for tag, attrs in Composition(text).nodes:
+                if layout and (tag in {"audio", "video", "iframe", "object", "embed", "hyperframes-player"} or "data-composition-src" in attrs):
+                    raise VisualPlanError("Layout samples use semantic placeholders, not media or compositions")
+                if layout and ("srcset" in attrs or "imagesrcset" in attrs):
+                    raise VisualPlanError("Layout samples use a single local src, not responsive image candidates")
                 refs.extend(attrs[key] for key in ("src", "data-composition-src", "poster") if attrs.get(key))
                 if tag == "link" and attrs.get("href"):
                     refs.append(attrs["href"])
         refs += re.findall(r"url\(\s*['\"]?([^)'\"\s]+)", text)
+        if layout:
+            refs += re.findall(r"@import\s+['\"]([^'\"]+)['\"]", text)
         refs += re.findall(r"(?:\bfrom\s*|\bimport\s*\(?\s*|\bfetch\s*\(\s*)['\"]([^'\"]+)['\"]", text)
         for ref in refs:
             if ref.startswith(("#", "data:", "blob:")):
@@ -105,12 +126,21 @@ def source_changes(before, after):
     return [name for name in sorted(a.keys() | b.keys()) if a.get(name) != b.get(name)]
 
 
-def serve(preview, hf_dist, port=0, review=None):
-    hf_dist = Path(hf_dist).resolve()
-    scripts = {name: hf_dist / name for name in ("hyperframes-player.global.js", "hyperframe.runtime.iife.js")}
+def serve(preview, hf_dist=None, port=0, review=None, *, layout=False):
+    scripts = {} if layout else {name: Path(hf_dist).resolve() / name for name in ("hyperframes-player.global.js", "hyperframe.runtime.iife.js")}
     if not all(p.is_file() for p in scripts.values()):
         raise VisualPlanError("--hyperframes-dist must contain the installed player and runtime bundles")
-    page = Path(__file__).with_name("visual_plan.html").read_bytes()
+    if layout:
+        data = json.loads((preview / "visual-plan.json").read_text(encoding="utf-8"))
+        scope = escape(" / ".join(s["id"] for s in data["scenes"]))
+        page = (f'<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+                f'<title>布局样段 {scope}</title><style>body{{margin:0;font:16px system-ui;letter-spacing:0}}'
+                'header{padding:12px;overflow-wrap:anywhere}iframe{display:block;width:100%;height:calc(100dvh - 90px);border:0}</style>'
+                f'<header>布局样段 | {scope} | 动效与媒体尚未实现<br>'
+                f'{escape(preview.name)} | {"Review | " if review else ""}生产播放与渲染尚未验证</header>'
+                '<iframe title="静态布局样段" sandbox="allow-scripts allow-same-origin" src="source-snapshot/index.html"></iframe></html>').encode()
+    else:
+        page = Path(__file__).with_name("visual_plan.html").read_bytes()
 
     class Handler(SimpleHTTPRequestHandler):
         def send_head(self):
@@ -183,7 +213,10 @@ def serve(preview, hf_dist, port=0, review=None):
         def end_headers(self):
             self.send_header("Cache-Control", "no-store")
             self.send_header("Accept-Ranges", "bytes")
-            self.send_header("Content-Security-Policy", "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' blob:")
+            policy = "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' blob:"
+            if layout:
+                policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'none'; connect-src 'none'; object-src 'none'"
+            self.send_header("Content-Security-Policy", policy)
             super().end_headers()
 
     with ThreadingHTTPServer(("127.0.0.1", port), partial(Handler, directory=str(preview))) as server:

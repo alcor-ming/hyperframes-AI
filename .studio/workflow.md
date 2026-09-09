@@ -4,7 +4,7 @@
 
 Windows 从固定 `workspace/start.ps1` 创建会话，之后使用返回会话目录内的入口，整个会话绑定同一已安装版本；下文 `./work` 在 Windows 对应该目录的 `work.cmd`。`work.cmd doctor` 显示实际绑定，候选启动必须指定 `-Candidate <id> -ReviewRoot <隔离WorkStore>`。WSL 负责 Harness、组件内部和新效果开发，只在明确请求的私有复现副本中调试。Windows 可以编辑本作品文字、Slots、布局、时间和跨 Scene 编排，不修改已安装 Harness 或冻结 vendor。
 
-前台交互运行 `./work current`；后台任务使用已分配的 Work ID 与 Variant ID 显式启动。读取 `WORK.md` 的 `workflow` 后再路由。`hyperframes_video` 只加载当前 Work、Variant、Script、一个 Recipe 和一套 Profile；`podcast_quote_image` 在文章方案批准前加载规划 Skill，批准后加载文案 Skill，且只读取当前阶段的机器产物。已有合格输入时跳过上游步骤。
+前台交互运行 `./work current`；后台任务使用已分配的 Work ID 与 Variant ID 显式启动。读取 `WORK.md` 的 `workflow` 后再路由。`hyperframes_video` 只加载当前 Work、Variant、Script、一个 Recipe 和一套 Profile；Research 按当前 Scene / Anchor 缺口只读采用条目与相关资料依据，视觉阶段再读 Plan。`podcast_quote_image` 在文章方案批准前加载规划 Skill，批准后加载文案 Skill，且只读取当前阶段的机器产物。已有合格输入时跳过上游步骤。
 
 ## HyperFrames 视频
 
@@ -23,41 +23,67 @@ Windows 从固定 `workspace/start.ps1` 创建会话，之后使用返回会话�
 - `dbs`：保留 `source.md` 原始基线，允许 DBS 多轮修改口播；正文变化时递增 Script Revision 并等待批准。
 - `verbatim`：逐字保留转录口播、稳定 Anchor 和原时间戳；正文 `approval` 为 `not_required`，DBS 只可处理诊断或 `PACKAGE.md`，不得改写口播。
 
-两条路径汇合后，先用最终 Script 的核心主题执行 `./work --work <id> --variant <variant-id> name "<核心主题>"`，再按最终 `SCRIPT.md` 联网研究一手资料并完成同一 Variant 的 `RESEARCH.md`。研究按 Anchor 提供补充事实、可视化机制、边界和来源链接，不替代或反向改写口播。Script Revision 变化时必须刷新 Research Revision，之后才能设计 Animation Plan。
+两条路径汇合后，先用最终 Script 的核心主题执行 `./work --work <id> --variant <variant-id> name "<核心主题>"`，再按 Scene 索引与最终口播的实际信息缺口完成同一 Variant 的 `RESEARCH.md`。只补查受影响内容，不替代或反向改写口播；没有缺口时记录无新增研究。Script Revision 变化先核对适用范围，完成必要条目更新和 Revision 同步后继续，不默认刷新全片。
+
+`SCRIPT.md` 的口播正文使用稳定 Anchor；简短 Scene 索引必须放在成对 `<!-- scene-index:start -->` / `<!-- scene-index:end -->` 内，只记录 `Scene | Anchor 范围 | 时间预算 | 观众重点 / 调研方向`。索引是规划输入，不是口播。需要纯文本、统计、配音或对齐输入时统一使用 `./work --work <id> --variant <variant-id> script text`；只有需要同时保留 Anchor 时增加 `--anchors`。旧 SCRIPT 没有索引时按原正文读取；如已有等效索引，只补成对标记，不强行重排内容。
+
+### 内容归属与按缺口研究
+
+Research 只补当前内容实际缺少的理解、比较、应用或记忆点信息，可按需选择概念 / 原理 / 例子、前后 / 方案比较、应用 / 过程 / 效果、背景故事 / 反差事实 / 代表性案例；过渡和个人感受可以不研究。优先一手资料，发现事实错误时定点纠正，不另做“边界调研”。
+
+同一 `RESEARCH.md` 内，“资料依据”保存研究结果、来源和资料或素材证据位置；源视频证据时间点不等于成片展示时间。“采用信息”按现有 Scene / Anchor 与简短条目标题保存可直接使用的信息稿和来源引用，必要时标核心 / 可选；只有歧义时加简短编号。不写布局、图标尺寸、裁切、动画状态或成片秒数。
+
+逐字口播引用 Script Anchor。口播摘录加工成独立维护的信息文字时写入 Research 采用信息并注明口播来源，不因此联网。原视频 / 截图内文字归素材，清楚呈现时不重复覆盖。“步骤一”“输入”“结果”等无独立主张的表现标签直接写在工程；数据、比较、因果和“效率提升十倍”等独立主张必须来自采用信息及其资料依据。Plan 引用这些来源，只用少量文字示例说明设计，不成为第二份信息稿或标签表。
+
+同一主模型负责内容到画面。换行、层级、分组、出现顺序和表现标签直接在样段 / 工程调整；删除重复措辞、等义精简或改成流程短语时，同时原位更新 Research 采用条目及呈现，不重新联网、不生成阶段性交接或文字审批。等义以观众最终得到的结论不变为准；顺序变因果、比较对象变化、必要数值 / 单位 / 归属消失均为实质修改。
+
+不采用可选信息由主模型决定。新增数据、比较或因果只补查相关条目；删除核心信息，或改变事实结论、观点、已确认叙事时，集中提出局部取舍、建议和对 Scene / 时间的影响，沿用既有用户确认。确实无法同时保留核心信息与时间预算时，直接给用户真实取舍，不要求 Research 反复压缩。
 
 Research 标记为 `ready` 后，创建 Animation Plan 的同一步调用 DBS 完成 `PACKAGE.md`：使用 `dbs-xhs-title` 生成候选并选择 Top 1，再根据最终 Script 与 Research 写一条封面文字、一句话简介和内容概括。内容概括按主要对象或主题简短分项；介绍多个 Skill、工具、功能或案例时逐项单独说明。文档只保留这四项最终结果，不附公式分析或候选清单，也不新增审批门。
 
-进入 Animation Plan 时加载 `hyperframes-anti-ppt`，按当前实际文字、时间边界、Recipe、Profile、Subtemplate 与画幅检查信息完整、阅读窗口和动效关系，不套用统一状态公式。结果合并进同一份 `ANIMATION_PLAN.md`，不新增审批产物。组件的检索、版本、Slots 与安装由视频工作流或组件库能力负责。
+进入 Animation Plan 时加载 `hyperframes-anti-ppt`，按当前内容来源、时间依据、Recipe、Profile、Subtemplate 与画幅检查结论是否被正确表达、需要阅读的文字是否可读以及动效关系，不要求逐字逐卡摆放，不套用统一状态公式。结果合并进同一份 `ANIMATION_PLAN.md`，不新增审批产物。组件的检索、版本、Slots 与安装由视频工作流或组件库能力负责。
 
 已批准的 Component Release 直接读取 `.studio/components/**/COMPONENT.md`，需要真实用法证据时再读取对应 `cases/**/CASE.md` 和边界 Fixture；Case 不扩大公共合同。安装前运行 `./work component validate <component-id>@vN`，用显式 Work/Variant 和 Binding 文件运行 `./work --work <id> --variant <variant-id> component install <component-id>@vN --binding-file <binding.json>`；Plan 批准前限预演用途，增加 `--purpose plan`，仍要求 Script / Research 就绪与 Release 合格。随后用 `component verify` 复算公共源、Work vendor、全部 Scene Bindings 和 `COMPONENT_LOCK.json`。语义简报与匹配理由仍写入 `ANIMATION_PLAN.md`，不创建第二份 Scene 数据库或逐场拒绝清单。没有匹配组件时选择 Plan 内的 `custom:<slug>`，修改内部实现应派生到 Work-local custom，不覆盖冻结 vendor。
 
-### 可执行 Visual Plan
+### 轻量布局 Plan
 
-Animation Plan 与 Work-local 场景实现并行形成：所有 Scene 绑定实际上屏文字、关键素材、主要动效与交接，能顺序播放、暂停、拖动和定位。预演沿用正式画布尺寸、字体、布局与时间逻辑；只延后不影响视觉判断的精修。缺失关键素材要记录影响，不能用占位冒充效果通过。文字在源码或 Binding 中维护一份，Plan 引用其位置。
+Animation Plan 覆盖全片 Scene / Anchor、Research 采用信息或素材引用、视觉方向、主要动态方案、素材用途与待定项，不复制完整信息稿或逐屏标签；已有合格结构直接沿用。默认只制作一个实际、文字密度和版式能代表主体的片段，不默认选字少的开头，也不自动为每个 Scene 做一张图。另一类版式确实无法推断且影响整体决策时才补一个小样。
 
-使用现有预览快照入口，不另做演示工程：
+样段用普通 HTML/CSS 呈现实际内容；其中需要阅读的文字使用拟采用的颜色、字体、字号、行距和层级，并匹配目标画幅。可用极少量 JavaScript 切换少量静态状态，不以灰色线框冒充设计。媒体占位说明用途、对象、比例和裁切意图，不使用失效路径、虚构 URL 或空文件，也不触发下载、probe、转码、同步或全媒体哈希。已有且影响布局的真实图片可使用，只检查实际用到的资源；事实核查与内容所需媒体流程不因此跳过。
 
-```bash
-./work --work <id> --variant <variant-id> preview register --purpose plan
-./work --work <id> --variant <variant-id> preview open plan-v001 --port 8765
-# 用户确认可见效果后执行；记录 Plan 批准，不接受 Draft
-./work --work <id> --variant <variant-id> preview accept plan-v001
-./work --work <id> --variant <variant-id> preview diff plan-v001
-./work --work <id> --variant <variant-id> preview render plan-v001 --output <Work内的draft.mp4>
-./work --work <id> --variant <variant-id> preview register <Work内的draft.mp4>
+主要 GSAP / Three 动作先写方案：对象和关系、起止状态、稳定阅读位置、结果，昂贵或新颖效果必要时补替代。样段不初始化 HF、GSAP、Three、所有 Scene、长音频或整片时间线，不导出 MP4。页面标明“布局样段｜Sxx｜动效与媒体尚未实现”；没有动画就叫状态切换，不造整片播放轴。能判断布局、配色、字体与文字承载即提交。
+
+使用现有 preview 生命周期，样段目录位于当前 Variant 内并含 `index.html`；`--sample-dir` 按 Variant 解析（也接受其内部绝对路径），`--scene` 可重复。画布节点声明正整数 `data-width` / `data-height`，每个已展示 Scene 的 `id` 或 `data-scene-id` 与 Plan 表及 `--scene` 一致，例如：
+
+```html
+<main data-width="1920" data-height="1080">
+  <section data-scene-id="S01"><!-- 当前片段实际文字与布局 --></section>
+</main>
 ```
 
-Plan 注册不要求先编码 MP4。`preview open` 是使用官方 `hyperframes-player` 的本地前台服务器，不是 Studio 全编辑器；只查看同源快照。`index.html` 顶层 Scene 使用 `id="S01"` 或 `data-scene-id="S01"` 以及 `data-start`、`data-duration`，可选 `data-reading-time` 为 Scene 内秒数，默认中点。视觉意图从 Plan 的 Scene 表投影，不手工维护第二份 Scene 库。静态关键帧辅助正式显示尺寸的阅读检查，不替代动效播放。
+上例只是节点约定，实际样段还需匹配画幅的 CSS、真实内容和范围提示。实际资源均置于样段目录内，CSS `@import` 可递归引用，图片使用单一 `src` 而非 `srcset`，语义占位不写资源路径。
+
+```bash
+./work --work <id> --variant <variant-id> preview register --purpose plan --kind layout --sample-dir <Variant内样段目录> --scene S01
+./work --work <id> --variant <variant-id> preview open plan-v001 --port 8765
+# 用户确认布局与实施方向后执行；不接受 Draft
+./work --work <id> --variant <variant-id> preview accept plan-v001
+./work --work <id> --variant <variant-id> preview diff plan-v001
+```
+
+布局 Plan 的快照冻结当前 `SCRIPT.md`、`RESEARCH.md`、`ANIMATION_PLAN.md` 作为来源输入，并冻结样段、样式和实际使用资源；不要求完整工程、音频或生产依赖就绪。Plan 及元数据区分已展示的布局、配色、字体和层级，与同意实施但尚未验证的动作、节奏、媒体及其他 Scene；静态检查不能证明全片播放、阅读速度或渲染通过。
+
+完整可执行 Visual Plan 保留为明确选择的高级路径：`preview register --purpose plan --kind executable`。它继续使用官方 `hyperframes-player`、完整工程与依赖闭包；顶层 Scene 使用 `id="S01"` 或 `data-scene-id="S01"` 及 `data-start`、`data-duration`，可选 `data-reading-time`。旧记录和省略 kind 的旧调用仍按 executable 语义兼容，默认创作路由必须显式使用 layout。
 
 受控 Windows 入口自动解析当前会话的 HF 路径；底层 `--hyperframes-dist` / `--hyperframes-cli` 仅用于兼容运行时诊断，不指向 WSL 活跃开发目录。
 
-用户一次确认 Plan 及其源码快照，正式 Draft 沿用同源工程精修，不重新生成已确认场景。正式 Draft 注册与 Final 仍保留原批准检查。`preview render <draft-id> --output <final.mp4> --final` 从 Accepted Draft 渲染并记录实际源码摘要；需重定时时可用 `--refined-project <Variant内目录>` 保留原快照。旧 Work 的既有路径继续兼容。
+用户一次确认 Plan 及样段快照，不新增 Style / Motion / Prototype 审批。Draft 复用文字、tokens、样式和有用 HTML/CSS，优先完成最不确定的真实镜头再扩展其余 Scene、动作与媒体，允许必要结构改造和上述等义原位适配，不无理由改变已确认视觉。只对会改变整体决策的风险提前做最小试验；普通实现与修 bug 不重复审批。必需媒体和效果缺失时不能接受完整 Draft 或进入 Final。正式 Draft 注册与 Final 的批准、完整快照与来源检查不变；`preview render <draft-id> --output <final.mp4> --final` 从 Accepted Draft 渲染，`--refined-project <Variant内目录>` 支持保留原快照的重定时。
 
-`verbatim` 的 Animation Plan 直接使用字级转录证据聚合出的原时间戳；源视频或音频仍是最终时间权威。`dbs` 在没有正式音频时才估算时间。
+三类时间分开维护：SCRIPT Scene 索引只给规划预算；正式音频与 `section_map.json` 保存实测时间；工程时间线决定画面实际出现与持续。`verbatim` 可用字级转录证据聚合的原时间戳作规划依据，源视频或音频仍是实测权威；`dbs` 没有正式音频时才估算。Plan 只记时间依据、必要阅读顺序和节奏意图，不复制精确时间表。
 
 ## Windows 与 WSL 请求交接
 
-出现组件内部或新效果缺口时，在当前讨论中形成 `REQUEST.md`，包含希望观众理解什么、行为、保留项、现有能力缺口、实际文字、画幅、阅读窗口、素材与相邻交接、验收输入。能从 Work 获取的信息不重复询问，不新增需求批准门。
+Windows 先完成实际文字、布局样段、配色及效果方案；新效果未交付但不影响布局判断时不阻塞 Plan。Plan 通过后按需交接组件内部或新效果，在当前讨论中形成 `REQUEST.md`，包含希望观众理解什么、行为、保留项、现有能力缺口、实际文字、画幅、阅读窗口、素材与相邻交接、验收输入。能从 Work 获取的信息不重复询问，不新增需求批准门。新组件、通用 GSAP、Three 主体仍由 WSL 实现。
 
 Windows 用明确 Work/Variant 冻结请求；`--file` 是允许改变的工程相对路径，`--context-file` 是只读复现输入。源码来自当前工程或指定 `--preview` 快照：
 
@@ -81,8 +107,8 @@ Windows 用明确 Work/Variant 冻结请求；`--file` 是允许改变的工程�
 
 ```text
 下载/内容输入 -> 选择 dbs 或 verbatim -> 必要时批准 Script
--> RESEARCH.md -> 源视频或用户录制 -> section_map -> Animation Plan + 同源可播放预演
--> 确认 Plan 与预演 -> 同源精修 + Draft
+-> RESEARCH.md -> Animation Plan + 代表性布局样段（已有媒体依据或估算）
+-> 确认 Plan -> 源视频或用户录制 + section_map -> 优先实现高风险镜头 + 完整 Draft
 -> 接受 Draft -> Final QA + 60fps high render -> Finalize -> 自动归档
 ```
 
@@ -90,23 +116,25 @@ Windows 用明确 Work/Variant 冻结请求；`--file` 是允许改变的工程�
 
 `verbatim` 下载视频先沿用逐字稿原时间戳；其他没有正式配音的输入才按字数、语速和信息密度估算时间。两者都先完成 `RESEARCH.md`，再制作接近 Final 的无声 Draft。接受 Draft 后接入正式配音时，从对应源码快照继续，只调整时间、停留、转场和元素出现顺序。
 
-已有正式配音时，先生成 `section_map.json`，再完成 Plan、Draft 和 Final。
+已有正式配音时沿用媒体依据规划，Draft 以 `section_map.json` 对齐；没有音频可估算。不得仅为查看布局强制配音、ASR、长音频同步或视频导出。
 
 ## 检查点
 
 1. DBS 修改口播正文时批准 `SCRIPT.md`。
-2. `RESEARCH.md` 必须与当前 Script Revision 对齐并标记为 `ready`。
+2. `RESEARCH.md` 标记为 `ready`，资料依据与采用信息覆盖当前实际缺口；Revision 变化时先核对受影响范围，不自动重研究全片。
 3. 创建 Animation Plan 时同步用 DBS 完成 `PACKAGE.md` 的标题、封面文字、一句话简介和内容概括。
-4. Plan 批准前用 `hyperframes-anti-ppt` 检查真实内容下的表达与阅读；结果只进入现有 Plan，允许必要的 Work-local HTML 预演。
-5. 正式 Draft 前一次确认引用当前 Research Revision 的 `ANIMATION_PLAN.md` 与同源预演快照，不新增 Motion Plan 审批。
+4. Plan 用 `hyperframes-anti-ppt` 检查代表性样段的真实文字承载与动态表达方案，不以缺动画判失败；结果只进入现有 Plan。
+5. 正式 Draft 前一次确认引用当前 Research Revision 的 `ANIMATION_PLAN.md` 与布局样段快照，未实现动作不冒充已验证，不新增 Motion Plan 审批。
 6. Draft 提交用户前用 `hyperframes-anti-ppt` 复审成片或代表性关键帧，再按现有流程注册和接受 Draft。
 7. Final 前接受一个 Draft 作为视觉基线。
 
 技术 QA、时间微调、换行、easing、性能优化和归档不要求用户批准。
 
-局部反馈可用 `preview diff <id> --scene S02 --range 18.2 23.5 --note "保留正文，只改焦点迁移"` 记录到当前 Variant 的 `.runtime/feedback.json`；不带 `--note` 只读比较。范围使用当前预演的绝对秒数，Scene 可重复指定。记录修改影响与实际投入时沿用这些 Work 备注，不以技术夹具宣称返工下降。
+局部反馈可用 `preview diff <id> --scene S02 --range 18.2 23.5 --note "保留正文，只改焦点迁移"` 记录到当前 Variant 的 `.runtime/feedback.json`；不带 `--note` 只读比较。时间范围仅适用于实际时间线，静态样段用 Scene 和对象定位，Scene 可重复指定。从新增样段开始在现有 Work 备注记录可取得的输入/输出 token（含缓存原口径）、Windows 与 WSL 的 Plan 及总制作投入、布局/动效返工，等待用户时间单列；缺失统计如实标明，不用代码行数代替 token，不以技术夹具宣称成本下降。
 
-反馈定位到预演/Draft 版本、Scene、必要时间范围或对象。`preview diff <id>` 查看当前工程相对该快照的源码差异；只改受影响 Scene 与必要交接。主构图、隐喻或视觉目标变化只确认变更部分；未受影响源码、冻结资产、原 Accepted Draft 与 Final 不覆盖。正式配音接入优先调整阅读停留，再处理可变动作与交接，不默认整场 `timeScale`，不截断音频或删必要文字。总投入、方向性返工、实际影响范围和有效复用可记入现有 Work 备注；没有真实交付证据时不宣称返工下降。
+反馈定位到预演/Draft 版本、Scene、必要时间范围或对象。`preview diff <id>` 查看当前工程相对该快照的源码差异；只改受影响 Scene 与必要衔接。普通等义修改完成 Research / 工程更新和 Revision 同步后，由主模型确认口播、Anchor 与已批准 Plan 的视觉正文未变；Plan 只允许 frontmatter 的 `status`、`visual_plan`、`revision`、`script_revision`、`research_revision` 变化。随后使用 `preview diff <accepted-plan-id> --scene S02 --note "等义修改依据与局部影响" --compatible` 记录适用性。机器校验明确 Scene、冻结 / 当前输入与工程哈希，不猜自然语言；旧记录缺冻结来源时保留原流程，实际范围不符或后续再修改时不能沿用兼容记录。
+
+`--compatible` 只沿用 Accepted Plan 进入一个新 Draft，避免未受影响内容被全片重做；它不把当前文件伪装成旧 Accepted Draft 已批准。Accepted Draft 的来源内容或 Revision 变化时必须注册并接受新 Draft，只有上述 Plan 纯状态 / `visual_plan` 元数据变化不使其失效。主构图、隐喻、视觉目标或核心内容变化仍只确认变更部分；未受影响源码、冻结资产、原 Accepted Draft 与 Final 不覆盖，新 Draft / Final 继续走现有来源与接受检查。正式配音接入优先调整阅读停留，再处理可变动作与衔接，不默认整场 `timeScale`，不截断音频或删必要信息。总投入、方向性返工、实际影响范围和有效复用可记入现有 Work 备注；没有真实交付证据时不宣称返工下降。
 
 ## 播客金句图
 

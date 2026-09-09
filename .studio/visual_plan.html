@@ -32,7 +32,7 @@
     document.querySelector('#locator').value=`${data.id} ${ids} ${rangeStart===null?time.toFixed(2):rangeStart.toFixed(2)}${rangeEnd===null?'':'-'+rangeEnd.toFixed(2)}s`;
     if(scene===current)return;current=scene;menu.value=scene.id;
     const dl=document.querySelector('#intent');dl.replaceChildren();
-    for(const key of ['视觉目标','上屏信息引用','预演定位/未验证差异']){const value=scene.intent[key]||(key==='视觉目标'?scene.intent['内容方向']:null)||'原 Plan 未单列';const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value;dl.append(dt,dd)}
+    for(const [key,legacy] of [['视觉目标','内容方向'],['内容 / 素材引用','上屏信息引用'],['预演定位/未验证差异','样段范围/待实现']]){const value=scene.intent[key]||scene.intent[legacy]||'原 Plan 未单列';const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value;dl.append(dt,dd)}
   }
   function seek(time){pendingSeek=time;player.seek(time);update(time,true)}
   menu.onchange=()=>{manualScene=data.scenes.find(s=>s.id===menu.value);seek(manualScene.start)};

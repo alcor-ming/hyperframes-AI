@@ -3,13 +3,13 @@
 ## 无正式配音
 
 1. 下载视频先通过共享 ASR 生成 `characters[]` 字级时间戳，再在 `dbs` 与 `verbatim` 中选择文案路径；`dbs` 正文被修改时等待 Script Approval，`verbatim` 保留原文和原时间戳。
-2. 按最终 Script 联网研究并完成同一 Variant 的 `RESEARCH.md`。
-3. `verbatim` 沿用原时间戳；其他输入根据字数、参考语速和 Scene 信息密度估算时间；调用 DBS 完成 `PACKAGE.md`，同时生成引用当前 Research Revision 的 Animation Plan。
-4. Plan 批准后完成接近 Final 的 HTML 和无声 Draft。
-5. 用户接受 Draft 后接收正式配音，生成 `section_map.json`。
-6. 从 Accepted Draft 的源码快照继续，只调整时间、停留、转场和元素出现顺序。
+2. 用 SCRIPT 的非口播 Scene 索引定位实际信息缺口，按需研究并在同一 `RESEARCH.md` 保存资料依据与采用信息；可以无新增研究，不为过渡凑资料。
+3. SCRIPT 索引只保留规划时间预算；`verbatim` 用原时间戳作依据，其他没有正式音频的输入根据字数、参考语速和 Scene 信息密度估算。调用 DBS 完成 `PACKAGE.md`，同时生成引用当前 Research 采用条目的全片 Animation Plan 加一个代表性实际文字 HTML/CSS 布局样段，媒体语义占位、主要动作先写方案。
+4. Plan 批准后复用文字、样式和有用代码，先实现最不确定镜头，再补齐其余 Scene、动作和媒体，完成接近 Final 的无声 Draft。主模型可直接完成换行、分组和等义精简；独立信息措辞同步回写 Research 采用条目，核心取舍才提交用户。
+5. 用户接受 Draft 后接收正式配音，以实测音频生成 `section_map.json`。
+6. 从 Accepted Draft 的源码快照继续，工程时间线记录画面实际出现与持续；只调整时间、停留、转场和元素出现顺序。
 7. 无法保持可读性时返回 Draft Review，不改变 Scene 语义或 Hero State 强行压缩。
 
 ## 已有正式配音
 
-完成文案分流与 `RESEARCH.md` 后，直接以音频为时间权威生成 Section Map，再完成 Plan、Draft、Final 和自动归档。
+完成文案分流与按缺口组织的 `RESEARCH.md` 后沿用音频信息规划布局 Plan，不为静态查看强制同步或运行 ASR；Draft 以实测音频为权威生成 Section Map，工程时间线另记画面实际出现与持续，再完成 Draft、Final 和自动归档。

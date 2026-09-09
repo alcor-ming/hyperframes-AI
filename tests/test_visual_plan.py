@@ -40,6 +40,123 @@ class VisualPlanTest(unittest.TestCase):
         data.update(fields)
         path.write_text("---\n" + json.dumps(data) + text[end:])
 
+    def layout_sample(self):
+        sample = self.variant / "layout"
+        sample.mkdir()
+        (sample / "index.html").write_text(
+            '<link rel="stylesheet" href="styles.css">'
+            '<main id="S01" data-width="1080" data-height="1920">'
+            '<h1>Complete conditions remain visible.</h1>'
+            '<aside>Portrait placeholder: speaker, 9:16, centered crop.</aside></main>'
+        )
+        (sample / "styles.css").write_text('h1 { color: #246; }')
+        return sample
+
+    def register_layout(self):
+        self.run_cli("preview", "register", "--purpose", "plan", "--kind", "layout",
+                     "--sample-dir", "layout", "--scene", "S01")
+
+    def test_layout_lifecycle_without_project_or_recording(self):
+        sample = self.layout_sample()
+        shutil.rmtree(self.project)
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        state["template"] = "talking_head"
+        WORK_CLI.write_variant(self.variant, state)
+        self.assertFalse((self.variant / "section_map.json").exists())
+        self.register_layout()
+        self.register_layout()
+        preview = self.variant / "previews" / "plan-v001"
+        self.assertEqual([preview], list((self.variant / "previews").iterdir()))
+        metadata = WORK_CLI.preview_metadata(preview)
+        self.assertEqual("layout", metadata["kind"])
+        self.assertEqual("layout", metadata["sample_dir"])
+        self.assertEqual(["S01"], metadata["sample_scenes"])
+        self.assertTrue(metadata["demonstrated"])
+        self.assertTrue(metadata["unverified"])
+        with patch.object(WORK_CLI, "serve") as serve, patch.object(WORK_CLI, "runtime_path") as runtime:
+            self.run_cli("preview", "open", "plan-v001")
+            runtime.assert_not_called()
+            serve.assert_called_once_with(preview, None, 0, metadata.get("review"), layout=True)
+        self.run_cli("preview", "accept", "plan-v001")
+        self.run_cli("preview", "accept", "plan-v001")
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        self.assertEqual("plan-v001", state["accepted_visual_plan"])
+        self.assertIsNone(state["accepted_preview"])
+        self.assertEqual("approved", WORK_CLI.read_frontmatter(self.variant / "ANIMATION_PLAN.md")["status"])
+        movie = self.root / "draft.mp4"
+        movie.write_bytes(b"test-only, not a render")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "No accepted preview"):
+            self.run_cli("finalize", str(movie), "--qa-passed")
+        (sample / "styles.css").write_text("h1 { color: red; }")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "Project changed"):
+            self.run_cli("preview", "accept", "plan-v001")
+
+    def test_layout_freezes_only_referenced_dependencies(self):
+        sample = self.layout_sample()
+        (sample / "unused.html").write_text('<video src="missing.mp4"></video>')
+        (sample / "styles.css").write_text('@import "tokens.css"; h1 { color: #246; }')
+        (sample / "tokens.css").write_text(":root { --text: black; }")
+        self.register_layout()
+        snapshot = self.variant / "previews" / "plan-v001" / "source-snapshot"
+        self.assertEqual(["index.html", "styles.css", "tokens.css"],
+                         sorted(p.relative_to(snapshot).as_posix() for p in snapshot.rglob("*") if p.is_file()))
+        (sample / "unused.html").write_text("Not part of this sample")
+        self.register_layout()
+        self.assertFalse((self.variant / "previews" / "plan-v002").exists())
+        self.run_cli("preview", "accept", "plan-v001")
+        (snapshot / "tokens.css").write_text(":root { --text: red; }")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "snapshot changed"):
+            self.run_cli("preview", "accept", "plan-v001")
+
+    def test_layout_rejects_nonlocal_media_and_compositions(self):
+        sample = self.layout_sample()
+        path = sample / "index.html"
+        original = path.read_text()
+        for extra, error in (
+            ('<link rel="stylesheet" href="https://example.com/live.css">', "Non-local"),
+            ('<img src="../outside.png">', "outside snapshot"),
+            ('<video src="missing.mp4"></video>', "semantic placeholders"),
+            ('<audio src="missing.wav"></audio>', "semantic placeholders"),
+            ('<div data-composition-src="missing.html"></div>', "semantic placeholders"),
+            ('<img srcset="missing.png 2x">', "single local src"),
+        ):
+            with self.subTest(extra=extra):
+                path.write_text(original + extra)
+                with self.assertRaisesRegex(VisualPlanError, error):
+                    self.register_layout()
+        for text in (original.replace('id="S01"', 'id="S99"'), original.replace('data-width="1080"', 'data-width="0"')):
+            with self.subTest(text=text):
+                path.write_text(text)
+                with self.assertRaises(VisualPlanError):
+                    self.register_layout()
+
+    def test_draft_expands_layout_baseline_but_requires_real_dependencies(self):
+        self.layout_sample()
+        with (self.variant / "ANIMATION_PLAN.md").open("a") as stream:
+            stream.write("\n| S02 | P001 |\n")
+        self.register_layout()
+        self.run_cli("preview", "accept", "plan-v001")
+        with (self.project / "index.html").open("a") as stream:
+            stream.write('<div id="S02" data-start="4" data-duration="4" data-composition-src="compositions/S02.html"></div>')
+        scene = self.project / "compositions" / "S02.html"
+        scene.write_text('<video src="missing.mp4"></video>')
+        movie = self.root / "draft.mp4"
+        movie.write_bytes(b"test-only, not a render")
+        with self.assertRaisesRegex(VisualPlanError, "missing or outside snapshot"):
+            self.run_cli("preview", "register", str(movie))
+        scene.write_text("<p>Second complete explanation.</p>")
+        self.run_cli("preview", "register", str(movie))
+        draft = self.variant / "previews" / "draft-v001"
+        metadata = WORK_CLI.preview_metadata(draft)
+        plan = self.variant / "previews" / "plan-v001"
+        self.assertEqual("executable", metadata["kind"])
+        self.assertEqual("plan-v001", metadata["source_plan"])
+        self.assertEqual(WORK_CLI.preview_metadata(plan)["snapshot_sha256"], metadata["source_plan_sha256"])
+        self.assertIn("compositions/S02.html", metadata["changed_files"])
+        self.assertEqual(["S01", "S02"], [s["id"] for s in WORK_CLI.read_json(draft / "visual-plan.json")["scenes"]])
+        self.run_cli("preview", "accept", "draft-v001")
+        self.assertEqual("draft-v001", WORK_CLI.read_json(self.variant / "variant.yaml")["accepted_preview"])
+
     def test_plan_to_same_source_draft_and_local_diff(self):
         with (self.project / "index.html").open("a") as stream:
             stream.write('<div id="S02" data-start="4" data-duration="4" data-composition-src="compositions/S02.html"></div>')
@@ -49,6 +166,9 @@ class VisualPlanTest(unittest.TestCase):
         untouched.write_text("<p>Unchanged explanation.</p>")
         self.run_cli("preview", "register", "--purpose", "plan")
         preview = self.variant / "previews" / "plan-v001"
+        metadata = WORK_CLI.preview_metadata(preview)
+        self.assertEqual("executable", metadata.pop("kind"))
+        (preview / "preview.md").write_text("---\n" + json.dumps(metadata) + "\n---\n\n# Preview\n")
         original = (preview / "source-snapshot" / "compositions" / "S01.html").read_bytes()
         self.run_cli("preview", "accept", "plan-v001")
         state = WORK_CLI.read_json(self.variant / "variant.yaml")
@@ -108,6 +228,135 @@ class VisualPlanTest(unittest.TestCase):
         (self.project / "compositions" / "S01.html").write_text('<script src="../../escape.js"></script>')
         with self.assertRaisesRegex(VisualPlanError, "outside snapshot"):
             validate_dependencies(self.project)
+
+    def test_local_research_revision_reuses_plan_but_not_draft_acceptance(self):
+        # Technical fixture: no live research, media or production Work.
+        plan = self.variant / "ANIMATION_PLAN.md"
+        plan.write_text(plan.read_text() + "\n| S02 | P002 |\n")
+        index = self.project / "index.html"
+        index.write_text(index.read_text() + '<div id="S02" data-start="4" data-duration="4" data-composition-src="compositions/S02.html"></div>')
+        scene = self.project / "compositions" / "S02.html"
+        scene.write_text("<p>First provide input, then inspect output.</p>")
+        research = self.variant / "RESEARCH.md"
+        research.write_text(research.read_text() + "\n## S02 / P002 - Process\nFirst provide input, then inspect output.\n")
+        self.run_cli("preview", "register", "--purpose", "plan")
+        self.run_cli("preview", "accept", "plan-v001")
+        baseline = self.variant / "previews" / "plan-v001"
+        original = {p.relative_to(baseline): p.read_bytes() for p in baseline.rglob("*") if p.is_file()}
+        untouched = (self.project / "compositions" / "S01.html").read_bytes()
+        research.write_text(research.read_text().replace("First provide input, then inspect output.", "Provide input -> inspect output."))
+        scene.write_text("<p>Provide input -> inspect output.</p>")
+        args = ("preview", "diff", "plan-v001", "--scene", "S02", "--note", "Same ordered process; checked S02 and handoff", "--compatible")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "without an increased revision"):
+            self.run_cli(*args)
+        self.update("RESEARCH.md", revision=2)
+        self.update("ANIMATION_PLAN.md", revision=2, research_revision=2)
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        state["plan_revision"] = 2
+        WORK_CLI.write_variant(self.variant, state)
+        movie = self.root / "draft.mp4"
+        movie.write_bytes(b"test-only")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "scoped --compatible"):
+            self.run_cli("preview", "register", str(movie))
+        self.run_cli(*args)
+        record = WORK_CLI.read_json(self.variant / ".runtime" / "feedback.json")["entries"][-1]
+        self.assertEqual(["S02"], record["requested_scenes"])
+        self.assertEqual(["compositions/S02.html"], record["changed_files"])
+        self.assertEqual(WORK_CLI.preview_input_hashes(self.variant), record["current_inputs"])
+        cli = self.root / "cli.js"
+        cli.write_text("// Render validation fixture; no runtime execution")
+        with patch.dict(os.environ, {"HYPERFRAMES_BROWSER_PATH": str(self.root / "missing-browser")}):
+            with self.assertRaisesRegex(WORK_CLI.HarnessError, "Pinned render dependency"):
+                self.run_cli("preview", "render", "plan-v001", "--hyperframes-cli", str(cli), "--output", str(self.root / "render.mp4"))
+        self.run_cli("preview", "register", str(movie))
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        self.assertEqual("plan-v001", state["accepted_visual_plan"])
+        self.assertIsNone(state["accepted_preview"])
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "No accepted preview"):
+            self.run_cli("finalize", str(movie), "--qa-passed")
+        self.run_cli("preview", "accept", "draft-v001")
+        self.assertEqual(untouched, (self.project / "compositions" / "S01.html").read_bytes())
+        self.assertEqual(original, {p.relative_to(baseline): p.read_bytes() for p in baseline.rglob("*") if p.is_file()})
+        for target in (research, scene):
+            previous = target.read_bytes()
+            target.write_bytes(previous + b"\nchanged after check")
+            with self.assertRaisesRegex(WORK_CLI.HarnessError, "scoped --compatible"):
+                self.run_cli("preview", "register", str(movie))
+            with self.assertRaisesRegex(WORK_CLI.HarnessError, "scoped --compatible"):
+                self.run_cli("preview", "render", "plan-v001", "--hyperframes-cli", str(cli), "--output", str(self.root / "render.mp4"))
+            target.write_bytes(previous)
+        research.write_text(research.read_text() + "\nNew current content")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "Preview inputs changed"):
+            self.run_cli("preview", "accept", "draft-v001")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "Preview inputs changed"):
+            self.run_cli("finalize", str(movie), "--qa-passed")
+
+    def test_compatibility_rejects_changed_intent_narration_and_unchecked_scenes(self):
+        self.run_cli("preview", "register", "--purpose", "plan")
+        self.run_cli("preview", "accept", "plan-v001")
+        args = ("preview", "diff", "plan-v001", "--scene", "S01", "--note", "Checked", "--compatible")
+        for name, addition, error in (("ANIMATION_PLAN.md", "\nA different visual goal", "intent changed"),
+                                      ("ANIMATION_PLAN.md", "\n| S02 | P002 |", "intent changed"),
+                                      ("SCRIPT.md", "\nDifferent narration", "Narration changed")):
+            path = self.variant / name
+            before = path.read_text()
+            path.write_text(before + addition)
+            with self.assertRaisesRegex(WORK_CLI.HarnessError, error):
+                self.run_cli(*args)
+            path.write_text(before)
+        (self.project / "compositions" / "S01.html").write_text("changed")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "outside checked scope"):
+            self.run_cli("preview", "diff", "plan-v001", "--scene", "S99", "--note", "Checked", "--compatible")
+        baseline = self.variant / "previews" / "plan-v001"
+        frozen = baseline / "RESEARCH.md"
+        frozen.write_text(frozen.read_text() + "\nTampered frozen input")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "Frozen preview inputs changed"):
+            self.run_cli(*args)
+        metadata = WORK_CLI.preview_metadata(baseline)
+        metadata.pop("input_sha256")
+        (baseline / "preview.md").write_text("---\n" + json.dumps(metadata) + "\n---\n")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "no frozen inputs"):
+            self.run_cli(*args)
+
+    def test_plan_registration_and_acceptance_bind_research_content(self):
+        self.run_cli("preview", "register", "--purpose", "plan")
+        research = self.variant / "RESEARCH.md"
+        original = research.read_text()
+        research.write_text(original + "\nChanged input with the same revision")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "Preview inputs changed"):
+            self.run_cli("preview", "accept", "plan-v001")
+        self.run_cli("preview", "register", "--purpose", "plan")
+        self.assertTrue((self.variant / "previews" / "plan-v002").is_dir())
+        frozen = self.variant / "previews" / "plan-v002" / "RESEARCH.md"
+        frozen.write_text("tampered")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "Frozen preview inputs changed"):
+            self.run_cli("preview", "accept", "plan-v002")
+
+    def test_layout_compatibility_uses_full_draft_scope_and_ignores_scene_index_narration(self):
+        self.layout_sample()
+        plan = self.variant / "ANIMATION_PLAN.md"
+        plan.write_text(plan.read_text() + "\n| S02 | P002 |\n")
+        self.register_layout()
+        self.run_cli("preview", "accept", "plan-v001")
+        index = self.project / "index.html"
+        index.write_text(index.read_text() + '<div id="S02" data-start="4" data-duration="4" data-composition-src="compositions/S02.html"></div>')
+        (self.project / "compositions" / "S02.html").write_text("<p>Equivalent ordered process</p>")
+        script = self.variant / "SCRIPT.md"
+        script.write_text("---\n" + json.dumps(WORK_CLI.read_frontmatter(script)) + "\n---\n"
+                          + WORK_CLI.script_text(script, anchors=True)
+                          + "\n\n<!-- scene-index:start -->\n| Scene | Anchor | Budget | Direction |\n"
+                          + "| S02 | P002 | 4s | Process evidence |\n<!-- scene-index:end -->\n")
+        self.update("SCRIPT.md", revision=2)
+        self.update("RESEARCH.md", revision=2, script_revision=2)
+        self.update("ANIMATION_PLAN.md", revision=2, script_revision=2, research_revision=2)
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        state.update(script_revision=2, plan_revision=2)
+        WORK_CLI.write_variant(self.variant, state)
+        self.run_cli("preview", "diff", "plan-v001", "--scene", "S02", "--note", "Only index metadata and S02 input checked", "--compatible")
+        movie = self.root / "draft.mp4"
+        movie.write_bytes(b"technical fixture")
+        self.run_cli("preview", "register", str(movie))
+        self.run_cli("preview", "accept", "draft-v001")
 
     def test_missing_pinned_browser_fails_before_invoking_hyperframes(self):
         self.run_cli("preview", "register", "--purpose", "plan")
