@@ -4,6 +4,7 @@ param(
     [string]$Command = "status",
     [string]$ReleaseRoot = (Join-Path $env:LOCALAPPDATA "HyperFramesAI"),
     [string]$WorkRoot,
+    [string]$AssetRoot,
     [string]$CheckWork,
     [string]$Variant = "main"
 )
@@ -84,6 +85,18 @@ function Get-LocalConfig {
         }
     }
     $config | Add-Member -NotePropertyName work_root -NotePropertyValue ([System.IO.Path]::GetFullPath($WorkRoot)) -Force
+    if ($AssetRoot) {
+        if (-not [System.IO.Path]::IsPathRooted($AssetRoot)) { throw "AssetRoot must be an absolute path" }
+        if (-not (Test-Path -LiteralPath $AssetRoot -PathType Container)) { throw "AssetRoot must be an existing independent directory" }
+        $absoluteAssets = [System.IO.Path]::GetFullPath($AssetRoot).TrimEnd('\')
+        $absoluteHome = [System.IO.Path]::GetFullPath($ReleaseRoot).TrimEnd('\')
+        $absoluteWorks = [System.IO.Path]::GetFullPath($WorkRoot).TrimEnd('\')
+        if ($absoluteAssets -eq $absoluteHome -or $absoluteAssets.StartsWith($absoluteHome + '\', [System.StringComparison]::OrdinalIgnoreCase) -or
+            $absoluteAssets -eq $absoluteWorks -or $absoluteAssets.StartsWith($absoluteWorks + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "AssetRoot must be outside the installation and WorkStore"
+        }
+        $config | Add-Member -NotePropertyName asset_root -NotePropertyValue $absoluteAssets -Force
+    }
     return $config
 }
 

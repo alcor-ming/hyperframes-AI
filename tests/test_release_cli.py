@@ -87,6 +87,21 @@ class ReleaseCliTest(unittest.TestCase):
             RELEASE.extract_zip(archive, root / "out", "node-fixed")
             self.assertEqual((root / "out" / "node.exe").read_bytes(), b"locked")
 
+    def test_release_omits_finished_library_but_keeps_contracts_and_profile_routing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = (".studio/components/example/v1/component.html", ".studio/backgrounds/example/v1/background.html",
+                     ".studio/component_harness.py", ".studio/asset_store.py",
+                     ".agents/skills/hyperframes-codex-workflow/profile-registry.json")
+            for name in paths:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("fixture")
+            RELEASE.strip_bundled_assets(root)
+            self.assertFalse((root / ".studio/components").exists())
+            self.assertFalse((root / ".studio/backgrounds").exists())
+            self.assertTrue(all((root / name).is_file() for name in paths[2:]))
+
     def test_incomplete_native_lock_cannot_produce_a_python_only_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

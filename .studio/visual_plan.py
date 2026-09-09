@@ -27,8 +27,7 @@ class Composition(HTMLParser):
         self.nodes.append((tag, dict(attrs)))
 
 
-def scene_projection(project, plan_text):
-    """Timing comes from executable HTML; intent comes from the existing Plan table."""
+def plan_scene_rows(plan_text):
     rows = {}
     headers = []
     for line in plan_text.splitlines():
@@ -39,6 +38,18 @@ def scene_projection(project, plan_text):
             headers = cells
         elif headers and re.fullmatch(r"S\d+", cells[0]):
             rows.setdefault(cells[0], {}).update(dict(zip(headers, cells)))
+    if not rows:
+        raise VisualPlanError("Animation Plan needs a Scene table")
+    return rows
+
+
+def reference_projection(plan_text):
+    return [{"id": sid, "source": "", "intent": row} for sid, row in plan_scene_rows(plan_text).items()]
+
+
+def scene_projection(project, plan_text):
+    """Timing comes from executable HTML; intent comes from the existing Plan table."""
+    rows = plan_scene_rows(plan_text)
     scenes = []
     for _, attrs in Composition((project / "index.html").read_text(encoding="utf-8")).nodes:
         scene_id = attrs.get("data-scene-id", attrs.get("id", ""))
@@ -63,15 +74,15 @@ def layout_projection(project, plan_text, scene_ids):
     rows = set(re.findall(r"^\|\s*(S\d+)\s*\|", plan_text, re.MULTILINE))
     nodes = Composition((project / "index.html").read_text(encoding="utf-8")).nodes
     ids = {a.get("data-scene-id", a.get("id")) for _, a in nodes}
-    if not scene_ids or len(set(scene_ids)) != len(scene_ids) or set(scene_ids) - rows or set(scene_ids) - ids:
-        raise VisualPlanError("Layout sample needs unique --scene IDs present in both Plan and HTML")
+    if not scene_ids or len(set(scene_ids)) != len(scene_ids) or set(scene_ids) - rows or not set(scene_ids).intersection(ids):
+        raise VisualPlanError("Layout sample needs unique Plan --scene IDs and at least one demonstrated Scene in HTML")
     canvases = [a for _, a in nodes if "data-width" in a and "data-height" in a]
     if not canvases or any(not a[k].isdigit() or not 0 < int(a[k]) <= 16384 for a in canvases for k in ("data-width", "data-height")):
         raise VisualPlanError("Layout sample needs a positive data-width/data-height canvas")
     return [{"id": sid, "source": "index.html"} for sid in scene_ids]
 
 
-def validate_dependencies(project, *, layout=False):
+def validate_dependencies(project, *, layout=False, entry="index.html"):
     """Check literal local references; browser QA must also check dynamic asset loads."""
     project = project.resolve()
     visited = set()
@@ -110,7 +121,7 @@ def validate_dependencies(project, *, layout=False):
                 raise VisualPlanError(f"Non-local dependency in {path.name}: {ref}")
             visit(path.parent / unquote(parsed.path))
 
-    visit(project / "index.html")
+    visit(project / entry)
     return sorted(p.relative_to(project).as_posix() for p in visited)
 
 

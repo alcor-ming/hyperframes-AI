@@ -43,7 +43,14 @@ Windows 日常创作打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`，先运行 
 
 视频 `SCRIPT.md` 的口播正文可附成对 `scene-index` 注释包围的非口播 Scene 索引；需要配音、统计或对齐文本时使用 `./work script text`，索引不会混入。`RESEARCH.md` 只按当前 Scene / Anchor 的内容缺口补充资料依据和采用信息，不规定视觉实现。Plan 引用 Script、Research 或素材，不再复制一份信息稿。
 
-视频默认 Plan 是全片简短方案与一个代表性静态布局样段；样段使用实际内容、配色与画幅，素材已清楚呈现的信息不强制重复覆盖，未接入媒体用语义占位。Script / Research 就绪后，将样段放在当前 Variant 的 `layout/index.html`，再登记和查看：
+视频先逐 Scene 筛选信息，再按真实关系、文字、素材、画幅与时间匹配已接纳资产。全片 Plan 只为真实缺口制作轻量样段，数量可为零；同类缺口验证一次并注明适用 Scene。没有新样段时引用已验收资产 Preview：
+
+```bash
+./work preview register --purpose plan --kind reference
+./work preview accept plan-v001
+```
+
+有缺口时，将真实文字与设计放在当前 Variant 的 `layout/index.html`；媒体可用语义占位，不为预览补整片动画：
 
 ```bash
 ./work preview register --purpose plan --kind layout --sample-dir layout --scene S01
@@ -52,7 +59,20 @@ Windows 日常创作打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`，先运行 
 ./work preview accept plan-v001
 ```
 
-样段不要求 HF、Three、FFmpeg 或正式音频；接受不等于动画通过或 Draft 接受。Draft 复用已确认部分，优先验证最不确定镜头，再补全其余 Scene。换行、分组和等义精简由同一主模型原位处理，核心内容或结论变化才提出局部取舍；Revision 留痕不把局部修改变成全片刷新。完整可执行预演保留为显式选择的高级路径，旧命令与记录语义不变。具体样段约定见 [创作工作流](.studio/workflow.md)。
+两种登记方式择一，`preview accept` 只在用户确认 Plan 后执行。样段的官方 Studio 承载仅补静态 composition，不要求 Three、FFmpeg 或正式音频；接受不等于动态通过或 Draft 接受。配色、字体可全片共享，局部布局仅覆盖明确匹配的 Scene。Draft 按各自 Plan / Binding 保留连接、分支、反馈与结果，未支持表达报告当前 Scene 缺口，不静默退回通用文字卡片。完整可执行预演仍为显式高级路径。具体约定见 [创作工作流](.studio/workflow.md)。
+
+日常预览默认启动锁定版本的官方 HyperFrames Studio，返回实际项目 URL；当前工程可编辑，登记版本只在隔离副本打开：
+
+```bash
+./work preview open current
+./work preview context current --fields selection,lint --detail compact
+./work preview open draft-v001
+./work preview stop current
+# 仅显式历史查看保留自制审阅页
+./work preview open draft-v001 --legacy
+```
+
+Studio 修改同步原文案真源或暂停对应再生成，旧 MP4 / QA 不继续代表新源码。`reference` Plan 没有虚构的可播放工程，直接审阅其资产引用。
 
 Draft 与 Final 生命周期：
 
@@ -78,6 +98,19 @@ Draft 与 Final 生命周期：
 ## 私有内容
 
 外部 WorkStore 的 `works/`、旧 `tasks/`、媒体、工程、Draft、Final 和运行状态不进入开发仓或 Git。Harness 不实现下载后端，而是调用独立的 `trendradar-media`；它不公开发布内容，也不内置 ASR 模型。经用户对准确 Work/Variant 明确授权，可使用其已登录的 Windows Chrome 保存小红书创作者平台草稿，但绝不点击发布。
+
+可复用资产使用外部配置的 AssetStore，与 Harness 发布周期独立；先注册现有来源，兼容资产通过元数据发现，不修改全局组件白名单。WSL 开发和封装，Windows 接纳准确版本；`migration-ready` 不自动通过，不以整库 / 全画幅齐备阻塞单个资产。Work 沿用 vendor、Binding 和 `COMPONENT_LOCK.json` 固定实际依赖，库更新不漂移旧作品，已有闭合副本不依赖外部库在线。旧内置库与历史快照保留只读兼容，不自动删除。
+
+当前独立接纳支持 Component 合同及同合同效果；Background / Profile 的完整独立安装仍是后续目标。Windows 会话使用其固定 `work.cmd` 执行以下命令，或安装时通过 `-AssetRoot` 设置独立目录：
+
+```bash
+./work component root <absolute-asset-store>
+./work component source-add <existing-source-directory>
+./work component import <exact-package-directory>
+# 在 Windows 完成该候选的实际审阅后，使用 import 返回的精确摘要
+./work component accept <component-id>@vN --sha256 <package-sha256> --note <review-result>
+./work component list --query <relationship-or-name>
+```
 
 ## 固定 Release 与 Codex App 部署
 
@@ -125,7 +158,7 @@ python3 .studio/prepare_windows_runtime.py prepare \
 .\start.ps1 -Candidate candidate-review-001 -ReviewRoot D:\AI\AI+hyperframes\review\review-001
 ```
 
-启动器输出 `sessions/<uuid>` 下的固定会话目录。Codex 后续仅使用该目录的 `work.cmd` / `work.ps1`，先运行 `work.cmd doctor` 查看实际版本、依赖、WorkRoot 与 Review 身份。安装包内的 `work.cmd session start --review-root <path>` 也可建立会话；未绑定会话的普通 Work 命令会拒绝运行。可执行预演的 `preview open` / `preview render` 自动使用会话受控 HF，无需手填 `--hyperframes-dist`；静态样段查看不加载 HF，doctor 的生产依赖缺失不能冒充已具备渲染能力，也不阻止不依赖它们的布局查看。
+启动器输出 `sessions/<uuid>` 下的固定会话目录。Codex 后续仅使用该目录的 `work.cmd` / `work.ps1`，先运行 `work.cmd doctor` 查看实际版本、依赖、WorkRoot 与 Review 身份。安装包内的 `work.cmd session start --review-root <path>` 也可建立会话；未绑定会话的普通 Work 命令会拒绝运行。`preview open` / `preview render` 自动使用会话受控 HF，无需手填 `--hyperframes-dist`；静态样段通过同一锁定 Studio 薄承载，不加载正式音频或新增效果。缺少官方运行时会明确报错，不静默退回自制页面，也不冒充渲染能力。
 
 会话 `work.cmd` 直接调用固定版本的内置 Python，不启动子 `powershell.exe -File`；`work.ps1` 仅保留为兼容入口。旧会话文件不会自动重写，入口修复后须选择新候选并创建新会话。安装根以当前 Codex App 内的 `%LOCALAPPDATA%` 或安装时的 `-ReleaseRoot` 为准，不能假设它与外部终端相同。若沙箱仍拒绝入口，保留准确命令和错误，不修改执行策略或把审批后通过当成沙箱验收。
 

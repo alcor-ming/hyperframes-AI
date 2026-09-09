@@ -56,6 +56,78 @@ class VisualPlanTest(unittest.TestCase):
         self.run_cli("preview", "register", "--purpose", "plan", "--kind", "layout",
                      "--sample-dir", "layout", "--scene", "S01")
 
+    def test_reference_plan_needs_no_sample_project_or_recording(self):
+        backup = self.root / "project-backup"
+        shutil.move(self.project, backup)
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        state["template"] = "talking_head"
+        WORK_CLI.write_variant(self.variant, state)
+        self.run_cli("preview", "register", "--purpose", "plan", "--kind", "reference")
+        self.run_cli("preview", "register", "--purpose", "plan", "--kind", "reference")
+        preview = self.variant / "previews" / "plan-v001"
+        metadata = WORK_CLI.preview_metadata(preview)
+        self.assertEqual("reference", metadata["kind"])
+        self.assertEqual([], metadata["sample_scenes"])
+        self.assertEqual([], list((preview / "source-snapshot").iterdir()))
+        self.assertFalse(self.project.exists())
+        self.run_cli("preview", "accept", "plan-v001")
+        self.run_cli("preview", "accept", "plan-v001")
+        self.assertIsNone(WORK_CLI.read_json(self.variant / "variant.yaml")["accepted_preview"])
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "no new sample"):
+            self.run_cli("preview", "open", "plan-v001")
+        shutil.move(backup, self.project)
+        movie = self.root / "draft.mp4"
+        movie.write_bytes(b"synthetic test output")
+        self.run_cli("preview", "register", str(movie))
+        self.run_cli("preview", "accept", "draft-v001")
+        self.assertEqual("draft-v001", WORK_CLI.read_json(self.variant / "variant.yaml")["accepted_preview"])
+
+    def test_one_gap_sample_can_cover_explicit_matching_scenes(self):
+        self.layout_sample()
+        with (self.variant / "ANIMATION_PLAN.md").open("a") as stream:
+            stream.write("\n| S02 | P001 | Same information structure as S01 |\n")
+        self.run_cli("preview", "register", "--purpose", "plan", "--kind", "layout",
+                     "--sample-dir", "layout", "--scene", "S01", "--scene", "S02")
+        self.run_cli("preview", "accept", "plan-v001")
+        metadata = WORK_CLI.preview_metadata(self.variant / "previews" / "plan-v001")
+        self.assertEqual(["S01", "S02"], metadata["sample_scenes"])
+        self.assertNotIn("S02", (self.variant / "layout" / "index.html").read_text())
+
+    def test_studio_default_isolates_frozen_sample_and_preserves_review_edits(self):
+        self.layout_sample()
+        self.register_layout()
+        snapshot = self.variant / "previews" / "plan-v001" / "source-snapshot"
+        before = WORK_CLI.snapshot_digest(snapshot, "layout")
+        cli = self.root / "pinned-cli.js"
+        cli.write_text("// fixture CLI; launch is checked by visual-studio.mjs")
+        response = {"port": 3101, "studioUrl": "http://127.0.0.1:3101/#project/plan-v001", "pid": 123}
+        with patch.object(WORK_CLI.studio_preview, "start", return_value=response) as start, patch.object(WORK_CLI, "serve") as legacy:
+            self.run_cli("preview", "open", "plan-v001", "--hyperframes-cli", str(cli))
+            project = start.call_args.args[1]
+            self.assertNotEqual(project, snapshot)
+            self.assertFalse(os.path.samefile(project / "index.html", snapshot / "index.html"))
+            self.assertIn('data-composition-id="layout-sample"', (project / "index.html").read_text())
+            (project / "styles.css").write_text("h1 { color: red; }")
+            self.run_cli("preview", "open", "plan-v001", "--hyperframes-cli", str(cli))
+            self.assertEqual(project, start.call_args.args[1])
+            self.assertEqual("h1 { color: red; }", (project / "styles.css").read_text())
+            legacy.assert_not_called()
+        self.assertEqual(before, WORK_CLI.snapshot_digest(snapshot, "layout"))
+        self.run_cli("preview", "accept", "plan-v001")
+
+    def test_old_output_cannot_be_registered_as_edited_source(self):
+        self.run_cli("preview", "register", "--purpose", "plan")
+        self.run_cli("preview", "accept", "plan-v001")
+        movie = self.root / "draft.mp4"
+        movie.write_bytes(b"synthetic original output")
+        self.run_cli("preview", "register", str(movie))
+        (self.project / "compositions" / "S01.html").write_text("<p>Edited in Studio.</p>")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "output belongs to different source"):
+            self.run_cli("preview", "register", str(movie))
+        movie.write_bytes(b"synthetic rerender output")
+        self.run_cli("preview", "register", str(movie))
+        self.assertTrue((self.variant / "previews" / "draft-v002").is_dir())
+
     def test_layout_lifecycle_without_project_or_recording(self):
         sample = self.layout_sample()
         shutil.rmtree(self.project)
@@ -74,7 +146,7 @@ class VisualPlanTest(unittest.TestCase):
         self.assertTrue(metadata["demonstrated"])
         self.assertTrue(metadata["unverified"])
         with patch.object(WORK_CLI, "serve") as serve, patch.object(WORK_CLI, "runtime_path") as runtime:
-            self.run_cli("preview", "open", "plan-v001")
+            self.run_cli("preview", "open", "plan-v001", "--legacy")
             runtime.assert_not_called()
             serve.assert_called_once_with(preview, None, 0, metadata.get("review"), layout=True)
         self.run_cli("preview", "accept", "plan-v001")

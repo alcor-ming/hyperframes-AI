@@ -55,6 +55,7 @@ class WindowsSessionTest(unittest.TestCase):
             session = runtime.read_json(session_dir / "session.json")
             env = runtime.environment(release, home, session)
             self.assertEqual(env["HYPERFRAMES_AI_WORK_ROOT"], str(production))
+            self.assertEqual(env["HYPERFRAMES_AI_ASSET_CONFIG"], str(home / "config/local.json"))
             self.assertEqual(env["HYPERFRAMES_AI_REVIEW"], "0")
             self.assertTrue(env["TEMP"].startswith(str(session_dir)))
             with patch.object(runtime.subprocess, "run", return_value=CompletedProcess([], 0, "v0.0.0", "")):

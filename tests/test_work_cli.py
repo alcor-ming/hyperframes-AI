@@ -41,6 +41,11 @@ class WorkCliTest(unittest.TestCase):
         work_id = self.invoke("new", title, "--workflow", workflow)
         return work_id, self.root / "works" / "active" / work_id
 
+    def test_explicit_missing_variant_never_falls_back_to_main(self):
+        work_id, _ = self.new_work()
+        result = self.invoke("--work", work_id, "--variant", "missing", "status", expected=2)
+        self.assertIn("Unknown variant: missing", result)
+
     def test_naming_lock_recovers_dead_local_owner(self) -> None:
         lock = self.root / ".studio" / ".runtime" / "naming.lock.d"
         lock.mkdir(parents=True)

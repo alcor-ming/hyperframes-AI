@@ -327,6 +327,8 @@ def validate_component_release(directory: Path, expected_ref: str | None = None,
         raise ComponentError("Component package is missing baselines/")
 
     metadata = _read_frontmatter(directory / "COMPONENT.md")
+    if metadata.get("contract") not in {None, "component-contract-v1", "component-contract-v2"}:
+        raise ComponentError("Unsupported Component contract")
     component_id = metadata.get("component_id")
     version = metadata.get("version")
     if not isinstance(component_id, str) or not COMPONENT_ID_RE.fullmatch(component_id):
@@ -453,6 +455,39 @@ def validate_component_release(directory: Path, expected_ref: str | None = None,
         "fixture": fixture,
         "surface_specs": surface_specs,
     }
+
+
+def validate_component_acceptance(acceptance: dict, release: dict, *, runtime_root: Path | None = None) -> None:
+    """Check the separate acceptance without rewriting hash-covered metadata."""
+    if (not isinstance(acceptance, dict) or acceptance.get("schema_version") != 1
+            or acceptance.get("status") != "accepted"
+            or acceptance.get("component_ref") != release["component_ref"]
+            or acceptance.get("package_sha256") != release["package_sha256"]
+            or not acceptance.get("accepted_at") or not acceptance.get("note")):
+        raise ComponentError(f"Asset acceptance does not match the exact package: {release['component_ref']}")
+    root = runtime_root or Path(os.environ.get("HYPERFRAMES_AI_ROOT", Path(__file__).resolve().parents[1]))
+    lock = _read_json(root / "windows-runtime.lock.json")
+    runtime = acceptance.get("runtime")
+    if not isinstance(runtime, dict) or runtime.get("target") != lock.get("target"):
+        raise ComponentError(f"Asset runtime target is incompatible: {release['component_ref']}")
+    versions = runtime.get("versions")
+    if not isinstance(versions, dict) or "hyperframes" not in versions:
+        raise ComponentError("Asset acceptance requires the tested HyperFrames version")
+    declared = release["metadata"].get("runtime", {})
+    if not isinstance(declared, dict):
+        raise ComponentError("Asset runtime compatibility must be an object")
+    if declared.get("target", lock["target"]) != lock["target"]:
+        raise ComponentError(f"Asset declared runtime target is incompatible: {release['component_ref']}")
+    required = declared.get("versions", {})
+    if not isinstance(required, dict) or not set(required) <= set(versions):
+        raise ComponentError("Asset runtime versions must be an object")
+    for name, tested in versions.items():
+        if tested != lock.get("versions", {}).get(name):
+            raise ComponentError(f"Asset runtime version is incompatible: {release['component_ref']} {name}")
+    for name, allowed in required.items():
+        allowed = allowed if isinstance(allowed, list) else [allowed]
+        if lock.get("versions", {}).get(name) not in allowed:
+            raise ComponentError(f"Asset declared runtime version is incompatible: {release['component_ref']} {name}")
 
 
 def _safe_relative(value: str, label: str) -> str:
@@ -892,6 +927,7 @@ def install_component(
     binding_path: str | None = None,
     expected_ref: str | None = None,
     review_root: Path | None = None,
+    acceptance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Vendor one validated release, bind one Scene, and update the Lock."""
 
@@ -900,7 +936,10 @@ def install_component(
         review_identity(review_root)
         if not Path(project).resolve().is_relative_to(Path(review_root).resolve() / "works" / "active"):
             raise ComponentError("Candidate installation requires an isolated Review project")
-    release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=review_root is not None)
+    allow_unapproved = review_root is not None or acceptance is not None
+    release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=allow_unapproved)
+    if acceptance is not None:
+        validate_component_acceptance(acceptance, release)
     project = Path(project)
     if project.is_symlink() or not project.is_dir():
         raise ComponentError(f"Work project is not a regular directory: {project}")
@@ -918,7 +957,7 @@ def install_component(
     vendor_path.parent.mkdir(parents=True, exist_ok=True)
 
     if vendor_path.exists():
-        existing = validate_component_release(vendor_path, expected_ref=release["component_ref"], allow_unapproved=review_root is not None)
+        existing = validate_component_release(vendor_path, expected_ref=release["component_ref"], allow_unapproved=allow_unapproved)
         if existing["package_sha256"] != release["package_sha256"] or not _same_tree(Path(release_directory), vendor_path):
             raise ComponentError(f"Existing vendor copy differs: {vendor_path}")
     else:
@@ -927,7 +966,7 @@ def install_component(
             raise ComponentError(f"Refusing to reuse stale staging directory: {staging}")
         shutil.copytree(release_directory, staging)
         try:
-            installed = validate_component_release(staging, expected_ref=release["component_ref"], allow_unapproved=review_root is not None)
+            installed = validate_component_release(staging, expected_ref=release["component_ref"], allow_unapproved=allow_unapproved)
             if installed["package_sha256"] != release["package_sha256"] or not _same_tree(Path(release_directory), staging):
                 raise ComponentError("Vendor copy changed during installation")
             os.replace(staging, vendor_path)
@@ -949,6 +988,8 @@ def install_component(
         "surfaces": [surface_records[surface_id] for surface_id in sorted(surface_records)],
     }
     record = _lock_record(release, project, [binding_entry], vendor_path)
+    if acceptance is not None:
+        record["acceptance"] = acceptance
     if review_root is not None:
         record["review"] = review_identity(review_root)
     for index, existing in enumerate(components):
@@ -1195,12 +1236,15 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         vendor_path = project / vendor_rel
         if record.get("review") and review_root is None:
             raise ComponentError("Review candidate cannot be used in production")
-        vendor = validate_component_release(vendor_path, expected_ref=ref, allow_unapproved=review_root is not None)
+        acceptance = record.get("acceptance")
+        vendor = validate_component_release(vendor_path, expected_ref=ref, allow_unapproved=review_root is not None or acceptance is not None)
+        if acceptance is not None:
+            validate_component_acceptance(acceptance, vendor)
         if vendor["package_sha256"] != record.get("work_package_sha256"):
             raise ComponentError(f"Work package hash mismatch: {ref}")
         if vendor["package_sha256"] != record.get("public_package_sha256"):
             raise ComponentError(f"Public and Work package hashes differ: {ref}")
-        if public_root is not None:
+        if public_root is not None and acceptance is None:
             public_path = Path(public_root) / ".studio" / "components" / component_id / f"v{version}"
             public = validate_component_release(public_path, expected_ref=ref)
             if public["package_sha256"] != vendor["package_sha256"]:
@@ -1260,6 +1304,7 @@ __all__ = [
     "validate_component_mounts",
     "validate_component_transport",
     "validate_component_release",
+    "validate_component_acceptance",
     "validate_snapshot_closure",
     "validate_surface_dom",
     "validate_surface_payloads",

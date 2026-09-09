@@ -45,7 +45,7 @@ Windows 先通过固定 `workspace/start.ps1` 建立会话；下文 `./work` 均
 - `RESEARCH.md`：视频工作流在同一文件内保存按内容缺口取得的“资料依据”和按 Scene / Anchor 组织的“采用信息”，并记录与 Script Revision 的适用关系；不负责视觉机制、布局、裁切或成片时间。播客图文工作流仍记录嘉宾身份、与获批观点相关的经历、可用于正文补充的背景信息、事实边界和来源。
 - `PACKAGE.md`：视频工作流保存最终标题、封面文字、一句话简介和内容概括；内容概括按主要对象或主题简短分项，介绍多个 Skill、工具、功能或案例时逐项单独说明。播客图文工作流直接保存可复制的纯文本，第一行为标题，其后依次为开篇、`01｜小标题` 形式的分节与第三人称正文、署名、`原视频：<视频原标题>` 和话题标签，不放来源地址、Markdown 标记或“大标题”“开篇”“图片文案”等结构说明。标题与开篇第一段必须从用户获批的选取文段归纳，不得用文段之外的嘉宾背景主导；标题在全文稳定后最后拟定。render 生成 `xiaohongshu.json`，分别保存标题、正文、1 至 3 个话题与有序图片。
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
-- `ANIMATION_PLAN.md`：全片视觉语义与用户决策真源；默认与一个代表性布局样段一起确认，正式 Draft 前批准。Work 场景源码与 Binding 是可执行真源。
+- `ANIMATION_PLAN.md`：全片视觉语义、逐 Scene 选型与用户决策真源；先匹配可用资产，仅为真实设计缺口制作样段，数量可以为零，正式 Draft 前批准。Work 场景源码与 Binding 是可执行真源。
 - `variant.yaml`：当前 Variant 状态，由 CLI 与 Agent 更新。
 - `materials/acquisition.json`：URL 媒体的来源、Hermes job、平台和本地副本摘要；不得保存外部 `manifest_ref` 或临时媒体路径。
 - `artifacts/transcript.json`：`podcast_quote_image` 的已解析文案和时间真源；字幕优先，转录仅补空档，冲突必须人工确认。
@@ -61,9 +61,9 @@ Windows 先通过固定 `workspace/start.ps1` 建立会话；下文 `./work` 均
 - Research 完成后，创建 Animation Plan 的同时调用 DBS 完成 `PACKAGE.md`；只保留最终标题、封面文字、一句话简介和内容概括。
 - 主模型对最终 Scene 负责：换行、层级、分组、顺序和无独立主张的标签直接在样段 / 工程调整；删除重复措辞、等义精简或转成流程短语时原位更新对应 Research 采用条目和呈现，不重新联网、不增加文字审批。逐字口播引用 Script Anchor；独立信息写入 Research；原视频 / 截图内文字归素材，已清楚呈现时不强制重复覆盖。
 - 不采用可选增补无需回传。新增数据、比较或因果只补查相关条目；删除核心信息，或改变事实结论、观点、因果、必要数值 / 单位 / 归属及已确认叙事时，提出局部取舍和对 Scene / 时间的影响。确实无法同时保留核心信息与时间预算时直接交给用户取舍，不循环压缩。
-- Script / Research 按现有路径就绪后，Plan 默认为全片简短方案加一个实际、文字密度有代表性的 HTML/CSS 布局样段，使用真实文字、颜色、字体和画幅；媒体用标明用途、对象、比例与裁切意图的语义占位，不加载假路径。必要时用少量 JavaScript 切换静态状态，不初始化 HF、GSAP、Three、全片时间线、音频同步或 MP4 渲染。能判断布局、配色、字体和文字承载即提交，不自动为每个 Scene 制作小样。完整可执行 Visual Plan 仅为明确选择的高级路径。
+- Script / Research 就绪后，逐 Scene 筛选有效信息并按关系、真实文字、素材、画幅、时间和状态变化匹配已接纳资产或组合，记录精确引用与 Binding。沿用 `.studio/workflow.md` 的信息筛选和去重规则，不把制作约束写成观众正文。已适配能力直接复用；待接纳资产先做库级验证；只有真实设计或全片风格缺口才做 HTML/CSS 样段，同类缺口可共用并明确适用 Scene，数量可以为零。样段使用真实文字、颜色、字体和画幅，媒体用语义占位；Studio 薄承载仅补必要根容器、画幅和展示时长，不补全片时间线、新 GSAP / Three 动作、媒体同步或 MP4。完整可执行 Visual Plan 仅为明确选择的高级路径。
 - 主要动效先写清对象关系、起止状态、阅读安排与必要替代，默认在 Draft 最先实现最不确定的镜头；只有会改变整体决策的风险才提前局部试做。Windows 可先完成样段及效果需求，未交付的新组件或效果不无条件阻塞 Plan；其主体仍按需交给 WSL 开发，不改公共冻结资产。
-- 用户一次确认 `ANIMATION_PLAN.md` 与样段快照，区分已展示的设计和尚未验证但同意实施的动效、媒体及其他 Scene；不增加 Motion Plan 审批。Draft 复用已确认的文字、tokens、样式和有用代码，再补齐其他 Scene、动作与媒体，不要求 Plan 预先拥有完整工程。Plan 接受不写入 `accepted_preview`，不放行 Final；完整 Draft 与 Final 仍严格检查必需素材和效果。
+- 用户一次确认 `ANIMATION_PLAN.md` 及适用的样段或已验收资产引用，分别记录全片配色 / 字体、局部布局适用 Scene、同意实施但尚未验证的动作 / 媒体。全片主题可共享，局部结构和动效不自动推广全片；不增加 Motion Plan 审批。Draft 逐 Scene 按 Plan、资产引用和 Binding 装配，保留角色、连接、条件、分支、反馈及结果关系；未支持的表达明确报告该 Scene 缺口，不压成通用文字行或静默 fallback。Plan 接受不写入 `accepted_preview`，不放行 Final；完整 Draft 与 Final 仍严格检查必需素材和效果。
 - Draft 提交用户前使用 `hyperframes-anti-ppt` 复审成片或代表性关键帧；`PASS` 只是 QA 结果，不替代 Draft 接受。
 - Final 必须从用户接受的 Draft 源码快照继续。
 - Script / Research / Plan Revision 继续留痕；版本变化先检查实际影响范围，只补查、同步或重做引用变动的 Scene 与必要衔接，不自动刷新全片。内容等义由主模型判断，机器仍校验明确范围、引用及冻结 / 当前内容一致性；元数据同步不等于旧 Accepted Draft 自动批准新画面。
@@ -89,11 +89,13 @@ Windows 先通过固定 `workspace/start.ps1` 建立会话；下文 `./work` 均
 
 - Work 和 Variant 的创建、指针、等待、Park、Draft 注册、Final、Archive 与 Reopen 只通过 `./work` 管理。
 - CLI 只管理生命周期和文件一致性；内容判断与视觉选择仍由 Agent 负责，确定性的解析、时间与格式处理交给对应 Skill 脚本。
+- 日常制作、缺口样段和 Draft 审阅默认通过 Work CLI 启动锁定版本的官方 HyperFrames Studio，返回实际工程 URL；自制审阅页仅保留显式历史查看。当前工程可编辑，登记版本只在独立复制的审阅副本中打开，不用 hardlink / symlink 暴露冻结快照、vendor 或资产包。定位绑定准确 Work / Variant、工程和实际端口，只读必要 Scene / selection / lint 上下文；Studio 改稿同步原文案真源或暂停相关再生成，旧 MP4 / QA 不冒充对应新源码。
 - Final 是本地交付物，不表示已保存到平台草稿箱或已发布；两者分别需要外部动作，且草稿授权绝不包含发布。
 
 ## Release 与 Codex App 部署
 
 - WSL Git 仓只负责开发和构建；Windows Codex App 日常打开 `%LOCALAPPDATA%\HyperFramesAI\workspace` 薄创作入口，运行不可变 Windows x64 包。`current` / `previous` 保留稳定安装兼容入口；不得把安装目录或 Windows 旧仓作为开发仓。
+- 可复用资产通过外部配置的 AssetStore 独立接纳和发现，不随普通 Harness 更新重发全库；已有独立来源直接注册，不建立第二份可写权威库。新实现仍由 WSL 开发；Windows 接纳准确版本并按合同使用。`migration-ready` 不等于生产通过，只验证当前需要的资产，不以全部家族 / 画幅齐备为准入门。Work 沿用 vendor / Binding / `COMPONENT_LOCK.json` 固定已接纳版本及依赖，库更新不热替换旧作品；同身份版本不同内容拒绝覆盖，外部库离线不影响已有闭合副本。
 - Harness Release 使用 `harness-YYYY.MM.PATCH`，只通过 `./release build` 从干净、已标记且与 upstream 同步的提交构建；脚本不代替用户执行 commit、tag 或 push。
 - 本机候选使用 `./release candidate <build-id> --runtime-cache <cache>`，允许受控未提交修改；必要新增文件逐项 `--include <path>`，不自动纳入任意未跟踪文件。冻结源码和运行依赖并记录哈希，候选安装不覆盖稳定 `current`，不要求先 commit、tag、push 或公开发布。
 - 请求的 revision 与来源快照冻结后交给 WSL；候选只在 Review 副本预演，禁止正式 Finalize、归档完成与平台草稿。组件验收、Plan 接受和 Draft 接受分别记录，用户一句明确回复可以涵盖多个对象；不新增连续审批问卷。

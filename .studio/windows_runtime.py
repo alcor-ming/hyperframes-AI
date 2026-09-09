@@ -38,6 +38,7 @@ def environment(root: Path, home: Path, session: dict | None = None) -> dict[str
     env.update({
         "HYPERFRAMES_AI_ROOT": str(root),
         "HYPERFRAMES_AI_CONFIG": str(home / "config/local.json"),
+        "HYPERFRAMES_AI_ASSET_CONFIG": str(home / "config/local.json"),
         "HYPERFRAMES_AI_REVIEW": "1" if session and session.get("review") else "0",
         "HYPERFRAMES_AI_VERSION": read_json(root / ".release.json")["release"],
         "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1",

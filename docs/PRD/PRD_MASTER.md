@@ -1,12 +1,22 @@
 # HyperFrames AI vNext PRD Master
 
-状态：产品边界已确认，待拆分实施
+状态：v2.2 当前工作流修订；Theme / Background / Component 完整解耦仍为后续目标
 
-产品范围：Theme / Background / Component 解耦重构
+产品范围：官方 Studio、逐 Scene 复用与独立资产接纳；保留三层解耦设计
 
 风险：T3 Parent PRD
 
-日期：2026-09-03
+日期：2026-09-09
+
+## 当前默认路径（v2.2）
+
+Script / Research 就绪后，先筛选每个 Scene 的信息并匹配可用资产。已有适配组件直接复用；组合或参数可以解决时记录当前用法；只有真实设计缺口才做轻量样段，数量可以为零。全片颜色、字体可共享，局部样段的布局、信息结构和动效只覆盖 Plan 明确列出的 Scene。
+
+官方 HyperFrames Studio 是制作与审阅的默认入口。Work 负责准确工程、版本、反馈和接受；冻结版本只通过隔离副本交给 Studio，不把 Studio 编辑自动算作原版本或用户批准。继续保留 v2.1 的内容筛选、去重、必要条件与真实来源。
+
+合同兼容的 Component / 同合同效果包通过外部 AssetStore 独立导入、验证和精确接纳，再固定到 Work 的 vendor / Binding / Lock；不依赖 Harness 内置名单，也不等待全部旧家族或画幅齐备。普通新增资产不要求重发 Harness。Background / Profile 的完整独立安装与三层解耦仍需按实际合同实现，不能把当前 Component 链路冒充全部完成。
+
+下文保留完整解耦目标和原批次 backlog，不作为当前 Work 或单个兼容资产的额外前置门。本文件是产品索引，不增加每次创作的必读材料。
 
 ## 产品定位
 
@@ -36,9 +46,9 @@
 3. 让 Component 完整拥有布局、材质、几何、字号、层级、画面效果、GSAP 编排、easing 与 Hero/Handoff。
 4. 移除 `subtemplate`、Profile Motion Verb 及 `Profile` 对组件检索的影响。
 5. 让同一 Component Family 的 `4x3` 与 `16x9` 实现共享语义用途和 Slot 合同，但保持独立源码与版本。
-6. 一次性重构三套 Profile、二十个公共 Component Family 和一个 Background Family。
+6. 保留三套 Profile、二十个公共 Component Family 和一个 Background Family 的原整组重构 backlog，不阻塞单个兼容资产独立接纳。
 7. 由 Open Design 保存设计原稿并完成集中 Gallery 验收；仓库只保存生产合同、实现、hash 与基线。
-8. 保留旧 Work 的 vendored 快照与可复现性，同时禁止新 Work 使用旧合同。
+8. 保留旧 Work 的 vendored 快照与可复现性；合同兼容且已接纳的旧资产继续可用，完整新路径验证后再决定 legacy 退场，不覆盖旧包。
 
 ## 非目标
 
@@ -104,10 +114,12 @@ Component 与 Background 只消费这些语义 token，不声明特定 Profile�
 
 ## 资产与引用
 
+资产来源与 Harness 版本独立配置。当前 Component 包在外部 AssetStore 使用精确身份与版本目录；旧 `.studio/components/` 只读兼容，发现结果标明来源。同身份、同版本但内容不同必须拒绝覆盖或使用。完整解耦后，其他类型也按各自合同提供独立包，不把以下目标结构当作当前已全部支持的安装器：
+
 ```text
-.studio/profiles/<profile-id>/vN/
-.studio/backgrounds/<background-id>/<ratio>/vN/
-.studio/components/<component-id>/<ratio>/vN/
+<独立资产开发目录>/...
+<AssetStore>/packages/<精确资产身份>/<ratio（如适用）>/vN/
+<WorkStore>/works/.../project/vendor/...
 ```
 
 引用格式：
@@ -137,7 +149,9 @@ component_ref: rich-skill-explanation/4x3@v1
 - Background 状态不得承载叙事文本、证据或替代 Component 的状态变化。
 - 更换 Background Release、增加状态或改变可感知环境动效，必须提高 Plan Revision 并重新批准。
 
-## 一次性重构范围
+## 原整组重构 Backlog
+
+本节保留 2026-09-03 确认的整组交付范围，不是 v2.2 新资产的白名单或当前 Work 的启动条件。
 
 ### Profile
 
@@ -183,19 +197,19 @@ Open Design `Hyperframes` 项目中的组合预览、缺失 HTML 的孤立 artif
 
 - Open Design `Hyperframes` 项目继续作为设计原稿真源。
 - Gallery 必须覆盖 `20 Component Families x 2 ratios + 1 Background Family x 2 ratios`，共 42 个可独立 Preview/seek 的实现。
-- 用户可逐项退回；只有 42 项全部通过后，整组才可进入新公共库。
+- 用户可逐项退回；该历史批次只有 42 项全部通过才可宣称整组完成。单个兼容资产按其精确版本独立验证、接纳，不受未完成项阻塞。
 - 每项冻结稳定 revision；无稳定 revision 时对完整 artifact bundle 计算 SHA-256。
-- 开发仓不复制 Open Design 原稿，只记录 artifact ref、revision/hash、生产合同、实现、基线与 package hash。
+- 独立资产开发目录记录 artifact ref、revision/hash、生产合同、实现、基线与 package hash；不复制 Open Design 私有原稿到 Harness 仓。
 - 生产翻译只允许主题 token 接线、Slots、Work 隔离、seek-safe 与离线渲染所需调整；可感知差异必须退回 Gallery 重新确认。
 
 ## 迁移与兼容
 
-- 新资产使用 `component-contract-v2`。
-- 现有公共包原样保留并标记 `legacy-profile-coupled`，不覆盖 hash，不参加新 Work 检索。
+- 新 Ratio Component 使用 `component-contract-v2`；其他类型按实际已实现的合同验证，不凭目录存在宣称可用。
+- 现有公共包原样保留，legacy 身份由外部索引说明，不在 hash 覆盖文件内改状态；只读兼容发现明确标明来源与限制。
 - 旧 Work 继续从原 vendored package、Binding 与 Lock 渲染。
-- 新 Work 只能引用新 Profile、Background 与 Component Ratio Release。
+- 当前 Work 使用已接纳、依赖闭合且满足真实画幅、内容与时间约束的精确资产；不得要求尚未完成的 Profile / Background 重构才能开始。
 - 迁移不改写历史 Animation Plan、Accepted Draft、Final 或 Archive。
-- 新公共库整组未通过前，旧生产路径继续可用；不得形成一半新合同、一半旧合同的新 Work。
+- 旧生产路径继续可用；新旧资产组合按实际合同兼容性检查，不以整组完成状态替代兼容性判断。`migration-ready` 不等于已接纳。
 
 ## 保持不变的能力
 
@@ -206,7 +220,9 @@ Open Design `Hyperframes` 项目中的组合预览、缺失 HTML 的孤立 artif
 - Composition Evidence 继续只是组合验收证据，不自动成为公共转场或运行时依赖。
 - 组件仍须 paused、seek-safe、可离线渲染；Background 也遵守相同时间确定性要求。
 
-## 验收
+## 完整解耦目标验收
+
+以下是原整组目标的完成标准，不代表本轮均已实现；v2.2 当前链路按索引中的专项 PRD 验收。
 
 1. 三套 Profile 只包含最小主题合同，不再拥有画幅、材质、构图或动效字段。
 2. 42 个 Open Design Gallery 项均完成独立设计、seek、关键状态与用户验收。
@@ -219,12 +235,12 @@ Open Design `Hyperframes` 项目中的组合预览、缺失 HTML 的孤立 artif
 
 ## PRD 索引
 
-- [Windows 创作工作台与 WSL 交接](./hyperframes-windows-workbench-wsl-handoff.md)：2026-09-07 更新制作时机，Windows 先完成布局样段与需求，Plan 后按需交接 WSL 新效果；固定入口、不可变候选、私有请求和隔离回测不变。
-- [轻量视觉 Plan、信息型动效与效果复用升级 PRD](./hyperframes-visual-plan-motion-reuse.md)：2026-09-07 v2.0 默认全片简短方案加一个代表性布局样段，主要动作与媒体在 Draft 完成；完整可执行预演保留高级选择，Plan 不等于 Draft 接受。保留本主 PRD 未来设计与整库范围，不宣称真实 token 或返工已经下降。
-- [组件与动效模块 PRD](./hyperframes-component-motion.md)
+- [逐 Scene 复用、缺口 Plan 与官方 Studio PRD](./hyperframes-visual-plan-motion-reuse.md)：v2.2，逐场选信息与匹配资产、样段可为零、局部批准范围、Studio 默认入口及 v2.1 内容质量；不宣称真实返工已经下降。
+- [组件与独立资产接纳 PRD](./hyperframes-component-motion.md)：v2.2，外部来源发现、候选验证、精确接纳与固定依赖；三层解耦和 42 项 Gallery 保留为原批次 backlog，不阻塞单资产。
+- [Windows 创作工作台与 WSL 交接](./hyperframes-windows-workbench-wsl-handoff.md)：v2.2，锁定官方 Studio、独立资产配置与 Windows 接纳；固定会话、不可变候选、私有请求及隔离回测不变。
 - [决策台账](./_ledger/component-driven-motion-vnext.md)
 - [rnskill 动效分层研究](./_research/rnskill-motion-layering.md)
 
 ## 审批边界
 
-本 PRD 只确认 Theme / Background / Component 解耦和一次性重构范围。它不授权修改 Skill、Profile、组件、Work、Open Design artifact、Git 历史或外部发布状态；实施必须另行进入 Trellis 任务并遵守 Gallery、Plan 与 Draft 的既有审批门。
+本 PRD 记录产品边界与后续解耦范围，不自行扩大正式 Work、Open Design、Git 或外部发布授权。实施按当前用户请求与现行边界推进；单资产接纳、Plan 与 Draft 各自记录，不增加额外审批层，历史整组 Gallery 约定只约束该批次的完成声明。
