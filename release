@@ -30,6 +30,9 @@ LOCAL_SKILLS = {
     "design-taste-frontend": "eb6d1b2e9c86123ebd153123e1f12e16955c7d43a1ec28495c48f29f2641481e",
 }
 VERSION_PATTERN = re.compile(r"^(?:harness-)?(\d{4}\.\d{2}\.\d+)$")
+PUBLIC_ROOT_FILES = {"AGENTS.md", "README.md", "LICENSE", ".gitignore", "release", "release.ps1",
+                     "work", "work.cmd", "work.ps1", "asr-wsl.cmd", "windows-runtime.lock.json",
+                     "windows-npm.lock.json", "skills-lock.json", "workspace.ps1"}
 
 
 class ReleaseError(RuntimeError):
@@ -88,29 +91,78 @@ def release_checks(root: Path) -> None:
     )
 
 
+def safe_member(name: str) -> Path:
+    if "\\" in name or ":" in name or not name or name.startswith("/") or ".." in name.split("/"):
+        raise ReleaseError(f"Unsafe archive path: {name}")
+    return Path(name)
+
+
+def extract_zip(source: Path, destination: Path, strip_prefix: str = "") -> None:
+    with zipfile.ZipFile(source) as bundle:
+        for entry in bundle.infolist():
+            safe_member(entry.filename)
+            if (entry.external_attr >> 16) & 0o170000 == 0o120000:
+                raise ReleaseError("Runtime archive must not contain symlinks")
+            name = entry.filename
+            if strip_prefix:
+                if name.rstrip("/") == strip_prefix.rstrip("/"):
+                    continue
+                if not name.startswith(strip_prefix.rstrip("/") + "/"):
+                    raise ReleaseError(f"Runtime member outside strip_prefix: {name}")
+                name = name[len(strip_prefix.rstrip("/")) + 1:]
+            target = destination / safe_member(name)
+            if entry.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with bundle.open(entry) as stream, target.open("xb") as output:
+                    shutil.copyfileobj(stream, output)
+
+
 def stage_runtime(staging: Path, cache: Path) -> dict[str, str]:
-    lock = json.loads(RUNTIME_LOCK.read_text(encoding="utf-8"))
+    lock = json.loads((staging / "windows-runtime.lock.json").read_text(encoding="utf-8"))
     assets = lock.get("assets")
     if lock.get("target") != "windows-x64" or not isinstance(assets, list) or not assets:
         raise ReleaseError("Invalid Windows runtime lock")
+    if lock.get("pending_assets"):
+        raise ReleaseError("Windows runtime closure incomplete: " + ", ".join(lock["pending_assets"]))
+    if not lock.get("required_files"):
+        raise ReleaseError("Runtime lock must declare the complete native execution chain")
     runtime = staging / "runtime" / "python"
     site_packages = runtime / "Lib" / "site-packages"
     runtime.mkdir(parents=True)
     site_packages.mkdir(parents=True)
     hashes: dict[str, str] = {}
     for asset in assets:
+        if len(safe_member(asset["file"]).parts) != 1:
+            raise ReleaseError("Runtime asset file must be a cache basename")
         source = cache / asset["file"]
         if not source.is_file() or sha256(source) != asset["sha256"]:
             raise ReleaseError(f"Missing or invalid locked runtime asset: {source}")
         hashes[asset["file"]] = asset["sha256"]
-        with zipfile.ZipFile(source) as bundle:
-            bundle.extractall(runtime if asset["kind"] == "python" else site_packages)
+        kind = asset["kind"]
+        if kind in {"python", "wheel"}:
+            destination = runtime if kind == "python" else site_packages
+        elif kind in {"zip", "npm-tree"}:
+            relative = safe_member(asset["target"])
+            if relative.parts[0] != "runtime":
+                raise ReleaseError("Runtime target must be under runtime/")
+            destination = staging / relative
+        else:
+            raise ReleaseError(f"Unknown runtime asset kind: {kind}")
+        extract_zip(source, destination, asset.get("strip_prefix", ""))
+        if sha256(source) != asset["sha256"]:
+            raise ReleaseError(f"Runtime changed while staging: {source.name}")
     pth_files = list(runtime.glob("python*._pth"))
     if len(pth_files) != 1:
         raise ReleaseError("Embedded Python ._pth file is missing")
     lines = [line for line in pth_files[0].read_text(encoding="utf-8").splitlines() if line != "#import site"]
     lines.extend(["Lib/site-packages", "import site"])
     pth_files[0].write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    for name in lock["required_files"]:
+        relative = safe_member(name)
+        if relative.parts[0] != "runtime" or not (staging / relative).is_file():
+            raise ReleaseError(f"Native runtime closure is missing: {name}")
     return hashes
 
 
@@ -125,6 +177,14 @@ def write_zip(source: Path, archive: Path, prefix: str, timestamp: int) -> None:
             bundle.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
 
 
+def strip_bundled_assets(staging: Path) -> None:
+    """Keep migration fixtures in the checkout, not the Windows application."""
+    for name in ("components", "backgrounds"):
+        directory = staging / ".studio" / name
+        if directory.is_dir():
+            shutil.rmtree(directory)
+
+
 def verified_archive(archive: Path) -> str:
     checksum = archive.with_suffix(archive.suffix + ".sha256")
     if not archive.is_file() or not checksum.is_file():
@@ -134,10 +194,92 @@ def verified_archive(archive: Path) -> str:
         raise ReleaseError(f"Checksum verification failed: {archive}")
     with zipfile.ZipFile(archive) as bundle:
         roots = {Path(name).parts[0] for name in bundle.namelist() if name}
-        bad = [name for name in bundle.namelist() if ".." in Path(name).parts or Path(name).is_absolute()]
-    if len(roots) != 1 or bad:
+        for name in bundle.namelist():
+            safe_member(name)
+    if len(roots) != 1:
         raise ReleaseError("Release ZIP must contain one safe top-level directory")
     return roots.pop()
+
+
+def public_source(name: str) -> bool:
+    path = safe_member(name)
+    forbidden = {".git", ".runtime", "__pycache__", "node_modules", "works", "requests", "review",
+                 "credentials", "secrets", ".env", ".codex", "dist"}
+    if any(part in forbidden or part.startswith(".env.") for part in path.parts):
+        return False
+    if path.suffix.lower() in {".pem", ".key", ".p12", ".pyc", ".pyo"}:
+        return False
+    return name in PUBLIC_ROOT_FILES or name.startswith((".studio/", ".agents/skills/", "docs/", "tests/"))
+
+
+def freeze_sources(staging: Path, includes: list[str], repo: Path = REPO) -> dict[str, str]:
+    tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=repo).decode().split("\0")
+    names = {name for name in tracked if name and public_source(name) and (repo / name).exists()}
+    for name in includes:
+        if not public_source(name) or not (repo / name).is_file():
+            raise ReleaseError(f"Explicit candidate source is not a public product file: {name}")
+        names.add(name)
+    hashes = {}
+    for name in sorted(names):
+        source = repo / name
+        if any(parent.is_symlink() for parent in [source, *source.parents]) or not source.is_file():
+            raise ReleaseError(f"Candidate source must be a regular local file: {name}")
+        target = staging / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        hashes[name] = sha256(source)
+        shutil.copy2(source, target)
+    # Detect edits during the copy instead of assigning mixed bytes a Git identity.
+    for name, digest in hashes.items():
+        if sha256(repo / name) != digest or sha256(staging / name) != digest:
+            raise ReleaseError(f"Source changed while freezing; retry: {name}")
+    return hashes
+
+
+def stage_skills(staging: Path) -> dict[str, str]:
+    for name, locked_hash in LOCAL_SKILLS.items():
+        source = REPO / ".agents" / "skills" / name
+        if not (source / "SKILL.md").is_file() or directory_sha256(source) != locked_hash:
+            raise ReleaseError(f"Missing or changed local release dependency: {name}")
+        target = staging / ".agents" / "skills" / name
+        shutil.copytree(source, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
+        if directory_sha256(target) != locked_hash:
+            raise ReleaseError(f"Local dependency changed while freezing: {name}")
+    return dict(LOCAL_SKILLS)
+
+
+def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: list[str]) -> Path:
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,79}", build_id):
+        raise ReleaseError("Candidate ID must use lowercase letters, digits, dots or hyphens")
+    identity = f"candidate-{build_id}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    archive = output_dir / f"hyperframes-ai-{identity}-windows-x64.zip"
+    checksum = archive.with_suffix(archive.suffix + ".sha256")
+    if archive.exists() or checksum.exists():
+        raise ReleaseError(f"Candidate artifact already exists: {archive}")
+    head = run("git", "rev-parse", "HEAD", capture=True)
+    dirty = bool(run("git", "status", "--porcelain", capture=True))
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    with tempfile.TemporaryDirectory(prefix="hf-candidate-") as temporary:
+        staging = Path(temporary) / identity
+        staging.mkdir()
+        sources = freeze_sources(staging, includes)
+        skills = stage_skills(staging)
+        runtime = stage_runtime(staging, runtime_cache)
+        release_checks(staging)
+        strip_bundled_assets(staging)
+        sources = {name: digest for name, digest in sources.items() if (staging / name).is_file()}
+        manifest = {"schema_version": 3, "channel": "candidate", "release": identity,
+                    "commit": head, "dirty": dirty, "target": "windows-x64",
+                    "built_at": datetime.fromtimestamp(timestamp, timezone.utc).isoformat(),
+                    "source_file_sha256": sources, "runtime_asset_sha256": runtime,
+                    "local_skill_sha256": skills,
+                    "files": {p.relative_to(staging).as_posix(): sha256(p)
+                              for p in sorted(staging.rglob("*")) if p.is_file()}}
+        (staging / ".release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        write_zip(staging, archive, identity, timestamp)
+    checksum.write_text(f"{sha256(archive)}  {archive.name}\n", encoding="ascii")
+    print(archive)
+    return archive
 
 
 def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
@@ -169,33 +311,28 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
         with tarfile.open(git_tar) as bundle:
             bundle.extractall(staging, filter="data")
 
-        dependency_hashes: dict[str, str] = {}
-        for name, locked_hash in LOCAL_SKILLS.items():
-            source = REPO / ".agents" / "skills" / name
-            if not (source / "SKILL.md").is_file() or directory_sha256(source) != locked_hash:
-                raise ReleaseError(f"Missing or changed local release dependency: {name}")
-            shutil.copytree(source, staging / ".agents" / "skills" / name)
-            dependency_hashes[name] = locked_hash
+        dependency_hashes = stage_skills(staging)
 
         runtime_hashes = stage_runtime(staging, runtime_cache)
         timestamp = int(run("git", "show", "-s", "--format=%ct", f"{tag}^{{commit}}", capture=True))
+        release_checks(staging)
+        strip_bundled_assets(staging)
         files = {
             path.relative_to(staging).as_posix(): sha256(path)
             for path in sorted(p for p in staging.rglob("*") if p.is_file())
         }
         manifest = {
-            "schema_version": 2,
+            "schema_version": 3,
+            "channel": "stable",
             "release": tag,
             "commit": head,
             "target": "windows-x64",
             "built_at": datetime.fromtimestamp(timestamp, timezone.utc).isoformat(timespec="seconds"),
-            "workstore": r"D:\AI\AI+hyperframes",
             "runtime_asset_sha256": runtime_hashes,
             "local_skill_sha256": dependency_hashes,
             "files": files,
         }
         (staging / ".release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-        release_checks(staging)
         write_zip(staging, archive, tag, timestamp)
 
     checksum.write_text(f"{sha256(archive)}  {archive.name}\n", encoding="ascii")
@@ -210,6 +347,11 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument("version")
     build_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
     build_parser.add_argument("--runtime-cache", type=Path, required=True)
+    candidate_parser = subcommands.add_parser("candidate")
+    candidate_parser.add_argument("build_id")
+    candidate_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
+    candidate_parser.add_argument("--runtime-cache", type=Path, required=True)
+    candidate_parser.add_argument("--include", action="append", default=[], help="Explicit new public file; repeat for each untracked addition")
     verify_parser = subcommands.add_parser("verify")
     verify_parser.add_argument("archive", type=Path)
     return command
@@ -220,6 +362,8 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         if args.command == "build":
             build(args.version, args.output_dir.resolve(), args.runtime_cache.resolve())
+        elif args.command == "candidate":
+            candidate(args.build_id, args.output_dir.resolve(), args.runtime_cache.resolve(), args.include)
         else:
             print(verified_archive(args.archive.resolve()))
     except (ReleaseError, subprocess.CalledProcessError, OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as exc:

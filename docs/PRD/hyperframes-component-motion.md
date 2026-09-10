@@ -1,22 +1,24 @@
 # HyperFrames Theme / Background / Component PRD
 
-状态：产品边界已确认，待拆分实施
+状态：v2.2 独立资产接纳修订；完整三层解耦仍为后续目标
 
 上位 PRD：[PRD_MASTER.md](./PRD_MASTER.md)
 
 决策依据：[component-driven-motion-vnext.md](./_ledger/component-driven-motion-vnext.md)
 
-日期：2026-09-03
+日期：2026-09-09
 
 ## 1. 模块目标
 
-一次性重构现有 HyperFrames 视觉资产合同，使主题、背景与前景组件各自只有一个职责：
+保留现有视觉资产的三层解耦目标，使主题、背景与前景组件各自只有一个职责：
 
 - Profile 决定颜色和字体；
 - Background 决定全画幅环境层；
 - Component 决定前景布局、画面效果和动效。
 
 新合同必须让组件跨 Profile 使用，让 `4:3` 与 `16:9` 保持独立设计，并继续保留 Work 本地冻结、离线渲染、Animation Plan 审批与历史 Work 可复现性。
+
+v2.2 当前交付重点是独立 Component / 同合同效果包的来源注册、隔离导入、精确接纳、动态发现与固定绑定。Profile / Background 的完整独立安装、最小主题合同和旧批次 42 项 Gallery 仍保留为后续目标，不假称已经全部实现，也不作为单个兼容资产或新 Work 的前置门。本文件不增加日常必读或审批层。
 
 ## 2. 术语
 
@@ -42,7 +44,7 @@
 
 ### Legacy Release
 
-现有把 `optical_fluidity`、`subtemplate`、颜色、字体与 Motion Verb 写进组件包的旧版本。它只服务既有 Work，不参加新 Work 检索。
+现有把 `optical_fluidity`、`subtemplate`、颜色、字体与 Motion Verb 写进组件包的旧版本。旧包原样保留；当前允许只读兼容发现并标明来源和限制，只有实际兼容且已批准的精确版本可使用。完整替代路径验证后再决定退场，不回写 hash 覆盖文件。
 
 ### Work Binding
 
@@ -50,25 +52,27 @@
 
 ## 3. 总体流程
 
-### 3.1 一次性设计重构
+### 3.1 原整组设计 Backlog
+
+以下保留旧批次的整体完成约定，不限制独立新资产的身份、数量、画幅或接纳时机。
 
 1. 从 Open Design `Hyperframes` 项目读取二十个公共 Component Family 的原稿与现有背景原稿。
 2. 为每个 Family 分别设计 `4x3` 与 `16x9`，不通过拉伸、裁切或响应式规则生成另一画幅。
 3. 将组件里的全画幅环境层拆入独立 Background；组件根层保持透明。
 4. 把硬编码颜色与字体替换为统一语义 token；其他视觉和动效参数留在具体实现。
 5. 生成一个集中 Gallery，覆盖 40 个 Component Ratio Release 与 2 个 Background Ratio Release。
-6. 用户逐项验收；全部通过后冻结 artifact revision 或 bundle SHA-256。
-7. 才能写入新公共库并进入 Work 集成验证。
+6. 用户逐项验收，各项冻结准确 artifact revision 或 bundle SHA-256。
+7. 全部通过才可宣称该批次整体完成；单个兼容资产可先独立接纳和集成验证。
 
 ### 3.2 正常 Work 路径
 
-1. Variant 声明唯一 `ratio`、`profile_ref` 与 `background_ref`。
-2. Animation Plan 先形成 Scene Semantic Brief。
-3. 工作流按 `ratio + semantic contract + slots/assets + duration + anti-use` 过滤 Component Ratio Release。
-4. Plan 为每个 Scene 记录 `background_state`、`component_ref`、Slots、时间和 Match Record。
-5. 用户整体批准 Plan。
-6. 工作流复制精确 Profile、Background、Component 包，创建 Binding 与 Lock。
-7. Work 仅从 vendored 副本完成 Draft、Snapshot、Final 与 Archive。
+1. 沿用 Variant 的画幅和当前已实现的主题路径；使用独立 Background 合同时才记录对应精确引用和状态。
+2. 先按 Script / Research 筛选每个 Scene 值得表达的信息，删除无信息增量的重复和内部制作说明，保留必要事实、条件、导航与来源。
+3. 从外部 AssetStore 与只读兼容来源，按 `ratio + semantic contract + slots/assets + duration + anti-use` 匹配已接纳资产。
+4. Plan 按 Scene 记录精确引用、内容绑定和必要差异；组合或参数能解决就直接复用，只为真实设计缺口制作轻量样段，可为零。
+5. 用户按原流程确认 Plan；全片视觉身份与局部样段适用 Scene 分开，未验证动作不登记为已看过效果。
+6. 工作流复制精确可用包和依赖，沿用 Binding 与 Lock；Draft 逐 Scene 装配，不将参与者、分支或反馈压成同一种文字行。
+7. 官方 Studio 打开当前工程或冻结版本的隔离副本；Work 登记并接受准确 Draft，Final / Archive 沿用既有生命周期。
 
 缺少合适组件时继续使用 `custom:<slug>` 并记录结构化缺口；不得为了复用而扭曲原文或跨画幅调用。
 
@@ -120,7 +124,7 @@ font.mono
 - DOM、CSS、布局、尺寸、素材构图、动效节奏和基线可完全不同。
 - 两个画幅分别版本化；一个画幅升级不要求另一个同步升级。
 - 不允许通过整体缩放、裁切、CSS media query 或通用响应式布局声称完成另一画幅设计。
-- 未经 Gallery 验收的画幅不存在可调用 Release。
+- 当前实际使用的画幅必须有对应实现并完成该精确版本的库级接纳；原批次 Gallery 的未完成画幅不阻塞其他已接纳实现。
 
 **验收**：每个 Ratio Release 都有独立 artifact、入口、Preview、关键帧与 package hash；跨画幅 Slot Schema 一致。
 
@@ -168,17 +172,19 @@ Component 不得包含：
 - wall clock、无限循环、未播种随机数或运行时网络；
 - Work 私有文案、媒体、链接或凭证。
 
-**验收**：任一组件可在两种画幅各自独立 Preview，并能应用任意一套合规 Profile。
+**目标验收**：原整组重构中的组件在两种画幅各自独立 Preview，并能应用合规 Profile。当前单个包按它实际声明和已验收的画幅、主题合同判断，不要求为接纳一个版本同时补齐整个 Family。
 
-### HCM-006｜公共目录与发现
+### HCM-006｜独立目录、接纳与发现
 
 ```text
-.studio/profiles/<profile-id>/vN/
-.studio/backgrounds/<background-id>/<ratio>/vN/
-.studio/components/<component-id>/<ratio>/vN/
+<独立资产开发目录>/...
+<AssetStore>/candidates/<精确资产身份>/<ratio（如适用）>/vN/
+<AssetStore>/packages/<精确资产身份>/<ratio（如适用）>/vN/
+<AssetStore>/acceptances/...
+<WorkStore>/works/.../project/vendor/...
 ```
 
-引用格式：
+完整解耦目标的引用格式保留如下；当前只按已实现的资产类型合同调用，不把示意字段当作已可用安装器：
 
 ```yaml
 profile_ref: optical_fluidity@v2
@@ -186,16 +192,19 @@ background_ref: functional-field/4x3@v1
 component_ref: rich-skill-explanation/4x3@v1
 ```
 
-- 发现机制直接读取各不可变目录内的 manifest/contract，不新增 Registry。
+- 注册已有外部来源，不复制出第二份可写权威库。发现和搜索由各包的身份、类型、用途、画幅、Slot、时间、依赖及 anti-use 元数据生成，不修改 `capabilities.yaml` 枚举、Python 资产常量或全局 Skill。
+- 导入只创建隔离候选，不执行上游下载、反馈或生产接纳。准确版本经合同、依赖、目标环境和 Fixture 验证后单独记录接纳；`migration-ready` 或目录存在不等于生产通过。
+- 接纳记录与不可变包摘要关联，不修改 hash 覆盖的 `COMPONENT.md` 状态。同身份、同版本但内容不同拒绝覆盖或使用，并指明受影响包。
+- 旧内置目录可只读兼容并标明来源；新 Release 不再随 Harness 携带全部 Component / Background 成品库，仍被现行 Skill 使用的 Profile 接入文件按实际依赖保留。
 - Profile 只参与主题注入，不参与组件候选过滤。
 - Component 候选过滤顺序固定为：ratio、依赖/资产/Schema/时长硬限制、语义职责、状态变化、anti-use、Fixture/Case。
 - Background 独立选择，不作为 Component Family 的一部分。
 
-**验收**：新增一个 Ratio Release 只需新增一个不可变目录；选择逻辑不按 Profile 或 `subtemplate` 分支。
+**验收**：一个现有合同兼容的新包可完成独立封装、Windows 导入和接纳、下次发现及新 Work 固定绑定，Harness 版本与程序文件哈希不变。未知资产类型明确拒绝，不将官方 Registry snippet 仅凭下载成功登记为本项目可用组件。
 
 ### HCM-007｜正式 Animation Plan
 
-Plan 顶层必须记录：
+完整解耦路径启用后，Plan 顶层记录下列引用；当前 Work 沿用已实现的主题路径，不因尚未交付的 Profile / Background 合同被阻塞：
 
 | 字段 | 含义 |
 |---|---|
@@ -211,11 +220,13 @@ Plan 顶层必须记录：
 | `component_ref` | `<component-id>/<ratio>@vN` 或 `custom:<slug>` |
 | Slots | 当前作品文本、数据、图标或媒体角色 |
 | Scene Semantic Brief | 叙事职责、信息结构、状态变化、证据、时长、entry/exit |
-| Match Record | fit、anti-use、相关拒绝候选与 fallback |
+| Match Record | 当前内容适配、必要 anti-use 差异与真实缺口；不要求每场长拒绝清单或通用 fallback |
 | Artifact evidence | 公共包合同/hash 或新 Gallery artifact revision/hash |
 | Customization | 允许的外层位置、尺寸、offset、timeScale 与 hold |
 
 Profile 不再要求选择理由、Motion Verb 或画幅映射；Plan 只验证主题合同完整。改变 Profile Release、Background Release、ratio、Background states 集合、Component Ref、Hero State 或 Scene 结构必须提高 Plan Revision 并重新批准。
+
+样段只验证明确的设计缺口，数量可为零；同一个样段覆盖多个 Scene 时逐项注明适用范围。颜色、字体等全片身份可共享，局部布局、信息结构与动作不能默认全片继承。官方 Studio 负责预览与编辑，Work 负责身份、版本和批准；已登记快照只在非链接的隔离副本中打开。
 
 **验收**：只读取 Plan 即可唯一解析主题、背景、组件、画幅、状态与适配边界。
 
@@ -227,22 +238,25 @@ Profile 不再要求选择理由、Motion Verb 或画幅映射；Plan 只验证�
 - Work Binding 不得修改 vendored DOM、CSS、状态顺序或 GSAP beat。
 - Work Lock 必须记录全部 refs、公共 package hash、Work 副本 hash、Binding 路径/hash 与安装文件。
 - Work 只从 vendored 副本渲染；断开公共库与 Open Design 后仍须 Preview/Render。
+- 沿用 `COMPONENT_LOCK.json`，记录当前包的精确接纳与所需依赖，不新增同功能锁；外部资产更新不会热替换旧 Work，无关依赖升级不让旧 Work 失效。
 - 新 Release 使用通用 `asset-package-sha256-v1`：排除 hash 清单本身，按 POSIX 相对路径字典序汇总每个文件的 SHA-256，再对 UTF-8 清单计算最终 SHA-256。legacy Component 继续保留原 `component-package-sha256-v1`，不重写。
 
 **验收**：任一包被修改都会在 Snapshot 前失败；公共库升级不能改变已冻结 Work。
 
 ### HCM-009｜旧合同迁移
 
-- 当前旧公共包原样保留，标记 `legacy-profile-coupled`。
+- 当前旧公共包原样保留，由索引说明 legacy 兼容身份，不改包内状态。
 - 不修改旧包 hash，不移动或重写旧 Work 的 vendor、Binding、Lock、Accepted Draft 或 Final。
-- 新公共资产统一声明 `component-contract-v2`。
-- 新 Work 不得发现或安装 legacy 包。
-- 新公共库整组完成前，禁止一个新 Work 混用新旧合同。
+- 新 Ratio Component 使用 `component-contract-v2`；现有兼容合同的独立包按实际合同验证，其他资产类型不冒用 Component 合同。
+- 当前可只读发现已批准且兼容的 legacy 包；新增资产走外部来源，完整新路径验证后再决定是否关闭 legacy 发现。
+- 新旧资产组合按真实合同、画幅和所需运行依赖判断，不以全部家族或全部画幅整组完成为新 Work 门。
 - 历史 Work 不需要补 Background Ref 或新 Profile Snapshot。
 
-**验收**：旧 Work 仍按原路径离线渲染；新 Work 的 Lock 中不存在 legacy package。
+**验收**：旧 Work 仍按原闭合副本离线渲染；新 Work 的 Lock 只包含当前可用且明确兼容的精确包，不隐式更新其他 Work。
 
-### HCM-010｜一次性重构清单
+### HCM-010｜原整组重构 Backlog
+
+本节范围保留，不是 v2.2 发现白名单、独立接纳条件或必须本轮完成的资产扩建。
 
 必须重构三套 Profile：
 
@@ -279,24 +293,24 @@ Profile 不再要求选择理由、Motion Verb 或画幅映射；Plan 只验证�
 
 **验收**：最终恰好形成 3 个新 Profile Releases、40 个 Component Ratio Releases 和 2 个 Background Ratio Releases；不得用额外原型扩大范围。
 
-### HCM-011｜Open Design Gallery 与冻结
+### HCM-011｜原批次 Gallery 与冻结
 
 - Open Design `Hyperframes` 项目是设计原稿真源。
 - Gallery 覆盖 42 个 Ratio Release，每项可独立 Preview、pause、seek 和 render。
-- 用户逐项通过或退回；只有全部通过后才能整组写入新公共库。
+- 用户逐项通过或退回；全部通过后才能宣称原批次整组完成。单个兼容包的精确接纳不等待其余项目，不回写过去的整组记录。
 - 每项记录稳定 revision；没有稳定 revision 时记录完整 artifact bundle SHA-256。
 - 仓库只保存生产实现、合同、hash、基线与 artifact 引用，不复制设计原稿。
 - 生产翻译只允许主题 token 接线、Slots、Work 隔离、seek-safe 和离线渲染所需调整。
 - 生产结果与 Gallery 存在可感知差异时必须退回重新确认。
 
-**验收**：42 项都有独立通过记录与唯一 artifact 证据；任一未通过时不得发布整组。
+**原批次验收**：42 项都有独立通过记录与唯一 artifact 证据；任一未通过不得宣称或发布整组，但不阻塞其他已接纳包独立使用。
 
 ### HCM-012｜失败边界
 
 - ratio 缺失、未知或各引用不一致：Draft 前停止。
 - Profile token 缺失：停止，不使用组件 fallback。
 - Background state 未声明：停止，不临时生成。
-- Component Slot Schema 跨画幅不一致：该 Family 不得发布。
+- 声明为同一 Family 同一 Slot 合同的已提供画幅不一致：拒绝该不兼容组合；没有实现另一画幅不阻塞当前画幅独立接纳。
 - Component 含全画幅背景、硬编码主题值、特定 Profile 字段或 `subtemplate`：不得发布。
 - Artifact 无法唯一解析、bundle 不完整或 hash 不一致：不得入库。
 - Required Slot、本地资产、package hash 或 Binding hash 缺失：停止集成或 Snapshot。
@@ -313,13 +327,13 @@ Profile 不再要求选择理由、Motion Verb 或画幅映射；Plan 只验证�
 2. Opening/Build/Hero/End 直接 seek 与顺序播放一致；
 3. repeat-seek 无状态累积；
 4. 目标画幅安全区、最长文案、字体 fallback 与溢出检查；
-5. 三套 Profile 逐一应用后的主题、对比度和硬编码扫描；
-6. Background + Component 组合后的层级、透明根层、遮挡和 Hero 可读性；
+5. 该包声明支持的主题、对比度与字体检查；完整解耦批次另验三套 Profile 和无硬编码目标；
+6. 实际使用的背景与组件组合后的层级、遮挡和 Hero 可读性；完整 Background 合同启用后另验透明根层；
 7. package hash、Work vendor hash、Binding hash 与离线渲染。
 
 Gallery 是设计验收，不能替代生产 HyperFrames Check 与像素 QA；源码扫描也不能替代实际渲染检查。
 
-**验收**：40 个 Component Ratio Release 与 2 个 Background Ratio Release 都有独立报告；三套 Profile 全部通过主题切换。
+**验收**：当前精确包有对应输入、画幅、状态和所需环境的验证结果；原整组完成时再要求 40 个 Component 与 2 个 Background 独立报告及三套 Profile 主题切换，不作为当前单包前置门。
 
 ### HCM-014｜权限与数据边界
 
@@ -353,7 +367,7 @@ Gallery 是设计验收，不能替代生产 HyperFrames Check 与像素 QA；�
 | 新真实用法仍在合同内 | 追加脱敏 Case，不修改 Release |
 | 只验证边界输入 | 追加 Fixture，不修改 Release |
 | 需求只服务当前作品或私有媒体 | 保持 Work-local |
-| 出现新画幅 | 先独立设计、Gallery 验收，再创建新 ratio；不得复用现有实现冒充 |
+| 出现新画幅 | 独立设计与精确版本接纳；原批次按 Gallery 留痕，不得复用现有实现冒充另一画幅 |
 
 ## 6. PRD 完成定义
 
@@ -365,4 +379,4 @@ Gallery 是设计验收，不能替代生产 HyperFrames Check 与像素 QA；�
 - 所有要求都有可测试验收标准；
 - 无产品级 TODO。
 
-建议实施采用 expand-contract：先增加新合同与新资产，完成 Gallery 和新路径验证，再关闭 legacy 对新 Work 的发现；不得通过覆盖旧包完成迁移。
+完整解耦继续采用 expand-contract：先增加新合同与新资产并验证新路径，再决定 legacy 退场。当前兼容资产可独立接纳，不等待 42 项齐备；不得覆盖旧包、回写历史 Gallery 或把本 PRD 作为额外审批门。

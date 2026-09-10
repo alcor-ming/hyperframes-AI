@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- Technical integration fixture, NOT a production Work or validated library candidate. -->
+<html lang="en"><head><meta charset="utf-8"><title>Mixed runtime technical fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101213;color:#f2f4f3;font-family:Arial,sans-serif}
+#mixed{position:relative;width:960px;height:540px;overflow:hidden}
+h1{position:absolute;left:36px;top:20px;font-size:30px;margin:0}
+.scene{position:absolute;top:90px;width:480px;height:430px}.scene:last-child{left:480px}
+canvas{width:480px;height:280px;display:block}.label{margin:4px 30px;font-size:24px;line-height:1.4}
+.track{height:5px;width:350px;margin:16px 30px;background:#343b38}.progress{height:5px;width:100%;background:#4fcfa3;transform-origin:left}
+</style><script src="gsap.min.js"></script><script src="three.min.js"></script><script src="scene-binding.js"></script></head>
+<body><main id="mixed" data-composition-id="mixed" data-width="960" data-height="540" data-duration="4">
+<h1>Layer separation explains dependency</h1>
+<section class="scene" id="first"><canvas></canvas><div class="label">Input / transform / output</div><div class="track"><div class="progress"></div></div></section>
+<section class="scene" id="second"><canvas></canvas><div class="label">Source / retrieval / answer</div><div class="track"><div class="progress"></div></div></section>
+</main><script>
+// Reuse one mechanism with two content bindings and a one-second scene offset.
+window.records = [];
+window.textureLoaded = false;
+let texture;
+const ready = new Promise((resolve, reject) => {
+  texture = new THREE.TextureLoader().load('texture.png', () => { window.textureLoaded = true; resolve(); }, undefined, reject);
+});
+function layerSeparation(id, start, color) {
+  const root = document.getElementById(id);
+  const renderer = new THREE.WebGLRenderer({canvas:root.querySelector('canvas'),alpha:true,antialias:true,preserveDrawingBuffer:true});
+  const gl=renderer.getContext(), debug=gl.getExtension('WEBGL_debug_renderer_info');
+  console.log('HF_WEBGL_BACKEND '+JSON.stringify({id,renderer:gl.getParameter(debug?debug.UNMASKED_RENDERER_WEBGL:gl.RENDERER),vendor:gl.getParameter(debug?debug.UNMASKED_VENDOR_WEBGL:gl.VENDOR)}));
+  renderer.setSize(480,280,false);renderer.setPixelRatio(1);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35,480/280,.1,100);camera.position.set(4,3,7);camera.lookAt(0,0,0);
+  const geometry = new THREE.BoxGeometry(2.5,.18,1.8);
+  const material = new THREE.MeshBasicMaterial({color,map:texture});
+  const layers = [-1,0,1].map(i=>{const mesh=new THREE.Mesh(geometry,material);scene.add(mesh);return mesh});
+  const state={progress:0};
+  const timeline=gsap.timeline({paused:true}).fromTo(state,{progress:0},{progress:1,duration:2,ease:'none'},0)
+    .fromTo(root.querySelector('.progress'),{scaleX:0},{scaleX:1,duration:2,ease:'none'},0);
+  const record={id,start,state,draws:0,disposed:0,renderer};records.push(record);
+  record.binding=HarnessScene.bindScene({start,duration:2,timeline,ready,renderAt(time){
+    record.time=time;record.draws++;
+    layers.forEach((mesh,i)=>{mesh.position.y=(i-1)*(.22+state.progress*.75)});
+    renderer.render(scene,camera);
+  },dispose(){record.disposed++;geometry.dispose();material.dispose();renderer.dispose()}});
+  return record;
+}
+layerSeparation('first',0,0x4fcfa3);layerSeparation('second',1,0xf0b95c);
+window.__timelines['mixed']=gsap.timeline({paused:true}).to({clock:0},{clock:4,duration:4,ease:'none'});
+window.fixtureReady=Promise.all(records.map(record=>record.binding.ready));
+</script></body></html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Visual Plan</title>
+<style>
+#session{overflow-wrap:anywhere;min-width:0}header{flex-wrap:wrap}
+*{box-sizing:border-box}body{margin:0;background:#f2f3f4;color:#202326;font:15px system-ui;letter-spacing:0}header{padding:12px 20px;border-bottom:1px solid #ccc;display:flex;gap:16px;align-items:center}main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;padding:20px}hyperframes-player{display:block;width:100%;aspect-ratio:16/9;background:#17191b}aside{min-width:0}select,button,input{font:inherit;max-width:100%}button,select{min-height:36px}nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}dl{margin:0}dt{font-weight:600;margin-top:16px}dd{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}output{font-variant-numeric:tabular-nums}#locator{width:100%;margin-top:16px}#stage.actual{overflow:auto}#stage.actual hyperframes-player{width:var(--canvas-width);max-width:none}#error{color:#a82222}@media(max-width:800px){main{grid-template-columns:1fr;padding:12px}header{flex-wrap:wrap}aside{border-top:1px solid #ccc;padding-top:12px}}
+</style>
+<header><strong id="version">Visual Plan</strong><span id="session"></span><output id="time">0.00s</output><span id="error" role="alert"></span></header>
+<main><section><div id="stage"><hyperframes-player id="player" runtime-src="/hf/hyperframe.runtime.iife.js" controls></hyperframes-player></div></section>
+<aside><nav><select id="scenes" aria-label="Scene"></select><button id="reading" title="关键阅读帧">阅读帧</button><button id="size" title="正式画布尺寸" aria-pressed="false">1:1</button></nav><dl id="intent"></dl><input id="locator" readonly aria-label="反馈位置"><nav><button id="in" title="标记区间起点" aria-label="标记区间起点">[</button><button id="out" title="标记区间终点" aria-label="标记区间终点">]</button><button id="copy">复制位置</button></nav></aside></main>
+<script src="/hf/hyperframes-player.global.js"></script>
+<script>
+(async()=>{
+  const player=document.querySelector('#player'),menu=document.querySelector('#scenes');
+  const session=await fetch('/session.json').then(r=>r.json());
+  document.querySelector('#session').textContent=(session.review?'Review · ':'')+session.version;
+  if(session.candidate?.request_id)document.querySelector('#session').textContent+=` · ${session.candidate.request_id}@r${session.candidate.revision} · ${session.candidate.delivery_id}`;
+  const data=await fetch('visual-plan.json').then(r=>{if(!r.ok)throw Error('Missing Visual Plan projection');return r.json()});
+  const source=await fetch('source-snapshot/index.html').then(r=>r.text());
+  const composition=new DOMParser().parseFromString(source,'text/html');
+  const base=composition.createElement('base');base.href=new URL('source-snapshot/',location.href).href;composition.head.prepend(base);
+  const canvas=composition.querySelector('[data-width][data-height]');
+  if(canvas){player.setAttribute('width',canvas.dataset.width);player.setAttribute('height',canvas.dataset.height);player.style.aspectRatio=`${canvas.dataset.width}/${canvas.dataset.height}`;document.querySelector('#stage').style.setProperty('--canvas-width',canvas.dataset.width+'px')}
+  document.querySelector('#version').textContent=data.id;
+  for(const scene of data.scenes){const option=document.createElement('option');option.value=scene.id;option.textContent=scene.id;menu.append(option)}
+  let current=null,manualScene=null,rangeStart=null,rangeEnd=null,pendingSeek=null;
+  function update(time,requested=false){
+    if(!requested&&pendingSeek!==null){if(Math.abs(time-pendingSeek)>.1)return;pendingSeek=null}
+    const scene=manualScene||data.scenes.findLast(s=>time>=s.start)||data.scenes[0];
+    document.querySelector('#time').textContent=time.toFixed(2)+'s';
+    const ids=rangeStart===null?scene.id:data.scenes.filter((s,i)=>s.start<=(rangeEnd??rangeStart)&&(data.scenes[i+1]?.start??Infinity)>rangeStart).map(s=>s.id).join(',');
+    document.querySelector('#locator').value=`${data.id} ${ids} ${rangeStart===null?time.toFixed(2):rangeStart.toFixed(2)}${rangeEnd===null?'':'-'+rangeEnd.toFixed(2)}s`;
+    if(scene===current)return;current=scene;menu.value=scene.id;
+    const dl=document.querySelector('#intent');dl.replaceChildren();
+    for(const [key,legacy] of [['视觉目标','内容方向'],['内容 / 素材引用','上屏信息引用'],['预演定位/未验证差异','样段范围/待实现']]){const value=scene.intent[key]||scene.intent[legacy]||'原 Plan 未单列';const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value;dl.append(dt,dd)}
+  }
+  function seek(time){pendingSeek=time;player.seek(time);update(time,true)}
+  menu.onchange=()=>{manualScene=data.scenes.find(s=>s.id===menu.value);seek(manualScene.start)};
+  document.querySelector('#reading').onclick=()=>seek((manualScene||current).reading);
+  for(const event of ['pointerdown','keydown','play'])player.addEventListener(event,()=>{manualScene=null;pendingSeek=null});
+  document.querySelector('#size').onclick=e=>{const actual=document.querySelector('#stage').classList.toggle('actual');e.currentTarget.setAttribute('aria-pressed',String(actual))};
+  document.querySelector('#copy').onclick=async()=>{const input=document.querySelector('#locator');try{await navigator.clipboard.writeText(input.value)}catch{input.select()}};
+  document.querySelector('#in').onclick=()=>{rangeStart=player.currentTime;rangeEnd=null;update(player.currentTime)};
+  document.querySelector('#out').onclick=()=>{rangeEnd=player.currentTime;rangeStart=Math.min(rangeStart??rangeEnd,rangeEnd);update(player.currentTime)};
+  player.addEventListener('timeupdate',e=>update(e.detail.currentTime));
+  player.addEventListener('error',e=>document.querySelector('#error').textContent=String(e.detail?.message||'Player error'));
+  player.setAttribute('srcdoc','<!doctype html>'+composition.documentElement.outerHTML);
+  update(0);
+})().catch(error=>document.querySelector('#error').textContent=error.message);
+</script></html>
