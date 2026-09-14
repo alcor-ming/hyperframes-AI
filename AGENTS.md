@@ -23,7 +23,7 @@
 
 1. 前台交互运行 `./work current`；没有 Current 时运行 `./work list`，不得猜测作品。后台任务必须接收明确的 Work ID 与 Variant ID，并用 `./work --work <id> --variant <id> status` 启动，不读取或改写 Current。
 2. 读取当前 `WORK.md` 与 `variant.yaml` 后按 `workflow` 路由：`hyperframes_video` 使用唯一视频 Skill；`podcast_quote_image` 在文章方案批准前使用 `planner_skill`，批准后使用 `copy_skill`。
-3. `hyperframes_video` 再读取 `SCRIPT.md`、当前 Template Recipe 与选定 Profile；Research 只按当前 Scene / Anchor 的信息缺口读取或补查相关采用条目和资料依据，进入视觉设计时再读取 `ANIMATION_PLAN.md`。仅在 Plan 构建或复审、Draft 画面复审时加载 `hyperframes-anti-ppt`，进入实现或 QA 时才读取对应 `.studio/spec/`。
+3. `hyperframes_video` 再读取 `SCRIPT.md`、当前 Template Recipe 与选定 Profile；Research 只按当前部分 / Anchor 的呈现需求读取或补充相关研究内容与素材依据，进入视觉设计时再读取 `ANIMATION_PLAN.md`。仅在 Plan 构建或复审、Draft 画面复审时加载 `hyperframes-anti-ppt`，进入实现或 QA 时才读取对应 `.studio/spec/`。
 4. `podcast_quote_image` 只读取当前阶段的 Skill 与机器 JSON；文章方案批准后先完成播客专用 `RESEARCH.md`，再生成 `PACKAGE.md`。不得加载视频工作流的 Script、Plan、Recipe 或 Profile。
 
 新建 Work 时，CLI 在命名锁内按 Workflow 分配三位递增序号，并以 `work-<workflow>-<序号>` 创建 Work ID 和目录；输入标题、来源标题与 LLM 均不得参与目录命名，创建后也不得改名。`podcast_quote_image` 在转录可用后、生成文章方案前，自动执行 `./work --work <id> --variant <variant-id> name "<嘉宾名>-<核心主题>"`；`hyperframes_video` 在 Script 稳定后、开始 Research 前执行 `./work --work <id> --variant <variant-id> name "<核心主题>"`。`name` 只补充语义标题并保留创建时的序号；语义标题保持简短，不使用来源平台 ID。
@@ -41,8 +41,8 @@
 
 - `source.md`：主要原始基线，DBS 不覆盖。
 - `materials/*.transcript.json`：下载视频的时间真源；YouTube 可优先采用结构化原生转录，其余或 fallback 统一复用 `qivance-music` 的共享 ASR，ASR 的 `characters[]` 不得退化为仅段级时间戳。
-- `SCRIPT.md`：当前 Variant 唯一口播正文，以及由成对 `scene-index` 注释明确排除出口播的简短 Scene / Anchor / 规划时间 / 信息缺口索引；批准后的隐藏段落 ID 保持稳定，索引不进入阅读版、统计、配音或对齐。
-- `RESEARCH.md`：视频工作流在同一文件内保存按内容缺口取得的“资料依据”和按 Scene / Anchor 组织的“采用信息”，并记录与 Script Revision 的适用关系；不负责视觉机制、布局、裁切或成片时间。播客图文工作流仍记录嘉宾身份、与获批观点相关的经历、可用于正文补充的背景信息、事实边界和来源。
+- `SCRIPT.md`：来自用户写作或视频转录的当前 Variant 唯一口播正文，指导本期及各部分讲什么；Agent 可整理成对 `scene-index` 注释内的简短 Scene / Anchor / 规划时间 / 本段内容索引，不要求用户先写视觉脚本或调研问题。批准后的隐藏段落 ID 保持稳定，索引不进入阅读版、统计、配音或对齐。
+- `RESEARCH.md`：视频工作流为 Animation Plan 准备有来源的视觉内容与素材，按 Script 内容部分及现有 Scene / Anchor 记录呈现需求、研究所得、素材依据和真实待补问题，并关联 Script Revision。补充文字和素材供 Plan 自主取舍，不是第二份脚本或必上屏清单，不决定布局、裁切、动作或成片时间。播客图文工作流仍记录嘉宾身份、与获批观点相关的经历、可用于正文补充的背景信息、事实边界和来源。
 - `PACKAGE.md`：视频工作流保存最终标题、封面文字、一句话简介和内容概括；内容概括按主要对象或主题简短分项，介绍多个 Skill、工具、功能或案例时逐项单独说明。播客图文工作流直接保存可复制的纯文本，第一行为标题，其后依次为开篇、`01｜小标题` 形式的分节与第三人称正文、署名、`原视频：<视频原标题>` 和话题标签，不放来源地址、Markdown 标记或“大标题”“开篇”“图片文案”等结构说明。标题与开篇第一段必须从用户获批的选取文段归纳，不得用文段之外的嘉宾背景主导；标题在全文稳定后最后拟定。render 生成 `xiaohongshu.json`，分别保存标题、正文、1 至 3 个话题与有序图片。
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
 - `ANIMATION_PLAN.md`：全片视觉语义、A/B 职责、逐 Scene 语义对象、素材占位与 cue 意图真源。整片 Plan 后制作一个真实 Scene 动态参考，用户一次方向批准后扩成完整占位 Draft，再补齐素材生成最终 Draft；不另建 Shotbook。Work 源码与 Binding 是可执行真源。
@@ -56,11 +56,11 @@
 
 - `hyperframes_video` 的下载视频必须通过共享 ASR 生成字级时间戳文案，再在 `SCRIPT.md` 中明确选择 `dbs` 或 `verbatim`：前者允许多轮 DBS 修改并在正文变化后等待批准；后者逐字保留口播与原时间戳，不运行正文改写。
 - DBS 实际修改口播正文时，等待用户批准 `SCRIPT.md`；只诊断或只改包装文案时不等待。
-- Script 确定后，按 Scene 索引与口播 Anchor 的真实信息缺口研究；可选择概念 / 原理 / 例子、比较、应用 / 过程 / 效果、背景故事 / 反差事实 / 代表性案例，也可无新增研究。`RESEARCH.md` 的资料依据保存研究结果、来源和素材证据位置，采用信息保存可直接使用的精炼措辞及引用，必要时区分核心与可选。
+- 已有文稿或转录而 Script 为空时，先按所选文案路径整理 Script，不先做全面查证。Script 确定后，Research 围绕“如何让观众看明白本段，需要哪些内容与材料”准备文字、实例、图片、截图、视频或数据；口播完整也可能需要素材，已有材料足够则无需新增研究。查证服务于实际材料，冲突局部处理，不接管口播或阻塞无关研究。首轮足以支持 Plan 即可；设计中发现具体需求时定点补研究，不重开全轮或增加审批。
 - 创建或复审 Animation Plan 时使用 `hyperframes-anti-ppt` 检查信息是否被正确表达、阅读窗口、关系与动效适配；不要求逐字逐卡摆放，不强制统一场景公式。结果合并进现有 `ANIMATION_PLAN.md`，不新增文件或审批门。组件的检索、版本、Slots 与安装仍由视频工作流或组件库能力负责。
 - Research 完成后，创建 Animation Plan 的同时调用 DBS 完成 `PACKAGE.md`；只保留最终标题、封面文字、一句话简介和内容概括。
-- 主模型对最终 Scene 负责：换行、层级、分组、顺序和无独立主张的标签直接在样段 / 工程调整；删除重复措辞、等义精简或转成流程短语时原位更新对应 Research 采用条目和呈现，不重新联网、不增加文字审批。逐字口播引用 Script Anchor；独立信息写入 Research；原视频 / 截图内文字归素材，已清楚呈现时不强制重复覆盖。
-- 不采用可选增补无需回传。新增数据、比较或因果只补查相关条目；删除核心信息，或改变事实结论、观点、因果、必要数值 / 单位 / 归属及已确认叙事时，提出局部取舍和对 Scene / 时间的影响。确实无法同时保留核心信息与时间预算时直接交给用户取舍，不循环压缩。
+- 主模型对最终 Scene 负责：换行、层级、分组、顺序和无独立主张的标签直接在样段 / 工程调整；删除重复措辞、等义精简或转成流程短语时原位更新对应 Research 研究条目和呈现，不重新联网、不增加文字审批。逐字口播引用 Script Anchor；独立信息写入 Research；原视频 / 截图内文字归素材，已清楚呈现时不强制重复覆盖。
+- Research 补充文字与素材由 Plan 自主取舍，不采用无需回传；核心内容以 Script 和已批准 Plan 为准，不以研究候选标记为准。新增数据、比较或因果只补查相关条目；取舍改变已确认观点、事实结论或叙事时才提出局部影响供用户确认，已批准视觉方向的实质变化仍按既有规则处理。确实无法同时保留已确认核心内容与时间预算时直接交给用户取舍，不循环压缩。
 - Script / Research 就绪后，先完成整片 Plan，按真实含义、关系、媒体和时间匹配语义视觉对象。保留已有 M2–M3 源码、Scene/Anchor ID 与画面，不为重构拆解对象内部联动或回退公开 HEAD。随后仅选一个当前 Scene 制作动态参考，优先复用已有成果；使用真实文字、画幅和已有音频片段，缺素材用稳定 ID 的语义占位，无最终音频标 provisional。局部布局不自动推广全片，不额外制作多 Scene 拼接样片。
 - 主要动效先写清对象关系、起止状态、阅读安排与必要替代，默认在 Draft 最先实现最不确定的镜头；只有会改变整体决策的风险才提前局部试做。Windows 在 Work-local 或已登记 AssetSource 开发效果，未实现动作不无条件阻塞 Plan；只有宿主、合同、工具或依赖装配缺口才交给 WSL，不改公共冻结资产。
 - 用户一次确认整片 `ANIMATION_PLAN.md` 与唯一 Scene 参考的制作方向，之后直接按各 Scene 方案扩片，不逐场审批或要求 Work-local 对象先入库。完整占位 Draft 必须覆盖全片和已实现动作，允许 Plan 登记的 planned placeholders、临时音轨及明确约定 proxy；不能掩盖空 Scene、代码错误或缺失内容，不增加占位 Draft 的强制批准门。素材齐备后生成最终 Draft，沿用原完整 Draft 接受与 Final 流程。方向批准和占位 Draft 均不放行 Finalize。
