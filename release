@@ -247,10 +247,19 @@ def stage_skills(staging: Path) -> dict[str, str]:
     return dict(LOCAL_SKILLS)
 
 
-def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: list[str]) -> Path:
+def stage_windows_rules(staging: Path) -> None:
+    template = staging / ".studio/templates/WINDOWS_AGENTS.md"
+    if not template.is_file():
+        raise ReleaseError("Windows root rules are missing from the frozen sources")
+    shutil.copyfile(template, staging / "AGENTS.md")
+
+
+def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: list[str], *, channel: str = "candidate") -> Path:
     if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,79}", build_id):
         raise ReleaseError("Candidate ID must use lowercase letters, digits, dots or hyphens")
-    identity = f"candidate-{build_id}"
+    if channel not in {"candidate", "local"}:
+        raise ReleaseError("Unsupported local build channel")
+    identity = f"{channel}-{build_id}"
     output_dir.mkdir(parents=True, exist_ok=True)
     archive = output_dir / f"hyperframes-ai-{identity}-windows-x64.zip"
     checksum = archive.with_suffix(archive.suffix + ".sha256")
@@ -266,9 +275,10 @@ def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: li
         skills = stage_skills(staging)
         runtime = stage_runtime(staging, runtime_cache)
         release_checks(staging)
+        stage_windows_rules(staging)
         strip_bundled_assets(staging)
         sources = {name: digest for name, digest in sources.items() if (staging / name).is_file()}
-        manifest = {"schema_version": 3, "channel": "candidate", "release": identity,
+        manifest = {"schema_version": 3, "layout": "root-v1", "channel": channel, "release": identity,
                     "commit": head, "dirty": dirty, "target": "windows-x64",
                     "built_at": datetime.fromtimestamp(timestamp, timezone.utc).isoformat(),
                     "source_file_sha256": sources, "runtime_asset_sha256": runtime,
@@ -316,6 +326,7 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
         runtime_hashes = stage_runtime(staging, runtime_cache)
         timestamp = int(run("git", "show", "-s", "--format=%ct", f"{tag}^{{commit}}", capture=True))
         release_checks(staging)
+        stage_windows_rules(staging)
         strip_bundled_assets(staging)
         files = {
             path.relative_to(staging).as_posix(): sha256(path)
@@ -323,6 +334,7 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
         }
         manifest = {
             "schema_version": 3,
+            "layout": "root-v1",
             "channel": "stable",
             "release": tag,
             "commit": head,
@@ -347,7 +359,7 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument("version")
     build_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
     build_parser.add_argument("--runtime-cache", type=Path, required=True)
-    candidate_parser = subcommands.add_parser("candidate")
+    candidate_parser = subcommands.add_parser("candidate", aliases=["local"])
     candidate_parser.add_argument("build_id")
     candidate_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
     candidate_parser.add_argument("--runtime-cache", type=Path, required=True)
@@ -362,8 +374,8 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         if args.command == "build":
             build(args.version, args.output_dir.resolve(), args.runtime_cache.resolve())
-        elif args.command == "candidate":
-            candidate(args.build_id, args.output_dir.resolve(), args.runtime_cache.resolve(), args.include)
+        elif args.command in {"candidate", "local"}:
+            candidate(args.build_id, args.output_dir.resolve(), args.runtime_cache.resolve(), args.include, channel=args.command)
         else:
             print(verified_archive(args.archive.resolve()))
     except (ReleaseError, subprocess.CalledProcessError, OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as exc:

@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from test_work_cli import WORK_CLI
-from visual_plan import scene_projection, validate_dependencies, VisualPlanError
+from visual_plan import scene_projection, layout_projection, reference_projection, validate_dependencies, VisualPlanError
 
 
 class VisualPlanTest(unittest.TestCase):
@@ -22,6 +22,10 @@ class VisualPlanTest(unittest.TestCase):
         self.variant = next((self.root / "works" / "active").iterdir()) / "variants" / "main"
         self.project = self.variant / "project"
         self.update("RESEARCH.md", status="ready")
+        plan = self.variant / "ANIMATION_PLAN.md"
+        plan.write_text("---\n" + json.dumps(WORK_CLI.read_frontmatter(plan)) + "\n---\n\n"
+                        "| Scene | Anchor | Intent |\n| --- | --- | --- |\n"
+                        "| S01 | P001 | Complete conditions remain visible. |\n")
         (self.project / "compositions").mkdir(exist_ok=True)
         (self.project / "index.html").write_text('<div id="S01" data-start="0" data-duration="4" data-composition-src="compositions/S01.html"></div>')
         (self.project / "compositions" / "S01.html").write_text('<p>Complete conditions remain visible.</p>')
@@ -51,6 +55,74 @@ class VisualPlanTest(unittest.TestCase):
         )
         (sample / "styles.css").write_text('h1 { color: #246; }')
         return sample
+
+    def test_scene_direction_and_placeholder_draft_do_not_authorize_final(self):
+        self.run_cli("preview", "register", "--purpose", "plan", "--scope", "scene", "--scene", "S01",
+                     "--media-readiness", "planned_placeholders")
+        preview, metadata = WORK_CLI.checked_preview(self.variant, "plan-v001")
+        self.assertEqual("direction", metadata["approval_purpose"])
+        self.run_cli("preview", "accept", "plan-v001")
+        self.assertIsNone(WORK_CLI.read_json(self.variant / "variant.yaml")["accepted_preview"])
+        movie = self.root / "draft.mp4"
+        cli = self.root / "hyperframes.js"
+        cli.write_text("// Mock render transport, not a native renderer")
+        def render(command, **kwargs):
+            movie.write_bytes(b"synthetic placeholder test")
+            return WORK_CLI.subprocess.CompletedProcess(command, 0, stdout="test renderer")
+        with patch.object(WORK_CLI.subprocess, "run", side_effect=render):
+            self.run_cli("preview", "render", "plan-v001", "--hyperframes-cli", str(cli), "--output", str(movie))
+        self.run_cli("preview", "register", str(movie), "--media-readiness", "planned_placeholders")
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "media-complete"):
+            self.run_cli("preview", "accept", "draft-v001")
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        state.update(accepted_preview="draft-v001", accepted_script_revision=state["script_revision"],
+                     accepted_plan_revision=state["plan_revision"])
+        WORK_CLI.write_variant(self.variant, state)
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "media-complete"):
+            self.run_cli("preview", "render", "draft-v001", "--final", "--output", str(self.root / "final.mp4"))
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "media-complete"):
+            self.run_cli("finalize", str(movie), "--qa-passed")
+        self.run_cli("preview", "register", str(movie), "--media-readiness", "complete")
+        self.run_cli("preview", "accept", "draft-v002")
+        self.assertEqual("draft-v002", WORK_CLI.read_json(self.variant / "variant.yaml")["accepted_preview"])
+
+    def test_scene_reference_checks_exact_scene_and_keeps_dependency_failures(self):
+        with self.assertRaisesRegex(VisualPlanError, "exactly one"):
+            self.run_cli("preview", "register", "--purpose", "plan", "--scope", "scene", "--scene", "S99")
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        state["template"] = "talking_head"
+        WORK_CLI.write_variant(self.variant, state)
+        plan = self.variant / "ANIMATION_PLAN.md"
+        plan.write_text(plan.read_text() + "\n| S02 | P002 |\n")
+        self.run_cli("preview", "register", "--purpose", "plan", "--scope", "scene", "--scene", "S01",
+                     "--media-readiness", "planned_placeholders")
+        WORK_CLI.checked_preview(self.variant, "plan-v001")
+        with self.assertRaisesRegex(VisualPlanError, "match exactly"):
+            self.run_cli("preview", "register", "--purpose", "plan", "--media-readiness", "planned_placeholders")
+        with (self.project / "index.html").open("a") as stream:
+            stream.write('<script src="missing.js"></script>')
+        with self.assertRaisesRegex(VisualPlanError, "missing"):
+            self.run_cli("preview", "register", "--purpose", "plan", "--scope", "scene", "--scene", "S01", "--media-readiness", "planned_placeholders")
+
+    def test_existing_letter_suffix_scenes_are_preserved_in_all_projections(self):
+        ids = ["S01", "S04", "S04B", "S04C"]
+        plan = "| Scene | Intent |\n| --- | --- |\n" + "\n".join(f"| {sid} | Accepted layout |" for sid in ids)
+        html = '<main data-width="1920" data-height="1080">' + "".join(
+            f'<section data-scene-id="{sid}" data-start="{i * 4}" data-duration="4"></section>'
+            for i, sid in enumerate(ids)) + '</main>'
+        index = self.project / "index.html"
+        index.write_text(html)
+        self.assertEqual(ids, [row["id"] for row in reference_projection(plan)])
+        self.assertEqual(ids, [row["id"] for row in reference_projection(plan.replace("| Scene |", "| 原 Scene ID |"))])
+        self.assertEqual(ids, [row["id"] for row in scene_projection(self.project, plan)])
+        self.assertEqual(["S04B"], [row["id"] for row in layout_projection(self.project, plan, ["S04B"])])
+        index.write_text('<section id="S04B" data-start="0" data-duration="4"></section>')
+        self.assertEqual(["S04B"], [row["id"] for row in scene_projection(self.project, plan, ["S04B"])])
+        with self.assertRaisesRegex(VisualPlanError, "match exactly"):
+            scene_projection(self.project, plan)
+        for invalid in ("S04b", "S04-B", "intro"):
+            with self.assertRaisesRegex(VisualPlanError, "exactly one"):
+                scene_projection(self.project, plan, [invalid])
 
     def register_layout(self):
         self.run_cli("preview", "register", "--purpose", "plan", "--kind", "layout",

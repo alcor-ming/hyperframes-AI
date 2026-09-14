@@ -1,5 +1,11 @@
 @echo off
-setlocal
+setlocal DisableDelayedExpansion
+if "%~1"=="" (
+  echo Open this folder in Codex App and start a conversation.
+  echo This command-line tool is used by the Agent. Examples: work.cmd doctor / work.cmd --help
+  pause
+  exit /b 0
+)
 set "PYTHONUTF8=1"
 set "PYTHON=%~dp0runtime\python\python.exe"
 if not exist "%PYTHON%" (

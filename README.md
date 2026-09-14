@@ -4,7 +4,7 @@
 
 ## 快速开始
 
-Windows 日常创作打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`，先运行 `start.ps1`，再使用返回会话目录内的 `work.cmd`；下文 Bash 命令是相同 CLI 的 WSL 写法。WSL 开发仓不作为 Windows 的创作入口。正式 Work 由 Windows 写入；WSL 开发和回测使用冻结请求与隔离副本。
+Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话并下达任务即可。`work.cmd` 是 Agent 按需调用的命令行工具，不是需要双击打开的聊天窗口；根入口不创建或依赖 Harness session，不选择候选或 Review 根。下文 Bash 命令是相同 CLI 的 WSL 写法。正式 Work 由 Windows 写入；WSL 开发和回测使用冻结请求与隔离副本。
 
 ```bash
 ./work root show
@@ -43,23 +43,9 @@ Windows 日常创作打开 `%LOCALAPPDATA%\HyperFramesAI\workspace`，先运行 
 
 视频 `SCRIPT.md` 的口播正文可附成对 `scene-index` 注释包围的非口播 Scene 索引；需要配音、统计或对齐文本时使用 `./work script text`，索引不会混入。`RESEARCH.md` 只按当前 Scene / Anchor 的内容缺口补充资料依据和采用信息，不规定视觉实现。Plan 引用 Script、Research 或素材，不再复制一份信息稿。
 
-视频先逐 Scene 筛选信息，再按真实关系、文字、素材、画幅与时间匹配已接纳资产。全片 Plan 只为真实缺口制作轻量样段，数量可为零；同类缺口验证一次并注明适用 Scene。没有新样段时引用已验收资产 Preview：
+视频沿用现有 Script、Research、音频与 M2–M3 画面，先完成整片 Plan，再选一个真实 Scene 动态参考。一次方向批准后直接生成完整 planned-placeholder Draft，素材齐备后生成最终 Draft，沿用原完整接受和 Final 流程。不逐 Scene 审批，不新建 Shotbook，不把样段或占位 Draft 当成具备 Finalize 权限的 full Draft。
 
-```bash
-./work preview register --purpose plan --kind reference
-./work preview accept plan-v001
-```
-
-有缺口时，将真实文字与设计放在当前 Variant 的 `layout/index.html`；媒体可用语义占位，不为预览补整片动画：
-
-```bash
-./work preview register --purpose plan --kind layout --sample-dir layout --scene S01
-./work preview open plan-v001
-# 用户确认样段设计和实施方向后
-./work preview accept plan-v001
-```
-
-两种登记方式择一，`preview accept` 只在用户确认 Plan 后执行。样段的官方 Studio 承载仅补静态 composition，不要求 Three、FFmpeg 或正式音频；接受不等于动态通过或 Draft 接受。配色、字体可全片共享，局部布局仅覆盖明确匹配的 Scene。Draft 按各自 Plan / Binding 保留连接、分支、反馈与结果，未支持表达报告当前 Scene 缺口，不静默退回通用文字卡片。完整可执行预演仍为显式高级路径。具体约定见 [创作工作流](.studio/workflow.md)。
+复用优先选择承担明确含义的视觉对象，保留内部联动和既有 helper。Plan 列清逐 Scene 的 A/B 职责、语义对象、素材占位 ID 与人声 cue 意图；音乐分析可选，已有 timestamps/section_map 优先复用。最终 Draft 必需素材齐备，计划内占位不阻塞此前全片预览。新登记参数只在实现并验证后加入帮助；旧 reference/layout 记录保持原含义。具体约定见 [创作工作流](.studio/workflow.md)。
 
 日常预览默认启动锁定版本的官方 HyperFrames Studio，返回实际项目 URL；当前工程可编辑，登记版本只在隔离副本打开：
 
@@ -99,72 +85,36 @@ Draft 与 Final 生命周期：
 
 外部 WorkStore 的 `works/`、旧 `tasks/`、媒体、工程、Draft、Final 和运行状态不进入开发仓或 Git。Harness 不实现下载后端，而是调用独立的 `trendradar-media`；它不公开发布内容，也不内置 ASR 模型。经用户对准确 Work/Variant 明确授权，可使用其已登录的 Windows Chrome 保存小红书创作者平台草稿，但绝不点击发布。
 
-可复用资产使用外部配置的 AssetStore，与 Harness 发布周期独立；先注册现有来源，兼容资产通过元数据发现，不修改全局组件白名单。WSL 开发和封装，Windows 接纳准确版本；`migration-ready` 不自动通过，不以整库 / 全画幅齐备阻塞单个资产。Work 沿用 vendor、Binding 和 `COMPONENT_LOCK.json` 固定实际依赖，库更新不漂移旧作品，已有闭合副本不依赖外部库在线。旧内置库与历史快照保留只读兼容，不自动删除。
+默认由 Windows Work-local Scene 组合模块与媒体，而不是填入完整冻结组件的 Slots。Windows 在 Work-local 或已登记 AssetSource 开发 Scene、GSAP、Three.js、shader、SVG、图片和模型；兼容视觉资产在 Windows 打包、精确接纳，不触发 Harness 发布。AssetSource 可编辑，AssetStore 已接纳包不可原地修改；先登记已有来源，不建立第二份可写权威库。`migration-ready` 不自动通过，不强制全库、双画幅、五阶段或全画幅透明根层。Work 沿用 vendor、Binding 和 `COMPONENT_LOCK.json` 固定实际依赖，库更新不漂移旧作品，已有闭合副本不依赖外部库在线。旧完整组件和历史快照只读兼容，不自动拆解或删除。
 
-当前独立接纳支持 Component 合同及同合同效果；Background / Profile 的完整独立安装仍是后续目标。Windows 会话使用其固定 `work.cmd` 执行以下命令，或安装时通过 `-AssetRoot` 设置独立目录：
+M1 扩展 module/media 最小子集，旧 Component 合同保留兼容；Template / Recipe、完整 Background / Profile 独立安装仍是后续目标。`component pack` 从 Windows 源目录的 `asset.json` 冻结实际文件，不修改编辑中源。Windows 使用根目录 `work.cmd`：
 
 ```bash
-./work component root <absolute-asset-store>
 ./work component source-add <existing-source-directory>
-./work component import <exact-package-directory>
-# 在 Windows 完成该候选的实际审阅后，使用 import 返回的精确摘要
+./work component pack <source-directory-with-asset.json>
+# 导入已有冻结包时改用 component import <exact-package-directory>
+# Windows 审阅独立副本后，使用 pack/import 返回的精确摘要
 ./work component accept <component-id>@vN --sha256 <package-sha256> --note <review-result>
 ./work component list --query <relationship-or-name>
 ```
 
-## 固定 Release 与 Codex App 部署
+资产配置归属当前入口根，变更只影响后续命令，长进程固定启动时输入；Review 不修改生产配置。module/media 的 `asset.json` 与 Binding 示例见 [资产 PRD](docs/PRD/hyperframes-component-motion.md#4-m1-最小资产合同)。独立样例沿用已实现的 `component install ... --project <registered-source/sample>` 与 `component verify --project <registered-source/sample>`，不伪装正式 Work，不增加另一套播放器。
 
-开发和构建只在本 WSL Git 仓进行。Windows Codex App 打开固定薄入口 `%LOCALAPPDATA%\HyperFramesAI\workspace`，从不可变 `releases\<tag>` 或 `candidates\<build-id>` 运行；`current` / `previous` 保留稳定安装与回滚入口。作品仍写入 `D:\AI\AI+hyperframes`，其中 `requests/` 保存私有交接、`review/` 保存隔离副本，不放 Harness 或运行依赖。
+## 根目录部署
 
-Release 使用 `harness-YYYY.MM.PATCH`。构建要求工作树干净、对应 tag 指向当前提交、分支已推送，并提供与 `windows-runtime.lock.json` 一致的运行时缓存：
+Windows 日常直接打开 `D:\AI\AI+hyperframes`；工具实际位于同根 `runtime/`、`.studio/`，根配置位于 `.studio/.runtime/`。直接 `work.cmd` 按自身位置选择工具，不经过 `.harness/releases/current` 或 session，不自动生成 session。已有 Work、资产、用户 Skill 与请求不迁移。
 
-```bash
-./release build 2026.09.1 --runtime-cache /path/to/windows-runtime-cache
-./release verify dist/hyperframes-ai-harness-2026.09.1-windows-x64.zip
-```
+一次命令解析配置一次，Preview/render 固定本次输入；更新前通过已有进程管理停止相关进程，以最小互斥防止启动和更新交错，不热换依赖。配置变更只影响后续命令，Agent 更新后重读根规则。
 
-首次准备固定 Windows 依赖是显式下载步骤，需具备该下载授权；普通创作命令不下载依赖：
+待安装 ZIP/staging 严格校验全部清单、hash 和路径；部署根只校验拥有的管理文件，保留合法用户文件和本地配置。更新先备份再覆盖管理文件，只有旧清单拥有且新版移除的文件可清理；用户修改冲突保留并报告，中断可检测恢复，不全根 mirror/delete。
 
-```bash
-python3 .studio/prepare_windows_runtime.py prepare \
-  --cache /path/to/windows-runtime-cache --output-lock windows-runtime.lock.json
-```
+本机候选基于当前受控工作树，不回退公开 HEAD，不重跑 M0–M1，不自动 commit/tag/push。候选根使用独立配置与 Work/Asset/source-copy，真实入口形态与生产一致，不写生产 Current 或接纳状态。先交付 R1 根候选，再按 Windows 所选 Work 暴露的问题修 R2/R3；不把候选通过冒充已更新生产。
 
-`windows-npm.lock.json` 固定完整依赖树。只有所有必需 Windows 文件已闭合并记录 SHA256，才移除 runtime lock 的 `pending_assets`；锁仍有缺项时构建明确失败，不生成只有 Python 的伪完整包。
+`release local` / `release candidate` 仍区分本机构建身份；正式 `release build` 使用 `harness-YYYY.MM.PATCH`，要求干净、tag 与 upstream 一致。完整包固定 Windows Python、Node、HF、GSAP/Three、浏览器及音视频依赖，普通制作不浮动安装。准确安装参数仅以实现后的帮助为准，不将设计目标写成可执行命令。
 
-本机回测不要求先提交、标记或推送：
+旧稳定包与历史 session 保留回退资料，不再作为新根的依赖。回滚程序不自动降级 Work schema、改资产绑定或删旧数据；旧工具无法读取时保留新数据与可用版本。实现、WSL/mock、Windows 原生 CLI、Studio、WebGL、带声短片及真实生产验收分别记录。
 
-```bash
-./release candidate review-001 --runtime-cache /path/to/windows-runtime-cache \
-  --include .studio/visual_plan.py --include .studio/visual_plan.html
-```
-
-候选按产品范围冻结当前源码；新增未跟踪文件需逐项 `--include`，示例不是所有新文件的清单。Manifest 记录 `channel=candidate`、基准 commit、dirty、源码文件及依赖哈希；默认输出 `dist/`。同一候选不可覆盖，重新构建使用新 ID。正式 `build` 的规则与 Git/公开发布授权不变。
-
-完整 ZIP 内置 Windows CPython、Python 依赖、Node、HF、GSAP/Three、Chromium、FFmpeg/ffprobe 及入口。Codex App 解压 ZIP 后执行（首次安装必须提供 WorkRoot）：
-
-```powershell
-.\release.ps1 verify
-.\release.ps1 install -WorkRoot D:\AI\AI+hyperframes
-.\release.ps1 status
-.\release.ps1 rollback
-```
-
-首次候选 ZIP 解压后执行 `release.ps1 install-candidate -WorkRoot D:\AI\AI+hyperframes`。可先从已安装候选目录运行 `work.cmd review init review-001`，只创建独立测试根、不改生产 Current，然后在固定工作台启动会话：
-
-```powershell
-.\start.ps1
-# 候选必须使用已准备好的隔离 Review WorkStore
-.\start.ps1 -Candidate candidate-review-001 -ReviewRoot D:\AI\AI+hyperframes\review\review-001
-```
-
-启动器输出 `sessions/<uuid>` 下的固定会话目录。Codex 后续仅使用该目录的 `work.cmd` / `work.ps1`，先运行 `work.cmd doctor` 查看实际版本、依赖、WorkRoot 与 Review 身份。安装包内的 `work.cmd session start --review-root <path>` 也可建立会话；未绑定会话的普通 Work 命令会拒绝运行。`preview open` / `preview render` 自动使用会话受控 HF，无需手填 `--hyperframes-dist`；静态样段通过同一锁定 Studio 薄承载，不加载正式音频或新增效果。缺少官方运行时会明确报错，不静默退回自制页面，也不冒充渲染能力。
-
-会话 `work.cmd` 直接调用固定版本的内置 Python，不启动子 `powershell.exe -File`；`work.ps1` 仅保留为兼容入口。旧会话文件不会自动重写，入口修复后须选择新候选并创建新会话。安装根以当前 Codex App 内的 `%LOCALAPPDATA%` 或安装时的 `-ReleaseRoot` 为准，不能假设它与外部终端相同。若沙箱仍拒绝入口，保留准确命令和错误，不修改执行策略或把审批后通过当成沙箱验收。
-
-稳定安装会验证 Manifest 与 WorkStore，再以 Windows junction 切换 `current` 并保留 `previous`；候选安装不改变稳定入口。配置、会话和缓存外置；会话固定实际包及其运行依赖，切换版本后开新会话，不热换 Skills 或播放器。回滚不删除 Work、旧快照、请求或 Final；旧包不自动清理。安装/回滚可带 `-CheckWork <id> -Variant <id>` 先检查目标版本能否读取指定 Work；未指定时会明确提示数据兼容性尚未验证。
-
-Windows 可以编排 Work-local HTML、文字、媒体 Slots、位置和时间；新组件内部、新 shader 或通用动作主体交给 WSL。`work request freeze` / `export` 冻结并导出实际输入，WSL 用 `request deliver` 交付，Windows 用 `request review` 建立隔离副本、`feedback` 记录反馈，明确批准后 `request accept` 接纳精确交付。完整参数见 [请求交接](.studio/workflow.md#windows-与-wsl-请求交接)。未批准实现仅在 Review 预演，不能正式安装、Finalize、归档完成或保存平台草稿；接纳交付不等于接受 Plan/Draft，不覆盖未受影响场景。
+Windows 直接开发视觉内容和效果；仅宿主、CLI、合同、加载、seek 或依赖装配缺口交给 WSL。`work request freeze` / `export` 冻结最小复现，WSL 在私有副本修工具并交付安装候选，Windows 在 Review 验证；纯布局、图标或动作设计不走工具请求。旧 `deliver` / `review` / `accept` 补丁合同保留兼容，不扩大 WSL 写生产源的权限。完整参数见 [请求交接](.studio/workflow.md#windows-与-wsl-请求交接)。Review 不允许正式 Finalize、归档完成或保存平台草稿；模拟资产接纳仅留 Review，接纳交付不等于接受 Plan/Draft，不覆盖未受影响场景。
 
 Windows 原生、交互 WebGL、抓帧 WebGL、视频硬件编码和真实复用分别验证。构建或 Linux 测试通过不表示 Windows 已部署或硬件路径通过。目标与验收边界见 [Windows 工作台 PRD](docs/PRD/hyperframes-windows-workbench-wsl-handoff.md)。
 

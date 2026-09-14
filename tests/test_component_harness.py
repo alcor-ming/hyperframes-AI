@@ -228,7 +228,7 @@ class ComponentHarnessTest(unittest.TestCase):
         COMPONENT.install_component(self.public, project, self.binding())
         lock_path = project / "COMPONENT_LOCK.json"
         lock = json.loads(lock_path.read_text(encoding="utf-8"))
-        lock["schema_version"] = 2
+        lock["schema_version"] = 999
         lock_path.write_text(json.dumps(lock), encoding="utf-8")
         with self.assertRaises(COMPONENT.ComponentError):
             COMPONENT.verify_installation(project)
@@ -471,11 +471,16 @@ class ComponentHarnessTest(unittest.TestCase):
         (project / "component-bindings" / "S01.json").write_text("{}\n", encoding="utf-8")
         (project / "COMPONENT_LOCK.json").write_text("{}\n", encoding="utf-8")
         self.assertIn("vendor", WORK.snapshot_items(project))
+        for name in ("scenes", "shared"):
+            (project / name).mkdir()
+            (project / name / "local.js").write_text("window.local = true;", encoding="utf-8")
         snapshot = self.root / "component-snapshot"
         WORK.copy_snapshot(project, snapshot)
         self.assertEqual("vendor", (snapshot / "vendor" / "components" / "marker.txt").read_text())
         self.assertTrue((snapshot / "component-bindings" / "S01.json").is_file())
         self.assertTrue((snapshot / "COMPONENT_LOCK.json").is_file())
+        for name in ("scenes", "shared"):
+            self.assertEqual((project / name / "local.js").read_bytes(), (snapshot / name / "local.js").read_bytes())
 
 
 if __name__ == "__main__":

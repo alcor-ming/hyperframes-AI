@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import hashlib
 from html.parser import HTMLParser
 import json
@@ -19,7 +21,7 @@ import xml.etree.ElementTree as ET
 PACKAGE_ALGORITHM = "component-package-sha256-v1"
 ASSET_PACKAGE_ALGORITHM = "asset-package-sha256-v1"
 OPTIONAL_SNAPSHOT_ITEMS = (
-    "vendor", "component-bindings", "COMPONENT_LOCK.json", "scene-slots.json", "assets",
+    "vendor", "component-bindings", "COMPONENT_LOCK.json", "scene-slots.json", "assets", "scenes", "shared",
     "runtime", "effects", "media", "shaders", "models", "textures", "hyperframes.json",
     "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
 )
@@ -319,6 +321,9 @@ def validate_component_release(directory: Path, expected_ref: str | None = None,
     """Validate one immutable Component Release and return its report."""
 
     directory = Path(directory)
+    if (directory / "asset.json").is_file():
+        from asset_contract import validate_asset
+        return validate_asset(directory, expected_ref)
     _ensure_regular_tree(directory)
     missing = [name for name in REQUIRED_RELEASE_FILES if not (directory / name).is_file()]
     if missing:
@@ -465,6 +470,10 @@ def validate_component_acceptance(acceptance: dict, release: dict, *, runtime_ro
             or acceptance.get("package_sha256") != release["package_sha256"]
             or not acceptance.get("accepted_at") or not acceptance.get("note")):
         raise ComponentError(f"Asset acceptance does not match the exact package: {release['component_ref']}")
+    if acceptance.get("review") and os.environ.get("HYPERFRAMES_AI_REVIEW") != "1":
+        raise ComponentError("Review asset acceptance cannot be used in production")
+    if release["metadata"].get("asset_type") == "media":
+        return
     root = runtime_root or Path(os.environ.get("HYPERFRAMES_AI_ROOT", Path(__file__).resolve().parents[1]))
     lock = _read_json(root / "windows-runtime.lock.json")
     runtime = acceptance.get("runtime")
@@ -498,6 +507,27 @@ def _safe_relative(value: str, label: str) -> str:
 
 
 def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[str, Any]:
+    if release["metadata"].get("asset_type") in {"module", "media"}:
+        if (not isinstance(binding, dict) or binding.get("schema_version") != 3
+                or binding.get("component_ref") != release["component_ref"]):
+            raise ComponentError("Asset Binding requires schema_version 3 and exact component_ref")
+        if not isinstance(binding.get("scene"), str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", binding["scene"]):
+            raise ComponentError("Binding scene is invalid")
+        usage = binding.get("usage")
+        if (not isinstance(usage, dict) or usage.get("role") not in {"subject", "evidence", "texture", "auxiliary"}
+                or not isinstance(usage.get("required"), bool)):
+            raise ComponentError("Asset Binding usage requires role and boolean required")
+        if set(usage) - {"role", "required", "fit", "focal_point"}:
+            raise ComponentError("Unsupported asset usage fields; layout and timing belong to the Scene")
+        if "fit" in usage and usage["fit"] not in {"contain", "cover", "fill"}:
+            raise ComponentError("Invalid asset usage fit")
+        point = usage.get("focal_point", [0.5, 0.5])
+        if (not isinstance(point, list) or len(point) != 2
+                or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 1 for v in point)):
+            raise ComponentError("Asset focal_point requires two normalized coordinates")
+        if set(binding) - {"schema_version", "component_ref", "scene", "usage"}:
+            raise ComponentError("Unsupported asset Binding fields")
+        return binding
     schema_version = release["schema"]["schema_version"]
     if not isinstance(binding, dict) or binding.get("schema_version") != schema_version:
         raise ComponentError(f"Binding schema_version must be {schema_version}")
@@ -859,8 +889,8 @@ def _vendor_relative(component_id: str, version: int) -> str:
 
 
 def _lock_components(lock: dict[str, Any]) -> list[dict[str, Any]]:
-    if lock.get("schema_version") != 1:
-        raise ComponentError("COMPONENT_LOCK.json schema_version must be 1")
+    if lock.get("schema_version") not in {1, 2}:
+        raise ComponentError("COMPONENT_LOCK.json schema_version must be 1 or 2")
     if lock.get("algorithm") != PACKAGE_ALGORITHM:
         raise ComponentError("COMPONENT_LOCK.json algorithm must be component-package-sha256-v1")
     components = lock.get("components", [])
@@ -869,6 +899,8 @@ def _lock_components(lock: dict[str, Any]) -> list[dict[str, Any]]:
     refs = [item.get("component_ref") for item in components]
     if len(refs) != len(set(refs)):
         raise ComponentError("COMPONENT_LOCK.json component_ref values must be unique")
+    if lock["schema_version"] == 1 and any(item.get("asset_kind") for item in components):
+        raise ComponentError("Generic assets require COMPONENT_LOCK.json schema_version 2")
     return components
 
 
@@ -919,6 +951,30 @@ def _lock_record(
     }
 
 
+@contextmanager
+def package_write_lock(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink() or path.is_file() and path.stat().st_nlink > 1:
+        raise ComponentError("Asset write lock cannot be linked")
+    with path.open("a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+            acquire = lambda: msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            release = lambda: msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            acquire = lambda: fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            release = lambda: fcntl.flock(handle, fcntl.LOCK_UN)
+        try:
+            acquire()
+        except OSError as error:
+            raise ComponentError(f"Another asset writer is active: {path}") from error
+        try:
+            yield
+        finally:
+            release()
+
+
 def install_component(
     release_directory: Path,
     project: Path,
@@ -938,6 +994,9 @@ def install_component(
             raise ComponentError("Candidate installation requires an isolated Review project")
     allow_unapproved = review_root is not None or acceptance is not None
     release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=allow_unapproved)
+    generic = release["metadata"].get("asset_type") in {"module", "media"}
+    if generic and acceptance is None:
+        raise ComponentError("Module/media installation requires exact asset acceptance")
     if acceptance is not None:
         validate_component_acceptance(acceptance, release)
     project = Path(project)
@@ -945,13 +1004,18 @@ def install_component(
         raise ComponentError(f"Work project is not a regular directory: {project}")
     binding_data = _load_binding(binding)
     validate_binding(binding_data, release)
-    surface_records = validate_surface_payloads(project, binding_data, release)
+    surface_records = {} if generic else validate_surface_payloads(project, binding_data, release)
     scene = binding_data["scene"]
     binding_rel = _safe_relative(binding_path or f"component-bindings/{scene}.{release['component_id']}.json", "binding path")
     target_binding = project / binding_rel
     package_id, version = parse_component_ref(release["component_ref"])
     vendor_path = project / _vendor_relative(package_id, version)
     lock_path = project / "COMPONENT_LOCK.json"
+    from work_requests import safe
+    for target in (target_binding, vendor_path, lock_path):
+        safe(project, target.relative_to(project).as_posix())
+        if target.is_file() and target.stat().st_nlink > 1:
+            raise ComponentError(f"Installation target cannot be a hardlink: {target}")
     lock = _read_json(lock_path) if lock_path.is_file() else {"schema_version": 1, "algorithm": PACKAGE_ALGORITHM, "components": []}
     components = _lock_components(lock)
     vendor_path.parent.mkdir(parents=True, exist_ok=True)
@@ -988,6 +1052,8 @@ def install_component(
         "surfaces": [surface_records[surface_id] for surface_id in sorted(surface_records)],
     }
     record = _lock_record(release, project, [binding_entry], vendor_path)
+    if generic:
+        record["asset_kind"] = release["metadata"]["asset_type"]
     if acceptance is not None:
         record["acceptance"] = acceptance
     if review_root is not None:
@@ -1010,7 +1076,7 @@ def install_component(
     else:
         components.append(record)
     components.sort(key=lambda item: str(item.get("component_ref", "")))
-    lock["schema_version"] = 1
+    lock["schema_version"] = 2 if generic or lock["schema_version"] == 2 else 1
     lock["algorithm"] = PACKAGE_ALGORITHM
     lock["components"] = components
     _atomic_json(lock_path, lock)
@@ -1033,6 +1099,16 @@ def validate_component_mounts(
     record: dict[str, Any],
 ) -> dict[str, Any]:
     index_path = Path(project) / "index.html"
+    if release["metadata"].get("asset_type") in {"module", "media"}:
+        from visual_plan import VisualPlanError, validate_dependencies
+        entry = f"{record['vendor_path']}/{release['metadata']['entry']}"
+        try:
+            dependencies = validate_dependencies(Path(project))
+        except VisualPlanError as error:
+            raise ComponentError(str(error)) from error
+        if entry not in dependencies:
+            raise ComponentError(f"Asset entry is not referenced by the project: {entry}")
+        return {"mounts": [{"entry": entry}]}
     if not index_path.is_file():
         return {"mounts": []}
     _, parser = _parse_html(index_path)
@@ -1238,6 +1314,9 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
             raise ComponentError("Review candidate cannot be used in production")
         acceptance = record.get("acceptance")
         vendor = validate_component_release(vendor_path, expected_ref=ref, allow_unapproved=review_root is not None or acceptance is not None)
+        generic = vendor["metadata"].get("asset_type") in {"module", "media"}
+        if generic and (record.get("asset_kind") != vendor["metadata"]["asset_type"] or acceptance is None):
+            raise ComponentError("Asset lock requires matching kind and exact acceptance")
         if acceptance is not None:
             validate_component_acceptance(acceptance, vendor)
         if vendor["package_sha256"] != record.get("work_package_sha256"):
@@ -1258,7 +1337,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
             binding_sha = file_sha256(binding_path)
             if binding_sha != binding_record["sha256"]:
                 raise ComponentError(f"Binding hash mismatch: {ref} {binding_rel}")
-            surface_records = validate_surface_payloads(project, binding, vendor)
+            surface_records = {} if generic else validate_surface_payloads(project, binding, vendor)
             expected_surfaces = [surface_records[surface_id] for surface_id in sorted(surface_records)]
             if binding_record["surfaces"] != expected_surfaces:
                 raise ComponentError(f"Surface payload record mismatch: {ref} {binding_rel}")

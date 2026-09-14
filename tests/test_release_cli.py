@@ -42,6 +42,8 @@ class ReleaseCliTest(unittest.TestCase):
         self.assertEqual(("2026.09.1", "harness-2026.09.1"), RELEASE.version_tag("2026.09.1"))
         with self.assertRaises(RELEASE.ReleaseError):
             RELEASE.version_tag("v1")
+        local = RELEASE.parser().parse_args(["local", "root-001", "--runtime-cache", "/tmp/cache"])
+        self.assertEqual(local.command, "local")
 
     def test_build_rejects_any_upstream_divergence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
