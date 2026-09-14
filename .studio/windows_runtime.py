@@ -1,17 +1,50 @@
-"""Bind Windows creation commands to one immutable installed runtime."""
+"""Run a physical Windows root with one resolved configuration per command."""
 from __future__ import annotations
 
-import argparse
+from contextlib import contextmanager
+import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
-import uuid
+
+# Embedded CPython does not add the launcher's directory to sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def paths_overlap(left: Path, right: Path) -> bool:
+    left_parts = tuple(part.casefold() for part in left.resolve().parts)
+    right_parts = tuple(part.casefold() for part in right.resolve().parts)
+    return left_parts[:len(right_parts)] == right_parts or right_parts[:len(left_parts)] == left_parts
+
+
+def validate_review_path(root: Path) -> None:
+    for path in (root, *root.parents):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        if path.is_symlink() or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+            raise ValueError(f"Review cannot use linked paths: {path}")
+
+
+def validate_review_tree(root: Path) -> None:
+    validate_review_path(root)
+    if not root.is_dir():
+        raise ValueError(f"Review requires an existing directory: {root}")
+    for directory, folders, files in os.walk(root, followlinks=False):
+        for name in folders + files:
+            path = Path(directory) / name
+            info = path.lstat()
+            if (path.is_symlink() or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                    or stat.S_ISREG(info.st_mode) and info.st_nlink > 1):
+                raise ValueError(f"Review requires real copies, not links: {path}")
 
 
 def runtime_paths(root: Path) -> dict[str, Path]:
@@ -28,19 +61,100 @@ def runtime_paths(root: Path) -> dict[str, Path]:
     }
 
 
-def environment(root: Path, home: Path, session: dict | None = None) -> dict[str, str]:
-    if session and Path(session["release_root"]).resolve() != root.resolve():
-        raise ValueError("Session runtime differs from launcher; start a new session")
-    cache = home / "sessions" / (session["id"] if session else "diagnostics") / "cache"
+
+@contextmanager
+def command_lock(root: Path):
+    """Coordinate commands and updates; detached Studio remains upstream-managed."""
+    path = root / ".studio/.runtime/tool.lock"
+    validate_review_path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError as error:
+                raise ValueError("This root is busy; finish the running command before updating or retrying") from error
+        else:
+            import fcntl
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as error:
+                raise ValueError("This root is busy; finish the running command before updating or retrying") from error
+        try:
+            # ponytail: one root command at a time; split read locks only if real contention matters.
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def resolved_config(root: Path) -> dict:
+    root = root.resolve()
+    config_path = root / ".studio/.runtime/local.json"
+    validate_review_path(config_path)
+    config = read_json(config_path)
+    for key in ("work_root", "asset_root"):
+        value = config.get(key)
+        if not isinstance(value, str) or not Path(value).is_absolute():
+            raise ValueError(f"Root configuration requires absolute {key}")
+        config[key] = str(Path(value).resolve())
+    for name in ("active", "parked", "archive"):
+        if not (Path(config["work_root"]) / "works" / name).is_dir():
+            raise ValueError(f"WorkStore missing works/{name}")
+    # Resolve the existing registry once, not again during a running command.
+    registry = Path(config["asset_root"]) / "sources.json"
+    sources = read_json(registry).get("sources", []) if registry.is_file() else config.get("asset_source_roots", [])
+    if not isinstance(sources, list) or not all(isinstance(p, str) and Path(p).is_absolute() for p in sources):
+        raise ValueError("Asset source roots must be an array of absolute directories")
+    config["asset_source_roots"] = [str(Path(p).resolve()) for p in sources]
+    if type(config.get("review", False)) is not bool:
+        raise ValueError("review must be a boolean")
+    manifest = read_json(root / ".release.json")
+    if manifest.get("channel") == "candidate" and config.get("review") is not True:
+        raise ValueError("Candidate root requires isolated Review configuration")
+    if config.get("review"):
+        asset_review = Path(config.get("asset_review_root", ""))
+        protected = config.get("review_protected_roots")
+        if (not asset_review.is_absolute() or not isinstance(protected, list) or not protected
+                or not all(isinstance(p, str) and Path(p).is_absolute() for p in protected)):
+            raise ValueError("Review requires explicit isolated assets and protected production roots")
+        allowed = [Path(config["work_root"]), Path(config["asset_root"]), asset_review,
+                   *[Path(p) for p in config["asset_source_roots"]]]
+        for path in [root, *allowed]:
+            validate_review_path(path)
+            if not path.resolve().is_relative_to(root) or any(paths_overlap(path, Path(p)) for p in protected):
+                raise ValueError(f"Review path escapes the independent root or overlaps production: {path}")
+        if Path(config["asset_root"]) != (asset_review / "store").resolve():
+            raise ValueError("Review AssetStore must be asset_review_root/store")
+        if any(not Path(p).is_relative_to(asset_review / "sources") for p in config["asset_source_roots"]):
+            raise ValueError("Review sources must be isolated source copies")
+    return config
+
+
+def environment(root: Path, config: dict | None = None) -> dict[str, str]:
+    root = root.resolve()
+    config = resolved_config(root) if config is None else config
+    config_path = root / ".studio/.runtime/local.json"
+    manifest = read_json(root / ".release.json")
+    cache = root / ".studio/.runtime/cache"
+    validate_review_path(cache)
     cache.mkdir(parents=True, exist_ok=True)
-    env = os.environ.copy()
+    env = {key: value for key, value in os.environ.items() if not key.upper().startswith("HYPERFRAMES_AI_")}
     env.update({key: str(value) for key, value in runtime_paths(root).items()})
     env.update({
+        "HYPERFRAMES_AI_HOME": str(root / ".studio/.runtime"),
         "HYPERFRAMES_AI_ROOT": str(root),
-        "HYPERFRAMES_AI_CONFIG": str(home / "config/local.json"),
-        "HYPERFRAMES_AI_ASSET_CONFIG": str(home / "config/local.json"),
-        "HYPERFRAMES_AI_REVIEW": "1" if session and session.get("review") else "0",
-        "HYPERFRAMES_AI_VERSION": read_json(root / ".release.json")["release"],
+        "HYPERFRAMES_AI_CONFIG": str(config_path),
+        "HYPERFRAMES_AI_ASSET_CONFIG": str(config_path),
+        "HYPERFRAMES_AI_DEFAULT_CONFIG": str(config_path),
+        "HYPERFRAMES_AI_RESOLVED_CONFIG": json.dumps(config),
+        "HYPERFRAMES_AI_REVIEW": "1" if config.get("review") else "0",
+        "HYPERFRAMES_AI_VERSION": manifest["release"],
         "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1",
         "TMP": str(cache), "TEMP": str(cache),
         "HYPERFRAMES_EXTRACT_CACHE_DIR": str(cache / "frames"),
@@ -51,64 +165,28 @@ def environment(root: Path, home: Path, session: dict | None = None) -> dict[str
     env["FFMPEG_PATH"] = env["HYPERFRAMES_FFMPEG_PATH"]
     env["FFPROBE_PATH"] = env["HYPERFRAMES_FFPROBE_PATH"]
     env["IMAGEIO_FFMPEG_EXE"] = env["FFMPEG_PATH"]
-    if session:
-        env["HYPERFRAMES_AI_CONFIG"] = str(home / "sessions" / session["id"] / "local.json")
-        env["HYPERFRAMES_AI_WORK_ROOT"] = read_json(Path(env["HYPERFRAMES_AI_CONFIG"]))["work_root"]
+    for key in ("work_root", "asset_root"):
+        env[f"HYPERFRAMES_AI_{key.upper()}"] = config[key]
+    if config.get("review"):
+        env["HYPERFRAMES_AI_REVIEW_ROOT"] = config["work_root"]
+        env["HYPERFRAMES_AI_ASSET_REVIEW_ROOT"] = config["asset_review_root"]
+        env["HYPERFRAMES_AI_REVIEW_PROTECTED_ROOTS"] = json.dumps(config["review_protected_roots"])
     return env
-
-
-def start_session(root: Path, home: Path, review_root: Path | None = None) -> Path:
-    manifest = read_json(root / ".release.json")
-    candidate = manifest.get("channel") == "candidate"
-    if candidate and review_root is None:
-        raise ValueError("Candidate sessions require --review-root (isolated WorkStore)")
-    config = read_json(home / "config/local.json")
-    if review_root:
-        review_root = review_root.resolve()
-        marker = review_root / ".runtime/review.json"
-        if not marker.is_file():
-            raise ValueError("Review WorkStore requires .runtime/review.json")
-        if review_root == Path(config["work_root"]).resolve():
-            raise ValueError("Review cannot use the production WorkStore")
-        config["work_root"] = str(review_root)
-    for name in ("active", "parked", "archive"):
-        if not (Path(config["work_root"]) / "works" / name).is_dir():
-            raise ValueError(f"WorkStore missing works/{name}")
-    session_id = uuid.uuid4().hex
-    directory = home / "sessions" / session_id
-    directory.mkdir(parents=True)
-    binding = {"id": session_id, "release_root": str(root.resolve()), "release": manifest["release"],
-               "review": bool(review_root), "runtime": read_json(root / "windows-runtime.lock.json")}
-    for name, value in (("session.json", binding), ("local.json", config)):
-        (directory / name).write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
-    # Each launcher carries its own binding; changing current cannot affect it.
-    runtime_prefix = "%~dp0" + os.path.relpath(root.resolve(), directory.resolve()).replace("/", "\\").replace("%", "%%")
-    (directory / "work.cmd").write_text(
-        '@echo off\nsetlocal DisableDelayedExpansion\nset "PYTHONUTF8=1"\n'
-        'set "HYPERFRAMES_AI_SESSION=%~dp0session.json"\n'
-        f'"{runtime_prefix}\\runtime\\python\\python.exe" -B "{runtime_prefix}\\.studio\\windows_runtime.py" %*\n'
-        'exit /b %ERRORLEVEL%\n', encoding="ascii")
-    (directory / "work.ps1").write_text(
-        '$env:HYPERFRAMES_AI_SESSION = Join-Path $PSScriptRoot "session.json"\n'
-        f"& '{str(root / 'work.ps1').replace(chr(39), chr(39)*2)}' @args\nexit $LASTEXITCODE\n", encoding="utf-8-sig")
-    (directory / "AGENTS.md").write_text(
-        "# Windows Creation Session\n\n"
-        f"Pinned runtime: `{root}`. Review: `{bool(review_root)}`.\n"
-        "Use this directory's `work.cmd` for every command. Do not resolve current again.\n"
-        f"Read the installed creation rules at `{root / 'AGENTS.md'}` and Skills under "
-        f"`{root / '.agents/skills'}` by absolute path; never edit installed files.\n"
-        "Work-local Slots, layout, timing and arrangement are creation; new reusable effects, "
-        "shaders and Harness changes must be handed to WSL development.\n", encoding="utf-8")
-    return directory
 
 
 def doctor(root: Path, env: dict[str, str]) -> dict:
     lock = read_json(root / "windows-runtime.lock.json")
+    config = json.loads(env["HYPERFRAMES_AI_RESOLVED_CONFIG"])
     result = {"release": read_json(root / ".release.json")["release"], "backend": "windows-native",
               "review": env["HYPERFRAMES_AI_REVIEW"] == "1", "runtime": str(root),
-              "work_root": env.get("HYPERFRAMES_AI_WORK_ROOT") or (
-                  read_json(Path(env["HYPERFRAMES_AI_CONFIG"])).get("work_root")
-                  if Path(env["HYPERFRAMES_AI_CONFIG"]).is_file() else "not-configured"), "checks": {}}
+              "rules_root": str(root / "AGENTS.md"),
+              "skills_root": str(root / ".agents/skills"), "runtime_lock": str(root / "windows-runtime.lock.json"),
+              "release_manifest_sha256": hashlib.sha256((root / ".release.json").read_bytes()).hexdigest(),
+              "config": env["HYPERFRAMES_AI_CONFIG"], "asset_config": env["HYPERFRAMES_AI_ASSET_CONFIG"],
+              "work_root": config.get("work_root", "not-configured"),
+              "asset_root": config.get("asset_root", "not-configured"),
+              "asset_source_roots": config.get("asset_source_roots", []),
+              "asset_review_root": config.get("asset_review_root"), "cache_root": env["TEMP"], "checks": {}}
     commands = {"node": [env["HYPERFRAMES_NODE"], "--version"],
                 "hyperframes": [env["HYPERFRAMES_NODE"], env["HYPERFRAMES_CLI"], "--version"],
                 "chromium": [env["HYPERFRAMES_BROWSER_PATH"], "--version"],
@@ -141,28 +219,20 @@ def doctor(root: Path, env: dict[str, str]) -> dict:
     return result
 
 
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     root = Path(__file__).resolve().parent.parent
-    binding_path = os.environ.get("HYPERFRAMES_AI_SESSION")
-    session = read_json(Path(binding_path)) if binding_path else None
-    home = Path(binding_path).resolve().parent.parent.parent if binding_path else Path(
-        os.environ.get("HYPERFRAMES_AI_HOME") or str(Path(os.environ["LOCALAPPDATA"]) / "HyperFramesAI"))
-    if argv[:2] == ["session", "start"]:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--review-root", type=Path)
-        parsed = parser.parse_args(argv[2:])
-        print(start_session(root, home, parsed.review_root))
-        return 0
-    env = environment(root, home, session)
-    if argv == ["doctor"]:
-        result = doctor(root, env)
-        print(json.dumps(result, indent=2))
-        return int(any(value == "not-installed" or isinstance(value, dict) and value["status"] != "available"
-                       for value in result["checks"].values()))
-    if not session and not (len(argv) == 3 and argv[:2] == ["review", "init"]):
-        raise ValueError("Start a pinned creation session first: work.cmd session start")
-    return subprocess.call([sys.executable, "-B", str(root / ".studio/work.py"), *argv], env=env)
+    with command_lock(root):
+        if (root / ".studio/.runtime/deploy-pending.json").exists():
+            raise ValueError("An update is incomplete; recover it with the verified package installer before running tools")
+        env = environment(root)
+        if argv == ["doctor"]:
+            result = doctor(root, env)
+            print(json.dumps(result, indent=2))
+            return int(any(value == "not-installed" or isinstance(value, dict) and value["status"] != "available"
+                           for value in result["checks"].values()))
+        return subprocess.call([sys.executable, "-B", str(root / ".studio/work.py"), *(argv or ["--help"])], env=env)
 
 
 if __name__ == "__main__":

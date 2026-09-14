@@ -1,0 +1,308 @@
+"""Managed-file root deployment; user content is never a package member."""
+from __future__ import annotations
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import shutil
+import subprocess
+import sys
+import uuid
+
+# Embedded CPython does not add this script's directory to sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+STATE = ".studio/.runtime"
+MANIFEST = f"{STATE}/deployment.json"
+PENDING = f"{STATE}/deploy-pending.json"
+CONFIG = f"{STATE}/local.json"
+
+
+def read(path):
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError(f"Duplicate JSON key: {key}")
+            value[key] = item
+        return value
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"), object_pairs_hook=unique)
+
+
+def digest(path):
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def safe(root, name):
+    for parent in (root, *root.parents):
+        if parent.is_symlink() or (parent.exists() and getattr(parent.lstat(), "st_file_attributes", 0) & 1024):
+            raise ValueError(f"Links are not allowed: {parent}")
+    parts = PurePosixPath(name).parts
+    if not parts or name != "/".join(parts) or any(p in {".", ".."} or any(ord(c) < 32 or c in ':\\<>"|?*' for c in p) or p.endswith((" ", ".")) for p in parts) or name.startswith("/"):
+        raise ValueError(f"Unsafe managed path: {name}")
+    if any(re.fullmatch(r"(?i)(con|prn|aux|nul|com[0-9]|lpt[0-9])", p.split(".")[0]) for p in parts):
+        raise ValueError(f"Reserved Windows path: {name}")
+    path = root
+    for part in parts:
+        path /= part
+        if path.is_symlink() or (path.exists() and getattr(path.lstat(), "st_file_attributes", 0) & 1024):
+            raise ValueError(f"Links are not allowed: {path}")
+    return path
+
+
+def managed(files):
+    seen = set()
+    for name, value in files.items():
+        key = name.casefold()
+        if key in seen or not re.fullmatch(r"[0-9a-f]{64}", value):
+            raise ValueError(f"Invalid or case-colliding manifest entry: {name}")
+        seen.add(key)
+        if key.split("/")[0] in {"works", "assets", "asset-library", "requests", "review", ".runtime", ".harness"} or key == STATE or key.startswith(STATE + "/"):
+            raise ValueError(f"Package claims user/runtime content: {name}")
+
+
+def verify_package(root):
+    manifest = read(safe(root, ".release.json"))
+    if manifest.get("target") != "windows-x64" or manifest.get("channel") not in {"candidate", "local", "stable"}:
+        raise ValueError("Unsupported package identity")
+    if not re.fullmatch(r"(?:harness-\d{4}\.\d{2}\.\d+|(?:candidate|local)-[A-Za-z0-9][A-Za-z0-9._-]*)", manifest.get("release", "")) or manifest.get("layout") != "root-v1":
+        raise ValueError("Package requires a valid release identity and root-v1 layout")
+    files = manifest["files"]
+    managed(files)
+    if ".release.json" in {name.casefold() for name in files}:
+        raise ValueError("Package cannot claim its own .release.json")
+    for name, value in files.items():
+        if digest(safe(root, name)) != value:
+            raise ValueError(f"Package hash mismatch: {name}")
+    for path in root.rglob("*"):
+        name = path.relative_to(root).as_posix()
+        safe(root, name)
+        if path.is_file() and name not in files and name != ".release.json":
+            raise ValueError(f"Unmanifested package file: {name}")
+    return manifest
+
+
+def verify_root(root):
+    if safe(root, PENDING).exists():
+        raise ValueError("Interrupted deployment; run recover before work")
+    state = read(safe(root, MANIFEST))
+    managed(state["files"])
+    for name, value in state["files"].items():
+        if digest(safe(root, name)) != value:
+            raise ValueError(f"Locally modified managed file: {name}")
+    return state
+
+
+def write_json(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(path.name + ".tmp")
+    if temp.exists() or temp.is_symlink():
+        raise ValueError(f"Temporary path conflict: {temp}")
+    temp.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8", newline="\n")
+    os.replace(temp, path)
+
+
+def inside(path, parent):
+    return path == parent or parent in path.parents
+
+
+def replace_file(source, destination, data=None):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(destination.name + ".deploy-" + uuid.uuid4().hex)
+    try:
+        if source is not None:
+            shutil.copy2(source, temporary)
+        else:
+            temporary.write_bytes(data)
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def validate_config(root, config, candidate):
+    for key in ("work_root", "asset_root"):
+        if not Path(config[key]).is_absolute():
+            raise ValueError(f"{key} must be absolute")
+    work = Path(config["work_root"])
+    for name in ("active", "parked", "archive"):
+        if not (work / "works" / name).is_dir():
+            raise ValueError(f"Missing WorkStore directory: {name}")
+    if candidate or config.get("review"):
+        if config.get("review") is not True or not config.get("review_protected_roots"):
+            raise ValueError("Candidate requires review=true and explicit review_protected_roots")
+        paths = [work, Path(config["asset_root"]), Path(config["asset_review_root"])] + [Path(p) for p in config.get("asset_source_roots", [])]
+        if not config.get("asset_source_roots"):
+            raise ValueError("Candidate requires independent asset_source_roots")
+        asset_review = Path(config["asset_review_root"])
+        if Path(config["asset_root"]) != asset_review / "store" or any(not inside(Path(p), asset_review / "sources") for p in config["asset_source_roots"]):
+            raise ValueError("Review assets require isolated asset_review_root/store and sources")
+        for path in paths:
+            if not path.is_absolute() or not inside(path, root) or not path.is_dir():
+                raise ValueError(f"Review content must be an existing directory inside root: {path}")
+            if path != root:
+                safe(root, path.relative_to(root).as_posix())
+            for item in path.rglob("*"):
+                safe(root, item.relative_to(root).as_posix())
+                if item.is_file() and item.stat().st_nlink > 1:
+                    raise ValueError(f"Review requires real copies, not hardlinks: {item}")
+            for protected in config["review_protected_roots"]:
+                protected = Path(protected)
+                if not protected.is_absolute() or inside(path.resolve(), protected.resolve()) or inside(protected.resolve(), path.resolve()):
+                    raise ValueError(f"Review path overlaps protected production root: {path}")
+
+
+def idle(root):
+    if os.name != "nt":
+        return
+    script = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(python|pythonw|node|ffmpeg|ffprobe|chrome|chrome-headless-shell|esbuild)(\\.exe)?$' } | Select-Object ProcessId,CommandLine,ExecutablePath | ConvertTo-Json -Compress"
+    result = subprocess.run(["powershell.exe", "-NoLogo", "-NoProfile", "-Command", script], capture_output=True, encoding="utf-8", check=True)
+    processes = json.loads(result.stdout or "[]")
+    if isinstance(processes, dict):
+        processes = [processes]
+    for process in processes:
+        location = ((process.get("CommandLine") or "") + " " + (process.get("ExecutablePath") or "")).replace("/", "\\").casefold()
+        # A host's bare working-directory argument does not consume installed tools.
+        prefix = str(root).replace("/", "\\").casefold().rstrip("\\") + "\\"
+        if process["ProcessId"] != os.getpid() and prefix in location:
+            raise ValueError(f"Root process {process['ProcessId']} is active; close preview/render before updating")
+
+
+def restore(root, transaction, check_only=False):
+    config = safe(root, CONFIG)
+    if not config.exists() and CONFIG not in transaction["before"]:
+        raise ValueError("Recovery would discard a local configuration deletion")
+    if config.exists() and digest(config) != transaction["config_sha256"]:
+        raise ValueError("Recovery would discard a local configuration edit")
+    backup = safe(root, transaction["backup"])
+    for name, old_hash in transaction["before"].items():
+        destination = safe(root, name)
+        current = digest(destination) if destination.is_file() else None
+        if current not in {old_hash, transaction["after"].get(name)}:
+            raise ValueError(f"Recovery would discard a local edit: {name}")
+        if old_hash is not None and digest(safe(backup, name)) != old_hash:
+            raise ValueError(f"Corrupt recovery backup: {name}")
+    if check_only:
+        return
+    for name, old_hash in transaction["before"].items():
+        destination = safe(root, name)
+        if old_hash is None:
+            destination.unlink(missing_ok=True)
+        else:
+            replace_file(safe(backup, name), destination)
+    safe(root, PENDING).unlink(missing_ok=True)
+
+
+def deploy(package, root, config_path):
+    package = package.resolve()
+    root = root.absolute()
+    if inside(package, root) or inside(root, package):
+        raise ValueError("Package and deployment root must be independent")
+    safe(root.parent, root.name)
+    manifest = verify_package(package)
+    root.mkdir(parents=True, exist_ok=True)
+    from windows_runtime import command_lock
+    with command_lock(root):
+        idle(root)
+        if safe(root, PENDING).exists():
+            raise ValueError("Interrupted deployment; run recover")
+        prior = verify_root(root) if safe(root, MANIFEST).exists() else {"files": {}}
+        config_file = safe(root, CONFIG)
+        config = read(config_file if config_file.exists() else config_path)
+        if config_file.exists() and config_path and read(config_path) != config:
+            raise ValueError("Deployment cannot overwrite existing local configuration")
+        validate_config(root, config, manifest["channel"] == "candidate")
+        files = dict(manifest["files"])
+        files[".release.json"] = digest(package / ".release.json")
+        for name in files:
+            if safe(root, name).exists() and name not in prior["files"]:
+                raise ValueError(f"Unmanaged file conflict: {name}")
+        writes = {name: safe(package, name) for name in files}
+        extras = {}
+        if not config_file.exists():
+            extras[CONFIG] = (json.dumps(config, indent=2) + "\n").encode()
+        if config.get("review"):
+            marker = Path(config["work_root"]) / ".runtime/review.json"
+            if not marker.exists():
+                extras[marker.relative_to(root).as_posix()] = (json.dumps({"mode": "review", "review_id": marker.parent.parent.name, "ready": True}) + "\n").encode()
+        names = set(prior["files"]) | set(files) | set(extras) | {MANIFEST}
+        backup_name = f"{STATE}/deploy-backups/{uuid.uuid4().hex}"
+        backup = safe(root, backup_name)
+        before = {}
+        for name in sorted(names):
+            path = safe(root, name)
+            before[name] = digest(path) if path.is_file() else None
+            if path.exists():
+                target = safe(backup, name)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, target)
+        state = {"release": manifest["release"], "files": files, "backup": backup_name}
+        extras[MANIFEST] = (json.dumps(state, indent=2) + "\n").encode()
+        after = dict(files)
+        after.update({name: hashlib.sha256(data).hexdigest() for name, data in extras.items()})
+        transaction = {"backup": backup_name, "before": before, "after": after,
+                       "config_sha256": digest(config_file) if config_file.exists() else after[CONFIG]}
+        write_json(backup / "transaction.json", transaction)
+        write_json(safe(root, PENDING), transaction)
+        try:
+            for name in sorted(names - {MANIFEST}):
+                target = safe(root, name)
+                if name in writes or name in extras:
+                    replace_file(writes.get(name), target, extras.get(name))
+                else:
+                    target.unlink()
+            write_json(safe(root, MANIFEST), state)
+            safe(root, PENDING).unlink()
+        except BaseException:
+            restore(root, transaction)
+            raise
+        return verify_root(root)
+
+
+def recover(root, rollback=False):
+    if inside(Path(__file__).resolve(), root.resolve()):
+        raise ValueError("Run recovery/rollback from an unpacked package outside the deployed root")
+    from windows_runtime import command_lock
+    with command_lock(root):
+        idle(root)
+        if rollback:
+            state = verify_root(root)
+            transaction = read(safe(root, state["backup"]) / "transaction.json")
+            restore(root, transaction, check_only=True)
+            write_json(safe(root, PENDING), transaction)
+        else:
+            transaction = read(safe(root, PENDING))
+        restore(root, transaction)
+    return {"restored": True}
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=("verify", "verify-root", "status", "deploy", "rollback", "recover"))
+    parser.add_argument("--package", type=Path, default=Path(__file__).resolve().parent.parent)
+    parser.add_argument("--root", type=Path)
+    parser.add_argument("--config", type=Path)
+    args = parser.parse_args()
+    try:
+        if args.command == "verify":
+            result = verify_package(args.package)
+        elif args.root is None:
+            raise ValueError("--root is required")
+        elif args.command in {"verify-root", "status"}:
+            result = verify_root(args.root.absolute())
+        elif args.command == "deploy":
+            result = deploy(args.package, args.root, args.config)
+        else:
+            result = recover(args.root.absolute(), args.command == "rollback")
+        if "files" in result:
+            result = {"release": result["release"], "root": str((args.root or args.package).absolute()),
+                      "managed_count": len(result["files"]), "backup": result.get("backup")}
+        print(json.dumps(result, indent=2))
+    except (ValueError, OSError, KeyError, TypeError) as error:
+        parser.exit(1, f"root deployment: {error}\n")
+
+
+if __name__ == "__main__":
+    main()

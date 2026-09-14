@@ -80,9 +80,11 @@ def verify(directory, manifest_name, key="files"):
 def review_identity(root):
     root = Path(root).resolve()
     marker = read(root / ".runtime" / "review.json")
-    # Parent-relative identity remains valid when the frozen request crosses WSL/Windows.
+    config = json.loads(os.environ.get("HYPERFRAMES_AI_RESOLVED_CONFIG", "{}"))
+    direct = (config.get("review") is True and str(root) == config.get("work_root"))
+    # Old Review copies retain their parent-relative identity; direct roots use resolved scope.
     production = root.parent.parent
-    if root.parent.name != "review" or not all((production / "works" / name).is_dir() for name in ("active", "parked", "archive")):
+    if not direct and (root.parent.name != "review" or not all((production / "works" / name).is_dir() for name in ("active", "parked", "archive"))):
         raise RequestError("Review requires an independent WorkStore under production/review/<id>")
     if marker.get("review_id") != root.name or marker.get("mode") != "review":
         raise RequestError("Review identity does not match this WorkStore")
@@ -94,6 +96,11 @@ def review_identity(root):
 
 def project_review_root(project):
     if os.environ.get("HYPERFRAMES_AI_REVIEW") != "1":
+        return None
+    asset_review = os.environ.get("HYPERFRAMES_AI_ASSET_REVIEW_ROOT")
+    if asset_review and Path(project).resolve().is_relative_to((Path(asset_review) / "sources").resolve()):
+        from asset_store import authoring_project
+        authoring_project(Path(os.environ["HYPERFRAMES_AI_ROOT"]), Path(project))
         return None
     for root in Path(project).resolve().parents:
         if (root / ".runtime" / "review.json").is_file():
@@ -111,6 +118,14 @@ def init_review(store, review_id):
     for location in ("active", "parked", "archive"):
         (destination / "works" / location).mkdir(parents=True)
     write(destination / ".runtime" / "review.json", {"mode": "review", "review_id": review_id, "ready": True})
+    (destination / "AGENTS.md").write_text(
+        "# Isolated Windows Review\n\n"
+        "This root is test content, never production. Use the independent deployed root's work.cmd, "
+        "root rules and Skills. Windows authors Scene/GSAP/Three/shader/media content here; "
+        "only Harness or host/tool defects go to WSL. This overrides any older parent rule "
+        "requiring WSL content rendering. Never edit production Work, assets, defaults, "
+        "frozen vendor or accepted snapshots. No production Final, archive or platform drafts.\n",
+        encoding="utf-8")
     review_identity(destination)
     return destination
 

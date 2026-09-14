@@ -17,6 +17,9 @@ class VisualPlanError(ValueError):
     pass
 
 
+SCENE_ID = re.compile(r"S[0-9]+[A-Z]*")
+
+
 class Composition(HTMLParser):
     def __init__(self, text):
         super().__init__()
@@ -34,9 +37,9 @@ def plan_scene_rows(plan_text):
         if not line.strip().startswith("|"):
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if cells[0] == "Scene":
+        if cells[0] in {"Scene", "原 Scene ID"}:
             headers = cells
-        elif headers and re.fullmatch(r"S\d+", cells[0]):
+        elif headers and SCENE_ID.fullmatch(cells[0]):
             rows.setdefault(cells[0], {}).update(dict(zip(headers, cells)))
     if not rows:
         raise VisualPlanError("Animation Plan needs a Scene table")
@@ -47,13 +50,17 @@ def reference_projection(plan_text):
     return [{"id": sid, "source": "", "intent": row} for sid, row in plan_scene_rows(plan_text).items()]
 
 
-def scene_projection(project, plan_text):
+def scene_projection(project, plan_text, scene_ids=None):
     """Timing comes from executable HTML; intent comes from the existing Plan table."""
     rows = plan_scene_rows(plan_text)
+    if scene_ids is not None:
+        if len(scene_ids) != 1 or scene_ids[0] not in rows:
+            raise VisualPlanError("Scene reference requires exactly one existing Plan Scene ID")
+        rows = {scene_ids[0]: rows[scene_ids[0]]}
     scenes = []
     for _, attrs in Composition((project / "index.html").read_text(encoding="utf-8")).nodes:
         scene_id = attrs.get("data-scene-id", attrs.get("id", ""))
-        if not re.fullmatch(r"S\d+", scene_id):
+        if not SCENE_ID.fullmatch(scene_id):
             continue
         try:
             start, duration = float(attrs["data-start"]), float(attrs["data-duration"])
@@ -71,7 +78,7 @@ def scene_projection(project, plan_text):
 
 
 def layout_projection(project, plan_text, scene_ids):
-    rows = set(re.findall(r"^\|\s*(S\d+)\s*\|", plan_text, re.MULTILINE))
+    rows = set(plan_scene_rows(plan_text))
     nodes = Composition((project / "index.html").read_text(encoding="utf-8")).nodes
     ids = {a.get("data-scene-id", a.get("id")) for _, a in nodes}
     if not scene_ids or len(set(scene_ids)) != len(scene_ids) or set(scene_ids) - rows or not set(scene_ids).intersection(ids):
@@ -82,12 +89,14 @@ def layout_projection(project, plan_text, scene_ids):
     return [{"id": sid, "source": "index.html"} for sid in scene_ids]
 
 
-def validate_dependencies(project, *, layout=False, entry="index.html"):
+def validate_dependencies(project, *, layout=False, entry="index.html", check_path=None):
     """Check literal local references; browser QA must also check dynamic asset loads."""
     project = project.resolve()
     visited = set()
 
     def visit(path):
+        if check_path is not None:
+            check_path(path)
         if layout and any(p.is_symlink() for p in (path, *path.parents) if p.is_relative_to(project)):
             raise VisualPlanError(f"Layout dependency cannot be a symlink: {path}")
         path = path.resolve()

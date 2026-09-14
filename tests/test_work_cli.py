@@ -409,6 +409,81 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual(b"final-one", history.read_bytes())
         self.assertEqual(b"final-two", second.read_bytes())
 
+    def test_finalize_accepts_legacy_digest_with_identical_render_mirror(self) -> None:
+        _, work = self.new_work()
+        draft = self.prepare_preview(work)
+        self.invoke("preview", "register", str(draft))
+        self.invoke("preview", "accept", "draft-v001")
+        variant = work / "variants" / "main"
+        preview = variant / "previews" / "draft-v001"
+        metadata = WORK_CLI.preview_metadata(preview)
+        frozen = variant / ".runtime" / "render-legacy" / "source-snapshot"
+        shutil.copytree(preview / "source-snapshot", frozen)
+        candidate = self.root / "legacy-final.mp4"
+        candidate.write_bytes(b"legacy-final")
+        state = json.loads((variant / "variant.yaml").read_text(encoding="utf-8"))
+        state["accepted_visual_plan"] = "plan-v001"
+        (variant / "variant.yaml").write_text(json.dumps(state), encoding="utf-8")
+        WORK_CLI.write_json(
+            variant / ".runtime" / "render.json",
+            {
+                "purpose": "final",
+                "source_preview": "draft-v001",
+                "parent_snapshot_sha256": metadata["snapshot_sha256"],
+                "snapshot_sha256": metadata["snapshot_sha256"],
+                "source_snapshot": ".runtime/render-legacy/source-snapshot",
+                "changed_files": [],
+                "output_sha256": WORK_CLI.file_sha256(candidate),
+                "script_revision": 1,
+                "plan_revision": 1,
+            },
+        )
+
+        with mock.patch.object(WORK_CLI, "snapshot_digest", return_value="f" * 64):
+            archived_final = Path(self.invoke("finalize", str(candidate), "--qa-passed"))
+
+        evidence = json.loads(
+            (archived_final.parent.parent / ".runtime" / "qa" / "legacy-snapshot-compatibility.json").read_text()
+        )
+        self.assertEqual(metadata["snapshot_sha256"], evidence["recorded_snapshot_sha256"])
+        self.assertEqual("f" * 64, evidence["current_snapshot_sha256"])
+        self.assertGreater(evidence["verified_file_count"], 0)
+
+    def test_finalize_rejects_legacy_digest_when_render_mirror_differs(self) -> None:
+        _, work = self.new_work()
+        draft = self.prepare_preview(work)
+        self.invoke("preview", "register", str(draft))
+        self.invoke("preview", "accept", "draft-v001")
+        variant = work / "variants" / "main"
+        preview = variant / "previews" / "draft-v001"
+        metadata = WORK_CLI.preview_metadata(preview)
+        frozen = variant / ".runtime" / "render-legacy" / "source-snapshot"
+        shutil.copytree(preview / "source-snapshot", frozen)
+        (frozen / "index.html").write_text("changed", encoding="utf-8")
+        candidate = self.root / "legacy-final.mp4"
+        candidate.write_bytes(b"legacy-final")
+        state = json.loads((variant / "variant.yaml").read_text(encoding="utf-8"))
+        state["accepted_visual_plan"] = "plan-v001"
+        (variant / "variant.yaml").write_text(json.dumps(state), encoding="utf-8")
+        WORK_CLI.write_json(
+            variant / ".runtime" / "render.json",
+            {
+                "purpose": "final",
+                "source_preview": "draft-v001",
+                "parent_snapshot_sha256": metadata["snapshot_sha256"],
+                "snapshot_sha256": metadata["snapshot_sha256"],
+                "source_snapshot": ".runtime/render-legacy/source-snapshot",
+                "changed_files": [],
+                "output_sha256": WORK_CLI.file_sha256(candidate),
+                "script_revision": 1,
+                "plan_revision": 1,
+            },
+        )
+        with mock.patch.object(WORK_CLI, "snapshot_digest", return_value="f" * 64):
+            result = self.invoke("finalize", str(candidate), "--qa-passed", expected=2)
+        self.assertIn("legacy final-render snapshot differs", result)
+        self.assertTrue(work.is_dir())
+
     def test_required_variants_delay_auto_archive(self) -> None:
         work_id, work = self.new_work()
         self.invoke("variant", "add", "bilibili-16x9", "--from", "main", "--ratio", "16:9")

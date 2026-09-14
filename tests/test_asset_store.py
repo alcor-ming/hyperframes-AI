@@ -48,6 +48,132 @@ class AssetStoreTest(unittest.TestCase):
         return STORE.accept_component(self.store, self.ref, candidate["package_sha256"],
                                       "Synthetic fixture acceptance for automated contract tests", runtime_root=self.harness)
 
+    def test_root_library_is_separate_from_work_data_and_installed_code(self):
+        work = self.root / "workspace"
+        store = work / "asset-library/store"
+        source = work / "asset-library/sources"
+        source.mkdir(parents=True)
+        with patch.dict(os.environ, {"HYPERFRAMES_AI_WORK_ROOT": str(work)}):
+            STORE.configure_asset_store(self.harness, store)
+            STORE.register_source(store, source)
+            project = source / "sample"
+            project.mkdir()
+            self.assertEqual(STORE.authoring_project(self.harness, project), project)
+            for forbidden in (work, work / "works/active", work / ".runtime", work / "assets"):
+                forbidden.mkdir(parents=True, exist_ok=True)
+                with self.assertRaises(COMPONENT.ComponentError):
+                    STORE.configure_asset_store(self.harness, forbidden)
+                with self.assertRaises(COMPONENT.ComponentError):
+                    STORE.register_source(store, forbidden)
+
+    def test_module_media_pack_install_and_offline_lock(self):
+        from PIL import Image
+        project = self.root / "project"
+        project.mkdir()
+        entries = []
+        for kind, entry in (("module", "move.js"), ("media", "image.png")):
+            source = self.root / kind
+            source.mkdir()
+            metadata = {"schema_version": 1, "id": f"local-{kind}", "version": 1, "kind": kind,
+                        "entry": entry, "source_url": "https://example.invalid/source", "rights": "test-owned"}
+            (source / "asset.json").write_text(json.dumps(metadata))
+            if kind == "module":
+                (source / entry).write_text("window.localMove = (timeline, target) => timeline.to(target, {x: 40});")
+            else:
+                Image.new("RGB", (12, 8), "red").save(source / entry)
+            candidate = STORE.pack_source(self.store, source)
+            self.assertFalse((source / "HASHES.json").exists())
+            ref = candidate["component_ref"]
+            record = STORE.accept_component(self.store, ref, candidate["package_sha256"], "synthetic fixture", runtime_root=self.harness)
+            package, _ = STORE.resolve_component(self.harness, ref)
+            with patch.object(STORE, "file_sha256", side_effect=AssertionError("Inventory must not hash package bytes")):
+                self.assertTrue(any(row["component_ref"] == ref for row in STORE.discover_components(self.harness)["assets"]))
+            binding = {"schema_version": 3, "component_ref": ref, "scene": "S01",
+                       "usage": {"role": "subject", "required": True}}
+            COMPONENT.install_component(package, project, binding, acceptance=record)
+            relative = f"vendor/components/local-{kind}/v1/{entry}"
+            entries.append(f'<script src="{relative}"></script>' if kind == "module" else f'<img src="{relative}">')
+            (source / "asset.json").write_text("changed source")
+        (project / "index.html").write_text("<html><body>" + "".join(entries) + "</body></html>")
+        lock = (project / "COMPONENT_LOCK.json").read_bytes()
+        self.assertEqual(2, json.loads(lock)["schema_version"])
+        shutil.rmtree(self.store)
+        self.assertEqual(2, len(COMPONENT.verify_installation(project)["components"]))
+        self.assertEqual(lock, (project / "COMPONENT_LOCK.json").read_bytes())
+        (project / "index.html").write_text("<html></html>")
+        with self.assertRaisesRegex(COMPONENT.ComponentError, "not referenced"):
+            COMPONENT.verify_installation(project)
+
+    def test_review_asset_writes_and_acceptance_do_not_escape(self):
+        import work_requests
+        production = self.root / "production"
+        for name in ("active", "parked", "archive"):
+            (production / "works" / name).mkdir(parents=True)
+        review_work = work_requests.init_review(production, "test")
+        review = self.root / "asset-review"
+        source = review / "sources/module"
+        source.mkdir(parents=True)
+        (source / "asset.json").write_text(json.dumps({"schema_version": 1, "id": "isolated-module",
+                                                     "version": 1, "kind": "module", "entry": "move.js"}))
+        (source / "move.js").write_text("window.move = () => 1;")
+        store = review / "store"
+        config = self.root / "session.json"
+        config.write_text(json.dumps({"asset_root": str(store), "work_root": str(review_work),
+                                      "asset_source_roots": [str(review / "sources")]}))
+        with patch.dict(os.environ, {"HYPERFRAMES_AI_REVIEW": "1", "HYPERFRAMES_AI_WORK_ROOT": str(review_work),
+                                     "HYPERFRAMES_AI_ASSET_REVIEW_ROOT": str(review),
+                                     "HYPERFRAMES_AI_REVIEW_PROTECTED_ROOTS": json.dumps([str(production), str(self.store)]),
+                                     "HYPERFRAMES_AI_ASSET_CONFIG": str(config)}):
+            with self.assertRaisesRegex(COMPONENT.ComponentError, "Review"):
+                STORE.configure_asset_store(self.harness, self.store)
+            with self.assertRaisesRegex(COMPONENT.ComponentError, "Review"):
+                STORE.pack_source(self.store, source)
+            with self.assertRaisesRegex(COMPONENT.ComponentError, "Review source"):
+                STORE.register_source(store, self.source)
+            candidate = STORE.pack_source(store, source)
+            record = STORE.accept_component(store, candidate["component_ref"], candidate["package_sha256"],
+                                            "Review simulation only", runtime_root=self.harness)
+            package = store / "packages/isolated-module/v1"
+            release = STORE._validate_package(package)
+            project = review / "sources/sample"
+            project.mkdir()
+            COMPONENT.install_component(package, project, {
+                "schema_version": 3, "component_ref": candidate["component_ref"], "scene": "S01",
+                "usage": {"role": "auxiliary", "required": True}}, acceptance=record)
+            (project / "index.html").write_text('<script src="vendor/components/isolated-module/v1/move.js"></script>')
+            COMPONENT.verify_installation(project)
+            (store / "acceptances/escape").symlink_to(self.store, target_is_directory=True)
+            with self.assertRaisesRegex(COMPONENT.ComponentError, "Linked"):
+                STORE._target(store, "acceptances/escape/record.json")
+        with self.assertRaisesRegex(COMPONENT.ComponentError, "Review asset acceptance"):
+            COMPONENT.validate_component_acceptance(record, release, runtime_root=self.harness)
+        self.assertFalse((self.store / "record.json").exists())
+
+    def test_session_roots_and_sources_are_defaults_only(self):
+        pinned = self.root / "pinned.json"
+        default = self.root / "defaults.json"
+        initial = {"asset_root": str(self.store), "asset_source_roots": [str(self.source)]}
+        pinned.write_text(json.dumps(initial))
+        default.write_text(json.dumps(initial))
+        with patch.dict(os.environ, {"HYPERFRAMES_AI_ASSET_CONFIG": str(pinned),
+                                     "HYPERFRAMES_AI_DEFAULT_CONFIG": str(default)}):
+            STORE.configure_asset_store(self.harness, self.root / "later-store")
+            self.assertEqual(self.store, STORE.asset_store_root(self.harness))
+            other = self.root / "other-source"
+            other.mkdir()
+            STORE.register_source(self.store, other)
+            self.assertEqual([str(self.source)], STORE._configured_sources(self.harness, self.store))
+            self.assertEqual(initial, json.loads(pinned.read_text()))
+
+    def test_asset_writer_lock_releases_without_stale_owner(self):
+        path = self.store / ".asset-write.lock"
+        with COMPONENT.package_write_lock(path):
+            with self.assertRaisesRegex(COMPONENT.ComponentError, "Another asset writer"):
+                with COMPONENT.package_write_lock(path):
+                    self.fail("Concurrent writer acquired the lock")
+        with COMPONENT.package_write_lock(path):
+            self.assertTrue(path.is_file())
+
     def metadata(self, **changes):
         path = self.source / "COMPONENT.md"
         lines = path.read_text(encoding="utf-8").splitlines()

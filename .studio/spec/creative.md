@@ -42,7 +42,7 @@
 
 ## Animation Plan
 
-- `ANIMATION_PLAN.md` 是唯一视觉语义真源；Script / Research 就绪后逐 Scene 筛选信息并匹配已接纳资产，只有真实缺口才做 Work-local HTML/CSS 样段，数量可为零。主要动效先写意图，完整可执行预演仅用于明确选择的高级路径。正式 Draft 前一次确认 Plan 及适用样段 / 资产引用，不新增审批。
+- `ANIMATION_PLAN.md` 是唯一视觉语义真源，保留现有 Scene/Anchor ID 和 M2–M3 成果。整片 Plan -> 一个真实 Scene 动态参考 -> 一次方向批准 -> 完整 planned-placeholder Draft -> 素材齐备最终 Draft。Plan 和参考合并一次批准，不逐 Scene 询问，不增加占位 Draft 接受门或 Shotbook。
 - 配色、字体等全片视觉身份可以共享；局部布局、信息结构和动作只在 Plan 明确列出的适配 Scene 中复用，样段不升级为全片模板。待库级接纳不是设计缺口，已有适配组件不重做审批样段。
 - Scene 引用 Script Anchor、Research 采用条目及必要资料或素材位置，不复制口播、研究全文或逐屏标签表。
 - Scene 给出视觉目标、完整可读的 Hero State、内容来源、文字 / 素材 / 动作各自承担的职责、阅读安排、素材用途与裁切意图。复杂场景才拆 Beat，不强制固定状态数。
@@ -50,8 +50,14 @@
 - Scene 数量、顺序、目标、Hero State、Template、Profile、文案结构或核心内容实质变化时更新 Plan Revision，只重新确认受影响 Scene 与必要衔接；等义原位适配不触发全片刷新。历史 Accepted Draft / Final 不覆盖，新 Final 仍须有适用的 Accepted Draft。
 - 精确时间、easing、换行、安全区、性能和不改变 Hero State 的布局修复不增加 Plan Revision。
 
+完整占位 Draft 必须含全片 Scene、实际动作和阅读安排，允许 Plan 登记的稳定素材占位、临时音轨和已约定 proxy，不可掩盖空场或错误；方向批准与占位 Draft 不授予 Finalize。素材齐备最终 Draft 沿用既有完整接受，原快照不改。
+
+音频 cue 从既有 timestamps/section_map 确定解析，重复词明确 Anchor、字符范围或 occurrence。Plan 记语义事件和偏移意图，不维护第二份秒表；源剪辑映射与单 Scene crop 不改原对齐。BGM/Blender 可选，无依赖时不阻塞。
+
 ## 信息型动效
 
+- Windows Work-local Scene 优先复用语义视觉对象及内部联动，既有 helper 保留，只在独立变化或真实复用时抽取。图标、图片、截图可担当主体、证据或纹理；旧完整 Scene 可复用，不强制拆解、双画幅或五阶段，共享相机、遮挡与光照保持内聚。A/B-roll 是逐 Scene 叙事职责，不等于引擎、文件或轨道，人物布局不强加全片。
+- Scene 可按实际画幅重新分组或计算布局，须验证真实文字、素材和阅读窗口，不能仅拉伸后宣称适配。视觉效果代码在 Windows Work-local 或已登记 AssetSource 开发，工具 / 宿主缺口才交 WSL。
 - 信息结论先完整，注意力再编排，动画服务解释。必要术语、结论、条件、步骤与例子必须由文字、素材、操作或动效正确传达，不要求逐字逐卡重复；正文可以丰富，不以空泛短标注替代实质信息。
 - 文字按含义分组，已讲内容可保留为稳定上下文；通过焦点迁移、局部展开、证据放大或对象转化解释关系。对比表、列表、截图、标题和稳定阅读不是失败条件。
 - 每组需要阅读的文字有可辨识的窗口；正文不持续漂移、缩放、模糊或被镜头遮挡。信息太多先改分组、时序、版面或等义措辞，仍无法保留核心结论与时间预算时提出该段真实取舍，不无限缩字。

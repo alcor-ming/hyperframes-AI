@@ -660,6 +660,11 @@ def command_root_show(root: Path, args: argparse.Namespace) -> None:
 
 
 def command_root_set(root: Path, args: argparse.Namespace) -> None:
+    default_config = os.environ.get("HYPERFRAMES_AI_DEFAULT_CONFIG")
+    if os.environ.get("HYPERFRAMES_AI_REVIEW") == "1":
+        raise HarnessError("Review cannot change production defaults")
+    if os.environ.get("HYPERFRAMES_AI_WORK_ROOT") and not default_config:
+        raise HarnessError("An explicit environment WorkRoot cannot change persistent configuration")
     target = Path(args.path).expanduser()
     if not target.is_absolute() or target.is_symlink():
         raise HarnessError("WorkStore root must be an existing absolute directory, not a symlink")
@@ -672,16 +677,17 @@ def command_root_set(root: Path, args: argparse.Namespace) -> None:
         (target / ".runtime").mkdir(exist_ok=True)
     except OSError as exc:
         raise HarnessError(f"WorkStore runtime directory is unavailable: {exc}") from exc
-    if os.environ.get("HYPERFRAMES_AI_WORK_ROOT"):
-        raise HarnessError("Session WorkRoot is pinned; start a new session to change it")
-    if os.environ.get("HYPERFRAMES_AI_CONFIG"):
-        config_path = Path(os.environ["HYPERFRAMES_AI_CONFIG"])
+    if default_config or os.environ.get("HYPERFRAMES_AI_CONFIG"):
+        config_path = Path(default_config or os.environ["HYPERFRAMES_AI_CONFIG"])
         config = read_json(config_path) if config_path.is_file() else {}
         config["work_root"] = str(target)
         write_json(config_path, config)
     else:
         atomic_write(work_root_config_path(root), str(target) + "\n")
-    command_root_show(root, args)
+    if default_config:
+        print(json.dumps({"work_root": str(target), "scope": "next-command"}))
+    else:
+        command_root_show(root, args)
 
 
 def command_name(root: Path, args: argparse.Namespace) -> None:
@@ -771,31 +777,39 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
         result = asset_store.discover_components(root, args.query)
     else:
         store = asset_store.asset_store_root(root)
-        if action == "source-add":
-            result = asset_store.register_source(store, Path(args.path))
-        elif action == "import":
-            result = asset_store.import_component(store, Path(args.path))
-        else:
-            result = asset_store.accept_component(store, args.component_ref, args.sha256, args.note, runtime_root=root)
+        from component_harness import package_write_lock
+        # ponytail: one short store-write lock; split by asset only if contention matters.
+        with package_write_lock(asset_store._target(store, ".asset-write.lock")):
+            if action == "source-add":
+                result = asset_store.register_source(store, Path(args.path))
+            elif action == "import":
+                result = asset_store.import_component(store, Path(args.path))
+            elif action == "pack":
+                result = asset_store.pack_source(store, Path(args.path))
+            else:
+                result = asset_store.accept_component(store, args.component_ref, args.sha256, args.note, runtime_root=root)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def command_component_install(root: Path, args: argparse.Namespace) -> None:
-    work, _ = selected_work(root, args)
-    require_workflow(work, "hyperframes_video")
-    variant, state = selected_variant(root, work, args)
-    plan_path = variant / "ANIMATION_PLAN.md"
-    plan = read_frontmatter(plan_path)
-    if args.purpose == "plan":
-        assert_preview_ready(variant, state, purpose="plan", kind="reference")
-    elif plan.get("status") != "approved":
-        raise HarnessError("ANIMATION_PLAN.md must be approved before Component installation")
+    if args.project:
+        project = asset_store.authoring_project(root, Path(args.project))
+    else:
+        work, _ = selected_work(root, args)
+        require_workflow(work, "hyperframes_video")
+        variant, state = selected_variant(root, work, args)
+        plan_path = variant / "ANIMATION_PLAN.md"
+        plan = read_frontmatter(plan_path)
+        if args.purpose == "plan":
+            assert_preview_ready(variant, state, purpose="plan", kind="reference")
+        elif plan.get("status") != "approved":
+            raise HarnessError("ANIMATION_PLAN.md must be approved before Component installation")
+        if not animation_plan_contains_component_ref(plan_path, args.component_ref):
+            raise HarnessError(f"ANIMATION_PLAN.md does not approve Component {args.component_ref}")
+        project = variant / "project"
     component_id, version = parse_component_ref(args.component_ref)
     source, acceptance = asset_store.resolve_component(root, args.source or args.component_ref)
     validate_component_release(source, expected_ref=args.component_ref, allow_unapproved=acceptance is not None)
-    if not animation_plan_contains_component_ref(plan_path, args.component_ref):
-        raise HarnessError(f"ANIMATION_PLAN.md does not approve Component {args.component_ref}")
-    project = variant / "project"
     if not args.binding_file:
         raise HarnessError("Component installation requires --binding-file/--binding")
     binding_path = Path(args.binding_file).expanduser()
@@ -804,19 +818,22 @@ def command_component_install(root: Path, args: argparse.Namespace) -> None:
     binding = binding_path.resolve()
     if not binding.is_file():
         raise HarnessError(f"Binding file is missing: {binding}")
-    result = install_component(
-        source,
-        project,
-        binding,
-        binding_path=args.destination_binding,
-        expected_ref=args.component_ref,
-        acceptance=acceptance,
-    )
-    result.update({"component_ref": f"{component_id}@v{version}", "work": work.name, "variant": variant.name})
+    from component_harness import package_write_lock
+    with package_write_lock(work_requests.safe(project.parent, ".runtime/component-install.lock")):
+        result = install_component(
+            source, project, binding, binding_path=args.destination_binding,
+            expected_ref=args.component_ref, acceptance=acceptance)
+    result.update({"component_ref": f"{component_id}@v{version}", "project": str(project)})
+    if not args.project:
+        result.update({"work": work.name, "variant": variant.name})
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def command_component_verify(root: Path, args: argparse.Namespace) -> None:
+    if args.project:
+        project = asset_store.authoring_project(root, Path(args.project))
+        print(json.dumps(verify_installation(project, component_ref=args.component_ref), ensure_ascii=False, indent=2))
+        return
     work, _ = selected_work(root, args)
     require_workflow(work, "hyperframes_video")
     variant, _ = selected_variant(root, work, args)
@@ -1081,6 +1098,20 @@ def snapshot_digest(project: Path, kind: str = "executable") -> str:
     return digest.hexdigest()
 
 
+def snapshot_tree_manifest(project: Path) -> dict[str, str]:
+    """Hash every frozen file when comparing legacy receipt mirrors."""
+
+    if not project.is_dir() or project.is_symlink():
+        raise HarnessError(f"Snapshot directory is unavailable: {project}")
+    manifest: dict[str, str] = {}
+    for path in sorted(project.rglob("*")):
+        if path.is_symlink():
+            raise HarnessError(f"Snapshot cannot contain symlinks: {path}")
+        if path.is_file():
+            manifest[path.relative_to(project).as_posix()] = file_sha256(path)
+    return manifest
+
+
 def copy_snapshot(project: Path, destination: Path, kind: str = "executable") -> None:
     destination.mkdir(parents=True)
     if kind == "reference":
@@ -1118,12 +1149,17 @@ def assert_preview_ready(variant: Path, state: dict[str, Any], *, purpose: str =
             raise HarnessError("ANIMATION_PLAN.md targets a different Research revision")
         if research.get("script_revision") != state.get("script_revision"):
             raise HarnessError("RESEARCH.md targets a different Script revision")
-    if purpose == "plan" and kind == "executable" and state.get("template") == "talking_head" and not (variant / "section_map.json").is_file():
-        raise HarnessError("Talking-head Visual Plan requires section_map.json and actual media")
 
 
 def preview_metadata(path: Path) -> dict[str, Any]:
     return read_frontmatter(path / "preview.md")
+
+
+def assert_full_draft(metadata: dict[str, Any]) -> None:
+    if (metadata.get("purpose", "draft") != "draft"
+            or metadata.get("scope", "full") != "full"
+            or metadata.get("media_readiness", "complete") != "complete"):
+        raise HarnessError("Only a full, media-complete Draft can be accepted or finalized")
 
 
 PREVIEW_DOCUMENTS = ("SCRIPT.md", "RESEARCH.md", "ANIMATION_PLAN.md")
@@ -1190,11 +1226,14 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     kind = args.kind
     layout = kind == "layout"
     reference = kind == "reference"
+    scene = args.scope == "scene"
+    if scene and (kind != "executable" or purpose != "plan" or len(args.scene) != 1):
+        raise HarnessError("Scene reference requires --kind executable --purpose plan and exactly one --scene")
     if reference and purpose != "plan":
         raise HarnessError("Reference-only registration requires --purpose plan")
     if layout and (purpose != "plan" or not args.sample_dir or not args.scene):
         raise HarnessError("Layout requires --purpose plan, --sample-dir and --scene")
-    if not layout and (args.sample_dir or args.scene):
+    if not layout and not scene and (args.sample_dir or args.scene):
         raise HarnessError("--sample-dir and --scene require --kind layout")
     assert_preview_ready(variant, state, purpose=purpose, kind=kind)
     draft = Path(args.draft_file).expanduser().resolve() if args.draft_file else None
@@ -1202,7 +1241,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError(f"Draft file is missing or empty: {draft}")
     if purpose == "plan" and draft is not None:
         raise HarnessError("Visual Plan uses executable source, not a replacement MP4")
-    project = preview_source(variant, {"sample_dir": args.sample_dir}) if layout else variant / "project"
+    project = preview_source(variant, {"sample_dir": args.sample_dir}) if args.sample_dir else variant / "project"
     if kind == "executable":
         assert_snapshot_source(project)
     if kind == "executable" and (project / "COMPONENT_LOCK.json").is_file():
@@ -1211,7 +1250,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         validate_work_surface_inventory(project)
     plan_text = (variant / "ANIMATION_PLAN.md").read_text(encoding="utf-8")
     visual = purpose == "plan" or bool(state.get("accepted_visual_plan"))
-    scenes = reference_projection(plan_text) if reference else layout_projection(project, plan_text, args.scene) if layout else scene_projection(project, plan_text) if visual else None
+    scenes = reference_projection(plan_text) if reference else layout_projection(project, plan_text, args.scene) if layout else scene_projection(project, plan_text, args.scene if scene else None) if visual else None
     if not reference and (purpose == "plan" or state.get("accepted_visual_plan")):
         validate_dependencies(project, layout=layout)
     draft_digest = file_sha256(draft) if draft else None
@@ -1235,7 +1274,9 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             and metadata.get("plan_sha256") == plan_digest
             and metadata.get("input_sha256") == input_hashes
             and metadata.get("kind", "executable") == kind
-            and (not layout or (metadata.get("sample_scenes") == args.scene and metadata.get("sample_dir") == project.relative_to(variant.resolve()).as_posix()))
+            and metadata.get("scope", "full") == args.scope
+            and metadata.get("media_readiness", "complete") == args.media_readiness
+            and (not (layout or scene) or (metadata.get("sample_scenes") == args.scene and metadata.get("sample_dir") == project.relative_to(variant.resolve()).as_posix()))
         ):
             assert_preview_inputs(path, metadata)
             if snapshot_digest(path / "source-snapshot", kind) != metadata.get("snapshot_sha256"):
@@ -1262,6 +1303,9 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             "id": draft_id,
             "purpose": purpose,
             "kind": kind,
+            "scope": args.scope,
+            "media_readiness": args.media_readiness,
+            "approval_purpose": "direction" if purpose == "plan" else "full-version",
             "registered_at": now(),
             "draft_sha256": draft_digest,
             "snapshot_sha256": source_digest,
@@ -1275,6 +1319,10 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             metadata.update(sample_dir=project.relative_to(variant.resolve()).as_posix(), sample_scenes=args.scene,
                             demonstrated="Sample layout, colors, typography and text hierarchy",
                             unverified="Other scenes, motion, reading speed, media and rendering")
+        if scene:
+            metadata.update(sample_dir=project.relative_to(variant.resolve()).as_posix(), sample_scenes=args.scene,
+                            demonstrated="Direction in the selected executable Scene only",
+                            unverified="Other Scenes, full assembly and final media")
         if reference:
             metadata.update(sample_scenes=[], demonstrated="Existing accepted asset previews referenced per Scene in Plan",
                             unverified="Current Work assembly, media, timing and rendering")
@@ -1323,6 +1371,10 @@ def command_preview_accept(root: Path, args: argparse.Namespace) -> None:
             raise HarnessError("Incomplete Visual Plan")
         if kind == "executable":
             assert_snapshot_source(preview / "source-snapshot")
+            if metadata.get("scope") == "scene":
+                scenes = scene_projection(preview / "source-snapshot", (preview / "ANIMATION_PLAN.md").read_text(encoding="utf-8"), metadata.get("sample_scenes"))
+                if read_json(preview / "visual-plan.json") != {"id": draft_id, "scenes": scenes}:
+                    raise HarnessError("Scene reference projection changed")
         if snapshot_digest(preview / "source-snapshot", kind) != metadata.get("snapshot_sha256"):
             raise HarnessError("Visual Plan snapshot changed")
         if kind == "layout":
@@ -1370,6 +1422,7 @@ def command_preview_accept(root: Path, args: argparse.Namespace) -> None:
     if not preview.is_dir() or not (preview / "draft.mp4").is_file() or not (preview / "source-snapshot").is_dir():
         raise HarnessError(f"Incomplete preview: {draft_id}")
     metadata = preview_metadata(preview)
+    assert_full_draft(metadata)
     assert_preview_inputs(preview, metadata, variant)
     if file_sha256(preview / "draft.mp4") != metadata.get("draft_sha256"):
         raise HarnessError("Draft media changed")
@@ -1425,7 +1478,7 @@ def checked_preview(variant: Path, preview_id: str) -> tuple[Path, dict[str, Any
         raise HarnessError("Frozen Animation Plan changed")
     if (preview / "visual-plan.json").is_file():
         plan_text = (preview / "ANIMATION_PLAN.md").read_text(encoding="utf-8")
-        scenes = reference_projection(plan_text) if kind == "reference" else layout_projection(preview / "source-snapshot", plan_text, metadata["sample_scenes"]) if kind == "layout" else scene_projection(preview / "source-snapshot", plan_text)
+        scenes = reference_projection(plan_text) if kind == "reference" else layout_projection(preview / "source-snapshot", plan_text, metadata["sample_scenes"]) if kind == "layout" else scene_projection(preview / "source-snapshot", plan_text, metadata.get("sample_scenes") if metadata.get("scope") == "scene" else None)
         if read_json(preview / "visual-plan.json") != {"id": preview.name, "scenes": scenes}:
             raise HarnessError("Visual Plan projection changed; it must be generated from the frozen sources")
     return preview, metadata
@@ -1438,14 +1491,14 @@ def studio_record(variant: Path, target: str) -> Path:
 def bound_studio(variant: Path, target: str) -> dict[str, Any]:
     path = studio_record(variant, target)
     if not path.is_file():
-        raise HarnessError("No bound Studio session; use preview open for this exact target first")
+        raise HarnessError("No Studio process record; use preview open for this exact target first")
     record = read_json(path)
     project = Path(record["project"]).resolve()
     expected = variant / "project" if target == "current" else variant / ".runtime" / record["review_directory"] / target
     if (record.get("target") != target or record.get("work") != variant.parent.parent.name
             or record.get("variant") != variant.name or project != expected.resolve()
             or target != "current" and not project.is_relative_to((variant / ".runtime").resolve())):
-        raise HarnessError("Studio session does not match this Work/Variant/target")
+        raise HarnessError("Studio process record does not match this Work/Variant/target")
     return record
 
 
@@ -1497,6 +1550,11 @@ def command_preview_open(root: Path, args: argparse.Namespace) -> None:
               "kind": kind, "port": session["port"], "url": session["studioUrl"], "pid": session.get("pid"),
               "snapshot_sha256": metadata.get("snapshot_sha256"), "cli_sha256": file_sha256(cli),
               "opened_source_sha256": previous.get("opened_source_sha256", snapshot_digest(project, kind)), "opened_at": now()}
+    if os.environ.get("HYPERFRAMES_AI_RESOLVED_CONFIG"):
+        config = json.loads(os.environ["HYPERFRAMES_AI_RESOLVED_CONFIG"])
+        record["tool_root"] = str(root)
+        record["tool_release"] = os.environ.get("HYPERFRAMES_AI_VERSION")
+        record["content_roots"] = {key: config.get(key) for key in ("work_root", "asset_root", "asset_source_roots", "review")}
     if session.get("browser_profile"):
         record["browser_profile"] = session["browser_profile"]
     if target != "current":
@@ -1512,7 +1570,7 @@ def command_preview_studio(root: Path, args: argparse.Namespace) -> None:
     record = bound_studio(variant, args.preview_id)
     cli = runtime_path(args.hyperframes_cli, "HYPERFRAMES_CLI")
     if file_sha256(cli) != record["cli_sha256"]:
-        raise HarnessError("Studio runtime changed; use the pinned session that opened this target")
+        raise HarnessError("Studio runtime changed; close the old process and reopen this target")
     project = Path(record["project"])
     if args.preview_command == "stop":
         result = studio_preview.stop(cli, project, record["port"])
@@ -1607,6 +1665,8 @@ def command_preview_render(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError("Render must start from the accepted Draft (Final) or Visual Plan (Draft)")
     baseline = variant / "previews" / preview_id
     metadata = preview_metadata(baseline)
+    if args.final:
+        assert_full_draft(metadata)
     assert_preview_inputs(baseline, metadata, variant if args.final else None)
     if args.final or review:
         for field in ("script_revision", "plan_revision"):
@@ -1661,6 +1721,11 @@ def command_preview_render(root: Path, args: argparse.Namespace) -> None:
               "output_sha256": file_sha256(output), "fps": args.fps, "quality": "high" if args.final else "draft",
               "software_gl": args.software_gl, "hyperframes_cli_sha256": file_sha256(cli),
               "script_revision": state["script_revision"], "plan_revision": state["plan_revision"], "rendered_at": now()}
+    if os.environ.get("HYPERFRAMES_AI_RESOLVED_CONFIG"):
+        config = json.loads(os.environ["HYPERFRAMES_AI_RESOLVED_CONFIG"])
+        record["tool_root"] = str(root)
+        record["tool_release"] = os.environ.get("HYPERFRAMES_AI_VERSION")
+        record["content_roots"] = {key: config.get(key) for key in ("work_root", "asset_root", "asset_source_roots", "review")}
     if review:
         record["review"] = work_requests.review_identity(configured_work_root(root) or root)
     write_json(render_dir / "render.json", record)
@@ -1865,22 +1930,51 @@ def command_finalize_video(
         raise HarnessError("Accepted preview source snapshot is missing")
     assert_preview_ready(variant, state)
     accepted_metadata = preview_metadata(accepted_path)
+    assert_full_draft(accepted_metadata)
     assert_preview_inputs(accepted_path, accepted_metadata, variant)
-    if snapshot_digest(accepted_path / "source-snapshot") != accepted_metadata.get("snapshot_sha256"):
-        raise HarnessError("Accepted Draft snapshot changed")
+    accepted_source = accepted_path / "source-snapshot"
+    recorded_snapshot_digest = accepted_metadata.get("snapshot_sha256")
+    current_snapshot_digest = snapshot_digest(accepted_source)
 
     render_record = None
+    frozen = None
+    legacy_compatibility = None
     if state.get("accepted_visual_plan"):
         render_record = read_json(variant / ".runtime" / "render.json")
         if (render_record.get("purpose") != "final" or render_record.get("source_preview") != accepted
                 or render_record.get("output_sha256") != candidate_digest
-                or render_record.get("parent_snapshot_sha256") != snapshot_digest(accepted_path / "source-snapshot")
+                or render_record.get("parent_snapshot_sha256") != recorded_snapshot_digest
                 or render_record.get("script_revision") != state.get("script_revision")
                 or render_record.get("plan_revision") != state.get("plan_revision")):
             raise HarnessError("Final needs a matching preview render --final result from the accepted Draft")
         frozen = (variant / str(render_record.get("source_snapshot", ""))).resolve()
-        if not frozen.is_relative_to((variant / ".runtime").resolve()) or snapshot_digest(frozen) != render_record.get("snapshot_sha256"):
+        if not frozen.is_relative_to((variant / ".runtime").resolve()) or not frozen.is_dir():
             raise HarnessError("Final render source snapshot changed or escaped the Work")
+        frozen_snapshot_digest = snapshot_digest(frozen)
+        if current_snapshot_digest == recorded_snapshot_digest:
+            if frozen_snapshot_digest != render_record.get("snapshot_sha256"):
+                raise HarnessError("Final render source snapshot changed or escaped the Work")
+        else:
+            if (render_record.get("snapshot_sha256") != recorded_snapshot_digest
+                    or render_record.get("changed_files") != []):
+                raise HarnessError("Accepted Draft snapshot changed")
+            accepted_tree = snapshot_tree_manifest(accepted_source)
+            frozen_tree = snapshot_tree_manifest(frozen)
+            if accepted_tree != frozen_tree:
+                raise HarnessError("Accepted Draft snapshot changed; legacy final-render snapshot differs")
+            legacy_compatibility = {
+                "schema_version": 1,
+                "accepted_preview": accepted,
+                "recorded_snapshot_sha256": recorded_snapshot_digest,
+                "current_snapshot_sha256": current_snapshot_digest,
+                "mirror_snapshot": str(frozen.relative_to(variant)),
+                "mirror_current_snapshot_sha256": frozen_snapshot_digest,
+                "verified_file_count": len(accepted_tree),
+                "basis": "byte-identical accepted and final-render snapshots with an unchanged render receipt",
+                "verified_at": now(),
+            }
+    elif current_snapshot_digest != recorded_snapshot_digest:
+        raise HarnessError("Accepted Draft snapshot changed")
 
     final_dir.mkdir(parents=True, exist_ok=True)
     (final_dir / "history").mkdir(exist_ok=True)
@@ -1932,6 +2026,10 @@ def command_finalize_video(
             variant / ".runtime" / "qa" / "final.json",
             {"passed": True, "final_sha256": candidate_digest, "recorded_at": now()},
         )
+    if legacy_compatibility:
+        compatibility_path = variant / ".runtime" / "qa" / "legacy-snapshot-compatibility.json"
+        compatibility_path.parent.mkdir(parents=True, exist_ok=True)
+        write_json(compatibility_path, legacy_compatibility)
     state.update(current_final="final.mp4", status="active", wait_for="none", next_action="Finalize complete")
     write_variant(variant, state)
     write_json(variant / ".runtime" / "finalize.json", {"state": "promoted", "final_sha256": candidate_digest})
@@ -2132,7 +2230,7 @@ def build_parser() -> argparse.ArgumentParser:
     component_root = component_commands.add_parser("root", help="Show or configure the independent AssetStore")
     component_root.add_argument("path", nargs="?")
     component_root.set_defaults(handler=command_component_store)
-    for name in ("source-add", "import"):
+    for name in ("source-add", "import", "pack"):
         command = component_commands.add_parser(name)
         command.add_argument("path")
         command.set_defaults(handler=command_component_store)
@@ -2145,6 +2243,7 @@ def build_parser() -> argparse.ArgumentParser:
     component_accept.add_argument("--note", required=True)
     component_accept.set_defaults(handler=command_component_store)
     component_install = component_commands.add_parser("install")
+    component_install.add_argument("--project", help="Standalone sample inside a registered AssetSource; never a Work")
     component_install.add_argument("component_ref")
     component_install.add_argument("--source", help="Component package path or component ref")
     component_install.add_argument(
@@ -2158,6 +2257,7 @@ def build_parser() -> argparse.ArgumentParser:
     component_install.add_argument("--purpose", choices=("plan", "draft"), default="draft")
     component_install.set_defaults(handler=command_component_install)
     component_verify = component_commands.add_parser("verify")
+    component_verify.add_argument("--project", help="Verify a standalone AssetSource sample")
     component_verify.add_argument("component_ref", nargs="?")
     component_verify.set_defaults(handler=command_component_verify)
 
@@ -2188,7 +2288,9 @@ def build_parser() -> argparse.ArgumentParser:
     preview_register.add_argument("draft_file", nargs="?")
     preview_register.add_argument("--purpose", choices=("plan", "draft"), default="draft")
     preview_register.add_argument("--kind", choices=("reference", "layout", "executable"), default="executable")
-    preview_register.add_argument("--sample-dir", help="Variant-local static sample directory containing index.html")
+    preview_register.add_argument("--scope", choices=("full", "scene"), default="full", help="Single executable Scene direction reference or full project")
+    preview_register.add_argument("--media-readiness", choices=("complete", "planned_placeholders"), default="complete", help="Declare planned media placeholders; these versions cannot authorize Final")
+    preview_register.add_argument("--sample-dir", help="Variant-local layout or single Scene project containing index.html")
     preview_register.add_argument("--scene", action="append", default=[])
     preview_register.set_defaults(handler=command_preview_register)
     preview_accept = preview_commands.add_parser("accept")
@@ -2253,11 +2355,11 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
         if release_file.is_file() and read_json(release_file).get("channel") == "candidate" and not review:
             if (args.command not in {"status", "current", "review"}
                     and not (args.command == "root" and args.root_command == "show")):
-                raise HarnessError("Candidate Harness requires an isolated Review session")
+                raise HarnessError("Candidate Harness requires an isolated Review root")
         if review or (store / ".runtime" / "review.json").exists():
             identity = work_requests.review_identity(store)
             if not review:
-                raise HarnessError("Review WorkStore requires a candidate Review session")
+                raise HarnessError("Review WorkStore requires an isolated root configuration")
             if identity.get("work") and (args.command == "new" or args.work_override not in (None, identity["work"])
                                          or args.variant_override not in (None, identity["variant"])
                                          or args.command == "use" and args.work_id != identity["work"]):
@@ -2266,6 +2368,7 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
                     or args.command == "root" and args.root_command == "set"
                     or args.command == "preview" and (args.preview_command == "accept" or getattr(args, "final", False))
                     or args.command == "component" and args.component_command in {"install", "accept"}
+                    and not os.environ.get("HYPERFRAMES_AI_ASSET_REVIEW_ROOT")
                     or args.command == "request" and args.request_command not in {"freeze", "export", "feedback"}):
                 raise HarnessError("Review forbids production acceptance, installation and lifecycle promotion")
         args.handler(target_root, args)
