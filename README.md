@@ -115,6 +115,8 @@ Windows 日常直接打开 `D:\AI\AI+hyperframes`；工具实际位于同根 `ru
 
 `release local` / `release candidate` 仍区分本机构建身份；正式 `release build` 使用 `harness-YYYY.MM.PATCH`，要求干净、tag 与 upstream 一致。完整包固定 Windows Python、Node、HF、GSAP/Three、浏览器及音视频依赖，普通制作不浮动安装。准确安装参数仅以实现后的帮助为准，不将设计目标写成可执行命令。
 
+产品包不携带本机开发用 Trellis：候选源选择排除开发目录与 Skills，显式 include 不可绕过；正式发行发现这些文件时拒绝构建，最终 ZIP 再检查一次。保留项目自身 Work CLI、轻量状态机与创作 Skills，Windows 根规则仍来自独立模板，运行不依赖开发仓。
+
 旧稳定包与历史 session 保留回退资料，不再作为新根的依赖。回滚程序不自动降级 Work schema、改资产绑定或删旧数据；旧工具无法读取时保留新数据与可用版本。实现、WSL/mock、Windows 原生 CLI、Studio、WebGL、带声短片及真实生产验收分别记录。
 
 Windows 直接开发视觉内容和效果；仅宿主、CLI、合同、加载、seek 或依赖装配缺口交给 WSL。`work request freeze` / `export` 冻结最小复现，WSL 在私有副本修工具并交付安装候选，Windows 在 Review 验证；纯布局、图标或动作设计不走工具请求。旧 `deliver` / `review` / `accept` 补丁合同保留兼容，不扩大 WSL 写生产源的权限。完整参数见 [请求交接](.studio/workflow.md#windows-与-wsl-请求交接)。Review 不允许正式 Finalize、归档完成或保存平台草稿；模拟资产接纳仅留 Review，接纳交付不等于接受 Plan/Draft，不覆盖未受影响场景。

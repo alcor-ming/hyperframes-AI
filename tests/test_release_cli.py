@@ -20,6 +20,56 @@ LOADER.exec_module(RELEASE)
 
 
 class ReleaseCliTest(unittest.TestCase):
+    def test_development_harness_cannot_enter_any_product_archive(self) -> None:
+        forbidden = (".trellis/project.json", ".trellis/tasks/example/prd.md",
+                     ".trellis/plans/example.md", "AGENTS.override.md", "BOARD.md",
+                     ".codex/agents/local.toml", ".claude/settings.json",
+                     ".agents/skills/trellis-start/SKILL.md", ".agents/skills/gitnexus/SKILL.md")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo = root / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            for name in forbidden:
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("development only")
+                self.assertFalse(RELEASE.public_source(name))
+                with self.assertRaises(RELEASE.ReleaseError):
+                    RELEASE.freeze_sources(root / "explicit", [name], repo)
+            for name in (".studio/component_harness.py", ".agents/skills/hyperframes-codex-workflow/SKILL.md",
+                         "docs/PRD/product.md"):
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("product")
+                self.assertTrue(RELEASE.public_source(name))
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            staged = root / "candidate"
+            sources = RELEASE.freeze_sources(staged, [], repo)
+            self.assertFalse(set(sources) & set(forbidden))
+            RELEASE.write_zip(staged, root / "candidate.zip", "candidate-test", 1)
+            for name in forbidden:
+                with self.subTest(name=name):
+                    leaked = staged / name
+                    leaked.parent.mkdir(parents=True, exist_ok=True)
+                    leaked.write_text("leaked")
+                    with self.assertRaisesRegex(RELEASE.ReleaseError, "Development Harness"):
+                        RELEASE.write_zip(staged, root / "leaked.zip", "local-test", 1)
+                    leaked.unlink()
+                    # Empty development directories are also forbidden.
+                    while leaked.parent != staged and not any(leaked.parent.iterdir()):
+                        leaked = leaked.parent
+                        leaked.rmdir()
+            with mock.patch.object(RELEASE, "run", side_effect=["", "head", "head", "head", ""]), \
+                 mock.patch.object(RELEASE.tarfile, "open") as bundle, \
+                 mock.patch.object(RELEASE, "stage_skills") as skills:
+                def contaminate(destination, **kwargs):
+                    (destination / "AGENTS.override.md").write_text("development only")
+                bundle.return_value.__enter__.return_value.extractall.side_effect = contaminate
+                with self.assertRaisesRegex(RELEASE.ReleaseError, "Development Harness"):
+                    RELEASE.build("2026.09.1", root / "stable", root / "cache")
+                skills.assert_not_called()
+
     def test_windows_zip_is_deterministic_and_checksum_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

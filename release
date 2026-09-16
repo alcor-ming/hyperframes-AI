@@ -167,6 +167,7 @@ def stage_runtime(staging: Path, cache: Path) -> dict[str, str]:
 
 
 def write_zip(source: Path, archive: Path, prefix: str, timestamp: int) -> None:
+    assert_no_development_harness(source)
     dt = datetime.fromtimestamp(timestamp, timezone.utc)
     zip_time = (max(dt.year, 1980), dt.month, dt.day, dt.hour, dt.minute, dt.second)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
@@ -201,8 +202,25 @@ def verified_archive(archive: Path) -> str:
     return roots.pop()
 
 
+def development_harness(name: str) -> bool:
+    parts = safe_member(name).as_posix().casefold().split("/")
+    return parts[0] in {".trellis", ".codex", ".claude", "agents.override.md", "board.md"} or (
+        len(parts) >= 3 and parts[:2] == [".agents", "skills"]
+        and (parts[2].startswith("trellis-") or parts[2] == "gitnexus")
+    )
+
+
+def assert_no_development_harness(staging: Path) -> None:
+    for path in staging.rglob("*"):
+        name = path.relative_to(staging).as_posix()
+        if development_harness(name):
+            raise ReleaseError(f"Development Harness must not enter a product package: {name}")
+
+
 def public_source(name: str) -> bool:
     path = safe_member(name)
+    if development_harness(name):
+        return False
     forbidden = {".git", ".runtime", "__pycache__", "node_modules", "works", "requests", "review",
                  "credentials", "secrets", ".env", ".codex", "dist"}
     if any(part in forbidden or part.startswith(".env.") for part in path.parts):
@@ -320,6 +338,8 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
         run("git", "archive", "--format=tar", "-o", str(git_tar), tag)
         with tarfile.open(git_tar) as bundle:
             bundle.extractall(staging, filter="data")
+
+        assert_no_development_harness(staging)
 
         dependency_hashes = stage_skills(staging)
 
