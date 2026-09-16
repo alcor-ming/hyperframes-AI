@@ -1237,7 +1237,8 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError("--sample-dir and --scene require --kind layout")
     assert_preview_ready(variant, state, purpose=purpose, kind=kind)
     draft = Path(args.draft_file).expanduser().resolve() if args.draft_file else None
-    if purpose == "draft" and (draft is None or not draft.is_file() or draft.stat().st_size == 0):
+    studio_draft = purpose == "draft" and draft is None
+    if draft is not None and (not draft.is_file() or draft.stat().st_size == 0):
         raise HarnessError(f"Draft file is missing or empty: {draft}")
     if purpose == "plan" and draft is not None:
         raise HarnessError("Visual Plan uses executable source, not a replacement MP4")
@@ -1249,14 +1250,16 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     elif kind == "executable" and (project / "scene-slots.json").is_file():
         validate_work_surface_inventory(project)
     plan_text = (variant / "ANIMATION_PLAN.md").read_text(encoding="utf-8")
-    visual = purpose == "plan" or bool(state.get("accepted_visual_plan"))
+    visual = purpose == "plan" or studio_draft or bool(state.get("accepted_visual_plan"))
     scenes = reference_projection(plan_text) if reference else layout_projection(project, plan_text, args.scene) if layout else scene_projection(project, plan_text, args.scene if scene else None) if visual else None
-    if not reference and (purpose == "plan" or state.get("accepted_visual_plan")):
+    if not reference and visual:
         validate_dependencies(project, layout=layout)
     draft_digest = file_sha256(draft) if draft else None
     source_digest = hashlib.sha256().hexdigest() if reference else snapshot_digest(project, kind)
     plan_digest = file_sha256(variant / "ANIMATION_PLAN.md") if visual else None
     input_hashes = preview_input_hashes(variant) if all((variant / name).is_file() for name in PREVIEW_DOCUMENTS) else None
+    if studio_draft:
+        input_hashes = preview_input_hashes(variant)
     if purpose == "draft" and state.get("accepted_visual_plan"):
         assert_plan_baseline(variant, state, variant / "previews" / validate_id(state["accepted_visual_plan"], "Visual Plan"), project)
     if draft_digest:
@@ -1297,7 +1300,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             validate_snapshot_closure(project, staging / "source-snapshot")
         if snapshot_digest(staging / "source-snapshot", kind) != source_digest:
             raise HarnessError("Project changed during registration")
-        if not reference and (purpose == "plan" or state.get("accepted_visual_plan")):
+        if not reference and visual:
             validate_dependencies(staging / "source-snapshot", layout=layout)
         metadata = {
             "id": draft_id,
@@ -1315,6 +1318,8 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         }
         if input_hashes is not None:
             metadata["input_sha256"] = input_hashes
+        if studio_draft:
+            metadata["review_mode"] = "studio"
         if layout:
             metadata.update(sample_dir=project.relative_to(variant.resolve()).as_posix(), sample_scenes=args.scene,
                             demonstrated="Sample layout, colors, typography and text hierarchy",
@@ -1419,16 +1424,23 @@ def command_preview_accept(root: Path, args: argparse.Namespace) -> None:
         write_variant(variant, state)
         print(draft_id)
         return
-    if not preview.is_dir() or not (preview / "draft.mp4").is_file() or not (preview / "source-snapshot").is_dir():
+    if not preview.is_dir() or not (preview / "source-snapshot").is_dir():
         raise HarnessError(f"Incomplete preview: {draft_id}")
     metadata = preview_metadata(preview)
     assert_full_draft(metadata)
     assert_preview_inputs(preview, metadata, variant)
-    if file_sha256(preview / "draft.mp4") != metadata.get("draft_sha256"):
-        raise HarnessError("Draft media changed")
+    if metadata.get("review_mode") == "studio":
+        record = bound_studio(variant, draft_id)
+        if (record.get("snapshot_sha256") != metadata.get("snapshot_sha256")
+                or snapshot_digest(Path(record["project"])) != metadata.get("snapshot_sha256")):
+            raise HarnessError("Studio review source changed; register and review the current Draft")
+        if snapshot_digest(variant / "project") != metadata.get("snapshot_sha256"):
+            raise HarnessError("Project changed; register the current Draft before accepting")
+    elif not (preview / "draft.mp4").is_file() or file_sha256(preview / "draft.mp4") != metadata.get("draft_sha256"):
+        raise HarnessError("Draft media changed or missing")
     if snapshot_digest(preview / "source-snapshot") != metadata.get("snapshot_sha256"):
         raise HarnessError("Draft snapshot changed")
-    if metadata.get("source_plan"):
+    if metadata.get("source_plan") or metadata.get("review_mode") == "studio":
         assert_preview_ready(variant, state)
     if metadata.get("script_revision") != state.get("script_revision"):
         raise HarnessError("Preview targets a different Script revision")
@@ -1703,6 +1715,8 @@ def command_preview_render(root: Path, args: argparse.Namespace) -> None:
     validate_snapshot_closure(source, frozen)
     validate_dependencies(frozen)
     source_hash = snapshot_digest(frozen)
+    if args.final and source_hash != metadata.get("snapshot_sha256"):
+        raise HarnessError("Final source differs from the accepted Draft; register and accept a new Draft")
     command = [os.environ.get("HYPERFRAMES_NODE", "node"), str(cli), "render", "--output", str(output), "--fps", str(args.fps), "--quality", "high" if args.final else "draft"]
     if args.software_gl:
         command.append("--no-browser-gpu")
@@ -1939,7 +1953,7 @@ def command_finalize_video(
     render_record = None
     frozen = None
     legacy_compatibility = None
-    if state.get("accepted_visual_plan"):
+    if state.get("accepted_visual_plan") or accepted_metadata.get("review_mode") == "studio":
         render_record = read_json(variant / ".runtime" / "render.json")
         if (render_record.get("purpose") != "final" or render_record.get("source_preview") != accepted
                 or render_record.get("output_sha256") != candidate_digest
@@ -1951,6 +1965,10 @@ def command_finalize_video(
         if not frozen.is_relative_to((variant / ".runtime").resolve()) or not frozen.is_dir():
             raise HarnessError("Final render source snapshot changed or escaped the Work")
         frozen_snapshot_digest = snapshot_digest(frozen)
+        if accepted_metadata.get("review_mode") == "studio" and (
+                render_record.get("snapshot_sha256") != recorded_snapshot_digest
+                or current_snapshot_digest != recorded_snapshot_digest):
+            raise HarnessError("Final source differs from the accepted Studio Draft")
         if current_snapshot_digest == recorded_snapshot_digest:
             if frozen_snapshot_digest != render_record.get("snapshot_sha256"):
                 raise HarnessError("Final render source snapshot changed or escaped the Work")
@@ -2285,7 +2303,7 @@ def build_parser() -> argparse.ArgumentParser:
     preview = commands.add_parser("preview")
     preview_commands = preview.add_subparsers(dest="preview_command", required=True)
     preview_register = preview_commands.add_parser("register")
-    preview_register.add_argument("draft_file", nargs="?")
+    preview_register.add_argument("draft_file", nargs="?", help="Optional legacy MP4; omit to freeze an executable Draft for Studio review")
     preview_register.add_argument("--purpose", choices=("plan", "draft"), default="draft")
     preview_register.add_argument("--kind", choices=("reference", "layout", "executable"), default="executable")
     preview_register.add_argument("--scope", choices=("full", "scene"), default="full", help="Single executable Scene direction reference or full project")

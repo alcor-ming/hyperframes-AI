@@ -23,11 +23,11 @@ For every scene, provide:
 | Supporting evidence | Optional data/example/relationship |
 | Hero frame | Static final composition and protected zones |
 | Profile motion verb | One or more verbs defined by the selected Profile |
-| Build / Breathe / Resolve | Timing structure |
+| Reading and emphasis | Actual screen text, stable reading, keyword emphasis and required visual changes |
 | Exit or carry-over | How continuity is preserved |
 | Risk | Overflow, occlusion, performance or profile drift |
 
-Stop after the plan. Do not create composition code or render final assets until the user explicitly confirms the Animation Plan.
+Create one real dynamic Scene reference after the whole-film Plan. Obtain one direction approval for both, including generated assets with specified purpose, quantity, style and Asset Brief. Then expand the full placeholder Draft without another mandatory acceptance gate; do not add a separate Profile approval.
 
 ## Gate 3：Implementation
 
@@ -38,9 +38,9 @@ Stop after the plan. Do not create composition code or render final assets until
 - Scene transitions preserve spatial or editorial continuity defined by the Profile.
 - Current captions and face protection zones remain clear.
 
-## Gate 4：Rendered-frame QA
+## Gate 4：Studio Draft QA
 
-Inspect at minimum:
+Inspect affected Scenes and necessary handoffs in actual playback, with representative frames as supporting evidence:
 
 - first stable frame;
 - each scene hero frame;
@@ -56,10 +56,10 @@ Answer:
 3. Is accent coverage within the Profile limit?
 4. Are all text roles legible at output size?
 5. Are face, subject and existing captions unobstructed?
-6. Does motion clarify state, relation or sequence?
+6. Does the selected animation-led or text-led treatment communicate clearly with sound?
 7. Is there enough static reading time?
-8. Are any effects present only to make the frame look busy?
-9. Does the scene still work if ambient motion is removed?
+8. Are decorative icons/images restrained and compatible with reading? Decoration itself is allowed.
+9. Is the whole frame never completely static for more than 2 seconds while text can remain stable? Judge perceptible changes during playback, not tween existence; no reliable automatic tolerance is claimed.
 10. Does the final frame resolve instead of fading into visual residue?
 
 ## Gate 5：Technical verification
@@ -70,4 +70,8 @@ Answer:
 - audio is neither duplicated nor shifted;
 - no text overflow, offscreen content or unintentional clipping;
 - HyperFrames lint/validate/inspect pass where available;
-- perform no more than one primary correction pass and one confirmation pass.
+- register the media-complete executable Studio Draft without a file, open its exact draft ID and accept the isolated reviewed version; no complete Draft MP4 prerequisite;
+- verify Studio sound, continuous playback, seek and backward dragging; local limitations may use an audible short export, not silently require a full Draft render;
+- render Final with `preview render <draft-id> --output <final.mp4> --final`, then check streams, specs, duration, full decode, representative frames and necessary audio;
+- fix actual failures and re-render as needed, with no arbitrary correction-pass limit;
+- unchanged accepted content needs source/evidence applicability only; local edits need affected scope, shared changes expand by dependencies; Finalize/archive checks sources, render records, file consistency and lifecycle without another aesthetic review/render.

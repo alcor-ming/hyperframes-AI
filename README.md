@@ -41,7 +41,7 @@ Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话�
 
 后台 Work 在创建时已经获得稳定序号；转录完成后只补充嘉宾名 + 核心主题，再完成 3 个文章方案并停在 `article_selection`。HyperFrames 视频在 Script 稳定后只补充核心主题。Work ID 与目录名始终不变，重复命名保留原序号；`work list` 按位置、Workflow 和序号排列。用户只需确认 1 个方案；单个 Work 失败不阻塞同批其他 Work。
 
-视频 `SCRIPT.md` 的口播正文可附成对 `scene-index` 注释包围的非口播 Scene 索引；需要配音、统计或对齐文本时使用 `./work script text`，索引不会混入。`RESEARCH.md` 只按当前 Scene / Anchor 的内容缺口补充资料依据和采用信息，不规定视觉实现。Plan 引用 Script、Research 或素材，不再复制一份信息稿。
+视频 `SCRIPT.md` 的口播正文可附成对 `scene-index` 注释包围的非口播 Scene 索引；配音、统计或对齐使用 `./work script text`。Research 按呈现需求准备候选材料，不规定实现；Plan 写清实际采用的屏幕文字、来源与声画取舍，不复制 Script/Research 全文。动画型与文字型独立于 Template/Profile，A/B 默认节奏、原声时长和2秒全画面静止人工检查见工作流。
 
 视频沿用现有 Script、Research、音频与 M2–M3 画面，先完成整片 Plan，再选一个真实 Scene 动态参考。一次方向批准后直接生成完整 planned-placeholder Draft，素材齐备后生成最终 Draft，沿用原完整接受和 Final 流程。不逐 Scene 审批，不新建 Shotbook，不把样段或占位 Draft 当成具备 Finalize 权限的 full Draft。
 
@@ -63,12 +63,15 @@ Studio 修改同步原文案真源或暂停对应再生成，旧 MP4 / QA 不继
 Draft 与 Final 生命周期：
 
 ```bash
-./work preview register /path/to/draft.mp4
+./work preview register
+./work preview open draft-v001
 ./work preview accept draft-v001
+./work preview render draft-v001 --output /path/to/final.mp4 --final
+# 完成编码输出 QA 后
 ./work finalize /path/to/final.mp4 --qa-passed
 ```
 
-`--qa-passed` 只能在 Agent 已完成 `.studio/spec/hyperframes.md` 规定的 Final QA 后使用。所有 Required Variants 完成 Final 后，Work 自动移入外部 WorkStore 的 `works/archive/<year-month>/`。
+无文件参数注册素材齐备的 Studio executable Draft，冻结来源和闭合工程；须打开准确登记版本的隔离副本再接受，无整片 Draft MP4 前置。旧 `preview register /path/to/draft.mp4` 保留兼容。Final 从接受快照渲染并保留正式收据；`--qa-passed` 仅在完成编码输出 QA 后使用，不重审未变设计。所有 Required Variants 完成 Final 后自动归档；明确“只导出”等限制优先，完成 Final 不包含发布/上传。
 
 ## 公开内容
 

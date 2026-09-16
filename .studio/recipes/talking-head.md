@@ -2,10 +2,10 @@
 
 1. 下载视频先通过共享 ASR 生成 `characters[]` 字级时间戳，再在 `dbs` 与 `verbatim` 中选择文案路径；`dbs` 正文被修改时等待 Script Approval，`verbatim` 保留下载视频的原文和原时间戳。
 2. 按 Script 各部分的呈现需求准备文字、实例与素材，在同一 `RESEARCH.md` 保存研究所得、素材依据及真实待补问题；已有材料足够则复用。Plan 自主取舍，设计中可定点补研究，具体职责见 `.studio/workflow.md`。
-3. 调用 DBS 完成 `PACKAGE.md`，同时生成引用当前 Research 的全片 `ANIMATION_PLAN.md`：逐 Scene 筛选信息并匹配已接纳资产或组合，只有真实缺口才做实际文字 HTML/CSS 样段，数量可为零。SCRIPT 索引只记规划时间预算，人物视频持续作为主视觉，样段可用语义媒体占位和估算时间，不为查看布局强制录制或 ASR。
+3. 按 `.studio/workflow.md` 独立确定动画型/文字型与 Profile，调用 DBS 完成 `PACKAGE.md`，全片 Plan 写清实际屏幕文字、A/B、素材与动作。一个真实 Scene 动态参考与整片 Plan 一次确认方向；人物布局不强加 B-roll，缺媒体可用语义占位，不为规划强制录制或 ASR。生成素材的用途、数量、风格随方向批准。
 4. Plan 批准后，没有可用人物视频时用户按 `subject_position: left|center|right` 录制；已有源视频直接使用。
 5. 用实际音频的字级时间证据与 Script Anchor 对齐，生成语义分段的 `section_map.json`；工程时间线另记画面实际出现与持续。
-6. 共享已确认主题，局部布局仅在明确匹配的 Scene 复用；优先实现不确定镜头，再逐 Scene 补齐结构、动作与媒体。默认在官方 Studio 查看工程，登记版本用隔离审阅副本。主模型直接处理换行、分组和等义精简并同步 Research 研究条目；取舍改变已确认观点、结论或叙事才提交局部确认。运行完整 Draft QA 并注册 Draft。
-7. 用户接受 Draft 后，从该源码快照完成 Final QA、60fps high render 和 Finalize。
+6. 方向批准后扩成全片占位 Draft，无额外接受门；补齐必需素材、正式音频与动作，保留原声和总时长。Studio 检查声音、连续播放、跳转/回拖、阅读及2秒全画面静止约束。无文件参数的 `preview register` 登记最终 Studio Draft，`preview open draft-vNNN` 审阅准确副本后 `preview accept draft-vNNN`，不先导出整片 Draft MP4。
+7. 从接受快照 `preview render <draft-id> --output <final.mp4> --final` 完成正式渲染，再编码输出 QA、Finalize 和自动归档；局部变化只复核影响范围，不重复未变化内容的审美批准。
 
 录制完成后 DBS 不默认重写已经说出口的正文；标题、封面、发布说明和屏幕关键词仍可继续处理。

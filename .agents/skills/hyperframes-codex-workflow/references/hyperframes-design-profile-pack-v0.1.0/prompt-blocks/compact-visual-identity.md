@@ -6,4 +6,4 @@
 2. `kami_editorial`：`#F5F4ED` 暖纸、`#1B365D` 唯一墨蓝强调、中文衬线标题+无衬线正文、排版与批注；Compose/Reveal/Annotate/Turn/Settle。禁冷灰、玻璃、复古手账和正文打字机；不依赖 TsangerJinKai02。
 3. `monochrome_atelier`：`#11110F` 暖黑、`#F4F2EB` 暖白、可选 `#C7A66B` ≤1.5%；强制 Distill→Quieter→Typeset→Layout；Isolate/Unveil/Cut/Condense/Lock。禁黑金卡片网格、金属渐变、玻璃、发光和弹跳。
 
-口播增强：人物/原视频优先，Profile 只占负空间。纯 HyperFrames：Profile 可控制完整画面，但每场仍只有一个主焦点。Animation Plan 经用户二次确认后才能执行。
+口播增强保护人物/原视频，纯 HyperFrames 可控制完整画面。Profile 只管风格，动画型/文字型另定 A/B 叙事。整片 Plan 加一个真实动态 Scene 一次方向批准，不另增审批；保原声/总时长，正文可稳定但全画面连续完全静止不超过2秒，实际播放人工核验。SVG/icon/图片可装饰，不强制机制动画。

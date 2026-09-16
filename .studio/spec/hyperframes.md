@@ -11,7 +11,7 @@
 - 动作不依赖 `Math.random()`、`Date.now()`、实时 delta、异步 Timeline、`repeat: -1` 或多个 Timeline 同时修改同一属性；可用固定 seed 初始化数据，再按时间直接求值。
 - composition 或 Scene 保留 `S01` 等稳定 ID；结构性偏离返回 Animation Plan。
 - `talking_head` 仅在人为主叙述的适用 Scene 保留人物布局；A/B-roll 按各 Scene 叙事职责安排，主声源贯穿切换且只播放一次，其他视频音轨按需要明确静音。
-- 在不牺牲单场主焦点和可读性的前提下，由主模型依据 Script、Research 研究条目和素材关系选择表达机制，并使用有语义且 seek-safe 的 GSAP 动画；Research 不规定动画机制，不为增加数量拆组件或堆装饰。
+- 依据主类型、Plan 实际屏幕文字及选材实现 seek-safe 动画。动画型不强制机制演绎，文字型保留卡片/装饰与局部强调；SVG/icon/图片允许装饰价值，但不以细碎运动干扰阅读。Research 不规定动画机制。
 - 动效按表达需要组织焦点、关系、证据、对象转化与交接，不要求每组件独立入场。稳定阅读贯穿 Scene，不以统一结尾停顿代替；只有可定义的真实进度才使用进度条，演示值明确标记。
 - Scene 布局按 Plan 预留图片 / 视频位和需要阅读的文字位；素材内已清楚呈现的信息不重复覆盖。缺少素材时保留稳定 Slot，不用虚构素材填满。
 - 逐 Scene 读取 Plan 的精确资产引用和 Binding；全片主题不等于局部结构通用。角色、连接、条件、去向、反馈及结果进入实际图形 / 状态，不能把不同语义字段统一压成文字行。未支持类型明确返回当前 Scene 的实现缺口，不静默 fallback 普通卡片；同构表达允许复用。
@@ -47,21 +47,22 @@
 
 ```bash
 npx --no-install hyperframes check
-npx --no-install hyperframes render --quality draft --output renders/review.mp4
 ```
 
 修复错误、空 Scene、越界、遮挡、不可读和严重节奏问题。对照 Plan 检查问题 Scene 的稳定状态及核心变化：连接有指向，条件分支可区分，反馈在状态中可见，选稿与必需 Slots 不丢失。只看开头或 contact sheet、仅有字段 / CSS 差异不算语义通过；同 easing 或相似外观不自动失败。普通 Warning 不阻止 Draft。Plan 登记的 planned placeholders 允许全片预览，准确标出缺口；占位不是代码错误的豁免，也不具备最终交付资格。只有 full 范围且必需素材齐备的版本能获得完整接受并进入 Final；单 Scene 方向批准不能代替。
 
-在既有 Draft QA 中对照各 Scene 的 Plan 记录主画面是否承载核心信息、B 是否有补充增量及有效回接、关键对象是否可识别、必要动作与结果是否兑现，以及素材是否按完成判据替换；无 B 或无需变化不算缺项。按真实速度检查阅读与交接，简化图形只在丢失必要辨认特征、内容或结果时返修，不靠加装饰解决。计划本身缺设计时先补受影响条目，不能凭代码中存在 SVG 或素材清单齐备判定设计完成。
+在 Studio 按主类型核对 Plan：动画型看对象/比较/关系/过程，文字型看卡片阅读/装饰/关键词强调；检查主辅载体及回接、承诺动作和素材。保原声和总时长，整幅画面完全静止不超过2秒而正文可稳定阅读；实际播放人工判断可感知变化及阅读干扰，不以 tween 数量判定，自动容差尚待 Windows 实测。不能凭 SVG 存在或文件齐备宣称设计完成。
 
-技术检查、视觉设计兑现与用户接受分别陈述，并绑定准确 Draft 版本、Scene 和必要时间范围；未播放或缺证据的部分明确未验证。`media_readiness=complete` 只表明约定素材齐备，不证明设计充分，技术 PASS 也不替代用户接受。不新增 QA 系统或审批门，不以组件数量、运动频率或静止秒数作为设计评分。
+技术检查、设计兑现和用户接受分开。素材齐备后无文件参数的 `preview register` 冻结 executable Studio Draft，再 `preview open draft-vNNN` 审阅准确隔离副本、`preview accept draft-vNNN`。无需完整 Draft MP4 或伪造收据；旧文件型兼容。核验 Windows Studio 声音、连续播放、跳转/回拖，局部限制可用带声短段，未听音明确未验证。素材 complete/技术 PASS 不替代设计和接受。
 
 ## Final QA
 
-沿用项目固定版本的 `check`，并检查最终音频时长、Scene 时间轴、音画同步、文字越界、最后一帧和输出比例，执行：
+从准确 Accepted Draft 的闭合快照正式渲染，保留收据，不从变化的可编辑工程冒充接受版本：
 
 ```bash
-npx --no-install hyperframes render --fps 60 --quality high --output renders/final.mp4
+./work --work <id> --variant <id> preview render <draft-id> --output <final.mp4> --final
 ```
 
-Final Error 阻止 `./work finalize ... --qa-passed`。全部通过时只向用户报告结果，不列逐项清单。
+新编码文件检查流、规格（60fps high）、原音时长、全量解码、代表帧及必要音频核验；实际缺陷修复后重渲染。Final Error 阻止 `./work finalize ... --qa-passed`，通过后 Finalize 自动归档；明确只导出/暂不归档等限制优先。
+
+QA 按影响范围：已接受且未变仅检查来源/证据适用性；局部变化只查受影响 Scene、状态和交接；共享布局/时间线/宿主变化按依赖扩展。编码 QA 不重审已接受观点/设计，仅 Finalize/归档核对来源、收据、文件、目标及归档结果，不重复审片/渲染。只报告结果与真实未验证项。

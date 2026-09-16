@@ -13,7 +13,7 @@ HyperFrames is an annotation and explanation layer. The person, original scene a
 - Text, panels and icons must remain outside the face protection zone.
 - Existing caption bounds are permanent protected space.
 - A Profile material may occupy negative space but must not turn the source footage into a dashboard.
-- Macro information groups follow semantic sections, usually 6–12 seconds; this is not a requirement for continuous motion.
+- Macro information groups follow meaning; use the main type's experimental A/B ranges in `.studio/workflow.md`, not a Profile-specific timing architecture.
 - When no new semantic information is needed, allow the original video to breathe without overlay.
 
 ### Ratio mapping
@@ -61,7 +61,7 @@ Typography, graphics, images and motion create the complete visual field. The Pr
 
 ## Mode precedence
 
-A Profile controls identity; the template controls occupation and density.
+A Profile controls identity; the Template controls subject occupation and protection. Animation-led/text-led is independent and controls narrative carriers and A/B rhythm. Preserve original audio/duration and manually verify no completely static whole frame exceeds 2 seconds; text may remain stable. Decorative SVG/icons/images are allowed, with most text-led cards decorated and brief text-only states permitted.
 
 Examples:
 

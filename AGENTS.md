@@ -8,7 +8,7 @@
 - 所有作品的当前真源位于外部 WorkStore `D:\AI\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`）的 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入开发仓或 Git。
 - 不公开发布内容、不购买额度。只有用户对准确 Work 与 Variant 明确授权后，才可使用其已登录的 Windows Chrome 保存到小红书创作者平台草稿箱；不得读取 Cookie、调用未公开接口或点击发布。
 - `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
-- v1 默认不生成 AI 图片；仅在用户明确授权、Animation Plan 已批准且存在明确 Asset Brief 时可调用 ImageGen。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。`hyperframes_video` 不生成或烧录底部字幕；`podcast_quote_image` 由工作流在选定视频帧上绘制批准的中英双语字幕。
+- 默认不生成 AI 图片；Plan 列明拟生成素材的用途、数量、风格和 Asset Brief 后，方向批准一并授权这些素材，不逐张询问；未列用途或明显超量再确认，私有内容转交新外部提供方仍需明确授权。生成内容不冒充真实界面、操作结果或数据证据。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。视频不生成或烧录底部字幕；播客图文沿用自己的双语字幕合同。
 
 ## 开发仓与 WorkStore 路径
 
@@ -45,7 +45,7 @@
 - `RESEARCH.md`：视频工作流为 Animation Plan 准备有来源的视觉内容与素材，按 Script 内容部分及现有 Scene / Anchor 记录呈现需求、研究所得、素材依据和真实待补问题，并关联 Script Revision。补充文字和素材供 Plan 自主取舍，不是第二份脚本或必上屏清单，不决定布局、裁切、动作或成片时间。播客图文工作流仍记录嘉宾身份、与获批观点相关的经历、可用于正文补充的背景信息、事实边界和来源。
 - `PACKAGE.md`：视频工作流保存最终标题、封面文字、一句话简介和内容概括；内容概括按主要对象或主题简短分项，介绍多个 Skill、工具、功能或案例时逐项单独说明。播客图文工作流直接保存可复制的纯文本，第一行为标题，其后依次为开篇、`01｜小标题` 形式的分节与第三人称正文、署名、`原视频：<视频原标题>` 和话题标签，不放来源地址、Markdown 标记或“大标题”“开篇”“图片文案”等结构说明。标题与开篇第一段必须从用户获批的选取文段归纳，不得用文段之外的嘉宾背景主导；标题在全文稳定后最后拟定。render 生成 `xiaohongshu.json`，分别保存标题、正文、1 至 3 个话题与有序图片。
 - `section_map.json`：实际录制或配音与 Script Anchor 的机器对齐结果；实际媒体是时间权威。
-- `ANIMATION_PLAN.md`：全片视觉语义、A/B 职责、逐 Scene 语义对象、素材占位与 cue 意图真源。整片 Plan 后制作一个真实 Scene 动态参考，用户一次方向批准后扩成完整占位 Draft，再补齐素材生成最终 Draft；不另建 Shotbook。Work 源码与 Binding 是可执行真源。
+- `ANIMATION_PLAN.md`：全片主类型、视觉语义、A/B 职责、实际采用的屏幕文字及来源、声画取舍、对象、素材与 cue 意图真源；不复制完整 Script/Research 或逐句同义改写。整片 Plan 后制作一个真实 Scene 动态参考，一次方向批准后扩成完整占位 Draft，再补齐素材生成最终 Draft；不另建 Shotbook 或文字数据库。Work 源码与 Binding 是可执行真源。
 - `variant.yaml`：当前 Variant 状态，由 CLI 与 Agent 更新。
 - `materials/acquisition.json`：URL 媒体的来源、Hermes job、平台和本地副本摘要；不得保存外部 `manifest_ref` 或临时媒体路径。
 - `artifacts/transcript.json`：`podcast_quote_image` 的已解析文案和时间真源；字幕优先，转录仅补空档，冲突必须人工确认。
@@ -53,6 +53,11 @@
 - `artifacts/aligned-quotes.json`、`frames/frame-candidates.json` 与 `frames/frame-selection.json`：脚本生成的时间对齐与候选帧状态，不用临时文档替代。
 
 ## 创作检查点
+
+- 视频主类型为动画型或文字型，独立于 Template/Profile；未指定时推荐并随方向确认，不新增混合型或审批。动画型以对象/比较/关系/过程为 A，解释卡/界面/图片/案例/结果为 B；文字型以卡片排版和局部强调为 A，接管画面的图片/界面/案例/短动画为 B。默认 A/B 分别为70%–85%/15%–30%和60%–75%/25%–40%，连续 A/单次 B 分别约15–35秒/4–12秒和10–25秒/4–10秒；仅作实验起点，按内容调整不凑秒数，不要求解释偏离。同框按主要观看任务计时，装饰不自动算 B。
+- 保原口播和原总时长；默认带声连续观看、手机等效尺寸可辨认，不要求静音复述全部论证。可省略铺垫、情绪、衔接和重复，不误导或遗漏改变结论的条件。文字型大部分卡片有装饰，允许短暂纯文字；SVG/icon/图片可有装饰价值。关键词局部强调，不默认逐字跳动、正文漂移或新增音乐/音效。
+- 整幅画面连续完全静止不得超过2秒，正文和单个对象可稳定阅读。先安排内容/A/B时间、逐步呈现和关键词强调，必要时少量辅助运动；不早早揭完后等声音、不加文字填时间、不剪原音、不用闪烁或无限循环规避。实际播放人工核验，不能以 tween 存在判定，自动容差尚待 Windows 实测。
+- 派工仅携带当前有效主类型、Plan、对应 Research 选材、必要 Script/时间依据与资产；清理可编辑 brief/CONTRACT 中失效要求，冻结历史保留。worker 完成不替代主模型内容验收。
 
 - `hyperframes_video` 的下载视频必须通过共享 ASR 生成字级时间戳文案，再在 `SCRIPT.md` 中明确选择 `dbs` 或 `verbatim`：前者允许多轮 DBS 修改并在正文变化后等待批准；后者逐字保留口播与原时间戳，不运行正文改写。
 - DBS 实际修改口播正文时，等待用户批准 `SCRIPT.md`；只诊断或只改包装文案时不等待。
@@ -65,7 +70,8 @@
 - 主要动效先写清对象关系、起止状态、阅读安排与必要替代，默认在 Draft 最先实现最不确定的镜头；只有会改变整体决策的风险才提前局部试做。Windows 在 Work-local 或已登记 AssetSource 开发效果，未实现动作不无条件阻塞 Plan；只有宿主、合同、工具或依赖装配缺口才交给 WSL，不改公共冻结资产。
 - 用户一次确认整片 `ANIMATION_PLAN.md` 与唯一 Scene 参考的制作方向，之后直接按各 Scene 方案扩片，不逐场审批或要求 Work-local 对象先入库。完整占位 Draft 必须覆盖全片和已实现动作，允许 Plan 登记的 planned placeholders、临时音轨及明确约定 proxy；不能掩盖空 Scene、代码错误或缺失内容，不增加占位 Draft 的强制批准门。素材齐备后生成最终 Draft，沿用原完整 Draft 接受与 Final 流程。方向批准和占位 Draft 均不放行 Finalize。
 - Draft 提交用户前使用 `hyperframes-anti-ppt` 复审成片或代表性关键帧；`PASS` 只是 QA 结果，不替代 Draft 接受。
-- Final 必须从用户接受的 Draft 源码快照继续。
+- 素材齐备后用无文件参数的 `preview register` 冻结 Studio executable Draft，无需先导出整片 Draft MP4；`preview open draft-vNNN` 审阅准确独立副本后 `preview accept draft-vNNN`。旧文件型注册保留。Final 用接受快照执行 `preview render <draft-id> --output <final.mp4> --final`，留存正式收据，再编码输出 QA、Finalize、自动归档；明确只导出/暂不归档等限制优先，不包含发布或上传。
+- QA 按影响：未变接受内容仅核对来源和证据适用性；局部变化检查对应 Scene/状态及交接；共享布局/时间线/宿主变化按依赖回归。新编码检查流、规格、时长、全量解码、代表帧及必要音频，不重审已接受设计；仅 Finalize/归档检查来源、收据、文件、目标与归档结果，不再次审片/渲染。Windows Studio 声音、播放、跳转和回拖须实际核验，局部限制可导出带声短段，不默认整片 Draft 导出，不把未听音算通过。
 - Script / Research / Plan Revision 继续留痕；版本变化先检查实际影响范围，只补查、同步或重做引用变动的 Scene 与必要衔接，不自动刷新全片。内容等义由主模型判断，机器仍校验明确范围、引用及冻结 / 当前内容一致性；元数据同步不等于旧 Accepted Draft 自动批准新画面。
 - 只在 Scene 数量、顺序、视觉目标、Hero State、Template、Profile、文案结构或核心内容发生实质变化时重新确认受影响部分。反馈绑定预演/Draft 版本、Scene 与必要时间范围，只修改该范围及必要衔接，保留未受影响场景与原 Accepted Draft / Final 快照。
 - 时间码、easing、换行、安全区、性能和不改变 Hero State 的布局修复无需重新批准。

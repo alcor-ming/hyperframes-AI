@@ -1,6 +1,6 @@
 ---
 name: hyperframes-design-profiles
-description: Select and enforce one of three HyperFrames video design profiles—Optical Fluidity, Kami Editorial, or Monochrome Atelier—across talking-head enhancement and pure HyperFrames presentation videos. Use when planning, implementing, reviewing, or normalizing HyperFrames visual identity, typography, color, materials, composition, and motion. Requires an Animation Plan confirmation gate before implementation.
+description: Select one HyperFrames visual identity across Templates and animation-led or text-led films; follow the shared Plan plus one dynamic Scene direction approval.
 license: Internal profile pack; adapted principles are attributed in upstream/THIRD_PARTY_NOTICES.md
 ---
 
@@ -15,7 +15,7 @@ Determine or infer:
 - `mode`: `talking_head` or `pure_hyperframes`
 - `profile`: `optical_fluidity`, `kami_editorial`, or `monochrome_atelier`
 - `ratio`: `16:9` or `9:16`; `optical_fluidity` also has an approved `4:3` mapping
-- `subtemplate` when `profile` is `optical_fluidity` and `mode` is `pure_hyperframes`: `hero_flow` or `module_stage`
+- main type: animation-led or text-led, independently selected in the Plan
 - authoritative duration/audio source
 - whether original captions already exist
 - protected subject/face regions when video footage exists
@@ -30,7 +30,7 @@ Load exactly one profile file:
 - `profiles/02-kami-editorial/PROFILE.md`
 - `profiles/03-monochrome-atelier/PROFILE.md`
 
-Do not combine their palettes, fonts, materials, signature motion, or composition logic. Shared accessibility and rendering rules may still apply.
+Do not combine their palettes, fonts or materials. Profiles govern visual identity, hierarchy and stylistic motion, not narrative architecture, A/B roles or mandatory mechanism animation. Main-type rhythm follows `.studio/workflow.md`; both types must work under the same Profile.
 
 ## Execution order
 
@@ -38,18 +38,18 @@ Do not combine their palettes, fonts, materials, signature motion, or compositio
 2. Read `shared/two-template-mapping.md`.
 3. Read the selected Profile and its `tokens.json`.
 4. Analyze the source media, section map, transcript, and available negative space.
-5. Produce an Animation Plan, Implementation Changes, and Test Plan.
-6. Apply `shared/review-gate.md`.
-7. Stop and wait for explicit confirmation of the Animation Plan.
-8. Only after confirmation, implement the HyperFrames composition.
-9. Render, inspect representative frames, correct bounded defects, and validate.
+5. Add the selected identity to the existing whole-film Plan; do not create extra planning artifacts.
+6. Apply `shared/review-gate.md` and create one real dynamic Scene reference.
+7. Ask once for direction confirmation covering the Plan and reference, not a separate Profile gate.
+8. Expand the full placeholder Draft, then complete media and accept the exact Studio Draft without a whole-film MP4 prerequisite.
+9. Render Final from the accepted snapshot, inspect encoded output, Finalize and archive; scope QA to actual changes.
 
 ## Planning output
 
 The plan must name:
 
 - selected profile and reason;
-- selected subtemplate and reason when the Profile requires one;
+- main type and its independently selected A/B arrangement;
 - visual thesis in one sentence;
 - authoritative palette and fonts/fallbacks;
 - information hierarchy;

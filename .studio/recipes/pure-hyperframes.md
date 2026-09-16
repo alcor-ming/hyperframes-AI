@@ -1,14 +1,14 @@
 # Pure HyperFrames Recipe
 
-## 无正式配音
+## 制作与接受
 
 1. 下载视频先通过共享 ASR 生成 `characters[]` 字级时间戳，再在 `dbs` 与 `verbatim` 中选择文案路径；`dbs` 正文被修改时等待 Script Approval，`verbatim` 保留原文和原时间戳。
 2. 按 Script 各部分的呈现需求准备文字、实例与素材，在同一 `RESEARCH.md` 保存研究所得、素材依据及真实待补问题；已有材料足够则复用。Plan 自主取舍，设计中可定点补研究，具体职责见 `.studio/workflow.md`。
-3. SCRIPT 索引只保留规划时间预算；`verbatim` 用原时间戳作依据，其他没有正式音频的输入根据字数、参考语速和 Scene 信息密度估算。调用 DBS 完成 `PACKAGE.md`，同时生成引用当前 Research 的全片 Animation Plan：逐 Scene 筛选信息并匹配已接纳资产或组合，只有真实缺口才做实际文字 HTML/CSS 样段，数量可为零；媒体语义占位、主要动作先写方案。
-4. Plan 批准后共享已确认主题，局部布局仅在明确匹配的 Scene 复用；先实现最不确定镜头，再逐 Scene 补齐结构、动作和媒体，完成接近 Final 的无声 Draft。默认在官方 Studio 查看工程，登记版本用隔离审阅副本。主模型可直接完成换行、分组和等义精简；独立信息措辞同步回写 Research 研究条目，取舍改变已确认观点或叙事才提交用户。
-5. 用户接受 Draft 后接收正式配音，以实测音频生成 `section_map.json`。
-6. 从 Accepted Draft 的源码快照继续，工程时间线记录画面实际出现与持续；只调整时间、停留、转场和元素出现顺序。
-7. 无法保持可读性时返回 Draft Review，不改变 Scene 语义或 Hero State 强行压缩。
+3. 按 `.studio/workflow.md` 独立确定动画型/文字型和 Profile。调用 DBS 完成 `PACKAGE.md`，全片 Plan 写清选材、实际屏幕文字、A/B 编排、素材及动作；一个真实 Scene 动态参考与整片 Plan 一次确认方向。生成素材的用途、数量、风格随方向批准，不逐张询问。
+4. 方向批准后直接扩成完整占位 Draft，在官方 Studio 查看。允许计划内素材、临时音轨与约定 proxy，不允许空 Scene 或未实现动作；无占位 Draft 接受门。已有音频和原总时长保持，无正式音频才使用 provisional 预算。
+5. 正式音频就绪后生成 `section_map.json` 并局部重定时；必需媒体和效果齐备后才接受最终 Draft，不接受无声占位版作为最终音画基线。按主类型检查阅读、交接、关键词强调及2秒全画面静止约束。
+6. 无文件参数的 `preview register` 冻结 Studio Draft，`preview open draft-vNNN` 审阅准确隔离副本后 `preview accept draft-vNNN`；无需先导出整片 Draft MP4。
+7. 从接受快照 `preview render <draft-id> --output <final.mp4> --final`，完成编码输出 QA、Finalize 与自动归档。按实际影响复核，不重审未变化观点/设计；明确“只导出”等限制优先。
 
 ## 已有正式配音
 
