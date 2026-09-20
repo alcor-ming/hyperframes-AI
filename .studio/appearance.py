@@ -105,12 +105,17 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
     for item in closure:
         identity, version = parse_component_ref(item["ref"])
         frozen.append({key: item[key] for key in ("ref", "kind", "package_sha256") } | {"version": version, "vendor_path": f"vendor/components/{identity}/v{version}"})
-    lock = {"schema_version": 1, "resolver_version": 1, "contract_version": 1,
+    version = _closure_version(closure)
+    lock = {"schema_version": version, "resolver_version": 1, "contract_version": version,
             "hash_algorithm": "sha256-canonical-json-utf8-v1", "account": {"id": account.get("id"), "revision": account.get("revision"), "sha256": digest(account)},
             "selection": selections, "assets": frozen, "mode": mode, "ratio": ratio, "width": width, "height": height, "fps": fps, "seed": seed, "time_unit": "seconds",
             "overrides": {"account": deepcopy(account.get("overrides", {})), "explicit": deepcopy(overrides.get("parameters", {}))}, "parameters": values, "sources": sources}
     lock["sha256"] = digest(lock)
     return lock
+
+
+def _closure_version(closure):
+    return 2 if any(item["kind"] == "motion" and item["metadata"].get("contract_version") == 2 for item in closure) else 1
 
 
 def _resolve_parameters(closure, selections, ratio, parameter_layers):
@@ -124,6 +129,7 @@ def _resolve_parameters(closure, selections, ratio, parameter_layers):
         if any(not isinstance(params, dict) for params in layer.get("motion", {}).values()):
             raise AppearanceError("Motion parameter overrides must be objects")
     values, sources = {"motion": {}}, {"motion": {}}
+    theme_tokens = {}
     for role, reference in (("theme", selections["theme"]), ("background", selections["background"]), *((slot, value["asset"]) for slot, value in selections["motion"].items() if value)):
         item = by_ref[reference["ref"]]
         metadata = item["metadata"]
@@ -136,6 +142,8 @@ def _resolve_parameters(closure, selections, ratio, parameter_layers):
         if role in SLOTS:
             if selections["motion"][role]["entry"] not in payload.get("slots", {}):
                 raise AppearanceError("Unknown motion preset entry")
+            if metadata.get("contract_version") == 2 and selections["motion"][role]["entry"] != role:
+                raise AppearanceError("Motion preset entry must match its selected slot")
             layers = [(name, layer.get("motion", {}).get(role, {})) for name, layer in parameter_layers]
             effective, origin = _parameters(metadata, layers)
             values["motion"][role], sources["motion"][role] = effective, origin
@@ -153,6 +161,16 @@ def _resolve_parameters(closure, selections, ratio, parameter_layers):
                 raise AppearanceError(f"Parameter path is absent: {path}")
             target[parts[-1]] = deepcopy(value)
         validate_declaration(payload, metadata, Path(item["path"]))
+        if role == "theme":
+            theme_tokens = payload["tokens"]
+        if role in SLOTS and metadata.get("contract_version") == 2:
+            for group in ("slots", "reduced_motion"):
+                token = payload[group]["emphasis"]["color_token"]
+                color = theme_tokens
+                for part in token.split("."):
+                    color = color.get(part) if isinstance(color, dict) else None
+                if not isinstance(color, str) or not color.strip():
+                    raise AppearanceError(f"Motion theme color token is unresolved: {token}")
     for _, layer in parameter_layers:
         if any(selections["motion"][slot] is None and params for slot, params in layer.get("motion", {}).items()):
             raise AppearanceError("Cannot override a disabled motion slot")
@@ -163,7 +181,7 @@ def _check_lock(lock: dict) -> None:
     from component_harness import parse_component_ref
     import re
     required = {"schema_version", "resolver_version", "contract_version", "hash_algorithm", "account", "selection", "assets", "mode", "ratio", "width", "height", "fps", "seed", "time_unit", "overrides", "parameters", "sources", "sha256"}
-    if not isinstance(lock, dict) or set(lock) != required or any(type(lock[key]) is not int or lock[key] != 1 for key in ("schema_version", "resolver_version", "contract_version")) or digest({key: value for key, value in lock.items() if key != "sha256"}) != lock.get("sha256"):
+    if not isinstance(lock, dict) or set(lock) != required or any(type(lock[key]) is not int for key in ("schema_version", "resolver_version", "contract_version")) or lock["resolver_version"] != 1 or lock["schema_version"] not in (1, 2) or lock["contract_version"] != lock["schema_version"] or digest({key: value for key, value in lock.items() if key != "sha256"}) != lock.get("sha256"):
         raise AppearanceError("Appearance lock schema or hash mismatch")
     if lock["hash_algorithm"] != "sha256-canonical-json-utf8-v1" or lock["time_unit"] != "seconds" or lock["mode"] not in ("text-led", "animation-led"):
         raise AppearanceError("Invalid frozen appearance contract")
@@ -222,6 +240,8 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
         raise AppearanceError("snapshot_dependencies must be a list of local files")
     references = [{key: item[key] for key in ("ref", "kind", "package_sha256")} for item in lock["assets"]]
     closure = resolve_asset_closure(root, references)
+    if lock["schema_version"] != _closure_version(closure):
+        raise AppearanceError("Appearance lock capability differs from asset closure")
     selected = {lock["selection"][kind]["ref"] for kind in ("theme", "background")}
     selected.update(value["asset"]["ref"] for value in lock["selection"]["motion"].values() if value)
     for item in closure:
@@ -267,6 +287,8 @@ def verify(project: Path, lock: dict) -> dict:
         path = safe(project, item["vendor_path"])
         metadata = validate_component_release(path, expected_ref=item["ref"], allow_unapproved=True)["metadata"]
         closure.append({**item, "path": path, "metadata": metadata})
+    if lock["schema_version"] != _closure_version(closure):
+        raise AppearanceError("Appearance lock capability differs from asset closure")
     values, sources = _resolve_parameters(closure, lock["selection"], lock["ratio"], list(lock["overrides"].items()))
     if digest(values) != digest(lock["parameters"]) or digest(sources) != digest(lock["sources"]):
         raise AppearanceError("Frozen effective parameters differ from accepted assets and overrides")

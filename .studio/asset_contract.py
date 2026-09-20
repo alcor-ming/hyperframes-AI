@@ -129,6 +129,8 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
             _fields(payload["readability"], {"foreground", "regions"}, label="Background readability")
             if payload["readability"].get("foreground", "any") not in ("light", "dark", "any"):
                 raise COMPONENT.ComponentError("Invalid foreground readability condition")
+    elif kind == "motion" and metadata.get("contract_version", 1) == 2:
+        _motion2(payload)
     else:
         _fields(payload, {"slots", "reduced_motion"}, {"slots", "reduced_motion"}, "Motion")
         for group in (payload["slots"], payload["reduced_motion"]):
@@ -161,6 +163,8 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
                     "motion": ("slots.", "reduced_motion.")}
         if not path.startswith(prefixes[kind]):
             raise COMPONENT.ComponentError(f"Asset identity or dependency field cannot be overridden: {path}")
+        if kind == "motion" and metadata.get("contract_version", 1) == 2 and (len(path.split(".")) != 3 or path.split(".")[-1] in {"effect", "color_token"}):
+            raise COMPONENT.ComponentError(f"Motion identity cannot be overridden: {path}")
         current = payload
         for part in path.split("."):
             if not isinstance(current, dict) or part not in current:
@@ -172,12 +176,63 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
     return payload
 
 
+def _motion2(payload):
+    slots = {"reveal", "emphasis", "exit", "transition"}
+    _fields(payload, {"capability_version", "slots", "reduced_motion"}, {"capability_version", "slots", "reduced_motion"}, "Motion v2")
+    if type(payload["capability_version"]) is not int or payload["capability_version"] != 2:
+        raise COMPONENT.ComponentError("Unsupported Motion capability_version")
+    for name in ("slots", "reduced_motion"):
+        _fields(payload[name], slots, slots, "Motion v2 slots")
+        for slot, settings in payload[name].items():
+            required = {"effect", "duration", "easing"}
+            optional = set()
+            effects = {"reveal": {"fade", "short-rise"}, "exit": {"fade-out"},
+                       "emphasis": {"focus-restore"}, "transition": {"crossfade", "cut"}}
+            if slot in {"reveal", "exit"}:
+                required |= {"opacity_from", "opacity_to"}
+                if slot == "exit" or isinstance(settings, dict) and settings.get("effect") == "short-rise":
+                    optional |= {"x", "y", "scale"}
+                if slot == "reveal":
+                    optional.add("hide_before")
+            elif slot == "emphasis":
+                required |= {"restore_duration", "color_token", "outline_width"}
+            _fields(settings, required | optional, required, f"Motion v2 {slot}")
+            if not isinstance(settings["effect"], str) or settings["effect"] not in effects[slot] or settings["easing"] not in ("none", "linear", "ease-in", "ease-out", "ease-in-out"):
+                raise COMPONENT.ComponentError("Unsupported Motion effect or easing")
+            for key, value in settings.items():
+                if key in {"effect", "easing"}:
+                    continue
+                if key == "hide_before":
+                    if type(value) is not bool:
+                        raise COMPONENT.ComponentError("Motion hide_before must be boolean")
+                elif key == "color_token":
+                    if not isinstance(value, str) or not re.fullmatch(r"(?:typography|colors|surface|border|radius|shadow|lines)(?:\.[a-zA-Z][a-zA-Z0-9_-]*)+", value):
+                        raise COMPONENT.ComponentError("Motion emphasis requires a theme color_token path")
+                elif (type(value) not in {int, float} or not math.isfinite(value)
+                      or key not in {"x", "y"} and value < 0
+                      or key.startswith("opacity_") and value > 1):
+                    raise COMPONENT.ComponentError("Invalid Motion numeric value")
+            if slot in {"reveal", "exit"} and settings["opacity_to"] != (1 if slot == "reveal" else 0):
+                raise COMPONENT.ComponentError("Motion opacity_to must restore reveal or hide exit")
+            if slot == "transition" and settings["effect"] == "cut" and settings["duration"] != 0:
+                raise COMPONENT.ComponentError("Motion cut requires zero duration")
+            if name == "reduced_motion":
+                if slot in {"reveal", "exit"} and settings["duration"] > payload["slots"][slot]["duration"]:
+                    raise COMPONENT.ComponentError("Reduced Motion cannot lengthen duration")
+                if slot in {"reveal", "exit"} and any(settings.get(key, default) != default for key, default in (("x", 0), ("y", 0), ("scale", 1))):
+                    raise COMPONENT.ComponentError("Reduced Motion cannot move or scale")
+                if slot == "emphasis" and (settings["duration"] != 0 or settings["restore_duration"] != 0):
+                    raise COMPONENT.ComponentError("Reduced Motion emphasis must be static")
+                if slot == "transition" and settings["effect"] != "cut":
+                    raise COMPONENT.ComponentError("Reduced Motion transition must cut")
+
+
 def _schema2(directory, metadata):
     _fields(metadata, {"schema_version", "id", "version", "kind", "entry", "contract_version", "parameters",
                       "compatibility", "dependencies", "asset_dependencies", "runtime", "usage", "example", "license",
                       "files", "description", "source_url", "rights"},
             {"contract_version", "parameters", "compatibility"}, "schema 2 manifest")
-    if type(metadata["contract_version"]) is not int or metadata["contract_version"] != 1:
+    if type(metadata["contract_version"]) is not int or metadata["contract_version"] not in ({1, 2} if metadata["kind"] == "motion" else {1}):
         raise COMPONENT.ComponentError("Unsupported asset contract_version")
     compatibility = metadata["compatibility"]
     _fields(compatibility, {"ratios"}, label="asset compatibility")

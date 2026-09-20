@@ -101,7 +101,49 @@ module/media 使用 Binding schema 3 的 `component_ref`、`scene` 和 `usage`�
 
 load 默认以当前页面目录为 project；显式 projectURL 必须是同源项目目录并保留末尾 `/`，例如 `await HarnessAppearance.load("./project/")`，不能传外部 URL 或把文件 URL 当目录。
 
-当前适配器仅 solid/transparent 背景；Motion 的 `bindMotion(element, resolved, slot, {cue})` 返回 seek/dispose，使用暂停的原生 WAAPI，只接宿主秒数，不自启时钟或音轨。首个适配器支持 reveal/exit、linear/none、无 stagger，null 不应用；其他已声明能力需相应宿主实现，不能由 schema 校验冒充可运行。实际 Windows Studio 与可读性仍须原生核验。
+当前适配器仅 solid/transparent 背景。Motion v1 保留 reveal/exit、linear/none、无 stagger 的旧调用；新四槽资产采用 manifest `contract_version:2` 和 entry `capability_version:2`，不可覆盖旧 ref/hash。含 v2 Motion 的闭包生成 appearance lock schema/contract 2、resolver 1，旧宿主明确拒绝。工具安装不升级旧 Work 的冻结 runtime；明确目标的更新仍用上文 rebind/upgrade-runtime，不修改历史快照或自动接纳资产。
+
+Motion v2 的 `slots` 与 `reduced_motion` 均须完整声明四槽，选择的 entry 必须等于槽名。公共字段为 duration（非负秒）、easing（none/linear/ease-in/ease-out/ease-in-out）。下例是 entry JSON；资产 manifest 仍按既有 schema 2 包装，只有声明在 parameters 的叶子可覆盖，effect/color_token 不可覆盖，0/false 保留原义：
+
+```json
+{
+  "capability_version": 2,
+  "slots": {
+    "reveal": {"effect":"short-rise","duration":0.4,"easing":"ease-out","opacity_from":0,"opacity_to":1,"y":12,"hide_before":true},
+    "emphasis": {"effect":"focus-restore","duration":0.2,"easing":"linear","restore_duration":0.2,"color_token":"colors.accent","outline_width":3},
+    "exit": {"effect":"fade-out","duration":0.3,"easing":"ease-in","opacity_from":1,"opacity_to":0},
+    "transition": {"effect":"crossfade","duration":0.4,"easing":"linear"}
+  },
+  "reduced_motion": {
+    "reveal": {"effect":"fade","duration":0.1,"easing":"linear","opacity_from":0,"opacity_to":1,"hide_before":true},
+    "emphasis": {"effect":"focus-restore","duration":0,"easing":"linear","restore_duration":0,"color_token":"colors.accent","outline_width":3},
+    "exit": {"effect":"fade-out","duration":0.1,"easing":"linear","opacity_from":1,"opacity_to":0},
+    "transition": {"effect":"cut","duration":0,"easing":"linear"}
+  }
+}
+```
+
+opacity_from/to 是相对绑定时基础 opacity 的 0..1 倍率；reveal 的 to 必须为 1，exit 为 0。reveal 可选 fade/short-rise，hide_before 默认 true；false 只取消 cue 前的 visibility 隐藏，不取消起始 opacity。short-rise 和 exit 可选 x/y/scale，组合基础 transform，不自动创建包装层。强调使用冻结 Theme token 的合法颜色形成 outline，restoreCue 由 Scene 显式给定，不推算阅读时间。cut 的 duration 必须为 0。reduced 入退场不得位移/缩放或比常规动作更长，强调两个 duration 为 0，转场为 cut；模式在 load 时固定，bind 的 reducedMotion 布尔值可显式选择，切换须重建实例。
+
+```js
+const appearance = await HarnessAppearance.load(); // 包括本地字体 ready，失败不得宣布宿主 ready
+HarnessAppearance.apply(stage, appearance);
+const motions = [
+  HarnessAppearance.bindMotion(revealLayer, appearance, "reveal", {cue: 1}),
+  HarnessAppearance.bindMotion(revealLayer, appearance, "emphasis", {cue: 2, restoreCue: 4}),
+  HarnessAppearance.bindMotion(exitLayer, appearance, "exit", {cue: 6}),
+  HarnessAppearance.bindMotion({outgoing, incoming}, appearance, "transition",
+    {cue: 7, endCue: 7.4, overlap: [7, 7.4]})
+];
+function seek(seconds) { for (const motion of motions) motion.seek(seconds); }
+function dispose() { for (const motion of motions) motion.dispose(); appearance.dispose(); }
+```
+
+以上元素均为 Scene 已挂载的显式图层。每个绑定返回 seek/dispose，只由宿主秒数定位暂停的原生 WAAPI，不自启时钟、音轨或场景。结束/回拖保留 DOM；零时长在 cue 精确切换；reduced 转场在原 cue 而非 endCue 瞬切。emphasis 的 restoreCue 不早于常规进入结束；transition 的 endCue-cue 等于常规预设 duration，crossfade 的 overlap 必须覆盖整个交接区间，不能自行延长 Scene 或音轨。Scene 必须保持两个不同目标及祖先可绘制，不能在交接前隐藏 outgoing，Motion 只控制目标自身 opacity/visibility。
+
+属性所有权覆盖绑定完整存续期（包括前后填充）：入退场占用 opacity/visibility 及声明的 transform，强调占用 outlineColor/Width/Style，转场占用双目标 opacity/visibility；已有动画或其他绑定争抢相同属性时在创建前拒绝。reveal 与 emphasis 可同元素组合；同元素的 reveal/exit 或转场应使用 Scene 显式隔离的运动层，不依赖创建顺序，也不自动包装表格或 SVG。绑定只采样一次基础样式，宿主不得在存续期争写所属属性；dispose 可重复调用，仅 cancel 自身效果，露出当前基础样式，不覆盖宿主对无关属性的更新。先 dispose 所有 Motion，再释放 appearance 字体。
+
+源侧可运行示例及截图检查为 `tests/motion-browser.mjs`，使用隔离资产/工程的真实 pack/resolve/materialize/load/apply/bind/seek 链路，不接触生产 Work、不导出视频；覆盖常规/reduced 的 16:9、4:3、9:16，不代表任意内容自动适配或 Windows 原生 Studio/音频/Final 已接受。
 
 优先复用能独立解释一个含义的语义视觉对象及其内部联动，由 Work-local Scene 安排本期叙事和媒体。已有 helper 保留，只有真实独立变化或复用需求才抽取，不强制图形/动作/布局工厂拆分。Windows 在已有 AssetSource 或 Work-local 开发；旧完整 Scene/组件保留兼容，空间舞台可内聚保存相机、遮挡和光照。布局适配须实测可读性，不以模块数量或双画幅完成率验收。
 

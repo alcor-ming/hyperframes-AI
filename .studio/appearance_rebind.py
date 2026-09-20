@@ -10,7 +10,8 @@ import appearance
 from component_harness import package_write_lock
 from work_requests import safe
 
-KNOWN_RUNTIMES = {"b6b0a69411f48d9f777a7e8fdf342a89e866b51d7d734d760b431ee9524908f0"}
+KNOWN_RUNTIMES = {"b6b0a69411f48d9f777a7e8fdf342a89e866b51d7d734d760b431ee9524908f0",
+                  "51c9496479b3111f876a412cbf7133be7b7e203e517ea6d00390e92f8a622d9b"}
 FILES = ("ANIMATION_PLAN.md", "variant.yaml")
 
 

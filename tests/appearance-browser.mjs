@@ -27,7 +27,7 @@ for name, kind, payload in [
  ('light','background',{'renderer':'solid','parameters':{'color':'#d9e9e3'}}),
  ('dark','background',{'renderer':'solid','parameters':{'color':'#24332e'}}),
  ('clear','background',{'renderer':'transparent','parameters':{}}),
- ('gentle','motion',{'slots':{'reveal':{'duration':1,'easing':'linear','x':40}},'reduced_motion':{}})]:
+ ('gentle','motion',{'slots':{'reveal':{'duration':1,'easing':'linear','x':40},'emphasis':{'duration':1,'easing':'power2.out','stagger':0.1}},'reduced_motion':{'reveal':{'duration':0.1,'easing':'power2.out'}}})]:
  source = root/name; source.mkdir()
  parameters = {'tokens.colors.text':{'type':'string','default':'#000000'}} if kind == 'theme' else {'slots.reveal.duration':{'type':'number','minimum':0,'default':1}} if kind == 'motion' else {}
  (source/'asset.json').write_text(json.dumps({'schema_version':2,'id':name,'version':1,'kind':kind,'entry':'entry.json','contract_version':1,'parameters':parameters,'compatibility':{}}))
@@ -124,7 +124,10 @@ try {
     await new Promise(resolve => setTimeout(resolve, 80));
     const still = getComputedStyle(card).transform;
     binding.dispose();
-    return { frames, still, animations: card.getAnimations().length };
+    let unsupportedReduced = false;
+    try { HarnessAppearance.bindMotion(card, await ready, 'reveal', { cue: 2, reducedMotion: true }); }
+    catch { unsupportedReduced = card.getAnimations().length === 0; }
+    return { frames, still, unsupportedReduced, animations: card.getAnimations().length };
   });
   assert.equal(motion.frames[0], motion.frames[3]);
   assert.equal(motion.frames[0], 'matrix(1, 0, 0, 1, 30, 0)', 'Frozen dot-path Motion override must apply');
@@ -132,6 +135,7 @@ try {
   assert.notEqual(motion.frames[0], motion.frames[1]);
   assert.notEqual(motion.frames[0], motion.frames[2]);
   assert.equal(motion.animations, 0);
+  assert.equal(motion.unsupportedReduced, true, 'Legacy unsupported presets fail only when selected, without effects');
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(output, 'evidence.json'), JSON.stringify({ static: evidence, motion }, null, 2));
   console.log(output);
