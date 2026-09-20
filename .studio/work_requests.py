@@ -160,12 +160,17 @@ def freeze(store, work, variant, request_id, brief, scenes, affected, context, p
                 if digest(target) != baseline[relative]:
                     raise RequestError(f"Request input changed while freezing: {relative}")
         shutil.copyfile(work / "WORK.md", staging / "WORK.md")
+        state = read(variant / "variant.yaml") if (variant / "variant.yaml").is_file() else {}
         for name in ("variant.yaml", "SCRIPT.md", "RESEARCH.md", "ANIMATION_PLAN.md", "section_map.json"):
-            source = variant / name
+            reference = state.get("shared_inputs", {}).get(name)
+            source = safe(work, reference) if reference is not None else variant / name
             if source.is_file():
                 target = staging / "repro" / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)
+        if state.get("shared_inputs"):
+            state.pop("shared_inputs")
+            write(staging / "repro" / "variant.yaml", state)
         metadata = {"schema_version": 1, "request_id": request_id, "revision": revision,
                     "work": work.name, "variant": variant.name, "scenes": scenes, "preview": preview,
                     "affected_files": sorted(set(affected)), "baseline": baseline, "files": entries(staging)}

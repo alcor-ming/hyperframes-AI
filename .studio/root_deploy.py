@@ -54,8 +54,12 @@ def safe(root, name):
 
 
 def managed(files):
+    if not isinstance(files, dict):
+        raise ValueError("Manifest files must be an object")
     seen = set()
     for name, value in files.items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            raise ValueError("Manifest entries must be strings")
         key = name.casefold()
         if key in seen or not re.fullmatch(r"[0-9a-f]{64}", value):
             raise ValueError(f"Invalid or case-colliding manifest entry: {name}")
@@ -72,6 +76,18 @@ def verify_package(root):
         raise ValueError("Package requires a valid release identity and root-v1 layout")
     files = manifest["files"]
     managed(files)
+    kind = manifest.get("package_kind", "full")
+    if kind not in {"full", "tools"}:
+        raise ValueError("Unsupported package kind")
+    if kind == "tools":
+        required = manifest["runtime_files"]
+        managed(required)
+        if not required or any(not name.startswith("runtime/") for name in required):
+            raise ValueError("Tools package requires exact runtime files")
+        if any(name.startswith("runtime/") for name in files):
+            raise ValueError("Tools package cannot contain runtime files")
+        if not isinstance(manifest.get("runtime_lock_sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", manifest["runtime_lock_sha256"]) or files.get("windows-runtime.lock.json") != manifest["runtime_lock_sha256"]:
+            raise ValueError("Tools package runtime lock mismatch")
     if ".release.json" in {name.casefold() for name in files}:
         raise ValueError("Package cannot claim its own .release.json")
     for name, value in files.items():
@@ -195,7 +211,64 @@ def restore(root, transaction, check_only=False):
     safe(root, PENDING).unlink(missing_ok=True)
 
 
-def deploy(package, root, config_path):
+def prune_backups(root, keep=2):
+    """Under command_lock; only completed, owned backups beyond the rollback chain."""
+    if keep < 2:
+        raise ValueError("Keep at least two rollback backups")
+    state = verify_root(root)
+    protected = set()
+    name = state.get("backup")
+    for _ in range(keep):
+        if not name:
+            break
+        backup = safe(root, name)
+        protected.add(name)
+        prior = safe(backup, MANIFEST)
+        transaction = read(safe(backup, "transaction.json"))
+        expected = transaction["before"].get(MANIFEST)
+        if (digest(prior) if prior.is_file() else None) != expected:
+            raise ValueError("Rollback chain is damaged; retain all backups")
+        name = read(prior).get("backup") if prior.exists() else None
+    parent = safe(root, f"{STATE}/deploy-backups")
+    removed, retained = [], []
+    if not parent.exists():
+        return {"removed": removed, "retained": retained}
+    for backup in sorted(parent.iterdir()):
+        relative = backup.relative_to(root).as_posix()
+        if relative in protected:
+            continue
+        try:
+            safe(root, relative)
+            if not re.fullmatch(r"[0-9a-f]{32}", backup.name):
+                raise ValueError("Unknown backup")
+            transaction = read(backup / "transaction.json")
+            receipt = read(backup / "completed.json")
+            if not isinstance(transaction, dict) or not isinstance(transaction.get("before"), dict):
+                raise ValueError("Unknown backup transaction")
+            if transaction.get("retention") != "managed-v1" or transaction["backup"] != relative or receipt != {"transaction_sha256": digest(backup / "transaction.json")}:
+                raise ValueError("Unowned or incomplete backup")
+            expected = {name: value for name, value in transaction["before"].items() if value is not None}
+            expected.update({"transaction.json": digest(backup / "transaction.json"), "completed.json": digest(backup / "completed.json")})
+            # Never recursively delete unknown contents or follow junctions.
+            for path in backup.rglob("*"):
+                name = path.relative_to(backup).as_posix()
+                safe(backup, name)
+                if path.is_file() and (name not in expected or digest(path) != expected[name]):
+                    raise ValueError("Modified backup")
+                if path.is_dir() and not any(item.startswith(name + "/") for item in expected):
+                    raise ValueError("Unknown backup directory")
+            if any(digest(safe(backup, name)) != value for name, value in expected.items()):
+                raise ValueError("Incomplete backup")
+            shutil.rmtree(backup)
+            removed.append(relative)
+        except (ValueError, OSError, KeyError, TypeError) as error:
+            retained.append({"path": relative, "reason": str(error)})
+    return {"removed": removed, "retained": retained}
+
+
+def deploy(package, root, config_path, keep=2):
+    if keep < 2:
+        raise ValueError("Keep at least two rollback backups")
     package = package.resolve()
     root = root.absolute()
     if inside(package, root) or inside(root, package):
@@ -215,11 +288,18 @@ def deploy(package, root, config_path):
             raise ValueError("Deployment cannot overwrite existing local configuration")
         validate_config(root, config, manifest["channel"] == "candidate")
         files = dict(manifest["files"])
+        if manifest.get("package_kind") == "tools":
+            required = manifest["runtime_files"]
+            installed = {name: value for name, value in prior["files"].items() if name.startswith("runtime/")}
+            if installed != required or prior["files"].get("windows-runtime.lock.json") != manifest["runtime_lock_sha256"]:
+                raise ValueError("Installed runtime differs; deploy a full package")
+            files.update(required)
         files[".release.json"] = digest(package / ".release.json")
         for name in files:
             if safe(root, name).exists() and name not in prior["files"]:
                 raise ValueError(f"Unmanaged file conflict: {name}")
-        writes = {name: safe(package, name) for name in files}
+        changed = {name for name, value in files.items() if prior["files"].get(name) != value}
+        writes = {name: safe(package, name) for name in changed}
         extras = {}
         if not config_file.exists():
             extras[CONFIG] = (json.dumps(config, indent=2) + "\n").encode()
@@ -227,7 +307,7 @@ def deploy(package, root, config_path):
             marker = Path(config["work_root"]) / ".runtime/review.json"
             if not marker.exists():
                 extras[marker.relative_to(root).as_posix()] = (json.dumps({"mode": "review", "review_id": marker.parent.parent.name, "ready": True}) + "\n").encode()
-        names = set(prior["files"]) | set(files) | set(extras) | {MANIFEST}
+        names = (set(prior["files"]) - set(files)) | changed | set(extras) | {MANIFEST}
         backup_name = f"{STATE}/deploy-backups/{uuid.uuid4().hex}"
         backup = safe(root, backup_name)
         before = {}
@@ -243,6 +323,7 @@ def deploy(package, root, config_path):
         after = dict(files)
         after.update({name: hashlib.sha256(data).hexdigest() for name, data in extras.items()})
         transaction = {"backup": backup_name, "before": before, "after": after,
+                       "retention": "managed-v1",
                        "config_sha256": digest(config_file) if config_file.exists() else after[CONFIG]}
         write_json(backup / "transaction.json", transaction)
         write_json(safe(root, PENDING), transaction)
@@ -255,10 +336,20 @@ def deploy(package, root, config_path):
                     target.unlink()
             write_json(safe(root, MANIFEST), state)
             safe(root, PENDING).unlink()
+            verify_root(root)
         except BaseException:
+            if not safe(root, PENDING).exists():
+                write_json(safe(root, PENDING), transaction)
             restore(root, transaction)
             raise
-        return verify_root(root)
+        result = dict(state, changed_count=len(changed), removed_count=len(set(prior["files"]) - set(files)),
+                      backup_bytes=sum(safe(backup, name).stat().st_size for name, value in before.items() if value is not None))
+        try:
+            write_json(backup / "completed.json", {"transaction_sha256": digest(backup / "transaction.json")})
+            result["cleanup"] = prune_backups(root, keep)
+        except (ValueError, OSError, KeyError, TypeError) as error:
+            result["cleanup"] = {"deferred": str(error)}
+        return result
 
 
 def recover(root, rollback=False):
@@ -284,6 +375,7 @@ def main():
     parser.add_argument("--package", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--root", type=Path)
     parser.add_argument("--config", type=Path)
+    parser.add_argument("--keep", type=int, default=2)
     args = parser.parse_args()
     try:
         if args.command == "verify":
@@ -293,12 +385,12 @@ def main():
         elif args.command in {"verify-root", "status"}:
             result = verify_root(args.root.absolute())
         elif args.command == "deploy":
-            result = deploy(args.package, args.root, args.config)
+            result = deploy(args.package, args.root, args.config, args.keep)
         else:
             result = recover(args.root.absolute(), args.command == "rollback")
         if "files" in result:
-            result = {"release": result["release"], "root": str((args.root or args.package).absolute()),
-                      "managed_count": len(result["files"]), "backup": result.get("backup")}
+            result = {**{key: value for key, value in result.items() if key != "files"},
+                      "root": str((args.root or args.package).absolute()), "managed_count": len(result["files"])}
         print(json.dumps(result, indent=2))
     except (ValueError, OSError, KeyError, TypeError) as error:
         parser.exit(1, f"root deployment: {error}\n")

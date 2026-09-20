@@ -173,7 +173,7 @@ Purpose: move to the next section or argument.
 Purpose: end movement and create a reading hold.
 
 - allow 0.8–2.5 seconds of stable reading depending on copy length;
-- remove decorative movement during the hold.
+- keep body text stable during reading; restrained decorative movement may maintain whole-frame activity without competing for attention.
 
 ## Timing tokens
 

@@ -16,6 +16,7 @@ import sys
 import tarfile
 import tempfile
 import zipfile
+import uuid
 
 
 REPO = Path(__file__).resolve().parent
@@ -167,6 +168,7 @@ def stage_runtime(staging: Path, cache: Path) -> dict[str, str]:
 
 
 def write_zip(source: Path, archive: Path, prefix: str, timestamp: int) -> None:
+    assert_no_development_harness(source)
     dt = datetime.fromtimestamp(timestamp, timezone.utc)
     zip_time = (max(dt.year, 1980), dt.month, dt.day, dt.hour, dt.minute, dt.second)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
@@ -201,8 +203,25 @@ def verified_archive(archive: Path) -> str:
     return roots.pop()
 
 
+def development_harness(name: str) -> bool:
+    parts = safe_member(name).as_posix().casefold().split("/")
+    return parts[0] in {".trellis", ".codex", ".claude", "agents.override.md", "board.md"} or (
+        len(parts) >= 3 and parts[:2] == [".agents", "skills"]
+        and (parts[2].startswith("trellis-") or parts[2] == "gitnexus")
+    )
+
+
+def assert_no_development_harness(staging: Path) -> None:
+    for path in staging.rglob("*"):
+        name = path.relative_to(staging).as_posix()
+        if development_harness(name):
+            raise ReleaseError(f"Development Harness must not enter a product package: {name}")
+
+
 def public_source(name: str) -> bool:
     path = safe_member(name)
+    if development_harness(name):
+        return False
     forbidden = {".git", ".runtime", "__pycache__", "node_modules", "works", "requests", "review",
                  "credentials", "secrets", ".env", ".codex", "dist"}
     if any(part in forbidden or part.startswith(".env.") for part in path.parts):
@@ -254,7 +273,7 @@ def stage_windows_rules(staging: Path) -> None:
     shutil.copyfile(template, staging / "AGENTS.md")
 
 
-def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: list[str], *, channel: str = "candidate") -> Path:
+def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: list[str], *, channel: str = "candidate", runtime_files: dict | None = None) -> Path:
     if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,79}", build_id):
         raise ReleaseError("Candidate ID must use lowercase letters, digits, dots or hyphens")
     if channel not in {"candidate", "local"}:
@@ -273,18 +292,21 @@ def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: li
         staging.mkdir()
         sources = freeze_sources(staging, includes)
         skills = stage_skills(staging)
-        runtime = stage_runtime(staging, runtime_cache)
+        runtime = stage_runtime(staging, runtime_cache) if runtime_files is None else {}
         release_checks(staging)
         stage_windows_rules(staging)
         strip_bundled_assets(staging)
         sources = {name: digest for name, digest in sources.items() if (staging / name).is_file()}
         manifest = {"schema_version": 3, "layout": "root-v1", "channel": channel, "release": identity,
+                    "package_kind": "full" if runtime_files is None else "tools",
                     "commit": head, "dirty": dirty, "target": "windows-x64",
                     "built_at": datetime.fromtimestamp(timestamp, timezone.utc).isoformat(),
                     "source_file_sha256": sources, "runtime_asset_sha256": runtime,
                     "local_skill_sha256": skills,
                     "files": {p.relative_to(staging).as_posix(): sha256(p)
                               for p in sorted(staging.rglob("*")) if p.is_file()}}
+        if runtime_files is not None:
+            manifest.update(runtime_files=runtime_files, runtime_lock_sha256=sha256(staging / "windows-runtime.lock.json"))
         (staging / ".release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         write_zip(staging, archive, identity, timestamp)
     checksum.write_text(f"{sha256(archive)}  {archive.name}\n", encoding="ascii")
@@ -321,6 +343,8 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
         with tarfile.open(git_tar) as bundle:
             bundle.extractall(staging, filter="data")
 
+        assert_no_development_harness(staging)
+
         dependency_hashes = stage_skills(staging)
 
         runtime_hashes = stage_runtime(staging, runtime_cache)
@@ -352,6 +376,139 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
     return archive
 
 
+def reusable_runtime(root: Path, lock_path: Path) -> dict | None:
+    state_path = root / ".studio/.runtime/deployment.json"
+    if not state_path.exists():
+        return None
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    if state["files"].get("windows-runtime.lock.json") != sha256(lock_path):
+        return None
+    files = {name: value for name, value in state["files"].items() if name.startswith("runtime/")}
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    if not files or lock.get("pending_assets") or not lock.get("required_files") or not all(name in files for name in lock["required_files"]):
+        return None
+    return files
+
+
+def prune_artifacts(parent: Path, target: str, keep: int, current: Path | None = None) -> list[str]:
+    """Only new-entrypoint receipts grant ownership, never filename or age alone."""
+    sys.path.insert(0, str(REPO / ".studio"))
+    from root_deploy import safe
+    completed = []
+    for directory in sorted(parent.iterdir(), reverse=True):
+        try:
+            safe(parent, directory.name)
+            receipt = json.loads(safe(directory, "receipt.json").read_text(encoding="utf-8"))
+            if not isinstance(receipt, dict) or not isinstance(receipt.get("artifacts"), dict):
+                continue
+            if receipt.get("owner") != "release-deploy-v1" or receipt.get("target") != target:
+                continue
+            expected = receipt["artifacts"]
+            if set(p.name for p in directory.iterdir()) != set(expected) | {"receipt.json"}:
+                continue
+            if any(sha256(safe(directory, name)) != value for name, value in expected.items()):
+                continue
+            completed.append(directory)
+        except (ValueError, OSError, KeyError, TypeError):
+            continue
+    if current is not None:
+        if current not in completed:
+            return []
+        completed.remove(current)
+        completed.insert(0, current)
+    removed = []
+    for directory in completed[keep:]:
+        shutil.rmtree(directory)
+        removed.append(str(directory))
+    return removed
+
+
+def install_archive(archive: Path, root: Path, expected_hash: str, keep: int, config: Path | None) -> dict:
+    if sha256(archive) != expected_hash:
+        raise ReleaseError("Transferred archive checksum differs; target not touched")
+    identity = verified_archive(archive)
+    unpacked = archive.parent / "unpacked"
+    unpacked.mkdir()
+    extract_zip(archive, unpacked)
+    package = unpacked / identity
+    sys.path.insert(0, str(package / ".studio"))
+    import root_deploy
+    result = root_deploy.deploy(package, root, config, keep)
+    result["managed_count"] = len(result.pop("files"))
+    result["package_kind"] = root_deploy.read(package / ".release.json").get("package_kind", "full")
+    return result
+
+
+def deploy_windows(args) -> dict:
+    if sys.platform != "linux" or not re.fullmatch(r"[A-Za-z]:[\\/].+", args.root) or any(c in args.root for c in "\r\n\0"):
+        raise ReleaseError("Run deploy in WSL with an absolute Windows drive path")
+    if args.keep < 2:
+        raise ReleaseError("Keep at least two rollback versions")
+    root = Path(run("wslpath", "-u", args.root, capture=True))
+    sys.path.insert(0, str(REPO / ".studio"))
+    from root_deploy import safe
+    safe(root.parent, root.name)
+    target = run("wslpath", "-w", str(root), capture=True)
+    target_key = hashlib.sha256(target.casefold().encode()).hexdigest()[:16]
+    parent = args.output_dir.resolve() / "deployments" / target_key
+    parent.mkdir(parents=True, exist_ok=True)
+    # One host build/transfer per target; the native command also holds its root lock.
+    import fcntl
+    with (parent / ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        build_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:12]
+        output = parent / build_id
+        output.mkdir()
+        runtime_files = None if args.full else reusable_runtime(root, RUNTIME_LOCK)
+        archive = candidate(build_id, output, args.runtime_cache.resolve(), args.include,
+                            channel="local", runtime_files=runtime_files)
+        # Bootstrap uses only locked embedded Python, outside the live installation.
+        identity = verified_archive(archive)
+        with zipfile.ZipFile(archive) as bundle:
+            runtime_lock = json.loads(bundle.read(identity + "/windows-runtime.lock.json"))
+            bootstrap = bundle.read(identity + "/release")
+        python_asset = next((asset for asset in runtime_lock["assets"] if asset["kind"] == "python"), None)
+        if python_asset is None:
+            raise ReleaseError("Runtime lock is missing bootstrap Python")
+        python_zip = args.runtime_cache / safe_member(python_asset["file"])
+        if sha256(python_zip) != python_asset["sha256"]:
+            raise ReleaseError("Bootstrap Python differs from runtime lock")
+        staging_parent = safe(root.parent, ".hyperframes-deploy")
+        staging_parent.mkdir(exist_ok=True)
+        stage = staging_parent / ("deploy-" + build_id)
+        stage.mkdir()
+        print(f"Windows staging: {stage}", flush=True)
+        extract_zip(python_zip, stage / "python")
+        (stage / "release.py").write_bytes(bootstrap)
+        for path in (archive, archive.with_suffix(archive.suffix + ".sha256")):
+            shutil.copy2(path, stage / path.name)
+        win = lambda path: run("wslpath", "-w", str(path), capture=True)
+        command = [str(stage / "python/python.exe"), "-B", win(stage / "release.py"),
+                   "_install", "--archive", win(stage / archive.name), "--root", target,
+                   "--sha256", sha256(archive), "--keep", str(args.keep)]
+        if args.config:
+            command.extend(["--config", args.config])
+        result = subprocess.run(command, cwd=stage, capture_output=True, text=True)
+        (output / "stdout.log").write_text(result.stdout, encoding="utf-8")
+        (output / "stderr.log").write_text(result.stderr, encoding="utf-8")
+        if result.returncode:
+            raise ReleaseError(f"Native deployment failed ({result.returncode}); staging retained: {stage}; logs: {output}\n{result.stderr}")
+        receipt = json.loads(result.stdout)
+        receipt.update(owner="release-deploy-v1", target=target, archive_bytes=archive.stat().st_size)
+        receipt["artifacts"] = {path.name: sha256(path) for path in output.iterdir()}
+        (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        try:
+            # The native process has exited; only this invocation's fresh staging is removed.
+            for path in stage.rglob("*"):
+                safe(stage, path.relative_to(stage).as_posix())
+            shutil.rmtree(stage)
+            receipt["removed_artifacts"] = prune_artifacts(parent, target, args.keep + 1, output)
+        except (ValueError, OSError) as error:
+            receipt["cleanup_deferred"] = str(error)
+        (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        return receipt
+
+
 def parser() -> argparse.ArgumentParser:
     command = argparse.ArgumentParser(description=__doc__)
     subcommands = command.add_subparsers(dest="command", required=True)
@@ -366,6 +523,20 @@ def parser() -> argparse.ArgumentParser:
     candidate_parser.add_argument("--include", action="append", default=[], help="Explicit new public file; repeat for each untracked addition")
     verify_parser = subcommands.add_parser("verify")
     verify_parser.add_argument("archive", type=Path)
+    deploy_parser = subcommands.add_parser("deploy", help="Build and deploy from WSL to a Windows root")
+    deploy_parser.add_argument("--root", required=True)
+    deploy_parser.add_argument("--runtime-cache", type=Path, default=REPO / ".studio/.runtime/windows-runtime-cache")
+    deploy_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
+    deploy_parser.add_argument("--include", action="append", default=[])
+    deploy_parser.add_argument("--config", help="Windows JSON path for first installation only")
+    deploy_parser.add_argument("--keep", type=int, default=2, help="Rollback versions (minimum 2); archives keep this many plus current")
+    deploy_parser.add_argument("--full", action="store_true", help="Include runtime even if its lock matches")
+    install_parser = subcommands.add_parser("_install", help=argparse.SUPPRESS)
+    install_parser.add_argument("--archive", required=True, type=Path)
+    install_parser.add_argument("--root", required=True, type=Path)
+    install_parser.add_argument("--sha256", required=True)
+    install_parser.add_argument("--keep", type=int, default=2)
+    install_parser.add_argument("--config", type=Path)
     return command
 
 
@@ -376,9 +547,15 @@ def main(arguments: list[str] | None = None) -> int:
             build(args.version, args.output_dir.resolve(), args.runtime_cache.resolve())
         elif args.command in {"candidate", "local"}:
             candidate(args.build_id, args.output_dir.resolve(), args.runtime_cache.resolve(), args.include, channel=args.command)
+        elif args.command == "deploy":
+            print(json.dumps(deploy_windows(args), indent=2))
+        elif args.command == "_install":
+            if sys.platform != "win32":
+                raise ReleaseError("Internal installer requires native Windows Python")
+            print(json.dumps(install_archive(args.archive, args.root, args.sha256, args.keep, args.config), indent=2))
         else:
             print(verified_archive(args.archive.resolve()))
-    except (ReleaseError, subprocess.CalledProcessError, OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
+    except (ReleaseError, subprocess.CalledProcessError, OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
         print(f"release: {exc}", file=sys.stderr)
         return 1
     return 0

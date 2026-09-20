@@ -3,7 +3,10 @@ from __future__ import annotations
 from importlib.machinery import SourceFileLoader
 import importlib.util
 import json
+import os
 from pathlib import Path
+import shutil
+import sys
 import tempfile
 import subprocess
 import unittest
@@ -20,6 +23,176 @@ LOADER.exec_module(RELEASE)
 
 
 class ReleaseCliTest(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux" and os.environ.get("HF_DEPLOY_NATIVE_TEST_ROOT"),
+                         "Set HF_DEPLOY_NATIVE_TEST_ROOT to a Windows-mounted isolated test parent")
+    def test_native_deployment_entrypoint(self):
+        parent = Path(os.environ["HF_DEPLOY_NATIVE_TEST_ROOT"])
+        parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="deploy-fixture-", dir=parent) as temporary:
+            base = Path(temporary)
+            root = base / "\u90e8\u7f72 root"
+            for name in ("works/active", "works/parked", "works/archive", "assets"):
+                (root / name).mkdir(parents=True)
+            win = lambda path: RELEASE.run("wslpath", "-w", str(path), capture=True)
+            config = base / "config.json"
+            config.write_text(json.dumps({"work_root": win(root), "asset_root": win(root / "assets")}))
+            real_lock = json.loads(RELEASE.RUNTIME_LOCK.read_text())
+            python_asset = next(asset for asset in real_lock["assets"] if asset["kind"] == "python")
+            lock = base / "fixture-lock.json"
+            lock.write_text(json.dumps({"target": "windows-x64", "assets": [python_asset],
+                                       "required_files": ["runtime/python/python.exe"]}))
+            args = RELEASE.parser().parse_args(["deploy", "--root", win(root), "--config", win(config),
+                                               "--output-dir", str(base / "artifacts")])
+            def fixture_candidate(build_id, output, cache, includes, *, channel, runtime_files):
+                source = base / ("source-" + build_id)
+                (source / ".studio").mkdir(parents=True)
+                for name in ("root_deploy.py", "windows_runtime.py"):
+                    shutil.copy2(REPO / ".studio" / name, source / ".studio" / name)
+                shutil.copy2(REPO / "release", source / "release")
+                shutil.copy2(lock, source / "windows-runtime.lock.json")
+                (source / "work.cmd").write_text(build_id)
+                if runtime_files is None:
+                    binary = source / "runtime/python/python.exe"
+                    binary.parent.mkdir(parents=True)
+                    binary.write_bytes(b"fixture dependency, never executed")
+                manifest = {"release": "local-" + build_id, "channel": "local", "layout": "root-v1", "target": "windows-x64",
+                            "package_kind": "full" if runtime_files is None else "tools",
+                            "files": {p.relative_to(source).as_posix(): RELEASE.sha256(p) for p in source.rglob("*") if p.is_file()}}
+                if runtime_files is not None:
+                    manifest.update(runtime_files=runtime_files, runtime_lock_sha256=RELEASE.sha256(lock))
+                (source / ".release.json").write_text(json.dumps(manifest))
+                archive = output / "fixture.zip"
+                RELEASE.write_zip(source, archive, manifest["release"], 1)
+                archive.with_suffix(".zip.sha256").write_text(f"{RELEASE.sha256(archive)}  {archive.name}\n")
+                return archive
+            with mock.patch.object(RELEASE, "RUNTIME_LOCK", lock), \
+                 mock.patch.object(RELEASE, "candidate", side_effect=fixture_candidate):
+                first = RELEASE.deploy_windows(args)
+                self.assertEqual(first["package_kind"], "full")
+                for _ in range(3):
+                    result = RELEASE.deploy_windows(args)
+                    self.assertEqual(result["package_kind"], "tools")
+                    self.assertFalse((root / result["backup"] / "runtime").exists())
+                self.assertEqual(len(list((root / ".studio/.runtime/deploy-backups").iterdir())), 2)
+                self.assertEqual(len(list((base / "artifacts").rglob("receipt.json"))), 3)
+                self.assertFalse(list((base / ".hyperframes-deploy").iterdir()))
+                (root / "work.cmd").write_text("user edit")
+                with self.assertRaisesRegex(RELEASE.ReleaseError, "Native deployment failed"):
+                    RELEASE.deploy_windows(args)
+                self.assertEqual((root / "work.cmd").read_text(), "user edit")
+                self.assertEqual(len(list((base / ".hyperframes-deploy").iterdir())), 1)
+
+    def test_deploy_arguments_and_runtime_selection(self):
+        args = RELEASE.parser().parse_args(["deploy", "--root", r"D:\AI\AI+hyperframes"])
+        self.assertEqual(args.keep, 2)
+        self.assertFalse(args.full)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock = root / "lock.json"
+            lock.write_text(json.dumps({"required_files": ["runtime/python/python.exe"]}))
+            self.assertIsNone(RELEASE.reusable_runtime(root, lock))
+            state = root / ".studio/.runtime/deployment.json"
+            state.parent.mkdir(parents=True)
+            files = {"runtime/python/python.exe": "a" * 64, "windows-runtime.lock.json": RELEASE.sha256(lock)}
+            state.write_text(json.dumps({"files": files}))
+            self.assertEqual(RELEASE.reusable_runtime(root, lock), {"runtime/python/python.exe": "a" * 64})
+            lock.write_text("{}")
+            self.assertIsNone(RELEASE.reusable_runtime(root, lock))
+
+    def test_artifact_retention_only_removes_verified_owned_successes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ("01", "02", "03", "04", "05"):
+                directory = root / name
+                directory.mkdir()
+                archive = directory / "package.zip"
+                archive.write_bytes(b"archive")
+                (directory / "receipt.json").write_text(json.dumps({"owner": "release-deploy-v1", "target": "fixture",
+                    "artifacts": {"package.zip": RELEASE.sha256(archive)}}))
+            (root / "02" / "user.txt").write_text("unknown")
+            (root / "03" / "package.zip").write_bytes(b"changed")
+            removed = RELEASE.prune_artifacts(root, "fixture", 2)
+            self.assertEqual(removed, [str(root / "01")])
+            self.assertTrue((root / "02" / "user.txt").exists())
+            self.assertTrue((root / "03").exists())
+            # Current must survive even if wall time moved backwards or its UUID sorts first.
+            removed = RELEASE.prune_artifacts(root, "fixture", 1, root / "04")
+            self.assertEqual(removed, [str(root / "05")])
+            self.assertTrue((root / "04" / "receipt.json").exists())
+            (root / "03" / "receipt.json").write_text("[]")
+            RELEASE.prune_artifacts(root, "fixture", 1, root / "04")
+
+    def test_tools_candidate_omits_runtime_but_keeps_exact_requirement(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            def freeze(staging, includes):
+                (staging / "windows-runtime.lock.json").write_text("locked")
+                return {"windows-runtime.lock.json": RELEASE.sha256(staging / "windows-runtime.lock.json")}
+            runtime = {"runtime/python/python.exe": "a" * 64}
+            with mock.patch.object(RELEASE, "run", side_effect=["head", "dirty"]), \
+                 mock.patch.object(RELEASE, "freeze_sources", side_effect=freeze), \
+                 mock.patch.object(RELEASE, "stage_skills", return_value={}), \
+                 mock.patch.object(RELEASE, "stage_windows_rules"), \
+                 mock.patch.object(RELEASE, "release_checks"), \
+                 mock.patch.object(RELEASE, "stage_runtime") as stage:
+                archive = RELEASE.candidate("fixture", root / "out", root / "cache", [], channel="local", runtime_files=runtime)
+            stage.assert_not_called()
+            with zipfile.ZipFile(archive) as bundle:
+                manifest = json.loads(bundle.read("local-fixture/.release.json"))
+                self.assertEqual(manifest["package_kind"], "tools")
+                self.assertEqual(manifest["runtime_files"], runtime)
+                self.assertFalse(any("/runtime/" in name for name in bundle.namelist()))
+
+    def test_development_harness_cannot_enter_any_product_archive(self) -> None:
+        forbidden = (".trellis/project.json", ".trellis/tasks/example/prd.md",
+                     ".trellis/plans/example.md", "AGENTS.override.md", "BOARD.md",
+                     ".codex/agents/local.toml", ".claude/settings.json",
+                     ".agents/skills/trellis-start/SKILL.md", ".agents/skills/gitnexus/SKILL.md")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo = root / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            for name in forbidden:
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("development only")
+                self.assertFalse(RELEASE.public_source(name))
+                with self.assertRaises(RELEASE.ReleaseError):
+                    RELEASE.freeze_sources(root / "explicit", [name], repo)
+            for name in (".studio/component_harness.py", ".agents/skills/hyperframes-codex-workflow/SKILL.md",
+                         "docs/PRD/product.md"):
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("product")
+                self.assertTrue(RELEASE.public_source(name))
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            staged = root / "candidate"
+            sources = RELEASE.freeze_sources(staged, [], repo)
+            self.assertFalse(set(sources) & set(forbidden))
+            RELEASE.write_zip(staged, root / "candidate.zip", "candidate-test", 1)
+            for name in forbidden:
+                with self.subTest(name=name):
+                    leaked = staged / name
+                    leaked.parent.mkdir(parents=True, exist_ok=True)
+                    leaked.write_text("leaked")
+                    with self.assertRaisesRegex(RELEASE.ReleaseError, "Development Harness"):
+                        RELEASE.write_zip(staged, root / "leaked.zip", "local-test", 1)
+                    leaked.unlink()
+                    # Empty development directories are also forbidden.
+                    while leaked.parent != staged and not any(leaked.parent.iterdir()):
+                        leaked = leaked.parent
+                        leaked.rmdir()
+            with mock.patch.object(RELEASE, "run", side_effect=["", "head", "head", "head", ""]), \
+                 mock.patch.object(RELEASE.tarfile, "open") as bundle, \
+                 mock.patch.object(RELEASE, "stage_skills") as skills:
+                def contaminate(destination, **kwargs):
+                    (destination / "AGENTS.override.md").write_text("development only")
+                bundle.return_value.__enter__.return_value.extractall.side_effect = contaminate
+                with self.assertRaisesRegex(RELEASE.ReleaseError, "Development Harness"):
+                    RELEASE.build("2026.09.1", root / "stable", root / "cache")
+                skills.assert_not_called()
+
     def test_windows_zip_is_deterministic_and_checksum_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

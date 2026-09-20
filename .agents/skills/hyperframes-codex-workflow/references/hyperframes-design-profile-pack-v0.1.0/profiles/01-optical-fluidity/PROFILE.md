@@ -37,20 +37,20 @@ Avoid for nostalgic, literary, archival or intentionally tactile subjects unless
 
 ## Pure HyperFrames subtemplates
 
-For `pure_hyperframes`, select exactly one presentation structure, state it in the Animation Plan, and load only its file:
+These legacy structures are optional design references, not Profile requirements. The main type and Plan own narrative architecture; load a reference only when useful:
 
 - `hero_flow`｜主视觉叙事流：read [`subtemplates/hero-flow.md`](subtemplates/hero-flow.md).
 - `module_stage`｜模块讲解台：read [`subtemplates/module-stage.md`](subtemplates/module-stage.md).
 
-Do not load both subtemplate files.
+Do not load unused references.
 
 Select from the information structure, not the canvas ratio alone:
 
 - Use `hero_flow` for a story, claim, case or process whose visual mechanism changes with each semantic turn.
 - Use `module_stage` for a list, tool set, course or repeated comparison whose peer items share one explanation pattern.
-- Do not combine both structures in one Variant. Changing the selected subtemplate after Plan approval requires a revised Animation Plan and user approval.
+- Select local layouts by Scene needs; only substantive changes to approved visual direction need local confirmation.
 
-The subtemplate defines presentation architecture only. Component selection, component appearance, measurements and motion choreography belong to the Animation Plan and the separate component Skill/library.
+Subtemplates do not override animation-led/text-led roles. Component selection, appearance, measurements and choreography belong to the Plan and asset contracts.
 
 ## Color language
 
@@ -184,11 +184,11 @@ At 60fps:
 
 ## Pure HyperFrames mapping
 
-- Build a complete three-layer spatial field.
+- Use only the spatial layers needed for hierarchy and the selected main type.
 - Use image, diagram or data objects as depth anchors.
 - The scene may use more pronounced Focus → Connect → Resolve choreography.
 - Ambient light may drift slowly, but it must not become a visible loop competing with speech.
-- Apply exactly one of `hero_flow` or `module_stage`; their composition rules override this baseline where they are more specific.
+- Typography-led cards, decorative SVG/icons/images and simple comparisons are valid; no mandatory `hero_flow`/`module_stage` architecture.
 
 ## Hard bans
 
@@ -205,8 +205,8 @@ At 60fps:
 
 ## Scene QA
 
-- Does the Animation Plan name exactly one Pure HyperFrames subtemplate?
-- Does the Scene follow the selected subtemplate rather than borrowing the other structure?
+- Does the Scene support the Plan's independent main type and A/B role?
+- Are typography, material and hierarchy consistent without forcing one layout?
 - Is glass solving hierarchy or merely adding style?
 - Does every path connect two meaningful anchors?
 - Does the focal object remain obvious after motion stops?

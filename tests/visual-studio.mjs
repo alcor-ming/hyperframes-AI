@@ -1,7 +1,7 @@
 // Real pinned Studio integration with synthetic Review Works, not production acceptance.
 // Set HF_PACKAGE, PLAYWRIGHT_PACKAGE and CHROME_PATH to existing local dependencies.
 // GSAP_FILE defaults to the runtime's sibling gsap package; include its local MotionPathPlugin.
-// Windows also requires WORK_COMMAND=<session/work.cmd> and FIXTURE_ROOT=<bound Review root>.
+// Windows also requires WORK_COMMAND=<isolated root/work.cmd> and FIXTURE_ROOT=<bound Review root>.
 // WORK_COMMAND may be a JSON argv array; WSL defaults to python3 .studio/work.py.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -16,7 +16,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const {HF_PACKAGE, PLAYWRIGHT_PACKAGE, CHROME_PATH, WORK_COMMAND, FIXTURE_ROOT} = process.env;
 assert(HF_PACKAGE && PLAYWRIGHT_PACKAGE && CHROME_PATH, 'Set local HF_PACKAGE, PLAYWRIGHT_PACKAGE, CHROME_PATH');
 assert(process.platform !== 'win32' || WORK_COMMAND && FIXTURE_ROOT,
-  'Windows must use an explicitly bound Review session work.cmd and FIXTURE_ROOT');
+  'Windows must use an explicitly bound Review root work.cmd and FIXTURE_ROOT');
 const playwrightEntry = (await fs.stat(PLAYWRIGHT_PACKAGE)).isDirectory()
   ? path.join(PLAYWRIGHT_PACKAGE, 'index.mjs') : PLAYWRIGHT_PACKAGE;
 const {chromium} = await import(pathToFileURL(playwrightEntry).href);
@@ -91,7 +91,8 @@ async function fixture(label) {
   await fs.writeFile(research, (await fs.readFile(research, 'utf8')).replace('"pending"', '"ready"'));
   const plan = path.join(variant, 'ANIMATION_PLAN.md');
   // Approved here denotes synthetic fixture input, never acceptance of a production Work.
-  await fs.writeFile(plan, (await fs.readFile(plan, 'utf8')).replace('"draft"', '"approved"'));
+  await fs.writeFile(plan, (await fs.readFile(plan, 'utf8')).replace('"draft"', '"approved"')
+    + '\n| Scene | Intent |\n| --- | --- |\n| S01 | Synthetic process and source attribution |\n');
   await fs.mkdir(path.join(project, 'compositions'), {recursive: true});
   await fs.writeFile(path.join(project, 'DESIGN.md'), 'Synthetic Studio process fixture; no production claim.');
   await fs.writeFile(path.join(project, 'project-config.json'), '{}');
@@ -100,6 +101,14 @@ async function fixture(label) {
     await fs.mkdir(path.join(project, 'assets'));
     for (const name of ['gsap.min.js', 'MotionPathPlugin.min.js'])
       await fs.copyFile(path.join(path.dirname(gsap), name), path.join(project, 'assets', name));
+    const rate = 24000, samples = rate * 4, wav = Buffer.alloc(44 + samples * 2);
+    wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
+    wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28);
+    wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36);
+    wav.writeUInt32LE(samples * 2, 40);
+    for (let i = 0; i < samples; i++) wav.writeInt16LE(Math.round(4000 * Math.sin(2 * Math.PI * 440 * i / rate)), 44 + i * 2);
+    await fs.writeFile(path.join(project, 'assets/tone.wav'), wav);
   }
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Studio fixture ${label}</title>
 <style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif;letter-spacing:0}main{width:960px;height:540px;background:#eef3f1;padding:48px;color:#162725}h1{font-size:38px;margin:0 0 20px}p{font-size:22px;margin:0 0 30px}.process{display:flex;align-items:center;gap:20px}.node{width:220px;height:170px;padding:24px;background:#fff;border-top:8px solid #188b72;font-size:26px}.node:last-child{border-color:#cf5068}span{font-size:32px}.footer{margin-top:34px;font-size:20px}</style></head><body>
@@ -107,7 +116,10 @@ async function fixture(label) {
 <section id="S01" class="clip" data-start="0" data-duration="1" data-track-index="0"><h1 id="fixture-title">Studio ${label}: evidence to answer</h1><p>Keep the retrieved source attached to the answer.</p><div class="process"><div class="node">Question<br>Which policy?</div><span aria-hidden="true">&rarr;</span><div class="node">Evidence<br>Policy 7</div><span aria-hidden="true">&rarr;</span><div class="node">Answer<br>Source: Policy 7</div></div><p class="footer">A visible relationship, not a repeated explanation.</p></section></main>
 ${label === 'A' ? '<script src="assets/gsap.min.js"></script><script src="assets/MotionPathPlugin.min.js"></script><script>window.__timelines={"studio-A":gsap.timeline({paused:true}).to(".node:first-child",{y:8,duration:.4}).to({},{duration:.6})};</script>' : ''}
 </body></html>`;
-  await fs.writeFile(path.join(project, 'index.html'), html);
+  const source = label === 'A' ? html.replaceAll('data-duration="1"', 'data-duration="4"')
+    .replace('duration:.6', 'duration:3.6')
+    .replace('</main>', '<audio id="test-audio" class="clip" src="assets/tone.wav" data-start="0" data-duration="4" data-track-index="1"></audio></main>') : html;
+  await fs.writeFile(path.join(project, 'index.html'), source);
   return {id, variant, project, label, run, html};
 }
 async function open(item, target = 'current', omitTarget = false) {
@@ -149,7 +161,7 @@ async function show(record, label) {
     },null,2));
     throw error;
   }
-  assert.equal(await frame.locator('audio,video,canvas').count(), 0);
+  assert.equal(await frame.locator('video,canvas').count(), 0);
   const {data, info} = await sharp(await iframe.screenshot()).removeAlpha().raw().toBuffer({resolveWithObject:true});
   let green = 0, pink = 0;
   for (let offset = 0; offset < data.length; offset += info.channels) {
@@ -200,7 +212,28 @@ try {
   }
   await shown.page.getByRole('button',{name:'Play',exact:true}).click();
   await shown.page.getByRole('button',{name:'Pause',exact:true}).waitFor({state:'visible'});
-  await shown.page.waitForTimeout(150);
+  await shown.page.waitForTimeout(350);
+  const audio = await shown.page.evaluate(async () => {
+    const player = document.querySelector('hyperframes-player');
+    const media = [...document.querySelectorAll('audio'),
+      ...player.shadowRoot.querySelectorAll('audio'),
+      ...player.shadowRoot.querySelector('iframe').contentDocument.querySelectorAll('audio')];
+    const active = media.find(item => !item.paused && !item.muted && item.volume > 0);
+    if (!active) return {media:media.map(item => ({time:item.currentTime,paused:item.paused,muted:item.muted,volume:item.volume}))};
+    const context = new AudioContext();
+    await context.resume();
+    const stream = active.captureStream();
+    const source = context.createMediaStreamSource(stream), analyser = context.createAnalyser();
+    source.connect(analyser);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    const samples = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(samples);
+    const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
+    source.disconnect(); await context.close();
+    return {time:active.currentTime,rms,muted:active.muted,volume:active.volume};
+  });
+  assert(audio.time > 0 && audio.rms > 0.01, `Studio must emit nonzero audio samples: ${JSON.stringify(audio)}`);
+  evidence.checks.push({nativeAudioSignal:audio,physicalSpeakerListening:'not verified'});
   await shown.page.getByRole('button',{name:'Pause',exact:true}).click();
   const player = shown.page.locator('hyperframes-player');
   const playbackTime = await player.evaluate(element => element.currentTime);
@@ -208,6 +241,11 @@ try {
   await player.evaluate(element => element.seek(0.25));
   assert.equal(await player.evaluate(element => element.currentTime), 0.25);
   await player.evaluate(element => element.seek(0));
+  await shown.page.waitForTimeout(150);
+  await shown.page.getByRole('button',{name:'Play',exact:true}).click();
+  await shown.page.waitForFunction(() => document.querySelector('hyperframes-player').currentTime > 0, null, {timeout:5000});
+  assert(await player.evaluate(element => element.currentTime) > 0, 'Playback must resume after backward seek');
+  await shown.page.getByRole('button',{name:'Pause',exact:true}).click();
   evidence.checks.push({nativePlaybackSeconds:playbackTime,seekSeconds:0.25});
   evidence.checks.push('two distinct Work contexts and default current Studio route');
   const planId = first.run('preview', 'register', '--purpose', 'plan', '--kind', 'executable');
@@ -220,6 +258,12 @@ try {
   await shownPlan.page.waitForTimeout(700);
   assert.deepEqual(await treeHashes(plan), planBefore, 'Studio Plan edits must preserve every frozen file');
   assert((await fs.readFile(path.join(first.project,'index.html'),'utf8')).includes('Studio A:'));
+  const studioDraftId = first.run('preview', 'register');
+  const studioDraft = path.join(first.variant, 'previews', studioDraftId);
+  await assert.rejects(fs.stat(path.join(studioDraft, 'draft.mp4')), {code:'ENOENT'});
+  const studioOnly = await open(first, studioDraftId);
+  await show(studioOnly, 'studio-only-draft');
+  evidence.checks.push({studioDraftWithoutMp4:studioDraftId,source:studioOnly.snapshot_sha256});
   const rendered = path.join(first.variant, 'studio-fixture-draft.mp4');
   first.run('preview', 'render', planId, '--output', rendered, '--fps', '6', '--software-gl');
   assert((await fs.stat(rendered)).size > 1000, 'Use a real rendered MP4, not fake test bytes');

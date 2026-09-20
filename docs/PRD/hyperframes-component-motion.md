@@ -1,5 +1,7 @@
 # HyperFrames Scene / Module / Media PRD
 
+> v3.3 当前增量见 [制作与工程合同](./hyperframes-v33-production-contract.md)。本文件保留既有设计理由与适用合同；新入口、语义时序、无 Draft/test 视频导出、独立 Finalize 与软归档以该增量为准，未取得原生证据不报告通过。
+
 状态：v3.2 语义视觉对象与根配置调整；保留 M1 已有 module/media 子集，不代表全部资产类型已实现或原生已部署
 
 上位 PRD：[PRD_MASTER.md](./PRD_MASTER.md)

@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 from typing import Any, Iterable
+from types import SimpleNamespace
 import unicodedata
 import uuid
 
@@ -50,6 +51,11 @@ from visual_plan import VisualPlanError, scene_projection, layout_projection, re
 import work_requests
 import studio_preview
 import asset_store
+import control_plane
+import appearance
+import storage
+import appearance_rebind
+import research_catalog
 
 WORKFLOWS = {"hyperframes_video", "podcast_quote_image"}
 TEMPLATES = {"talking_head", "pure_hyperframes"}
@@ -111,13 +117,7 @@ def stale_naming_lock(lock: Path) -> bool:
         return False
     if data.get("host") != socket.gethostname() or data.get("platform") != sys.platform or pid <= 0:
         return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return True
-    except (PermissionError, OSError):
-        return False
-    return False
+    return storage.process_stopped(pid)
 
 
 @contextmanager
@@ -214,7 +214,141 @@ def command_script_text(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args, allow_archive=True)
     require_workflow(work, "hyperframes_video")
     variant, _ = selected_variant(root, work, args)
-    print(script_text(variant / "SCRIPT.md", anchors=args.anchors))
+    print(script_text(input_path(variant, "SCRIPT.md"), anchors=args.anchors))
+
+
+def input_path(directory: Path, name: str) -> Path:
+    return control_plane.input_path(SimpleNamespace(**globals()), directory, name)
+
+
+def account_service(root: Path) -> control_plane.AccountService:
+    return control_plane.AccountService(SimpleNamespace(**globals()), root)
+
+
+def command_config(root: Path, args: argparse.Namespace) -> None:
+    service = account_service(root)
+    if args.operation == "put":
+        record = service.put(args.command, args.identity, read_json(Path(args.file)))
+    elif args.operation == "get":
+        record = service.get(args.command, args.identity)
+        if args.command == "series":
+            record = {**record, "works": [row["id"] for row in list_work_rows(root)
+                                         if read_frontmatter(locate_work(root, row["id"])[0] / "WORK.md").get("series") == args.identity]}
+    else:
+        record = [read_json(path) for path in sorted((service.directory / args.command).glob("*.json"))]
+    print(json.dumps(record, ensure_ascii=False, indent=2))
+
+
+def appearance_options(root: Path, args: argparse.Namespace) -> dict[str, Any]:
+    path = getattr(args, "appearance_file", None)
+    explicit = read_json(Path(path)) if path else {}
+    for key in ("theme", "background", "mode", "ratio", "fps", "seed"):
+        value = getattr(args, key, None)
+        if value is not None:
+            if key == "background" or key == "theme" and "@v" in value:
+                package, _ = asset_store.resolve_component(root, value)
+                report = validate_component_release(package, allow_unapproved=True)
+                if report["metadata"].get("asset_type") != key:
+                    raise HarnessError(f"Expected a {key} asset")
+                value = {"ref": report["component_ref"], "kind": key, "package_sha256": report["package_sha256"]}
+            explicit[key] = value
+    return explicit
+
+
+def command_appearance_resolve(root: Path, args: argparse.Namespace) -> None:
+    service = account_service(root)
+    account = service.get("account", args.account) if args.account else {}
+    print(json.dumps(appearance.resolve(root, account, appearance_options(root, args)), ensure_ascii=False, indent=2))
+
+
+def command_appearance_update(root: Path, args: argparse.Namespace) -> None:
+    appearance_rebind.command(root, args, SimpleNamespace(**globals()))
+
+
+def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = None) -> dict[str, Any]:
+    service = account_service(root)
+    purpose = read_frontmatter(work / "WORK.md").get("purpose", "standard") if work else args.purpose or "standard"
+    account = service.get("account", args.account) if args.account else {}
+    if (getattr(args, "workflow", None) == "hyperframes_video" or work and work_workflow(work) == "hyperframes_video") and purpose != "test" and not account:
+        raise HarnessError("Production Variant requires --account; configure AccountService first")
+    if purpose == "test" and account:
+        raise HarnessError("test Work binds batches, not accounts")
+    if purpose != "test" and args.batch:
+        raise HarnessError("Only test Work accepts a batch")
+    if work and account:
+        for variant in variant_paths(work):
+            if read_json(variant / "variant.yaml").get("account") == args.account:
+                raise HarnessError("An account already has a Variant in this Work")
+    if work and purpose == "test":
+        batch = args.batch or args.variant_id
+        if any(read_json(path / "variant.yaml").get("batch") == batch for path in variant_paths(work)):
+            raise HarnessError("A batch already has a Variant; revise that Variant")
+    explicit = appearance_options(root, args)
+    if appearance.is_asset_appearance({**account, **explicit}):
+        lock = appearance.resolve(root, account, explicit)
+        return {"theme": lock["selection"]["theme"], "background": lock["selection"]["background"],
+                "motion": lock["selection"]["motion"], "mode": lock["mode"], "ratio": lock["ratio"],
+                "appearance_lock": lock, "account": args.account, "account_revision": account.get("revision"),
+                "account_settings": account, "batch": args.batch, "revision": 1}
+    if set(explicit) - {"theme", "mode", "ratio"}:
+        raise HarnessError("Appearance parameters require exact Theme and Background assets")
+    settings = {key: explicit.get(key, account.get(key)) for key in ("theme", "mode", "ratio")}
+    settings["mode"] = settings["mode"] or "text-led"
+    if settings["theme"]:
+        settings["ratio"] = settings["ratio"] or "16:9"
+        settings["mode"] = settings["mode"] or "text-led"
+    theme = service.appearance(settings)
+    return {**settings, "account": args.account, "account_revision": account.get("revision"),
+            "account_settings": account, "theme_revision": theme.get("revision"), "theme_settings": theme,
+            "batch": args.batch, "revision": 1}
+
+
+def adopt_variant(path: Path, settings: dict[str, Any], *, shared: bool = False, branch: str | None = None) -> None:
+    state = read_json(path / "variant.yaml")
+    state.update({key: value for key, value in settings.items() if value is not None})
+    if settings.get("theme"):
+        state["profile"] = None
+        plan = path / "ANIMATION_PLAN.md"
+        metadata = read_frontmatter(plan)
+        metadata.update(theme=settings["theme"], mode=settings["mode"], ratio=settings["ratio"], profile=None)
+        atomic_write(plan, "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n" + document_body(plan))
+    work = path.parent.parent
+    if shared:
+        refs = {}
+        for name in ("SCRIPT.md", "RESEARCH.md"):
+            target = work / "shared" / name
+            if not target.exists():
+                target.parent.mkdir(exist_ok=True)
+                shutil.copy2(path / name, target)
+            refs[name] = target.relative_to(work).as_posix()
+            (path / name).unlink(missing_ok=True)
+        state["shared_inputs"] = refs
+    if branch:
+        state["content_branch"] = {"source_variant": branch, "input_sha256": {
+            name: file_sha256(path / name) for name in ("SCRIPT.md", "RESEARCH.md")}}
+    write_variant(path, state)
+
+
+def create_adopted_variant(root: Path, work: Path, variant_id: str, settings: dict[str, Any], *,
+                           shared: bool = False, branch: str | None = None, **options: Any) -> Path:
+    destination = work / "variants" / validate_id(variant_id, "variant id")
+    if destination.exists():
+        raise HarnessError(f"Variant already exists: {variant_id}")
+    staging_id = f".pending-{uuid.uuid4().hex}"
+    staging = work / "variants" / staging_id
+    try:
+        if "appearance_lock" in settings and options.get("ratio") not in RATIOS:
+            options["ratio"] = "source"
+        create_variant(root, work, staging_id, **options)
+        if "appearance_lock" in settings:
+            appearance.materialize(root, staging / "project", settings["appearance_lock"])
+        adopt_variant(staging, {**settings, "id": variant_id}, shared=shared, branch=branch)
+        staging.rename(destination)
+    except Exception:
+        if staging.is_dir():
+            shutil.rmtree(staging)
+        raise
+    return destination
 
 
 def animation_plan_contains_component_ref(path: Path, component_ref: str) -> bool:
@@ -363,7 +497,7 @@ def locate_work(root: Path, work_id: str) -> tuple[Path, str]:
     for location in ("active", "parked"):
         candidate = works_root(root) / location / work_id
         if candidate.is_dir():
-            return candidate, location
+            return candidate, "archive" if (candidate / ".runtime" / "archive.json").is_file() else location
     for candidate in archived_work_paths(root):
         if candidate.name == work_id:
             return candidate, "archive"
@@ -376,7 +510,7 @@ def list_work_rows(root: Path) -> list[dict[str, Any]]:
         parent = works_root(root) / location
         if parent.is_dir():
             for path in sorted(parent.iterdir()):
-                if path.is_dir():
+                if path.is_dir() and not path.name.startswith(".pending-"):
                     metadata = read_frontmatter(path / "WORK.md")
                     state_path = path / "variants" / "main" / "variant.yaml"
                     state = read_json(state_path) if state_path.is_file() else {}
@@ -386,7 +520,7 @@ def list_work_rows(root: Path) -> list[dict[str, Any]]:
                             "title": str(metadata.get("title", "")),
                             "created_at": str(metadata.get("created_at", "")),
                             "workflow": str(metadata.get("workflow", "hyperframes_video")),
-                            "location": location,
+                            "location": "archive" if (path / ".runtime" / "archive.json").is_file() else location,
                             "status": state.get("status"),
                             "wait_for": state.get("wait_for"),
                             "next_action": state.get("next_action"),
@@ -437,7 +571,7 @@ def variant_paths(work: Path) -> list[Path]:
     variants = work / "variants"
     if not variants.is_dir():
         return []
-    return [path for path in sorted(variants.iterdir()) if path.is_dir()]
+    return [path for path in sorted(variants.iterdir()) if path.is_dir() and not path.name.startswith(".pending-")]
 
 
 def selected_variant(root: Path, work: Path, args: argparse.Namespace) -> tuple[Path, dict[str, Any]]:
@@ -455,6 +589,8 @@ def selected_variant(root: Path, work: Path, args: argparse.Namespace) -> tuple[
     path = work / "variants" / variant_id
     if not path.is_dir():
         raise HarnessError(f"Unknown variant: {variant_id}")
+    if appearance_rebind.journal_path(path).exists() and getattr(args, "appearance_command", None) != "recover":
+        raise HarnessError("Appearance recovery pending; run appearance recover with this exact --work and --variant")
     return path, read_json(path / "variant.yaml")
 
 
@@ -468,7 +604,7 @@ def create_video_variant(
     variant_id: str,
     *,
     template: str,
-    profile: str,
+    profile: str | None,
     ratio: str,
     subject_position: str | None,
     copy_script_from: Path | None = None,
@@ -476,7 +612,7 @@ def create_video_variant(
     validate_id(variant_id, "variant id")
     if template not in TEMPLATES:
         raise HarnessError(f"Unknown template: {template}")
-    if profile not in PROFILES:
+    if profile is not None and profile not in PROFILES:
         raise HarnessError(f"Unknown profile: {profile}")
     if ratio not in RATIOS:
         raise HarnessError(f"Unknown ratio: {ratio}")
@@ -503,7 +639,7 @@ def create_video_variant(
     values = {
         "VARIANT_ID": json_string_content(variant_id),
         "TEMPLATE": json_string_content(template),
-        "PROFILE": json_string_content(profile),
+        "PROFILE": json_string_content(profile or ""),
         "RATIO": json_string_content(ratio),
         "SUBJECT_POSITION": json.dumps(subject_position),
         "SCRIPT_REVISION": json.dumps(script_revision),
@@ -564,7 +700,7 @@ def create_variant(
         work,
         variant_id,
         template=template or "pure_hyperframes",
-        profile=profile or "optical_fluidity",
+        profile=profile,
         ratio=ratio or "16:9",
         subject_position=subject_position,
         copy_script_from=copy_script_from,
@@ -572,12 +708,20 @@ def create_variant(
 
 
 def command_new(root: Path, args: argparse.Namespace) -> None:
+    if os.environ.get("HYPERFRAMES_AI_REVIEW") == "1":
+        args.purpose = "test"
+    series = "test" if args.purpose == "test" else args.series
+    if args.purpose == "test" and args.series not in (None, "test"):
+        raise HarnessError("test Work must use the test series")
+    if series and series != "test":
+        account_service(root).get("series", series)
     if args.workflow == "podcast_quote_image" and any(
         value is not None for value in (args.template, args.profile, args.ratio, args.subject_position)
     ):
         raise HarnessError("podcast_quote_image does not accept video Template, Profile, Ratio, or subject options")
     ensure_roots(root)
     with naming_lock(root):
+        settings = adopted_settings(root, args)
         rows = list_work_rows(root)
         existing_ids = {row["id"] for row in rows}
         number = next_work_number(rows, args.workflow)
@@ -588,41 +732,40 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
             if work_id not in existing_ids:
                 work = works_root(root) / "active" / work_id
                 try:
-                    work.mkdir()
+                    staging = work.with_name(f".pending-{uuid.uuid4().hex}")
+                    staging.mkdir()
                     break
                 except FileExistsError:
                     pass
             number += 1
 
-        semantic_title = unicodedata.normalize("NFKC", args.title).strip()
-        semantic_title = NUMBERED_TITLE_PATTERN.sub(r"\2", semantic_title).strip(" -") or "untitled"
-        title = f"{number:03d}-{semantic_title}"
-        created_at = now()
-        atomic_write(
-            work / "WORK.md",
-            template_text(
-                root,
-                "WORK.template.md",
-                {
-                    "WORK_ID": json_string_content(work_id),
-                    "TITLE": json_string_content(title),
-                    "CREATED_AT": created_at,
-                    "WORKFLOW": json_string_content(args.workflow),
-                },
-            ),
-        )
-        atomic_write(work / "source.md", "# Source\n\n")
-        (work / "materials").mkdir()
-        create_variant(
-            root,
-            work,
-            "main",
-            workflow=args.workflow,
-            template=args.template,
-            profile=args.profile,
-            ratio=args.ratio,
-            subject_position=args.subject_position,
-        )
+        try:
+            semantic_title = unicodedata.normalize("NFKC", args.title).strip()
+            semantic_title = NUMBERED_TITLE_PATTERN.sub(r"\2", semantic_title).strip(" -") or "untitled"
+            title = f"{number:03d}-{semantic_title}"
+            atomic_write(staging / "WORK.md", template_text(root, "WORK.template.md", {
+                "WORK_ID": json_string_content(work_id), "TITLE": json_string_content(title),
+                "CREATED_AT": now(), "WORKFLOW": json_string_content(args.workflow),
+            }))
+            atomic_write(staging / "source.md", "# Source\n\n")
+            (staging / "materials").mkdir()
+            options = dict(workflow=args.workflow, template=args.template, profile=args.profile,
+                           ratio=settings.get("ratio"), subject_position=args.subject_position)
+            if args.workflow == "hyperframes_video":
+                metadata = read_frontmatter(staging / "WORK.md")
+                metadata.update(purpose=args.purpose or "standard", series=series, shared_source=True,
+                                source_work=args.source_work, source_variant=args.source_variant, source_version=args.source_version)
+                atomic_write(staging / "WORK.md", "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n" + document_body(staging / "WORK.md"))
+                if args.purpose == "test":
+                    settings["batch"] = args.batch or "main"
+                create_adopted_variant(root, staging, "main", settings, shared=True, **options)
+            else:
+                create_variant(root, staging, "main", **options)
+            staging.rename(work)
+        except Exception:
+            if staging.is_dir():
+                shutil.rmtree(staging)
+            raise
         if not args.detached:
             write_pointer(root, "current-work", work_id)
             write_pointer(root, "current-variant", "main")
@@ -774,7 +917,8 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
     if action == "root":
         result = asset_store.configure_asset_store(root, Path(args.path)) if args.path else {"asset_root": str(asset_store.asset_store_root(root))}
     elif action == "list":
-        result = asset_store.discover_components(root, args.query)
+        result = asset_store.discover_components(root, args.query, kind=args.kind, ratio=args.ratio, tag=args.tag,
+            recommendation=args.recommendation, rebuild=args.rebuild, research_root=args.research_root)
     else:
         store = asset_store.asset_store_root(root)
         from component_harness import package_write_lock
@@ -788,6 +932,11 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
                 result = asset_store.pack_source(store, Path(args.path))
             else:
                 result = asset_store.accept_component(store, args.component_ref, args.sha256, args.note, runtime_root=root)
+        try:
+            discovery = asset_store.discover_components(root)
+            result = {**result, "discovery_sync": {"synchronized": not discovery["errors"], "errors": discovery["errors"]}}
+        except (ComponentError, OSError, ValueError) as exc:
+            result = {**result, "discovery_sync": {"synchronized": False, "error": str(exc)}}
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -843,8 +992,14 @@ def command_component_verify(root: Path, args: argparse.Namespace) -> None:
 
 
 def command_variant_add(root: Path, args: argparse.Namespace) -> None:
+    with naming_lock(root):
+        _command_variant_add(root, args)
+
+
+def _command_variant_add(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
     workflow = work_workflow(work)
+    settings = adopted_settings(root, args, work)
     source = None
     if args.copy_from:
         if workflow != "hyperframes_video":
@@ -852,18 +1007,18 @@ def command_variant_add(root: Path, args: argparse.Namespace) -> None:
         source_path = work / "variants" / validate_id(args.copy_from, "source variant")
         if not source_path.is_dir():
             raise HarnessError(f"Unknown source variant: {args.copy_from}")
-        source = source_path / "SCRIPT.md"
-    path = create_variant(
-        root,
-        work,
-        args.variant_id,
-        workflow=workflow,
-        template=args.template,
-        profile=args.profile,
-        ratio=args.ratio,
-        subject_position=args.subject_position,
-        copy_script_from=source,
-    )
+        source = input_path(source_path, "SCRIPT.md")
+    options = dict(workflow=workflow, template=args.template, profile=args.profile,
+                   ratio=settings.get("ratio"), subject_position=args.subject_position, copy_script_from=source)
+    if workflow == "hyperframes_video":
+        metadata = read_frontmatter(work / "WORK.md")
+        if metadata.get("purpose") == "test":
+            settings["batch"] = args.batch or args.variant_id
+        path = create_adopted_variant(root, work, args.variant_id, settings,
+                                      shared=bool(metadata.get("shared_source")) and not args.copy_from,
+                                      branch=args.copy_from, **options)
+    else:
+        path = create_variant(root, work, args.variant_id, **options)
     if not args.work_override:
         write_pointer(root, "current-variant", path.name)
     print(path.name)
@@ -1057,6 +1212,9 @@ def copy_directory_without_history(source: Path, destination: Path) -> None:
 def snapshot_items(project: Path) -> tuple[str, ...]:
     """Keep legacy snapshots unchanged while freezing installed Components when present."""
 
+    closure = storage.snapshot_files(project)
+    if closure is not None:
+        return closure
     return SNAPSHOT_ITEMS + tuple(
         name for name in OPTIONAL_SNAPSHOT_ITEMS if (project / name).exists() or (project / name).is_symlink()
     )
@@ -1064,7 +1222,8 @@ def snapshot_items(project: Path) -> tuple[str, ...]:
 
 def assert_snapshot_source(project: Path) -> None:
     items = snapshot_items(project)
-    missing = [name for name in SNAPSHOT_ITEMS if not (project / name).exists()]
+    required = ("index.html", "DESIGN.md", "project-config.json") if storage.snapshot_files(project) is not None else SNAPSHOT_ITEMS
+    missing = [name for name in required if not (project / name).exists()]
     if missing:
         raise HarnessError(f"Project snapshot is incomplete: {', '.join(missing)}")
     for name in items:
@@ -1127,7 +1286,7 @@ def copy_snapshot(project: Path, destination: Path, kind: str = "executable") ->
 
 
 def assert_preview_ready(variant: Path, state: dict[str, Any], *, purpose: str = "draft", kind: str = "executable") -> None:
-    script = read_frontmatter(variant / "SCRIPT.md")
+    script = read_frontmatter(input_path(variant, "SCRIPT.md"))
     plan = read_frontmatter(variant / "ANIMATION_PLAN.md")
     if script.get("approval") == "pending":
         raise HarnessError("SCRIPT.md still requires approval")
@@ -1142,7 +1301,7 @@ def assert_preview_ready(variant: Path, state: dict[str, Any], *, purpose: str =
     if purpose == "plan" and plan.get("research_revision") is None:
         raise HarnessError("Visual Plan requires the current Research revision")
     if plan.get("research_revision") is not None:
-        research = read_frontmatter(variant / "RESEARCH.md")
+        research = read_frontmatter(input_path(variant, "RESEARCH.md"))
         if research.get("status") != "ready":
             raise HarnessError("RESEARCH.md is not ready")
         if research.get("revision") != plan.get("research_revision"):
@@ -1166,9 +1325,9 @@ PREVIEW_DOCUMENTS = ("SCRIPT.md", "RESEARCH.md", "ANIMATION_PLAN.md")
 
 
 def preview_input_hashes(directory: Path) -> dict[str, str]:
-    if any(not (directory / name).is_file() for name in PREVIEW_DOCUMENTS):
+    if any(not input_path(directory, name).is_file() for name in PREVIEW_DOCUMENTS):
         raise HarnessError("Preview requires frozen SCRIPT.md, RESEARCH.md and ANIMATION_PLAN.md inputs")
-    return {name: file_sha256(directory / name) for name in PREVIEW_DOCUMENTS}
+    return {name: file_sha256(input_path(directory, name)) for name in PREVIEW_DOCUMENTS}
 
 
 def document_content(path: Path, ignored: tuple[str, ...] = ()) -> tuple[dict[str, Any], str]:
@@ -1178,17 +1337,24 @@ def document_content(path: Path, ignored: tuple[str, ...] = ()) -> tuple[dict[st
 
 def same_preview_inputs(preview: Path, variant: Path) -> bool:
     return all(document_content(preview / name, ("status", "visual_plan") if name == "ANIMATION_PLAN.md" else ())
-               == document_content(variant / name, ("status", "visual_plan") if name == "ANIMATION_PLAN.md" else ())
+               == document_content(input_path(variant, name), ("status", "visual_plan") if name == "ANIMATION_PLAN.md" else ())
                for name in PREVIEW_DOCUMENTS)
 
 
 def assert_preview_inputs(preview: Path, metadata: dict[str, Any], current: Path | None = None) -> None:
+    frozen_lock = metadata.get("adopted_settings", {}).get("appearance_lock")
+    if frozen_lock is not None and metadata.get("kind", "executable") == "executable":
+        appearance.verify(preview / "source-snapshot", frozen_lock)
     if "input_sha256" not in metadata:
         return  # Legacy previews cannot prove compatibility, but retain their original lifecycle.
     if preview_input_hashes(preview) != metadata["input_sha256"]:
         raise HarnessError("Frozen preview inputs changed")
     if current is not None and not same_preview_inputs(preview, current):
         raise HarnessError("Preview inputs changed; register the current content before accepting or finalizing")
+    if current is not None and "adopted_settings" in metadata:
+        state = read_json(current / "variant.yaml")
+        if metadata["adopted_settings"] != {key: state.get(key) for key in metadata["adopted_settings"]}:
+            raise HarnessError("Adopted Variant settings changed; register and accept a new Draft")
 
 
 def assert_plan_baseline(variant: Path, state: dict[str, Any], baseline: Path, project: Path) -> None:
@@ -1237,11 +1403,14 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError("--sample-dir and --scene require --kind layout")
     assert_preview_ready(variant, state, purpose=purpose, kind=kind)
     draft = Path(args.draft_file).expanduser().resolve() if args.draft_file else None
-    if purpose == "draft" and (draft is None or not draft.is_file() or draft.stat().st_size == 0):
+    studio_draft = purpose == "draft" and draft is None
+    if draft is not None and (not draft.is_file() or draft.stat().st_size == 0):
         raise HarnessError(f"Draft file is missing or empty: {draft}")
     if purpose == "plan" and draft is not None:
         raise HarnessError("Visual Plan uses executable source, not a replacement MP4")
     project = preview_source(variant, {"sample_dir": args.sample_dir}) if args.sample_dir else variant / "project"
+    if state.get("appearance_lock") is not None and kind == "executable":
+        appearance.verify(project, state["appearance_lock"])
     if kind == "executable":
         assert_snapshot_source(project)
     if kind == "executable" and (project / "COMPONENT_LOCK.json").is_file():
@@ -1249,14 +1418,16 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     elif kind == "executable" and (project / "scene-slots.json").is_file():
         validate_work_surface_inventory(project)
     plan_text = (variant / "ANIMATION_PLAN.md").read_text(encoding="utf-8")
-    visual = purpose == "plan" or bool(state.get("accepted_visual_plan"))
+    visual = purpose == "plan" or studio_draft or bool(state.get("accepted_visual_plan"))
     scenes = reference_projection(plan_text) if reference else layout_projection(project, plan_text, args.scene) if layout else scene_projection(project, plan_text, args.scene if scene else None) if visual else None
-    if not reference and (purpose == "plan" or state.get("accepted_visual_plan")):
+    if not reference and visual:
         validate_dependencies(project, layout=layout)
     draft_digest = file_sha256(draft) if draft else None
     source_digest = hashlib.sha256().hexdigest() if reference else snapshot_digest(project, kind)
     plan_digest = file_sha256(variant / "ANIMATION_PLAN.md") if visual else None
-    input_hashes = preview_input_hashes(variant) if all((variant / name).is_file() for name in PREVIEW_DOCUMENTS) else None
+    input_hashes = preview_input_hashes(variant) if all(input_path(variant, name).is_file() for name in PREVIEW_DOCUMENTS) else None
+    if studio_draft:
+        input_hashes = preview_input_hashes(variant)
     if purpose == "draft" and state.get("accepted_visual_plan"):
         assert_plan_baseline(variant, state, variant / "previews" / validate_id(state["accepted_visual_plan"], "Visual Plan"), project)
     if draft_digest:
@@ -1273,6 +1444,8 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             and metadata.get("plan_revision") == state.get("plan_revision")
             and metadata.get("plan_sha256") == plan_digest
             and metadata.get("input_sha256") == input_hashes
+            and ("adopted_settings" not in metadata or metadata["adopted_settings"] == {
+                key: state.get(key) for key in metadata["adopted_settings"]})
             and metadata.get("kind", "executable") == kind
             and metadata.get("scope", "full") == args.scope
             and metadata.get("media_readiness", "complete") == args.media_readiness
@@ -1297,7 +1470,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             validate_snapshot_closure(project, staging / "source-snapshot")
         if snapshot_digest(staging / "source-snapshot", kind) != source_digest:
             raise HarnessError("Project changed during registration")
-        if not reference and (purpose == "plan" or state.get("accepted_visual_plan")):
+        if not reference and visual:
             validate_dependencies(staging / "source-snapshot", layout=layout)
         metadata = {
             "id": draft_id,
@@ -1312,9 +1485,14 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             "script_revision": state.get("script_revision"),
             "plan_revision": state.get("plan_revision"),
             "plan_sha256": plan_digest,
+            "adopted_settings": {key: state.get(key) for key in (
+                "template", "profile", "theme", "theme_revision", "theme_settings", "mode", "ratio", "subject_position", "account", "account_revision", "account_settings", "batch",
+                "background", "motion", "appearance_lock")},
         }
         if input_hashes is not None:
             metadata["input_sha256"] = input_hashes
+        if studio_draft:
+            metadata["review_mode"] = "studio"
         if layout:
             metadata.update(sample_dir=project.relative_to(variant.resolve()).as_posix(), sample_scenes=args.scene,
                             demonstrated="Sample layout, colors, typography and text hierarchy",
@@ -1329,8 +1507,8 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         if os.environ.get("HYPERFRAMES_AI_REVIEW") == "1":
             metadata["review"] = work_requests.review_identity(configured_work_root(root) or root)
         for name in PREVIEW_DOCUMENTS:
-            if (variant / name).is_file():
-                shutil.copy2(variant / name, staging / name)
+            if input_path(variant, name).is_file():
+                shutil.copy2(input_path(variant, name), staging / name)
         assert_preview_inputs(staging, metadata)
         if visual:
             write_json(staging / "visual-plan.json", {"id": draft_id, "scenes": scenes})
@@ -1358,6 +1536,8 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
 
 def command_preview_accept(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
+    if read_frontmatter(work / "WORK.md").get("purpose") == "test":
+        raise HarnessError("test Work does not grant production acceptance")
     require_workflow(work, "hyperframes_video")
     variant, state = selected_variant(root, work, args)
     draft_id = validate_id(args.draft_id, "draft id")
@@ -1419,16 +1599,23 @@ def command_preview_accept(root: Path, args: argparse.Namespace) -> None:
         write_variant(variant, state)
         print(draft_id)
         return
-    if not preview.is_dir() or not (preview / "draft.mp4").is_file() or not (preview / "source-snapshot").is_dir():
+    if not preview.is_dir() or not (preview / "source-snapshot").is_dir():
         raise HarnessError(f"Incomplete preview: {draft_id}")
     metadata = preview_metadata(preview)
     assert_full_draft(metadata)
     assert_preview_inputs(preview, metadata, variant)
-    if file_sha256(preview / "draft.mp4") != metadata.get("draft_sha256"):
-        raise HarnessError("Draft media changed")
+    if metadata.get("review_mode") == "studio":
+        record = bound_studio(variant, draft_id)
+        if (record.get("snapshot_sha256") != metadata.get("snapshot_sha256")
+                or snapshot_digest(Path(record["project"])) != metadata.get("snapshot_sha256")):
+            raise HarnessError("Studio review source changed; register and review the current Draft")
+        if snapshot_digest(variant / "project") != metadata.get("snapshot_sha256"):
+            raise HarnessError("Project changed; register the current Draft before accepting")
+    elif not (preview / "draft.mp4").is_file() or file_sha256(preview / "draft.mp4") != metadata.get("draft_sha256"):
+        raise HarnessError("Draft media changed or missing")
     if snapshot_digest(preview / "source-snapshot") != metadata.get("snapshot_sha256"):
         raise HarnessError("Draft snapshot changed")
-    if metadata.get("source_plan"):
+    if metadata.get("source_plan") or metadata.get("review_mode") == "studio":
         assert_preview_ready(variant, state)
     if metadata.get("script_revision") != state.get("script_revision"):
         raise HarnessError("Preview targets a different Script revision")
@@ -1505,12 +1692,14 @@ def bound_studio(variant: Path, target: str) -> dict[str, Any]:
 def command_preview_open(root: Path, args: argparse.Namespace) -> None:
     work, location = selected_work(root, args, allow_archive=True)
     require_workflow(work, "hyperframes_video")
-    variant, _ = selected_variant(root, work, args)
+    variant, state = selected_variant(root, work, args)
     target = validate_id(args.preview_id, "preview")
     if target == "current" and (args.legacy or location == "archive"):
         raise HarnessError("Current project is editable; choose a registered preview for historical review")
     if target == "current":
         project, kind, metadata = variant / "project", "executable", {}
+        if state.get("appearance_lock") is not None:
+            appearance.verify(project, state["appearance_lock"])
     else:
         preview, metadata = checked_preview(variant, target)
         kind = metadata.get("kind", "executable")
@@ -1574,6 +1763,7 @@ def command_preview_studio(root: Path, args: argparse.Namespace) -> None:
     project = Path(record["project"])
     if args.preview_command == "stop":
         result = studio_preview.stop(cli, project, record["port"])
+        write_json(studio_record(variant, args.preview_id), {**record, "stopped_at": now()})
     else:
         result = studio_preview.context(cli, project, record["port"], args.fields, args.detail)
         result["work"] = {key: record[key] for key in ("work", "variant", "target", "url")}
@@ -1613,11 +1803,11 @@ def command_preview_diff(root: Path, args: argparse.Namespace) -> None:
         ignored = ("status", "visual_plan", "revision", "script_revision", "research_revision")
         if document_content(preview / "ANIMATION_PLAN.md", ignored) != document_content(variant / "ANIMATION_PLAN.md", ignored):
             raise HarnessError("Animation Plan intent changed; confirm the affected Plan instead of --compatible")
-        if script_text(preview / "SCRIPT.md", anchors=True) != script_text(variant / "SCRIPT.md", anchors=True):
+        if script_text(preview / "SCRIPT.md", anchors=True) != script_text(input_path(variant, "SCRIPT.md"), anchors=True):
             raise HarnessError("Narration changed; confirm the affected Plan instead of --compatible")
         for name in PREVIEW_DOCUMENTS:
-            before, after = read_frontmatter(preview / name), read_frontmatter(variant / name)
-            changed_content = document_content(preview / name, ("revision", "status", "visual_plan")) != document_content(variant / name, ("revision", "status", "visual_plan"))
+            before, after = read_frontmatter(preview / name), read_frontmatter(input_path(variant, name))
+            changed_content = document_content(preview / name, ("revision", "status", "visual_plan")) != document_content(input_path(variant, name), ("revision", "status", "visual_plan"))
             if changed_content and (not isinstance(after.get("revision"), int) or after["revision"] <= before.get("revision", 0)):
                 raise HarnessError(f"{name} changed without an increased revision")
         scenes = scene_projection(source, (variant / "ANIMATION_PLAN.md").read_text(encoding="utf-8"))
@@ -1651,8 +1841,34 @@ def command_preview_diff(root: Path, args: argparse.Namespace) -> None:
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+def measured_process(command: list[str], evidence: Path | None, operation: str, **kwargs: Any) -> subprocess.CompletedProcess:
+    if evidence is None:
+        return subprocess.run(command, **kwargs)
+    telemetry = read_json(evidence) if evidence.is_file() else {"schema_version": 1, "calls": []}
+    call = {"operation": operation, "started_at": now(), "state": "running", "launch_attempts": 1,
+            "completed_process_calls": 0, "elapsed_seconds": None, "returncode": None,
+            "wrapper_retries": 0, "tool_retries": None, "cache_hits": None, "tokens": None, "cost": None}
+    telemetry["calls"].append(call)
+    write_json(evidence, telemetry)
+    started = time.perf_counter()
+    try:
+        result = subprocess.run(command, **kwargs)
+        call.update(completed_process_calls=1, returncode=result.returncode,
+                    state="succeeded" if result.returncode == 0 else "failed")
+        return result
+    except BaseException:
+        call["state"] = "interrupted-or-launch-failed"
+        raise
+    finally:
+        call["elapsed_seconds"] = time.perf_counter() - started
+        write_json(evidence, telemetry)
+
+
 def command_preview_render(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
+    if (not args.final or read_frontmatter(work / "WORK.md").get("purpose") == "test"
+            or os.environ.get("HYPERFRAMES_AI_REVIEW") == "1"):
+        raise HarnessError("Draft and test video export is forbidden; use Studio")
     require_workflow(work, "hyperframes_video")
     variant, state = selected_variant(root, work, args)
     review = os.environ.get("HYPERFRAMES_AI_REVIEW") == "1"
@@ -1703,10 +1919,13 @@ def command_preview_render(root: Path, args: argparse.Namespace) -> None:
     validate_snapshot_closure(source, frozen)
     validate_dependencies(frozen)
     source_hash = snapshot_digest(frozen)
+    if args.final and source_hash != metadata.get("snapshot_sha256"):
+        raise HarnessError("Final source differs from the accepted Draft; register and accept a new Draft")
     command = [os.environ.get("HYPERFRAMES_NODE", "node"), str(cli), "render", "--output", str(output), "--fps", str(args.fps), "--quality", "high" if args.final else "draft"]
     if args.software_gl:
         command.append("--no-browser-gpu")
-    result = subprocess.run(command, cwd=frozen, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    result = measured_process(command, render_dir / "telemetry.json", "hyperframes-render",
+                              cwd=frozen, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     atomic_write(render_dir / "render.log", result.stdout)
     print(result.stdout, end="")
     if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
@@ -1721,6 +1940,7 @@ def command_preview_render(root: Path, args: argparse.Namespace) -> None:
               "output_sha256": file_sha256(output), "fps": args.fps, "quality": "high" if args.final else "draft",
               "software_gl": args.software_gl, "hyperframes_cli_sha256": file_sha256(cli),
               "script_revision": state["script_revision"], "plan_revision": state["plan_revision"], "rendered_at": now()}
+    record["telemetry"] = str((render_dir / "telemetry.json").relative_to(variant))
     if os.environ.get("HYPERFRAMES_AI_RESOLVED_CONFIG"):
         config = json.loads(os.environ["HYPERFRAMES_AI_RESOLVED_CONFIG"])
         record["tool_root"] = str(root)
@@ -1770,13 +1990,8 @@ def archive_destination(root: Path, work_id: str) -> Path:
 
 
 def move_to_archive(root: Path, work: Path, outcome: str) -> Path:
-    destination = archive_destination(root, work.name)
-    if destination.exists():
-        raise HarnessError(f"Archive destination already exists: {destination}")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    write_json(work / ".runtime" / "archive.json", {"outcome": outcome, "archived_at": now()})
-    os.replace(work, destination)
-    return destination
+    write_json(work / ".runtime" / "archive.json", {"outcome": outcome, "archived_at": now(), "soft": True})
+    return work
 
 
 def clear_current_if(root: Path, work_id: str) -> None:
@@ -1866,35 +2081,184 @@ def command_finalize_package(
         {"state": "promoted", "final_manifest_sha256": candidate_digest},
     )
 
-    if all_required_finals_exist(work):
-        write_json(
-            variant / ".runtime" / "finalize.json",
-            {"state": "archive_pending", "final_manifest_sha256": candidate_digest},
-        )
-        try:
-            archived = move_to_archive(root, work, "completed")
-        except (OSError, HarnessError) as exc:
-            raise HarnessError(f"Final is safe but archive is pending: {exc}") from exc
-        archived_variant = archived / "variants" / variant.name
-        write_json(
-            archived_variant / ".runtime" / "finalize.json",
-            {"state": "complete", "final_manifest_sha256": candidate_digest},
-        )
-        clear_current_if(root, work.name)
-        print(str(archived_variant / "final"))
-        return
+    write_json(variant / ".runtime" / "finalize.json", {"state": "complete", "final_manifest_sha256": candidate_digest})
     print(str(final_dir))
 
 
 def command_finalize(root: Path, args: argparse.Namespace) -> None:
+    # ponytail: one WorkStore lock; use per-Work locks if concurrent Finalize throughput matters.
+    with naming_lock(root):
+        _command_finalize(root, args)
+
+
+def reclaim_final_candidates(variant: Path, completed: Path | None = None) -> list[str]:
+    """Run only under naming_lock; candidates are registered after successful promotion."""
+    runtime = variant / ".runtime"
+    registry_path = runtime / "final-candidates.json"
+    registry = read_json(registry_path) if registry_path.is_file() else {"schema_version": 1, "entries": []}
+    if not isinstance(registry.get("entries"), list) or not all(isinstance(entry, dict) for entry in registry["entries"]):
+        raise HarnessError("Invalid Final candidate cleanup registry; retaining temporary files")
+    if completed is not None:
+        relative = completed.relative_to(runtime).as_posix()
+        storage.scoped_path(runtime, relative)
+        registry["entries"].append({"path": relative, "state": "succeeded", "rebuildable": True,
+                                    "sha256": file_sha256(completed), "registered_at": now()})
+        write_json(registry_path, registry)
+    final = variant / "final" / "final.mp4"
+    manifest_path = variant / "final" / "manifest.json"
+    if not final.is_file() or not manifest_path.is_file():
+        return []
+    manifest = read_json(manifest_path)
+    digest = file_sha256(final)
+    if manifest.get("final_sha256") != digest:
+        return []
+    references = set()
+    for receipt in (manifest.get("render", {}), read_json(runtime / "render.json") if (runtime / "render.json").is_file() else {}):
+        if not isinstance(receipt, dict):
+            raise HarnessError("Invalid render reference; retaining temporary files")
+        source = receipt.get("source_snapshot")
+        if source:
+            resolved = storage.scoped_path(variant, source)
+            if resolved.is_relative_to(runtime):
+                references.add(resolved.relative_to(runtime).as_posix())
+    removed = []
+    for entry in registry["entries"]:
+        if entry.get("state") != "succeeded" or entry.get("sha256") != digest:
+            continue
+        candidate = storage.scoped_path(runtime, entry["path"])
+        if not candidate.is_file() or file_sha256(candidate) != digest:
+            continue
+        qa_path = candidate.parent / "qa.json"
+        if not qa_path.is_file():
+            continue
+        qa = read_json(qa_path)
+        if qa.get("passed") is not True or qa.get("sha256") != digest:
+            continue
+        reclaimed = storage.reclaim(runtime, [entry], references)
+        if reclaimed:
+            entry.update(state="removed", removed_at=now())
+            removed.extend(reclaimed)
+    if removed:
+        write_json(registry_path, registry)
+    return removed
+
+
+def _command_finalize(root: Path, args: argparse.Namespace) -> None:
     work, location = selected_work(root, args, allow_archive=True)
+    if read_frontmatter(work / "WORK.md").get("purpose") == "test":
+        raise HarnessError("test Work cannot Finalize or export video")
     if work_workflow(work) == "podcast_quote_image":
+        if not args.final_file:
+            raise HarnessError("Package Finalize requires a deliverable directory")
         command_finalize_package(root, args, work, location)
+        return
+    variant, state = selected_variant(root, work, args)
+    if location != "archive":
+        try:
+            reclaim_final_candidates(variant)
+        except (OSError, HarnessError, storage.StorageError) as exc:
+            print(f"Prior temporary cleanup retained: {exc}", file=sys.stderr)
+    if not args.final_file:
+        if location == "archive":
+            raise HarnessError("Reopen before Finalize")
+        accepted = state.get("accepted_preview")
+        if not accepted:
+            raise HarnessError("No accepted preview")
+        job = variant / ".runtime" / f"finalize-{uuid.uuid4().hex[:12]}"
+        job.mkdir(parents=True)
+        render_args = argparse.Namespace(**vars(args))
+        render_args.preview_id, render_args.final = accepted, True
+        render_args.output, render_args.refined_project = str(job / "candidate.mp4"), None
+        try:
+            command_preview_render(root, render_args)
+            qa = encoded_video_qa(Path(render_args.output), evidence=job / "telemetry.json")
+            write_json(job / "qa.json", qa)
+            promote_args = argparse.Namespace(**vars(args))
+            promote_args.final_file, promote_args.qa_passed = render_args.output, True
+            command_finalize_video(root, promote_args, work, location)
+        except (HarnessError, OSError) as exc:
+            write_json(job / "failure.json", {"error": str(exc), "at": now()})
+            raise HarnessError(f"Finalize failed; inspect failure/recovery evidence at {job}: {exc}") from exc
+        try:
+            removed = reclaim_final_candidates(variant, Path(render_args.output))
+            write_json(job / "cleanup.json", {"removed": removed})
+        except (OSError, HarnessError, storage.StorageError) as exc:
+            print(f"Final is complete; temporary cleanup deferred: {exc}", file=sys.stderr)
         return
     command_finalize_video(root, args, work, location)
 
 
+def encoded_video_qa(candidate: Path, *, evidence: Path | None = None) -> dict[str, Any]:
+    probe = os.environ.get("HYPERFRAMES_FFPROBE_PATH", "ffprobe")
+    decoder = os.environ.get("HYPERFRAMES_FFMPEG_PATH", "ffmpeg")
+    result = measured_process([probe, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(candidate)],
+                              evidence, "ffprobe-qa", check=False, capture_output=True, text=True)
+    try:
+        metadata = json.loads(result.stdout)
+        videos = [stream for stream in metadata["streams"] if stream.get("codec_type") == "video"]
+        valid = (result.returncode == 0 and len(videos) == 1 and videos[0].get("width", 0) > 0
+                 and videos[0].get("height", 0) > 0 and float(metadata["format"]["duration"]) > 0)
+    except (KeyError, TypeError, ValueError):
+        valid = False
+    if not valid:
+        raise HarnessError("Encoded output QA failed: invalid video stream or duration")
+    decoded = measured_process([decoder, "-v", "error", "-xerror", "-i", str(candidate), "-f", "null", "-"],
+                               evidence, "ffmpeg-decode-qa", check=False, capture_output=True, text=True)
+    if decoded.returncode or decoded.stderr.strip():
+        raise HarnessError(f"Encoded output QA failed during full decode: {decoded.stderr}")
+    return {"passed": True, "sha256": file_sha256(candidate), "probe": metadata, "full_decode": True}
+
+
 def command_finalize_video(
+    root: Path, args: argparse.Namespace, work: Path, location: str,
+) -> None:
+    variant, _ = selected_variant(root, work, args)
+    journal = variant / ".runtime" / "final-promotion"
+    files = ("final/final.mp4", "final/manifest.json", "variant.yaml", ".runtime/finalize.json", ".runtime/qa/final.json")
+
+    def restore() -> None:
+        originals = read_json(journal / "prepared.json")
+        for name in files:
+            target = variant / name
+            if originals[name]:
+                temporary = target.with_name(f".{target.name}.restore-{uuid.uuid4().hex}")
+                shutil.copy2(journal / name, temporary)
+                os.replace(temporary, target)
+            else:
+                target.unlink(missing_ok=True)
+
+    if (journal / "prepared.json").is_file():
+        restore()
+    if journal.exists():
+        shutil.rmtree(journal)
+    journal.mkdir(parents=True)
+    originals = {}
+    for name in files:
+        source = variant / name
+        originals[name] = source.is_file()
+        if source.is_file():
+            backup = journal / name
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, backup)
+    write_json(journal / "prepared.json", originals)
+    try:
+        _command_finalize_video(root, args, work, location)
+        os.replace(journal / "prepared.json", journal / "committed.json")
+    except BaseException:
+        try:
+            restore()
+            os.replace(journal / "prepared.json", journal / "restored.json")
+        except OSError as recovery_error:
+            raise HarnessError(f"Final promotion recovery pending at {journal}: {recovery_error}") from recovery_error
+        raise
+    else:
+        try:
+            shutil.rmtree(journal)
+        except OSError:
+            pass  # Committed recovery evidence is harmless and cleaned on the next operation.
+
+
+def _command_finalize_video(
     root: Path,
     args: argparse.Namespace,
     work: Path,
@@ -1939,7 +2303,7 @@ def command_finalize_video(
     render_record = None
     frozen = None
     legacy_compatibility = None
-    if state.get("accepted_visual_plan"):
+    if state.get("accepted_visual_plan") or accepted_metadata.get("review_mode") == "studio":
         render_record = read_json(variant / ".runtime" / "render.json")
         if (render_record.get("purpose") != "final" or render_record.get("source_preview") != accepted
                 or render_record.get("output_sha256") != candidate_digest
@@ -1951,6 +2315,10 @@ def command_finalize_video(
         if not frozen.is_relative_to((variant / ".runtime").resolve()) or not frozen.is_dir():
             raise HarnessError("Final render source snapshot changed or escaped the Work")
         frozen_snapshot_digest = snapshot_digest(frozen)
+        if accepted_metadata.get("review_mode") == "studio" and (
+                render_record.get("snapshot_sha256") != recorded_snapshot_digest
+                or current_snapshot_digest != recorded_snapshot_digest):
+            raise HarnessError("Final source differs from the accepted Studio Draft")
         if current_snapshot_digest == recorded_snapshot_digest:
             if frozen_snapshot_digest != render_record.get("snapshot_sha256"):
                 raise HarnessError("Final render source snapshot changed or escaped the Work")
@@ -2034,17 +2402,7 @@ def command_finalize_video(
     write_variant(variant, state)
     write_json(variant / ".runtime" / "finalize.json", {"state": "promoted", "final_sha256": candidate_digest})
 
-    if all_required_finals_exist(work):
-        write_json(variant / ".runtime" / "finalize.json", {"state": "archive_pending", "final_sha256": candidate_digest})
-        try:
-            archived = move_to_archive(root, work, "completed")
-        except (OSError, HarnessError) as exc:
-            raise HarnessError(f"Final is safe but archive is pending: {exc}") from exc
-        archived_variant = archived / "variants" / variant.name
-        write_json(archived_variant / ".runtime" / "finalize.json", {"state": "complete", "final_sha256": candidate_digest})
-        clear_current_if(root, work.name)
-        print(str(archived_variant / "final" / "final.mp4"))
-        return
+    write_json(variant / ".runtime" / "finalize.json", {"state": "complete", "final_sha256": candidate_digest})
     print(str(final_file))
 
 
@@ -2067,32 +2425,19 @@ def command_archive(root: Path, args: argparse.Namespace) -> None:
 
 def command_reopen(root: Path, args: argparse.Namespace) -> None:
     work, location = locate_work(root, args.work_id)
-    if location == "active":
-        write_pointer(root, "current-work", work.name)
-        print(str(work))
-        return
-    if location == "parked":
-        work = restore_parked_work(root, work)
-    else:
-        destination = works_root(root) / "active" / work.name
-        if destination.exists():
-            raise HarnessError(f"Active work already exists: {work.name}")
+    if location == "archive":
         archive_path = work / ".runtime" / "archive.json"
-        archive_record = read_json(archive_path) if archive_path.is_file() else {}
+        record = read_json(archive_path) if archive_path.is_file() else {}
+        if not record.get("soft"):
+            raise HarnessError("Legacy physical archive remains read-only; create a new Work for further production")
         history_path = work / ".runtime" / "archive-history.json"
         history = read_json(history_path) if history_path.is_file() else {"entries": []}
-        entries = history.get("entries", [])
-        if not isinstance(entries, list):
-            entries = []
-        entries.append({**archive_record, "reopened_at": now()})
-        write_json(history_path, {"entries": entries})
-        archive_path.unlink(missing_ok=True)
-        os.replace(work, destination)
-        work = destination
-        for variant in variant_paths(work):
-            state = read_json(variant / "variant.yaml")
-            state.update(status="active", wait_for="none", next_action="Continue from the retained Final and history")
-            write_variant(variant, state)
+        history["entries"].append({**record, "reopened_at": now()})
+        write_json(history_path, history)
+        archive_path.unlink()
+        location = "parked" if work.parent.name == "parked" else "active"
+    if location == "parked":
+        work = restore_parked_work(root, work)
     write_pointer(root, "current-work", work.name)
     variants = variant_paths(work)
     variant_id = "main" if (work / "variants" / "main").is_dir() else (variants[0].name if variants else None)
@@ -2102,6 +2447,14 @@ def command_reopen(root: Path, args: argparse.Namespace) -> None:
 
 
 def add_variant_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--account")
+    parser.add_argument("--batch")
+    parser.add_argument("--theme")
+    parser.add_argument("--background", help="accepted background id@vN")
+    parser.add_argument("--appearance-file", help="JSON selections, motion slots and parameter overrides")
+    parser.add_argument("--fps", type=int)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--mode", choices=("text-led", "animation-led"))
     parser.add_argument("--template", choices=sorted(TEMPLATES))
     parser.add_argument("--profile", choices=sorted(PROFILES))
     parser.add_argument("--ratio", choices=sorted(RATIOS))
@@ -2157,6 +2510,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     new = commands.add_parser("new")
     new.add_argument("title")
+    new.add_argument("--purpose", choices=("standard", "ip", "test"))
+    new.add_argument("--series")
+    new.add_argument("--source-work")
+    new.add_argument("--source-variant")
+    new.add_argument("--source-version")
     new.add_argument("--workflow", choices=sorted(WORKFLOWS), required=True)
     new.add_argument("--detached", action="store_true", help="create without changing the foreground Current Work")
     add_variant_options(new)
@@ -2164,6 +2522,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("current").set_defaults(handler=command_current)
     commands.add_parser("list").set_defaults(handler=command_list)
+    research_catalog.register_cli(commands)
+    appearance_parser = commands.add_parser("appearance", help="Resolve or explicitly rebind exact appearance assets")
+    appearance_commands = appearance_parser.add_subparsers(dest="appearance_command", required=True)
+    resolve = appearance_commands.add_parser("resolve")
+    add_variant_options(resolve)
+    resolve.set_defaults(handler=command_appearance_resolve)
+    rebind = appearance_commands.add_parser("rebind", help="Preview an exact Variant update; --apply commits it")
+    add_variant_options(rebind)
+    rebind.add_argument("--apply", action="store_true")
+    rebind.add_argument("--upgrade-runtime", action="store_true", help="Upgrade a known old runtime in the editable project only")
+    rebind.set_defaults(handler=command_appearance_update)
+    appearance_commands.add_parser("recover", help="Recover a pending update of the explicit Work/Variant").set_defaults(handler=command_appearance_update)
+    for kind in ("account", "series", "theme"):
+        config_parser = commands.add_parser(kind)
+        operations = config_parser.add_subparsers(dest="operation", required=True)
+        for operation in ("put", "get", "list"):
+            operation_parser = operations.add_parser(operation)
+            if operation != "list":
+                operation_parser.add_argument("identity")
+            if operation == "put":
+                operation_parser.add_argument("--file", required=True)
+            operation_parser.set_defaults(handler=command_config)
     root_command = commands.add_parser("root", help="Show or set the external WorkStore root")
     root_commands = root_command.add_subparsers(dest="root_command", required=True)
     root_commands.add_parser("show").set_defaults(handler=command_root_show)
@@ -2236,6 +2616,12 @@ def build_parser() -> argparse.ArgumentParser:
         command.set_defaults(handler=command_component_store)
     component_list = component_commands.add_parser("list", help="Discover packages from their metadata, not a Harness allowlist")
     component_list.add_argument("--query", default="")
+    component_list.add_argument("--kind", choices=("component", "module", "media", "audio", "theme", "background", "motion"))
+    component_list.add_argument("--ratio")
+    component_list.add_argument("--tag")
+    component_list.add_argument("--recommendation", choices=("recommended", "historical", "pending"))
+    component_list.add_argument("--rebuild", action="store_true", help="Rebuild the derived discovery cache")
+    component_list.add_argument("--research-root", type=Path, help="Include explicitly registered reference documents")
     component_list.set_defaults(handler=command_component_store)
     component_accept = component_commands.add_parser("accept", help="Accept an exact locally reviewed asset version")
     component_accept.add_argument("component_ref")
@@ -2285,7 +2671,7 @@ def build_parser() -> argparse.ArgumentParser:
     preview = commands.add_parser("preview")
     preview_commands = preview.add_subparsers(dest="preview_command", required=True)
     preview_register = preview_commands.add_parser("register")
-    preview_register.add_argument("draft_file", nargs="?")
+    preview_register.add_argument("draft_file", nargs="?", help="Optional legacy MP4; omit to freeze an executable Draft for Studio review")
     preview_register.add_argument("--purpose", choices=("plan", "draft"), default="draft")
     preview_register.add_argument("--kind", choices=("reference", "layout", "executable"), default="executable")
     preview_register.add_argument("--scope", choices=("full", "scene"), default="full", help="Single executable Scene direction reference or full project")
@@ -2330,11 +2716,14 @@ def build_parser() -> argparse.ArgumentParser:
     preview_render.set_defaults(handler=command_preview_render)
 
     finalize = commands.add_parser("finalize")
-    finalize.add_argument("final_file")
+    finalize.add_argument("final_file", nargs="?")
+    finalize.add_argument("--hyperframes-cli")
+    finalize.add_argument("--fps", type=int, default=60)
+    finalize.add_argument("--software-gl", action="store_true")
     finalize.add_argument("--qa-passed", action="store_true")
     finalize.set_defaults(handler=command_finalize)
     archive = commands.add_parser("archive")
-    archive.add_argument("--outcome", required=True, choices=("abandoned", "superseded"))
+    archive.add_argument("--outcome", default="stored", choices=("stored", "abandoned", "superseded", "completed"))
     archive.set_defaults(handler=command_archive)
     reopen = commands.add_parser("reopen")
     reopen.add_argument("work_id")
@@ -2372,7 +2761,7 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
                     or args.command == "request" and args.request_command not in {"freeze", "export", "feedback"}):
                 raise HarnessError("Review forbids production acceptance, installation and lifecycle promotion")
         args.handler(target_root, args)
-    except (HarnessError, ComponentError, VisualPlanError, work_requests.RequestError) as exc:
+    except (HarnessError, ComponentError, VisualPlanError, appearance.AppearanceError, storage.StorageError, work_requests.RequestError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return 0

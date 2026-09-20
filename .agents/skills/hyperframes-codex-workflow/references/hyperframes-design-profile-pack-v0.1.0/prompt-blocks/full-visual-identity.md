@@ -1,6 +1,6 @@
 ## Visual Identity（统一 Profile 版）
 
-本任务必须从以下三套 Profile 中选择且只选择一套。Profile 控制视觉身份；模板控制画面占用方式。
+本任务只选择一套 Profile 控制视觉身份；Template 控制画面占用，独立的动画型/文字型决定 A/B 叙事，不由 Profile 强制机制动画或固定布局。
 
 - 口播增强模板：人物和原视频始终优先，Profile 仅映射为解释层。
 - 纯 HyperFrames 模板：Profile 可以控制完整画面，但同一时刻仍只有一个主焦点。
@@ -48,7 +48,7 @@
 - 字体：短标题可用 Source Han Serif SC / Libre Bodoni 类高对比衬线；正文使用稳定无衬线
 - 强制设计门：Distill → Quieter → Typeset → Layout
 - 动词：Isolate、Unveil、Cut、Condense、Lock
-- 运动：少而精确，允许果断切换和较长静止；禁止弹跳和弹性
+- 运动：少而精确，允许果断切换和正文稳定阅读；全画面连续完全静止不超过2秒，禁止弹跳和弹性
 - 禁止：黑金卡片网格、满屏金边、金属渐变、发光、玻璃、嵌套卡片、超细中文正文、所有场景都缓慢淡入
 
 ### Profile 共用规则
@@ -58,4 +58,5 @@
 - 先建立可读的静态 hero frame，再设计进入动画。
 - 人脸、主体和已有字幕区域为保护区。
 - Animation Plan 必须列出所选 Profile、hero frame、运动动词、时间范围、风险和测试。
-- 未经用户再次明确确认 Animation Plan，不得进入实现和正式渲染。
+- 整片 Plan 与一个真实动态 Scene 一次方向批准，之后直接扩成全片占位 Draft，不增加 Profile 审批。素材齐备后 Studio 注册、打开准确版本并接受，再从接受快照正式渲染、编码 QA、Finalize 和归档。
+- SVG/icon/图片可提供装饰价值，文字型大部分卡片有装饰，允许短暂纯文字。保原声/总时长，按实际播放人工核验2秒全画面静止与稳定阅读，不以 tween 数量判定。
