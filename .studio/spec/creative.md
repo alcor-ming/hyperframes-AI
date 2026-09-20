@@ -3,9 +3,9 @@
 ## 文案
 
 - `source.md` 保存主要原始基线，任何改写不得覆盖它。
-- `SCRIPT.md` 保存当前 Variant 的唯一口播正文，并可附一份明确排除出口播的简短 Scene 索引。正文使用 `<!-- P001 -->` 形式的稳定 Anchor；批准后新增 Anchor，不重排全部编号。索引用成对的 `<!-- scene-index:start -->` / `<!-- scene-index:end -->` 包围，只记录 `Scene | Anchor 范围 | 时间预算 | 本段内容 / 观众重点`，不进入纯文本阅读、字数统计、配音或语音对齐；旧 Work 如已有等效索引，只补成对标记，不强行重排内容。Frontmatter 的 `mode` 只使用 `dbs` 或 `verbatim`。
-- `hyperframes_video` 的 `PACKAGE.md` 在 Research 完成、Animation Plan 创建时同步生成，只保存一个最终标题、一条封面文字、一句话简介和内容概括，不进入口播正文。
-- 标题必须调用 `dbs-xhs-title` 生成候选并选择 Top 1；封面文字、一句话简介与内容概括基于最终 Script 和 Research，不编造正文没有支撑的承诺。内容概括按主要对象或主题简短分项；介绍多个 Skill、工具、功能或案例时逐项单独说明。
+- `SCRIPT.md` 保存当前 Variant 引用的唯一口播正文；新视频 Work 默认通过 `shared_inputs` 引用 Work 的 `shared/`，显式内容分支及旧 Work 可使用 Variant-local 文件。正文可附明确排除出口播的简短 Scene 索引，使用 `<!-- P001 -->` 形式的稳定 Anchor；批准后新增 Anchor，不重排全部编号。索引用成对的 `<!-- scene-index:start -->` / `<!-- scene-index:end -->` 包围，只记录 `Scene | Anchor 范围 | 时间预算 | 本段内容 / 观众重点`，不进入纯文本阅读、字数统计、配音或语音对齐；旧 Work 如已有等效索引，只补成对标记，不强行重排内容。Frontmatter 的 `mode` 只使用 `dbs` 或 `verbatim`，不同于 Variant 的叙事模式。
+- `hyperframes_video` 的 `PACKAGE.md` 仅在交付要求包含发布包装时生成，保存最终标题、封面文字、一句话简介和内容概括，不进入口播正文，也不作为视频前置。
+- 已要求的小红书包装标题调用 `dbs-xhs-title` 生成候选并选择 Top 1；封面文字、一句话简介与内容概括基于最终 Script 和 Research，不编造正文没有支撑的承诺。内容概括按主要对象或主题简短分项；介绍多个 Skill、工具、功能或案例时逐项单独说明。
 - `dbs` 允许多轮正文修改；DBS 只有在实际修改口播时才把 Script 状态设为 `pending` 并等待用户批准。
 - `verbatim` 必须保留转录文字、Anchor 和由 `characters[]` 聚合出的原时间戳，`approval` 为 `not_required`；DBS 不改正文，只可诊断或处理包装文案。
 - `podcast_quote_image` 先在 `RESEARCH.md` 中记录与获批观点相关的嘉宾身份、经历、背景故事、事实边界和来源，再生成可直接复制的纯文本 `PACKAGE.md`。第一行为不超过 20 字的标题，其后只使用开篇、`01｜小标题` 形式的顺序分节、正文、署名、`原视频：<视频原标题>` 和标签，不放来源地址、Markdown 标记或结构说明。render 另生成 `xiaohongshu.json`，正文连同 1 至 3 个话题不超过 1000 字，每个话题不超过 30 字。开篇第一段与每图小标题都只归纳获批文段，已核实的嘉宾背景最早从第二段开始补充。文案 Skill 先完成不含大标题的草稿，必须单独调用 `dbs-content` 对开篇、每个小标题和正文进行表达效率、认知落差与标题诊断，再由文案 Skill 应用修订。全文稳定后，必须单独调用 `dbs-xhs-title` 仅根据获批文段生成带公式编号的候选与 Top 3，再选定 Top 1 大标题；最后单独调用 `dbs-ai-check` 诊断完整成稿。仅读取 DBS Skill 或借用规则不算完成调用。DBS 不得改写批准方案中的原文金句或忠实翻译。
@@ -17,8 +17,8 @@
 
 ## Research
 
-- 视频工作流的 `RESEARCH.md` 与 `SCRIPT.md` 位于同一 Variant，记录 `script_revision`、Research Revision；按 Script 内容部分与现有 Scene / Anchor 保存呈现需求、研究所得、素材依据和真实待补问题。播客图文的 `RESEARCH.md` 不使用 Script Revision，只服务当前获批文章方案。
-- Research 为视觉设计准备可用文字、实例、图片、截图、视频或数据；即使口播完整也可需要材料，已有材料足够则复用。正向研究任务、首轮就绪标准和 Plan 定点补研究按 `.studio/workflow.md` 的“视觉内容与素材准备”执行，不要求用户先设计画面或列调研问题。
+- 视频工作流的 `RESEARCH.md` 与 `SCRIPT.md` 采用同一共享/分支来源合同，记录 `script_revision`、Research Revision；按 Script 内容部分与现有 Scene / Anchor 保存呈现需求、研究所得、素材依据和真实待补问题。共享源变化需检查所有引用 Variant 的实际影响，不自动沿用旧接受。播客图文的 `RESEARCH.md` 不使用 Script Revision，只服务当前获批文章方案。
+- Research 为视觉设计准备可用文字、实例、图片、截图、视频或数据；即使口播完整也可需要材料，已有材料足够则复用。正向研究任务、首轮就绪标准和 Plan 定点补研究按 `.studio/workflow.md` 的“内容准备”执行，不要求用户先设计画面或列调研问题。
 - 研究条目关联可定位的来源、素材位置和必要使用条件；记录来源不冒充已取得文件，源视频证据时间点不是成片展示时间。研究中的文字是候选表达，Plan 决定是否选用及用什么方式呈现，不以候选“核心”标记绑定上屏义务。旧研究结构与引用可继续使用，不批量改写历史 Work。
 - Research 不规定布局、裁切、动画状态或成片秒数。查证服务于实际材料，宣传、自述与验证分开，不编造 UI、数据或成功状态；与口播冲突时定点反馈问题、依据和局部影响，由用户决定相关表达，不擅改原音或用纠错画面处理，不阻塞无关研究。
 - Script Revision 变化后先检查实际影响范围：只补查或更新受影响条目，再把引用元数据同步到当前版本；未受影响资料不重新研究或重写。版本继续留痕，不能用元数据同步掩盖内容变化或修改旧接受快照。
@@ -42,30 +42,17 @@
 
 ## Animation Plan
 
-- `ANIMATION_PLAN.md` 是唯一视觉语义真源，保留现有 Scene/Anchor ID 和 M2–M3 成果。整片 Plan -> 一个真实 Scene 动态参考 -> 一次方向批准 -> 完整 planned-placeholder Draft -> 素材齐备最终 Draft。Plan 和参考合并一次批准，不逐 Scene 询问，不增加占位 Draft 接受门或 Shotbook。
+- `ANIMATION_PLAN.md` 是唯一采用后的视觉设计真源，保留现有 Scene/Anchor ID 和成果；阶段与批准边界只见 `.studio/workflow.md`，不另建 Shotbook。
 - 配色、字体等全片视觉身份可以共享；局部布局、信息结构和动作只在 Plan 明确列出的适配 Scene 中复用，样段不升级为全片模板。待库级接纳不是设计缺口，已有适配组件不重做审批样段。
 - Scene 引用 Script Anchor、Research 选材与素材位置，并明确实际屏幕文字和声画取舍；不逐句改写口播或复制研究全文。
 - Scene 给出视觉目标、完整可读的 Hero State、内容来源、文字 / 素材 / 动作各自承担的职责、阅读安排、素材用途与裁切意图。复杂场景才拆 Beat，不强制固定状态数。
 - `verbatim` Scene 可引用 `SCRIPT.md` 原时间戳作为依据；有实际视频或音频时仍以实际媒体为最终时间权威，工程时间线另记录实际呈现。
-- Scene 数量、顺序、目标、Hero State、Template、Profile、文案结构或核心内容实质变化时更新 Plan Revision，只重新确认受影响 Scene 与必要衔接；等义原位适配不触发全片刷新。历史 Accepted Draft / Final 不覆盖，新 Final 仍须有适用的 Accepted Draft。
+- Scene 数量、顺序、目标、Hero State、Template、视觉主题、文案结构或核心内容实质变化时更新 Plan Revision，只重新确认受影响 Scene 与必要衔接；等义原位适配不触发全片刷新。历史 Accepted Draft / Final 不覆盖，新 Final 仍须有适用的 Accepted Draft。
 - 精确时间、easing、换行、安全区、性能和不改变 Hero State 的布局修复不增加 Plan Revision。
 
-完整占位 Draft 必须含全片 Scene、实际动作和阅读安排，允许 Plan 登记的稳定素材占位、临时音轨和已约定 proxy，不可掩盖空场或错误；方向批准与占位 Draft 不授予 Finalize。素材齐备最终 Draft 沿用既有完整接受，原快照不改。
+## 表达与时间
 
-音频 cue 从既有 timestamps/section_map 确定解析，重复词明确 Anchor、字符范围或 occurrence。Plan 记语义事件和偏移意图，不维护第二份秒表；源剪辑映射与单 Scene crop 不改原对齐。BGM/Blender 可选，无依赖时不阻塞。
-
-## 信息型动效
-
-- Windows Work-local Scene 优先复用语义视觉对象及内部联动，既有 helper 保留，只在独立变化或真实复用时抽取。图标、图片、截图可担当主体、证据或纹理；旧完整 Scene 可复用，不强制拆解、双画幅或五阶段，共享相机、遮挡与光照保持内聚。A/B-roll 是逐 Scene 叙事职责，不等于引擎、文件或轨道，人物布局不强加全片。
-- Scene 可按实际画幅重新分组或计算布局，须验证真实文字、素材和阅读窗口，不能仅拉伸后宣称适配。视觉效果代码在 Windows Work-local 或已登记 AssetSource 开发，工具 / 宿主缺口才交 WSL。
-- 动画型与文字型的 A/B 职责、默认区间依 `.studio/workflow.md`，独立于 Template/Profile。默认带声连续观看，保原声和总时长；不要求静音复述论证或逐句上屏，允许省略铺垫、情绪、衔接、重复，不丢改变结论的条件。
-- SVG、icon、图片允许装饰价值；文字型大部分卡片有装饰，允许短暂纯文字。口播关键词可下划线/加框，不默认逐字跳动、正文漂移或新增音乐/音效。
-- 整幅画面连续完全静止不得超过2秒，正文及单个对象可稳定阅读。分配整段内容和 A/B 时间后逐步呈现，必要时少量辅助运动；实际播放人工核验，不用动画数量、闪烁或无限循环规避，不宣称已有可靠自动判定。
-- 文字按含义分组，已讲内容可保留为稳定上下文；通过焦点迁移、局部展开、证据放大或对象转化解释关系。对比表、列表、截图、标题和稳定阅读不是失败条件。
-- 每组需要阅读的文字有可辨识的窗口；正文不持续漂移、缩放、模糊或被镜头遮挡。信息太多先改分组、时序、版面或等义措辞，仍无法保留核心结论与时间预算时提出该段真实取舍，不无限缩字。
-- 关键隐喻说明对象代表什么、动作对应什么关系、观众应得出什么结论；保留并列、比较、因果的真实区别。概念示意、模拟操作与真实录屏不得混同，数字和成功状态需要证据或演示标记。
-- Three.js 服务空间层级、路径、聚合或遮挡，不用无指向粒子替代机制说明；长正文默认留在 DOM / SVG，空间镜头不能牺牲精确信息。没有必要时不使用 Three.js。
-- 阅读判断依据实际画幅、字体、文字、时长与显示尺寸，不设置通用字数、字号、动画比例或结尾 `0.4s` 门槛。不能因“可能更好看”推翻已确认方向。
+叙事模式、语义揭示、三种场景策略、同卡累积和观看检查统一见 `spec/visual-design.md`；实际 cue 映射、ready/seek 与资源闭包见 `spec/hyperframes.md`。本文件只维护来源与修订，不另编排 Plan/Draft/Final。
 
 ## 排除项
 

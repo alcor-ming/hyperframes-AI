@@ -1,10 +1,12 @@
 # HyperFrames AI vNext PRD Master
 
-状态：v3.2 根目录、语义视觉对象与分准备度 Draft 调整；不是软件发行或实机通过声明
+状态：v3.3 制作机制与工程控制面候选；不是软件发行、部署或实机通过声明
 
 风险：T3 Parent PRD
 
-日期：2026-09-11
+日期：2026-09-17
+
+当前增量见 [v3.3 制作与工程合同](./hyperframes-v33-production-contract.md)。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作采用三项入口、四阶段、独立 Finalize 与软归档。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
 
 ## 当前路径
 
@@ -48,7 +50,7 @@ M1 已有 module/media 合同保留，Template/Recipe/Blender 或全库迁移不
 - 通用模块不绑定双画幅；Scene 可重排或计算布局，必须验证真实文字、媒体与阅读时间，不能只拉伸后宣称适配。有限画幅模板保留自身限制。
 - 图标、图片、截图和模型可直接成为主体、证据、纹理或辅助对象，不统一限制到固定 Surface；旧组件仍遵守原合同。
 - 能独立的背景 / 前景可分开，共享相机、遮挡、光照的空间舞台保持内聚，不强制透明根层。
-- 主题继续使用当前选定 Profile；全片颜色、字体与局部布局 / 动作分开。原完整主题解耦目标不成为 M1 或日常 Work 的前置门。
+- 主题只拥有前景字体、配色与卡片外观，与叙事模式、背景、运动和布局独立；不强制双模式 Theme 或前置 Profile，旧 Profile 仅作可选兼容参考，详见 v3.3 合同。
 - GSAP 模块写入宿主有限 timeline，不拥有独立播放权；任何时刻可从显式参数与时间重建。模块用法与 preview 宿主不是同一接口。
 - 媒体、依赖与字体按实际使用闭合，不把未授权内容放进公开 Harness，不承诺尚未测试的运行时或画幅。
 
@@ -76,6 +78,8 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 - 历史决策保留在[原决策台账](./_ledger/component-driven-motion-vnext.md)；不回写过去记录，不将已替换的五阶段、双画幅或透明根层规则继续施加给新模块。
 
 ## PRD 索引
+
+- [v3.3 制作与工程合同](./hyperframes-v33-production-contract.md)：当前增量、规则归属、历史兼容与尚需原生/生产证据的边界。
 
 - [Scene 与独立资产合同](./hyperframes-component-motion.md)：类型边界、Windows 内容开发、最小 module/media、精确冻结与旧合同兼容。
 - [逐 Scene 复用、缺口 Plan 与官方 Studio](./hyperframes-visual-plan-motion-reuse.md)：保留内容质量、轻量 Plan、局部反馈与真实验收。

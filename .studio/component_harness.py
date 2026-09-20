@@ -23,7 +23,7 @@ ASSET_PACKAGE_ALGORITHM = "asset-package-sha256-v1"
 OPTIONAL_SNAPSHOT_ITEMS = (
     "vendor", "component-bindings", "COMPONENT_LOCK.json", "scene-slots.json", "assets", "scenes", "shared",
     "runtime", "effects", "media", "shaders", "models", "textures", "hyperframes.json",
-    "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+    "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "appearance-lock.json",
 )
 REQUIRED_RELEASE_FILES = (
     "COMPONENT.md",
@@ -472,7 +472,8 @@ def validate_component_acceptance(acceptance: dict, release: dict, *, runtime_ro
         raise ComponentError(f"Asset acceptance does not match the exact package: {release['component_ref']}")
     if acceptance.get("review") and os.environ.get("HYPERFRAMES_AI_REVIEW") != "1":
         raise ComponentError("Review asset acceptance cannot be used in production")
-    if release["metadata"].get("asset_type") == "media":
+    from asset_contract import asset_requires_runtime
+    if not asset_requires_runtime(release["metadata"]):
         return
     root = runtime_root or Path(os.environ.get("HYPERFRAMES_AI_ROOT", Path(__file__).resolve().parents[1]))
     lock = _read_json(root / "windows-runtime.lock.json")
@@ -507,6 +508,19 @@ def _safe_relative(value: str, label: str) -> str:
 
 
 def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[str, Any]:
+    kind = release["metadata"].get("asset_type")
+    if kind in {"theme", "background", "motion", "module", "media"} and isinstance(binding, dict) and binding.get("scope") == "dependency":
+        if (binding != {"schema_version": 3, "component_ref": release["component_ref"], "scope": "dependency"}):
+            raise ComponentError("Dependency Binding requires schema_version 3 and exact component_ref")
+        return binding
+    if kind in {"theme", "background", "motion"}:
+        if (not isinstance(binding, dict) or binding.get("schema_version") != 3
+                or binding.get("component_ref") != release["component_ref"]
+                or set(binding) != {"schema_version", "component_ref", "usage"}
+                or binding.get("usage") != {"role": kind, "required": True}
+                or binding["usage"]["required"] is not True):
+            raise ComponentError("Appearance Binding requires exact ref and kind usage")
+        return binding
     if release["metadata"].get("asset_type") in {"module", "media"}:
         if (not isinstance(binding, dict) or binding.get("schema_version") != 3
                 or binding.get("component_ref") != release["component_ref"]):
@@ -994,9 +1008,9 @@ def install_component(
             raise ComponentError("Candidate installation requires an isolated Review project")
     allow_unapproved = review_root is not None or acceptance is not None
     release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=allow_unapproved)
-    generic = release["metadata"].get("asset_type") in {"module", "media"}
+    generic = release["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion"}
     if generic and acceptance is None:
-        raise ComponentError("Module/media installation requires exact asset acceptance")
+        raise ComponentError("Asset installation requires exact asset acceptance")
     if acceptance is not None:
         validate_component_acceptance(acceptance, release)
     project = Path(project)
@@ -1005,7 +1019,7 @@ def install_component(
     binding_data = _load_binding(binding)
     validate_binding(binding_data, release)
     surface_records = {} if generic else validate_surface_payloads(project, binding_data, release)
-    scene = binding_data["scene"]
+    scene = binding_data.get("scene", binding_data.get("scope", "appearance"))
     binding_rel = _safe_relative(binding_path or f"component-bindings/{scene}.{release['component_id']}.json", "binding path")
     target_binding = project / binding_rel
     package_id, version = parse_component_ref(release["component_ref"])
@@ -1099,6 +1113,11 @@ def validate_component_mounts(
     record: dict[str, Any],
 ) -> dict[str, Any]:
     index_path = Path(project) / "index.html"
+    if release["metadata"].get("asset_type") in {"theme", "background", "motion"}:
+        return {"mounts": []}
+    if all(_read_json(Path(project) / item["path"]).get("scope") == "dependency"
+           for item in _lock_bindings(record)):
+        return {"mounts": []}
     if release["metadata"].get("asset_type") in {"module", "media"}:
         from visual_plan import VisualPlanError, validate_dependencies
         entry = f"{record['vendor_path']}/{release['metadata']['entry']}"
@@ -1267,6 +1286,18 @@ def validate_work_surface_inventory(project: Path) -> dict[str, Any]:
 
 
 def validate_snapshot_closure(source: Path, snapshot: Path) -> dict[str, Any]:
+    from storage import snapshot_files
+    closure = snapshot_files(Path(source))
+    if closure is not None:
+        if closure != snapshot_files(Path(snapshot)):
+            raise ComponentError("Snapshot dependency closure changed")
+        for name in closure:
+            original, frozen = Path(source) / name, Path(snapshot) / name
+            if not frozen.is_file() or original.read_bytes() != frozen.read_bytes():
+                raise ComponentError(f"Snapshot closure differs: {name}")
+        if set(closure) != {path.relative_to(snapshot).as_posix() for path in Path(snapshot).rglob("*") if path.is_file()}:
+            raise ComponentError("Snapshot contains files outside its declared closure")
+        return {"closed": True, "items": list(closure)}
     names = ("index.html", "compositions", "DESIGN.md", "project-config.json") + OPTIONAL_SNAPSHOT_ITEMS
     checked: list[str] = []
     for name in names:
@@ -1300,6 +1331,56 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
     components = _lock_components(lock)
     if not components:
         raise ComponentError("COMPONENT_LOCK.json contains no components")
+    # Validate the entire dependency graph, including when checking just one ref.
+    releases = {}
+    roots = set()
+    for record in components:
+        ref = record.get("component_ref")
+        vendor_path = project / _safe_relative(str(record.get("vendor_path", "")), "vendor path")
+        if record.get("review") and review_root is None:
+            raise ComponentError("Review candidate cannot be used in production")
+        release = validate_component_release(vendor_path, expected_ref=ref,
+                                             allow_unapproved=review_root is not None or record.get("acceptance") is not None)
+        kind = release["metadata"].get("asset_type")
+        acceptance = record.get("acceptance")
+        if kind in {"module", "media", "theme", "background", "motion"}:
+            if record.get("asset_kind") != kind or acceptance is None:
+                raise ComponentError("Asset lock requires matching kind and exact acceptance")
+        if acceptance is not None:
+            validate_component_acceptance(acceptance, release)
+        if (release["package_sha256"] != record.get("work_package_sha256")
+                or release["package_sha256"] != record.get("public_package_sha256")):
+            raise ComponentError(f"Installed package hash mismatch: {ref}")
+        releases[ref] = release
+        for item in _lock_bindings(record):
+            binding = _read_json(project / item["path"])
+            validate_binding(binding, release)
+            if file_sha256(project / item["path"]) != item["sha256"]:
+                raise ComponentError(f"Binding hash mismatch: {ref} {item['path']}")
+            if binding.get("scope") != "dependency":
+                roots.add(ref)
+    visited = set()
+    active = set()
+
+    def visit(ref):
+        if ref in active:
+            raise ComponentError("Installed asset dependency cycle")
+        if ref in visited:
+            return
+        active.add(ref)
+        for dependency in releases[ref]["metadata"].get("asset_dependencies", []):
+            target = releases.get(dependency["ref"])
+            if (target is None or target["metadata"].get("asset_type") != dependency["kind"]
+                    or target["package_sha256"] != dependency["package_sha256"]):
+                raise ComponentError(f"Installed asset dependency does not match exact package: {dependency['ref']}")
+            visit(dependency["ref"])
+        active.remove(ref)
+        visited.add(ref)
+
+    for ref in roots:
+        visit(ref)
+    if visited != set(releases):
+        raise ComponentError("Dependency Binding is not reachable from a bound asset")
     checked = []
     for record in components:
         ref = record.get("component_ref")
@@ -1310,19 +1391,9 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         component_id, version = parse_component_ref(ref)
         vendor_rel = _safe_relative(str(record.get("vendor_path", "")), "vendor path")
         vendor_path = project / vendor_rel
-        if record.get("review") and review_root is None:
-            raise ComponentError("Review candidate cannot be used in production")
         acceptance = record.get("acceptance")
-        vendor = validate_component_release(vendor_path, expected_ref=ref, allow_unapproved=review_root is not None or acceptance is not None)
-        generic = vendor["metadata"].get("asset_type") in {"module", "media"}
-        if generic and (record.get("asset_kind") != vendor["metadata"]["asset_type"] or acceptance is None):
-            raise ComponentError("Asset lock requires matching kind and exact acceptance")
-        if acceptance is not None:
-            validate_component_acceptance(acceptance, vendor)
-        if vendor["package_sha256"] != record.get("work_package_sha256"):
-            raise ComponentError(f"Work package hash mismatch: {ref}")
-        if vendor["package_sha256"] != record.get("public_package_sha256"):
-            raise ComponentError(f"Public and Work package hashes differ: {ref}")
+        vendor = releases[ref]
+        generic = vendor["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion"}
         if public_root is not None and acceptance is None:
             public_path = Path(public_root) / ".studio" / "components" / component_id / f"v{version}"
             public = validate_component_release(public_path, expected_ref=ref)

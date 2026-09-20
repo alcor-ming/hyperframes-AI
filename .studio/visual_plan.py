@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 from urllib.parse import unquote, urlsplit
 
+from dependency_scan import DependencyScanError, references
+
 
 class VisualPlanError(ValueError):
     pass
@@ -90,11 +92,16 @@ def layout_projection(project, plan_text, scene_ids):
 
 
 def validate_dependencies(project, *, layout=False, entry="index.html", check_path=None):
-    """Check literal local references; browser QA must also check dynamic asset loads."""
+    """Check closure using HTML document bases, or project-root hosting for JS entries.
+
+    Dynamic loads and nonstandard embedding still require runtime restrictions/QA.
+    """
     project = project.resolve()
     visited = set()
+    scanned = set()
+    dynamic_loads = set()
 
-    def visit(path):
+    def visit(path, document_base=None):
         if check_path is not None:
             check_path(path)
         if layout and any(p.is_symlink() for p in (path, *path.parents) if p.is_relative_to(project)):
@@ -102,35 +109,64 @@ def validate_dependencies(project, *, layout=False, entry="index.html", check_pa
         path = path.resolve()
         if not path.is_relative_to(project) or not path.is_file():
             raise VisualPlanError(f"Dependency is missing or outside snapshot: {path}")
-        if path in visited:
+        document_base = path.parent if path.suffix in {".html", ".htm"} else document_base or project
+        context = (path, document_base)
+        if context in scanned:
             return
+        scanned.add(context)
         visited.add(path)
-        if path.suffix not in {".html", ".css", ".js", ".mjs"}:
+        if path.suffix not in {".html", ".htm", ".css", ".js", ".mjs"}:
             return
         text = path.read_text(encoding="utf-8")
-        refs = []
-        if path.suffix == ".html":
+        if path.suffix in {".html", ".htm"}:
             for tag, attrs in Composition(text).nodes:
                 if layout and (tag in {"audio", "video", "iframe", "object", "embed", "hyperframes-player"} or "data-composition-src" in attrs):
                     raise VisualPlanError("Layout samples use semantic placeholders, not media or compositions")
                 if layout and ("srcset" in attrs or "imagesrcset" in attrs):
                     raise VisualPlanError("Layout samples use a single local src, not responsive image candidates")
-                refs.extend(attrs[key] for key in ("src", "data-composition-src", "poster") if attrs.get(key))
-                if tag == "link" and attrs.get("href"):
-                    refs.append(attrs["href"])
-        refs += re.findall(r"url\(\s*['\"]?([^)'\"\s]+)", text)
-        if layout:
-            refs += re.findall(r"@import\s+['\"]([^'\"]+)['\"]", text)
-        refs += re.findall(r"(?:\bfrom\s*|\bimport\s*\(?\s*|\bfetch\s*\(\s*)['\"]([^'\"]+)['\"]", text)
-        for ref in refs:
+        try:
+            refs, dynamic = references(text, path.suffix)
+        except DependencyScanError as error:
+            raise VisualPlanError(f"{path.name}: {error}") from error
+        if dynamic:
+            dynamic_loads.add(path.relative_to(project).as_posix())
+        for reference in refs:
+            ref = reference["value"]
+            if reference["kind"] in {"import", "executable"} and urlsplit(ref).scheme.lower() in {"data", "blob"}:
+                raise VisualPlanError(f"Opaque executable dependency in {path.name}: {ref}")
             if ref.startswith(("#", "data:", "blob:")):
                 continue
             parsed = urlsplit(ref)
             if parsed.scheme or parsed.netloc or ref.startswith("/"):
                 raise VisualPlanError(f"Non-local dependency in {path.name}: {ref}")
-            visit(path.parent / unquote(parsed.path))
+            base = document_base if reference["kind"] == "fetch" else path.parent
+            visit(base / unquote(parsed.path), document_base)
 
     visit(project / entry)
+    if dynamic_loads:
+        declared = False
+        for filename, key in (("project-config.json", "snapshot_dependencies"), ("asset.json", "dependencies")):
+            metadata_path = project / filename
+            if not metadata_path.is_file():
+                continue
+            visit(metadata_path)
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
+                entries = metadata.get(key) if isinstance(metadata, dict) else None
+            except ValueError as error:
+                raise VisualPlanError(f"Invalid dependency declaration: {filename}") from error
+            if entries is None:
+                continue
+            if not isinstance(entries, list) or not all(isinstance(ref, str) and ref for ref in entries):
+                raise VisualPlanError(f"{filename}: {key} must be a list of local files")
+            declared = True
+            for ref in entries:
+                if Path(ref).is_absolute() or ".." in Path(ref).parts or "\\" in ref or ":" in ref:
+                    raise VisualPlanError(f"Non-local declared dependency: {ref}")
+                visit(project / ref)
+        if not declared:
+            raise VisualPlanError("Dynamic import/fetch requires explicit snapshot_dependencies or asset dependencies: "
+                                  + ", ".join(sorted(dynamic_loads)) + "; runtime network restrictions and QA remain required")
     return sorted(p.relative_to(project).as_posix() for p in visited)
 
 

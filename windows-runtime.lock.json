@@ -7,6 +7,7 @@
     "hyperframes": "0.8.27",
     "gsap": "3.14.2",
     "three": "0.160.0",
+    "acorn": "8.15.0",
     "chromium": "152.0.7977.30",
     "ffmpeg": "7.1.1",
     "ffprobe": "7.1.1"
@@ -19,6 +20,8 @@
     "runtime/npm/node_modules/hyperframes/dist/hyperframe.runtime.iife.js",
     "runtime/npm/node_modules/gsap/dist/gsap.min.js",
     "runtime/npm/node_modules/three/build/three.min.js",
+    "runtime/npm/node_modules/acorn/dist/acorn.js",
+    "runtime/npm/node_modules/esbuild/lib/main.js",
     "runtime/npm/node_modules/@esbuild/win32-x64/esbuild.exe",
     "runtime/npm/node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64-0.35.4.node",
     "runtime/npm/node_modules/onnxruntime-node/bin/napi-v3/win32/x64/onnxruntime_binding.node",
@@ -105,8 +108,8 @@
       "kind": "npm-tree",
       "file": "hyperframes-0.8.27-windows-npm.zip",
       "target": "runtime/npm",
-      "sha256": "2fcad4a02f1c2f539153f7c48913d4869c26d3d6c6aaf712075cab67ee92903b",
-      "package_lock_sha256": "da0bc15785312a73e69d3889b98a3236caccefbe31a948c17835afd6dba6f93f"
+      "sha256": "e56411d43568ce8039e41d06e6766507536c7dde71671713ef7fe8d9dfa09ed8",
+      "package_lock_sha256": "304507fb2b105a16917ea7aceb3aa7ce71fd38352adb91e1cfb23499fbbe0d65"
     }
   ]
 }

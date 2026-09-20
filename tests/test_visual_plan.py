@@ -18,7 +18,8 @@ class VisualPlanTest(unittest.TestCase):
         self.root = Path(self.temp.name)
         repo = Path(__file__).resolve().parents[1]
         shutil.copytree(repo / ".studio" / "templates", self.root / ".studio" / "templates")
-        self.run_cli("new", "Visual test", "--workflow", "hyperframes_video")
+        WORK_CLI.account_service(self.root).put("account", "main", {"name": "Fixture"})
+        self.run_cli("new", "Visual test", "--workflow", "hyperframes_video", "--account", "main")
         self.variant = next((self.root / "works" / "active").iterdir()) / "variants" / "main"
         self.project = self.variant / "project"
         self.update("RESEARCH.md", status="ready")
@@ -37,7 +38,7 @@ class VisualPlanTest(unittest.TestCase):
         return parsed.handler(self.root, parsed)
 
     def update(self, name, **fields):
-        path = self.variant / name
+        path = WORK_CLI.input_path(self.variant, name)
         text = path.read_text()
         end = text.index("\n---", 3)
         data = WORK_CLI.read_frontmatter(path)
@@ -105,7 +106,8 @@ class VisualPlanTest(unittest.TestCase):
             self.run_cli("preview", "render", "draft-v002", "--final", "--hyperframes-cli", str(cli), "--output", str(final))
             self.run_cli("finalize", str(final), "--qa-passed")
             renderer.assert_called_once()
-        archived = next((self.root / "works/archive").glob(f"*/{self.variant.parent.parent.name}/variants/main"))
+        archived = self.variant
+        self.assertEqual("active", WORK_CLI.locate_work(self.root, self.variant.parent.parent.name)[1])
         self.assertEqual(final.read_bytes(), (archived / "final/final.mp4").read_bytes())
         self.assertEqual(original, (archived / "previews/draft-v002/source-snapshot/compositions/S01.html").read_bytes())
 
@@ -140,9 +142,11 @@ class VisualPlanTest(unittest.TestCase):
         def render(command, **kwargs):
             movie.write_bytes(b"synthetic placeholder test")
             return WORK_CLI.subprocess.CompletedProcess(command, 0, stdout="test renderer")
-        with patch.object(WORK_CLI.subprocess, "run", side_effect=render):
-            self.run_cli("preview", "render", "plan-v001", "--hyperframes-cli", str(cli), "--output", str(movie))
-        self.run_cli("preview", "register", str(movie), "--media-readiness", "planned_placeholders")
+        with patch.object(WORK_CLI.subprocess, "run", side_effect=render) as renderer:
+            with self.assertRaisesRegex(WORK_CLI.HarnessError, "export is forbidden"):
+                self.run_cli("preview", "render", "plan-v001", "--hyperframes-cli", str(cli), "--output", str(movie))
+            renderer.assert_not_called()
+        self.run_cli("preview", "register", "--media-readiness", "planned_placeholders")
         with self.assertRaisesRegex(WORK_CLI.HarnessError, "media-complete"):
             self.run_cli("preview", "accept", "draft-v001")
         state = WORK_CLI.read_json(self.variant / "variant.yaml")
@@ -152,10 +156,11 @@ class VisualPlanTest(unittest.TestCase):
         with self.assertRaisesRegex(WORK_CLI.HarnessError, "media-complete"):
             self.run_cli("preview", "render", "draft-v001", "--final", "--output", str(self.root / "final.mp4"))
         with self.assertRaisesRegex(WORK_CLI.HarnessError, "media-complete"):
-            self.run_cli("finalize", str(movie), "--qa-passed")
-        self.run_cli("preview", "register", str(movie), "--media-readiness", "complete")
-        self.run_cli("preview", "accept", "draft-v002")
-        self.assertEqual("draft-v002", WORK_CLI.read_json(self.variant / "variant.yaml")["accepted_preview"])
+            self.run_cli("finalize")
+        self.run_cli("preview", "register", "--media-readiness", "complete")
+        self.assertEqual("complete", WORK_CLI.preview_metadata(self.variant / "previews/draft-v002")["media_readiness"])
+        with self.assertRaisesRegex(WORK_CLI.HarnessError, "No Studio process"):
+            self.run_cli("preview", "accept", "draft-v002")
 
     def test_scene_reference_checks_exact_scene_and_keeps_dependency_failures(self):
         with self.assertRaisesRegex(VisualPlanError, "exactly one"):
@@ -452,7 +457,7 @@ class VisualPlanTest(unittest.TestCase):
         index.write_text(index.read_text() + '<div id="S02" data-start="4" data-duration="4" data-composition-src="compositions/S02.html"></div>')
         scene = self.project / "compositions" / "S02.html"
         scene.write_text("<p>First provide input, then inspect output.</p>")
-        research = self.variant / "RESEARCH.md"
+        research = WORK_CLI.input_path(self.variant, "RESEARCH.md")
         research.write_text(research.read_text() + "\n## S02 / P002 - Process\nFirst provide input, then inspect output.\n")
         self.run_cli("preview", "register", "--purpose", "plan")
         self.run_cli("preview", "accept", "plan-v001")
@@ -481,7 +486,7 @@ class VisualPlanTest(unittest.TestCase):
         cli = self.root / "cli.js"
         cli.write_text("// Render validation fixture; no runtime execution")
         with patch.dict(os.environ, {"HYPERFRAMES_BROWSER_PATH": str(self.root / "missing-browser")}):
-            with self.assertRaisesRegex(WORK_CLI.HarnessError, "Pinned render dependency"):
+            with self.assertRaisesRegex(WORK_CLI.HarnessError, "export is forbidden"):
                 self.run_cli("preview", "render", "plan-v001", "--hyperframes-cli", str(cli), "--output", str(self.root / "render.mp4"))
         self.run_cli("preview", "register", str(movie))
         state = WORK_CLI.read_json(self.variant / "variant.yaml")
@@ -497,7 +502,7 @@ class VisualPlanTest(unittest.TestCase):
             target.write_bytes(previous + b"\nchanged after check")
             with self.assertRaisesRegex(WORK_CLI.HarnessError, "scoped --compatible"):
                 self.run_cli("preview", "register", str(movie))
-            with self.assertRaisesRegex(WORK_CLI.HarnessError, "scoped --compatible"):
+            with self.assertRaisesRegex(WORK_CLI.HarnessError, "export is forbidden"):
                 self.run_cli("preview", "render", "plan-v001", "--hyperframes-cli", str(cli), "--output", str(self.root / "render.mp4"))
             target.write_bytes(previous)
         research.write_text(research.read_text() + "\nNew current content")
@@ -513,7 +518,7 @@ class VisualPlanTest(unittest.TestCase):
         for name, addition, error in (("ANIMATION_PLAN.md", "\nA different visual goal", "intent changed"),
                                       ("ANIMATION_PLAN.md", "\n| S02 | P002 |", "intent changed"),
                                       ("SCRIPT.md", "\nDifferent narration", "Narration changed")):
-            path = self.variant / name
+            path = WORK_CLI.input_path(self.variant, name)
             before = path.read_text()
             path.write_text(before + addition)
             with self.assertRaisesRegex(WORK_CLI.HarnessError, error):
@@ -535,7 +540,7 @@ class VisualPlanTest(unittest.TestCase):
 
     def test_plan_registration_and_acceptance_bind_research_content(self):
         self.run_cli("preview", "register", "--purpose", "plan")
-        research = self.variant / "RESEARCH.md"
+        research = WORK_CLI.input_path(self.variant, "RESEARCH.md")
         original = research.read_text()
         research.write_text(original + "\nChanged input with the same revision")
         with self.assertRaisesRegex(WORK_CLI.HarnessError, "Preview inputs changed"):
@@ -556,7 +561,7 @@ class VisualPlanTest(unittest.TestCase):
         index = self.project / "index.html"
         index.write_text(index.read_text() + '<div id="S02" data-start="4" data-duration="4" data-composition-src="compositions/S02.html"></div>')
         (self.project / "compositions" / "S02.html").write_text("<p>Equivalent ordered process</p>")
-        script = self.variant / "SCRIPT.md"
+        script = WORK_CLI.input_path(self.variant, "SCRIPT.md")
         script.write_text("---\n" + json.dumps(WORK_CLI.read_frontmatter(script)) + "\n---\n"
                           + WORK_CLI.script_text(script, anchors=True)
                           + "\n\n<!-- scene-index:start -->\n| Scene | Anchor | Budget | Direction |\n"
@@ -576,12 +581,16 @@ class VisualPlanTest(unittest.TestCase):
     def test_missing_pinned_browser_fails_before_invoking_hyperframes(self):
         self.run_cli("preview", "register", "--purpose", "plan")
         self.run_cli("preview", "accept", "plan-v001")
+        movie = self.root / "legacy-draft.mp4"
+        movie.write_bytes(b"legacy test input, not encoded video")
+        self.run_cli("preview", "register", str(movie))
+        self.run_cli("preview", "accept", "draft-v001")
         cli = self.root / "cli.js"
         cli.write_text("// unreachable")
         with patch.dict(os.environ, {"HYPERFRAMES_BROWSER_PATH": str(self.root / "missing.exe")}):
             with patch.object(WORK_CLI.subprocess, "run") as launch:
                 with self.assertRaisesRegex(WORK_CLI.HarnessError, "Pinned render dependency"):
-                    self.run_cli("preview", "render", "plan-v001", "--hyperframes-cli", str(cli), "--output", str(self.root / "test.mp4"))
+                    self.run_cli("preview", "render", "draft-v001", "--final", "--hyperframes-cli", str(cli), "--output", str(self.root / "test.mp4"))
                 launch.assert_not_called()
 
 

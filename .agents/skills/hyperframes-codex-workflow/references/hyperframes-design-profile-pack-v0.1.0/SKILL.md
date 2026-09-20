@@ -1,76 +1,28 @@
 ---
 name: hyperframes-design-profiles
-description: Select one HyperFrames visual identity across Templates and animation-led or text-led films; follow the shared Plan plus one dynamic Scene direction approval.
+description: Optional legacy appearance references for an already selected visual theme; not a required production step or workflow.
 license: Internal profile pack; adapted principles are attributed in upstream/THIRD_PARTY_NOTICES.md
 ---
 
-# HyperFrames Design Profiles
+# Legacy Appearance References
 
-This skill is the runtime source of truth for visual identity. Upstream design skills are references, not runtime dependencies.
+This pack is optional compatibility data, not the runtime source of orchestration.
+The current entry is narrative mode, visual theme and supported ratio, defined in
+`.studio/workflow.md`. Never require a Profile choice before content or Plan.
 
-## Required inputs
+Read only a specifically needed legacy PROFILE/tokens file. Historical shared
+review gates and execution recipes are not current production instructions.
+Existing Work identities, tokens and accepted snapshots remain unchanged; an old
+Profile is not automatically a qualified new theme.
 
-Determine or infer:
+A visual theme owns background, palette, fonts, type hierarchy, card appearance
+and icon/image treatment. It supports both narrative modes and explicitly names
+supported ratios. It does not prescribe Scene layouts, A/B roles, timing,
+approval, QA or Final delivery. Keep adopted parameters in the existing project
+theme location; Plan records the reference, not a second token copy.
 
-- `mode`: `talking_head` or `pure_hyperframes`
-- `profile`: `optical_fluidity`, `kami_editorial`, or `monochrome_atelier`
-- `ratio`: `16:9` or `9:16`; `optical_fluidity` also has an approved `4:3` mapping
-- main type: animation-led or text-led, independently selected in the Plan
-- authoritative duration/audio source
-- whether original captions already exist
-- protected subject/face regions when video footage exists
-
-If the user explicitly names a profile, do not substitute another one. If no profile is named, recommend one from the content purpose, then state the selection in the Animation Plan.
-
-## One-profile rule
-
-Load exactly one profile file:
-
-- `profiles/01-optical-fluidity/PROFILE.md`
-- `profiles/02-kami-editorial/PROFILE.md`
-- `profiles/03-monochrome-atelier/PROFILE.md`
-
-Do not combine their palettes, fonts or materials. Profiles govern visual identity, hierarchy and stylistic motion, not narrative architecture, A/B roles or mandatory mechanism animation. Main-type rhythm follows `.studio/workflow.md`; both types must work under the same Profile.
-
-## Execution order
-
-1. Read `shared/profile-contract.md`.
-2. Read `shared/two-template-mapping.md`.
-3. Read the selected Profile and its `tokens.json`.
-4. Analyze the source media, section map, transcript, and available negative space.
-5. Add the selected identity to the existing whole-film Plan; do not create extra planning artifacts.
-6. Apply `shared/review-gate.md` and create one real dynamic Scene reference.
-7. Ask once for direction confirmation covering the Plan and reference, not a separate Profile gate.
-8. Expand the full placeholder Draft, then complete media and accept the exact Studio Draft without a whole-film MP4 prerequisite.
-9. Render Final from the accepted snapshot, inspect encoded output, Finalize and archive; scope QA to actual changes.
-
-## Planning output
-
-The plan must name:
-
-- selected profile and reason;
-- main type and its independently selected A/B arrangement;
-- visual thesis in one sentence;
-- authoritative palette and fonts/fallbacks;
-- information hierarchy;
-- protected regions;
-- scene-by-scene semantic objects;
-- hero-frame composition;
-- motion verbs and timings;
-- profile-specific anti-pattern risks;
-- tests and acceptance boundary.
-
-## Precedence
-
-Resolve conflicts in this order:
-
-1. explicit user instruction in the current request;
-2. locked project/brand rules;
-3. video mode constraints;
-4. selected Profile;
-5. shared baseline;
-6. upstream suggestions.
-
-## Runtime ban on upstream replacement
-
-Do not invoke an upstream design skill to redesign the visual world during normal video execution. An upstream skill may be used only when the user asks to maintain, compare, or audit the Profile, and its findings must be translated back into the selected Profile contract before implementation.
+Preserve explicit brand choices. Adjust wrapping, layout, allowed type size and
+local contrast for readability; do not silently replace fonts, main colors,
+background style or card language. Unsupported combinations are reported rather
+than stretched into supposed support. Upstream material is reference only,
+never a replacement production workflow.
