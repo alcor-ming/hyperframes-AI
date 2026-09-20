@@ -19,6 +19,35 @@ readiness and render errors are failures, not successful black frames. This pilo
 does not yet guarantee readiness for arbitrary dynamically mounted video assets;
 those compositions are not production-qualified.
 
+## Studio Initialization
+
+Mount only after the document contains the target element. Studio 0.8.27 bundles
+local external scripts at the first script position, so a body script may execute
+in the head. Use `DOMContentLoaded` when `document.readyState === 'loading'`, not
+a timeout or retry. The container must be a connected HTML element in this
+document. Native DOM membership validates the node across realms; neither the
+current nor owner-document `HTMLElement` constructor reliably describes all
+Studio-created wrappers. No constructors or node prototypes are replaced.
+
+Invalid containers, components and dimensions have separate errors. Resource and
+render failures reject readiness/seeks and use the existing Studio player error
+overlay, with an inline alert for standalone pages. Load/ready cannot erase an
+active failure. Disposal removes reporting/listeners and the React root, including
+on document navigation; late failures from disposed instances are ignored. After
+a replacement scene is ready and rendered, an already-ready host may clear the
+previous error. HyperFrames remains the sole clock.
+
+`node tests/remotion-init.mjs` runs isolated A (standalone scene), B (real Studio
+DOM without React/Remotion), and C (real Studio integration) checks. Set
+`HF_PACKAGE` to locked HyperFrames 0.8.27, `CHROME_PATH` to local Chromium,
+`GSAP_FILE` to local gsap.min.js beside MotionPathPlugin.min.js, and `FONT_FILE`
+to a local font. The fixture tests actual font/image readiness, screenshot pixels,
+play/pause, direct/reverse/repeated seeks, disposal/remount/navigation, invalid
+inputs, missing images and component exceptions, including visible failure and
+same-document recovery. Results record the platform and each layer separately.
+It is silent: WSL Studio integration is not Windows-native or audio acceptance.
+The existing Windows-only `tests/remotion-studio.mjs` retains its native boundary.
+
 ## Local Verification
 
 Install the optional locked toolchain with `npm ci --prefix .studio/remotion`.
