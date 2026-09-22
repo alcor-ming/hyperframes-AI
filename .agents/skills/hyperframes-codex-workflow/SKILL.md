@@ -13,7 +13,13 @@ In Windows use the production root's `work.cmd`; in development do not read prod
 
 Read `WORK.md` and `variant.yaml`. For `podcast_quote_image`, load only `planner_skill` before article selection or `copy_skill` afterward and the current machine artifacts. Do not load video Plan, Recipe or theme rules for that branch.
 
-For video, resolve Script/Research through `shared_inputs` when present; new Works use `shared/`, while old Variant-local sources remain compatible. Creating production video Works/Variants requires a registered `--account`; test Works use batches and no account. Mode defaults to `text-led`, without a default Profile. Use the Variant's frozen account/theme settings rather than rereading changed service defaults.
+For video, resolve Script/Research through `shared_inputs` when present; new Works use `shared/`, while old Variant-local sources remain compatible. Mode defaults to `text-led`, without a default Profile. Use the Variant's frozen account/theme settings rather than rereading changed service defaults.
+
+Before creating a video object, first distinguish discussion/research from making something, then locate an explicitly continued Work/Variant, a needed independent Variant of the same content goal, or a temporary experiment. Continue an existing matching Variant; create a new production Work only for a new content goal, and keep an ordinary fix in the current Variant. A request to test one Scene inside an already specified production Work stays there; an independent comparison that must leave the original untouched uses an isolated experiment. Do not infer purpose from keywords, source URL, media, missing Final, or Current. Search only the current object and relevant named/title/account candidates. If purpose materially changes the organization and is still ambiguous, ask one short question before creating; otherwise state whether you are continuing, adding a Variant, experimenting, or creating production work without adding an approval gate.
+
+New video Works explicitly pass `--purpose standard|ip|test`: `standard` and `ip` are production, `test` is an experiment. Production creation needs a valid Series and registered `--account`; experiments do not bind an account and may snapshot its settings as a reference. An account is a Variant owner, not a unique Variant ID; select the exact Variant when several belong to it. Keep `podcast_quote_image` creation and routing unchanged.
+
+Keep experiments until specifically asked to delete them. Before deletion, check active Studio/request and real production path dependencies; do not cascade into production or shared assets. Copy or freeze any adopted result inside the production Work first, and treat `source_work` as lineage rather than a live dependency or production acceptance.
 
 ## Stage Loading
 

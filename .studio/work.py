@@ -21,6 +21,7 @@ from typing import Any, Iterable
 from types import SimpleNamespace
 import unicodedata
 import uuid
+from urllib.parse import quote
 
 
 try:
@@ -56,6 +57,7 @@ import appearance
 import storage
 import appearance_rebind
 import research_catalog
+import work_migration
 
 WORKFLOWS = {"hyperframes_video", "podcast_quote_image"}
 TEMPLATES = {"talking_head", "pure_hyperframes"}
@@ -234,6 +236,11 @@ def command_config(root: Path, args: argparse.Namespace) -> None:
         if args.command == "series":
             record = {**record, "works": [row["id"] for row in list_work_rows(root)
                                          if read_frontmatter(locate_work(root, row["id"])[0] / "WORK.md").get("series") == args.identity]}
+        elif args.command == "account":
+            record = {**record, "variants": [
+                {"work": row["id"], "series": row["series"], "series_number": row["series_number"], **variant}
+                for row in list_work_rows(root) if row["workflow"] == "hyperframes_video"
+                for variant in row["variants"] if variant["account"] == args.identity]}
     else:
         record = [read_json(path) for path in sorted((service.directory / args.command).glob("*.json"))]
     print(json.dumps(record, ensure_ascii=False, indent=2))
@@ -275,10 +282,6 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
         raise HarnessError("test Work binds batches, not accounts")
     if purpose != "test" and args.batch:
         raise HarnessError("Only test Work accepts a batch")
-    if work and account:
-        for variant in variant_paths(work):
-            if read_json(variant / "variant.yaml").get("account") == args.account:
-                raise HarnessError("An account already has a Variant in this Work")
     if work and purpose == "test":
         batch = args.batch or args.variant_id
         if any(read_json(path / "variant.yaml").get("batch") == batch for path in variant_paths(work)):
@@ -405,8 +408,56 @@ def title_number(title: str) -> int | None:
 
 
 def work_id_number(work_id: str, workflow: str) -> int | None:
-    match = re.fullmatch(rf"work-{re.escape(workflow)}-(\d{{3}})", work_id)
+    suffix = r"(?:-[\w.-]+)?" if workflow == "hyperframes_video" else ""
+    match = re.fullmatch(rf"work-{re.escape(workflow)}-(\d{{3,}}){suffix}", work_id)
     return int(match.group(1)) if match else None
+
+
+def semantic_title(value: str, *, video: bool = False) -> str:
+    title = unicodedata.normalize("NFKC", value).strip()
+    return title if video else NUMBERED_TITLE_PATTERN.sub(r"\2", title).strip(" -")
+
+
+def work_slug(title: str) -> str:
+    slug = re.sub(r"[^\w.-]+", "-", title, flags=re.UNICODE).strip(".-_")[:40].rstrip(".-_")
+    return slug or "untitled"
+
+
+def identity_path(root: Path) -> Path:
+    return runtime_root(root) / "work-identity.json"
+
+
+def identity_state(root: Path) -> dict[str, Any]:
+    path = identity_path(root)
+    state = read_json(path) if path.is_file() else {}
+    if not isinstance(state, dict):
+        raise HarnessError(f"Invalid Work identity state: {path}")
+    for key in ("series_highwater", "aliases", "series_aliases"):
+        if not isinstance(state.get(key, {}), dict):
+            raise HarnessError(f"Invalid Work identity {key}: {path}")
+    if not isinstance(state.get("video_highwater", 0), int) or state.get("video_highwater", 0) < 0:
+        raise HarnessError(f"Invalid video highwater: {path}")
+    if any(not isinstance(value, int) or value < 0 for value in state.get("series_highwater", {}).values()):
+        raise HarnessError(f"Invalid series highwater: {path}")
+    return {"video_highwater": state.get("video_highwater", 0),
+            "series_highwater": state.get("series_highwater", {}),
+            "aliases": state.get("aliases", {}),
+            "series_aliases": state.get("series_aliases", {})}
+
+
+def write_identity(root: Path, state: dict[str, Any]) -> None:
+    write_json(identity_path(root), state)
+
+
+def video_number(root: Path, rows: list[dict[str, Any]], state: dict[str, Any]) -> int:
+    observed = [work_id_number(row["id"], "hyperframes_video") or 0 for row in rows
+                if row["workflow"] == "hyperframes_video"]
+    return max(int(state["video_highwater"]), *observed, 0) + 1
+
+
+def series_number(root: Path, rows: list[dict[str, Any]], state: dict[str, Any], series: str) -> int:
+    observed = [int(row.get("series_number") or 0) for row in rows if row.get("series") == series]
+    return max(int(state["series_highwater"].get(series, 0)), *observed, 0) + 1
 
 
 def next_work_number(rows: Iterable[dict[str, Any]], workflow: str) -> int:
@@ -494,6 +545,8 @@ def archived_work_paths(root: Path) -> Iterable[Path]:
 
 def locate_work(root: Path, work_id: str) -> tuple[Path, str]:
     validate_id(work_id, "work id")
+    work_id = identity_state(root)["aliases"].get(work_id, work_id)
+    validate_id(work_id, "work id")
     for location in ("active", "parked"):
         candidate = works_root(root) / location / work_id
         if candidate.is_dir():
@@ -506,49 +559,38 @@ def locate_work(root: Path, work_id: str) -> tuple[Path, str]:
 
 def list_work_rows(root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    def row_for(path: Path, location: str) -> dict[str, Any]:
+        metadata = read_frontmatter(path / "WORK.md")
+        variants = []
+        for variant in variant_paths(path):
+            state = read_json(variant / "variant.yaml")
+            variants.append({"id": variant.name, "name": state.get("name") or variant.name,
+                             "account": state.get("account"), "account_revision": state.get("account_revision"),
+                             "status": state.get("status"), "wait_for": state.get("wait_for"),
+                             "next_action": state.get("next_action")})
+        only = variants[0] if len(variants) == 1 else {}
+        return {"id": path.name, "title": str(metadata.get("title", "")),
+                "created_at": str(metadata.get("created_at", "")),
+                "workflow": str(metadata.get("workflow", "hyperframes_video")),
+                "purpose": metadata.get("purpose", "standard"), "series": metadata.get("series"),
+                "series_number": metadata.get("series_number"), "location": location,
+                "status": only.get("status"), "wait_for": only.get("wait_for"),
+                "next_action": only.get("next_action"), "variants": variants}
     for location in ("active", "parked"):
         parent = works_root(root) / location
         if parent.is_dir():
             for path in sorted(parent.iterdir()):
                 if path.is_dir() and not path.name.startswith(".pending-"):
-                    metadata = read_frontmatter(path / "WORK.md")
-                    state_path = path / "variants" / "main" / "variant.yaml"
-                    state = read_json(state_path) if state_path.is_file() else {}
-                    rows.append(
-                        {
-                            "id": path.name,
-                            "title": str(metadata.get("title", "")),
-                            "created_at": str(metadata.get("created_at", "")),
-                            "workflow": str(metadata.get("workflow", "hyperframes_video")),
-                            "location": "archive" if (path / ".runtime" / "archive.json").is_file() else location,
-                            "status": state.get("status"),
-                            "wait_for": state.get("wait_for"),
-                            "next_action": state.get("next_action"),
-                        }
-                    )
+                    rows.append(row_for(path, "archive" if (path / ".runtime" / "archive.json").is_file() else location))
     for path in archived_work_paths(root):
-        metadata = read_frontmatter(path / "WORK.md")
-        state_path = path / "variants" / "main" / "variant.yaml"
-        state = read_json(state_path) if state_path.is_file() else {}
-        rows.append(
-            {
-                "id": path.name,
-                "title": str(metadata.get("title", "")),
-                "created_at": str(metadata.get("created_at", "")),
-                "workflow": str(metadata.get("workflow", "hyperframes_video")),
-                "location": "archive",
-                "status": state.get("status"),
-                "wait_for": state.get("wait_for"),
-                "next_action": state.get("next_action"),
-            }
-        )
+        rows.append(row_for(path, "archive"))
     location_order = {"active": 0, "parked": 1, "archive": 2}
     rows.sort(
         key=lambda row: (
             location_order[row["location"]],
             row["workflow"],
-            title_number(row["title"]) is None,
-            title_number(row["title"]) or 0,
+            row.get("series") or "",
+            row.get("series_number") or title_number(row["title"]) or 0,
             row["created_at"],
             row["id"],
         )
@@ -710,11 +752,15 @@ def create_variant(
 def command_new(root: Path, args: argparse.Namespace) -> None:
     if os.environ.get("HYPERFRAMES_AI_REVIEW") == "1":
         args.purpose = "test"
+    if args.workflow == "hyperframes_video" and not args.purpose:
+        raise HarnessError("Video Work requires --purpose standard, ip, or test")
     series = "test" if args.purpose == "test" else args.series
     if args.purpose == "test" and args.series not in (None, "test"):
         raise HarnessError("test Work must use the test series")
     if series and series != "test":
         account_service(root).get("series", series)
+    if args.workflow == "hyperframes_video" and args.purpose != "test" and not series:
+        raise HarnessError("Production video Work requires --series")
     if args.workflow == "podcast_quote_image" and any(
         value is not None for value in (args.template, args.profile, args.ratio, args.subject_position)
     ):
@@ -723,12 +769,27 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
     with naming_lock(root):
         settings = adopted_settings(root, args)
         rows = list_work_rows(root)
+        identity = identity_state(root)
         existing_ids = {row["id"] for row in rows}
-        number = next_work_number(rows, args.workflow)
+        number = video_number(root, rows, identity) if args.workflow == "hyperframes_video" else next_work_number(rows, args.workflow)
+        title_text = semantic_title(args.title, video=args.workflow == "hyperframes_video")
+        if args.workflow == "hyperframes_video" and (not title_text or any(char in title_text for char in "\r\n")):
+            raise HarnessError("Work title must be non-empty on one line")
+        if args.workflow == "podcast_quote_image":
+            title_text = title_text or "untitled"
+        if args.workflow == "hyperframes_video" and args.purpose == "test" and not args.separate:
+            existing = [row["id"] for row in rows if row["workflow"] == "hyperframes_video"
+                        and row["purpose"] == "test" and row["title"] == title_text]
+            if existing:
+                raise HarnessError("Experiment already exists: " + ", ".join(existing) + "; use --separate for a new comparison")
+        assigned_series_number = (series_number(root, rows, identity, series)
+                                  if args.workflow == "hyperframes_video" and args.purpose != "test" else None)
         while True:
-            if number > 999:
+            if args.workflow == "podcast_quote_image" and number > 999:
                 raise HarnessError("Work name sequence is exhausted")
             work_id = f"work-{args.workflow}-{number:03d}"
+            if args.workflow == "hyperframes_video":
+                work_id += f"-{work_slug(title_text)}"
             if work_id not in existing_ids:
                 work = works_root(root) / "active" / work_id
                 try:
@@ -740,9 +801,7 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
             number += 1
 
         try:
-            semantic_title = unicodedata.normalize("NFKC", args.title).strip()
-            semantic_title = NUMBERED_TITLE_PATTERN.sub(r"\2", semantic_title).strip(" -") or "untitled"
-            title = f"{number:03d}-{semantic_title}"
+            title = title_text if args.workflow == "hyperframes_video" else f"{number:03d}-{title_text}"
             atomic_write(staging / "WORK.md", template_text(root, "WORK.template.md", {
                 "WORK_ID": json_string_content(work_id), "TITLE": json_string_content(title),
                 "CREATED_AT": now(), "WORKFLOW": json_string_content(args.workflow),
@@ -753,7 +812,7 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
                            ratio=settings.get("ratio"), subject_position=args.subject_position)
             if args.workflow == "hyperframes_video":
                 metadata = read_frontmatter(staging / "WORK.md")
-                metadata.update(purpose=args.purpose or "standard", series=series, shared_source=True,
+                metadata.update(purpose=args.purpose, series=series, series_number=assigned_series_number, shared_source=True,
                                 source_work=args.source_work, source_variant=args.source_variant, source_version=args.source_version)
                 atomic_write(staging / "WORK.md", "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n" + document_body(staging / "WORK.md"))
                 if args.purpose == "test":
@@ -761,6 +820,11 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
                 create_adopted_variant(root, staging, "main", settings, shared=True, **options)
             else:
                 create_variant(root, staging, "main", **options)
+            if args.workflow == "hyperframes_video":
+                identity["video_highwater"] = number
+                if assigned_series_number is not None:
+                    identity["series_highwater"][series] = assigned_series_number
+                write_identity(root, identity)
             staging.rename(work)
         except Exception:
             if staging.is_dir():
@@ -783,7 +847,205 @@ def command_current(root: Path, args: argparse.Namespace) -> None:
 
 def command_list(root: Path, args: argparse.Namespace) -> None:
     ensure_roots(root)
-    print(json.dumps(list_work_rows(root), ensure_ascii=False, indent=2))
+    rows = list_work_rows(root)
+    if args.tree:
+        print("\n".join(tree_lines(root, rows)))
+    else:
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+
+
+def display_name(root: Path, row: dict[str, Any]) -> str:
+    if row["workflow"] != "hyperframes_video" or row["purpose"] == "test":
+        return row["title"]
+    if not row["series"] or not row["series_number"]:
+        return row["title"]
+    try:
+        series_name = account_service(root).get("series", row["series"])["name"]
+    except HarnessError:
+        series_name = row["series"]
+    return f"{series_name} {row['series_number']:03d} · {row['title']}"
+
+
+def experiment_suffix(row: dict[str, Any]) -> str:
+    number = work_id_number(row["id"], "hyperframes_video")
+    return f"{number:03d}" if number is not None else row["id"][-6:]
+
+
+def variant_account_label(row: dict[str, Any], variant: dict[str, Any]) -> str:
+    if row["workflow"] != "hyperframes_video":
+        return variant["account"] or "版本"
+    if row["purpose"] == "test":
+        return "实验"
+    if not variant["account"]:
+        return "历史未绑定"
+    revision = variant["account_revision"]
+    return f"{variant['account']} · r{revision}" if revision is not None else f"{variant['account']} · 历史版本未知"
+
+
+def tree_lines(root: Path, rows: list[dict[str, Any]]) -> list[str]:
+    lines = []
+    experiment_names = [row["title"] for row in rows if row["purpose"] == "test"]
+    groups = (
+        ("生产系列", lambda row: row["workflow"] == "hyperframes_video" and row["purpose"] != "test" and row["location"] != "archive"),
+        ("临时实验", lambda row: row["workflow"] == "hyperframes_video" and row["purpose"] == "test" and row["location"] != "archive"),
+        ("历史归档", lambda row: row["workflow"] == "hyperframes_video" and row["location"] == "archive"),
+        ("播客作品", lambda row: row["workflow"] == "podcast_quote_image"),
+    )
+    for heading, include in groups:
+        members = [row for row in rows if include(row)]
+        if not members:
+            continue
+        lines.append(heading)
+        if heading in {"生产系列", "历史归档"}:
+            members.sort(key=lambda row: (row["series"] or "", row["series_number"] or 0, row["id"]))
+        previous_series = None
+        for row in members:
+            grouped = heading in {"生产系列", "历史归档"}
+            if grouped and row["series"] != previous_series:
+                try:
+                    series_label = account_service(root).get("series", row["series"])["name"]
+                except HarnessError:
+                    series_label = row["series"] or "未登记系列"
+                lines.append(f"  {series_label}")
+                previous_series = row["series"]
+            indent = "    " if grouped else "  "
+            label = f"{row['series_number']:03d} · {row['title']}" if row["series_number"] else row["title"]
+            if row["purpose"] == "test" and experiment_names.count(row["title"]) > 1:
+                label += f" · {experiment_suffix(row)}"
+            if row["location"] == "parked":
+                label += " (停放)"
+            lines.append(f"{indent}{label} [{row['id']}]")
+            for variant in row["variants"]:
+                lines.append(f"{indent}  {variant_account_label(row, variant)} · {variant['name']} "
+                             f"[{variant['id']}] {variant['status'] or 'unknown'}")
+    return lines
+
+
+def refresh_browser(root: Path) -> None:
+    store = works_root(root).parent
+    lines = ["# 浏览目录", ""]
+    rows = list_work_rows(root)
+    if not any(row["workflow"] == "hyperframes_video" for row in rows) and not (store / "浏览目录.md").exists():
+        return
+    experiment_names = [row["title"] for row in rows if row["purpose"] == "test"]
+    for row in rows:
+        if row["workflow"] != "hyperframes_video":
+            continue
+        path, _ = locate_work(root, row["id"])
+        label = display_name(root, row)
+        if row["purpose"] == "test" and experiment_names.count(row["title"]) > 1:
+            label += f" · {experiment_suffix(row)}"
+        label = label.replace("]", "\\]")
+        section = "历史归档" if row["location"] == "archive" else "临时实验" if row["purpose"] == "test" else "生产系列"
+        link = quote(path.relative_to(store).as_posix(), safe="/")
+        lines.append(f"- {section} / [{label}]({link})")
+        for variant in row["variants"]:
+            lines.append(f"  - {variant_account_label(row, variant)} · {variant['name']} · {variant['status'] or 'unknown'}")
+    atomic_write(store / "浏览目录.md", "\n".join(lines) + "\n")
+
+
+def command_browser_rebuild(root: Path, args: argparse.Namespace) -> None:
+    refresh_browser(root)
+    print(str(works_root(root).parent / "浏览目录.md"))
+
+
+def command_migrate(root: Path, args: argparse.Namespace) -> None:
+    api = sys.modules.get(__name__) or SimpleNamespace(**globals())
+    if args.migrate_command == "dry-run":
+        def overrides(path: str | None) -> dict[str, str]:
+            if not path:
+                return {}
+            value = read_json(Path(path))
+            if not isinstance(value, dict) or not all(isinstance(key, str) and isinstance(item, str)
+                                                      for key, item in value.items()):
+                raise HarnessError(f"Migration overrides must be a JSON string map: {path}")
+            return value
+
+        plan = work_migration.build_plan(root, api,
+                                         title_overrides=overrides(args.title_overrides),
+                                         purpose_overrides=overrides(args.purpose_overrides),
+                                         only_ids=args.only or None)
+        content = json.dumps(plan, ensure_ascii=False, indent=2) + "\n"
+        if args.output:
+            output = Path(args.output).expanduser()
+            if output.is_symlink() or output.resolve().is_relative_to(works_root(root).parent.resolve()):
+                raise HarnessError("Migration mapping output must be a new file outside WorkStore")
+            try:
+                with output.open("x", encoding="utf-8") as handle:
+                    handle.write(content)
+            except OSError as exc:
+                raise HarnessError(f"Cannot create migration mapping {output}: {exc}") from exc
+        else:
+            print(content, end="")
+    else:
+        plan = read_json(Path(args.mapping))
+        result = work_migration.apply_plan(root, plan, api)
+        args.migration_applied = result["applied"]
+        print(json.dumps(result, ensure_ascii=False))
+
+
+def command_find(root: Path, args: argparse.Namespace) -> None:
+    matches = [row for row in list_work_rows(root) if row["workflow"] == "hyperframes_video"
+               and row["series"] == args.series and row["series_number"] == args.number]
+    moved_from = None
+    if not matches:
+        alias = identity_state(root)["series_aliases"].get(f"{args.series}:{args.number}")
+        if alias:
+            matches = [row for row in list_work_rows(root) if row["id"] == alias]
+            moved_from = {"series": args.series, "series_number": args.number}
+    if not matches:
+        raise HarnessError("No Work for this series number")
+    result = []
+    for row in matches:
+        variants = [variant for variant in row["variants"] if not args.account or variant["account"] == args.account]
+        result.extend({"work": row["id"], "series": row["series"], "series_number": row["series_number"],
+                       "moved_from": moved_from, "variant": variant} for variant in variants)
+    if not result:
+        raise HarnessError("No Variant for this account and series number")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def command_series_move(root: Path, args: argparse.Namespace) -> None:
+    account_service(root).get("series", args.identity)
+    with naming_lock(root):
+        work, _ = selected_work(root, args, allow_archive=True)
+        metadata_path = work / "WORK.md"
+        metadata = read_frontmatter(metadata_path)
+        if metadata.get("workflow") != "hyperframes_video" or metadata.get("purpose", "standard") == "test":
+            raise HarnessError("Only production video Works can move between series")
+        old_series, old_number = metadata.get("series"), metadata.get("series_number")
+        if old_series == args.identity:
+            print(json.dumps({"work": work.name, "series": old_series, "series_number": old_number}))
+            return
+        rows, identity = list_work_rows(root), identity_state(root)
+        new_number = series_number(root, rows, identity, args.identity)
+        if old_series and old_number:
+            key = f"{old_series}:{old_number}"
+            if key in identity["series_aliases"] and identity["series_aliases"][key] != work.name:
+                raise HarnessError("Historical series number already points to another Work")
+            identity["series_aliases"][key] = work.name
+        metadata.update(series=args.identity, series_number=new_number)
+        identity["series_highwater"][args.identity] = new_number
+        write_identity(root, identity)
+        atomic_write(metadata_path, "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n" + document_body(metadata_path))
+    print(json.dumps({"work": work.name, "series": args.identity, "series_number": new_number}))
+
+
+def command_variant_name(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
+    variant, state = selected_variant(root, work, args)
+    name = checked_variant_name(args.name)
+    state["name"] = name
+    write_variant(variant, state)
+    print(name)
+
+
+def checked_variant_name(value: str) -> str:
+    name = unicodedata.normalize("NFKC", value).strip()
+    if not name or any(char in name for char in "\r\n") or len(name) > 40:
+        raise HarnessError("Variant name must contain 1-40 characters on one line")
+    return name
 
 
 def command_root_show(root: Path, args: argparse.Namespace) -> None:
@@ -835,9 +1097,8 @@ def command_root_set(root: Path, args: argparse.Namespace) -> None:
 
 def command_name(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
-    semantic_title = unicodedata.normalize("NFKC", args.title).strip()
-    semantic_title = NUMBERED_TITLE_PATTERN.sub(r"\2", semantic_title).strip(" -")
-    if not semantic_title or any(char in semantic_title for char in "\r\n") or len(semantic_title) > 40:
+    new_title = semantic_title(args.title, video=work_workflow(work) == "hyperframes_video")
+    if not new_title or any(char in new_title for char in "\r\n") or len(new_title) > 40:
         raise HarnessError("Work name must contain 1-40 characters on one line")
 
     ensure_roots(root)
@@ -845,14 +1106,17 @@ def command_name(root: Path, args: argparse.Namespace) -> None:
         metadata_path = work / "WORK.md"
         metadata = read_frontmatter(metadata_path)
         workflow = work_workflow(work)
-        number = work_id_number(work.name, workflow)
-        if number is None:
-            number = title_number(str(metadata.get("title", "")))
-        if number is None:
-            number = next_work_number(list_work_rows(root), workflow)
-        if number > 999:
-            raise HarnessError("Work name sequence is exhausted")
-        title = f"{number:03d}-{semantic_title}"
+        if workflow == "hyperframes_video":
+            title = new_title
+        else:
+            number = work_id_number(work.name, workflow)
+            if number is None:
+                number = title_number(str(metadata.get("title", "")))
+            if number is None:
+                number = next_work_number(list_work_rows(root), workflow)
+            if number > 999:
+                raise HarnessError("Work name sequence is exhausted")
+            title = f"{number:03d}-{new_title}"
 
         lines = metadata_path.read_text(encoding="utf-8").splitlines()
         frontmatter_end = lines.index("---", 1)
@@ -999,6 +1263,7 @@ def command_variant_add(root: Path, args: argparse.Namespace) -> None:
 def _command_variant_add(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args)
     workflow = work_workflow(work)
+    name = checked_variant_name(args.name) if workflow == "hyperframes_video" and args.name is not None else None
     settings = adopted_settings(root, args, work)
     source = None
     if args.copy_from:
@@ -1017,6 +1282,10 @@ def _command_variant_add(root: Path, args: argparse.Namespace) -> None:
         path = create_adopted_variant(root, work, args.variant_id, settings,
                                       shared=bool(metadata.get("shared_source")) and not args.copy_from,
                                       branch=args.copy_from, **options)
+        if name is not None:
+            state = read_json(path / "variant.yaml")
+            state["name"] = name
+            write_variant(path, state)
     else:
         path = create_variant(root, work, args.variant_id, **options)
     if not args.work_override:
@@ -1038,7 +1307,9 @@ def command_variant_list(root: Path, args: argparse.Namespace) -> None:
     rows = []
     for path in variant_paths(work):
         state = read_json(path / "variant.yaml")
-        rows.append({"id": path.name, "status": state.get("status"), "wait_for": state.get("wait_for")})
+        rows.append({"id": path.name, "name": state.get("name") or path.name,
+                     "account": state.get("account"), "account_revision": state.get("account_revision"),
+                     "status": state.get("status"), "wait_for": state.get("wait_for")})
     print(json.dumps(rows, ensure_ascii=False, indent=2))
 
 
@@ -1690,6 +1961,11 @@ def bound_studio(variant: Path, target: str) -> dict[str, Any]:
 
 
 def command_preview_open(root: Path, args: argparse.Namespace) -> None:
+    with naming_lock(root):
+        _command_preview_open(root, args)
+
+
+def _command_preview_open(root: Path, args: argparse.Namespace) -> None:
     work, location = selected_work(root, args, allow_archive=True)
     require_workflow(work, "hyperframes_video")
     variant, state = selected_variant(root, work, args)
@@ -2517,11 +2793,33 @@ def build_parser() -> argparse.ArgumentParser:
     new.add_argument("--source-version")
     new.add_argument("--workflow", choices=sorted(WORKFLOWS), required=True)
     new.add_argument("--detached", action="store_true", help="create without changing the foreground Current Work")
+    new.add_argument("--separate", action="store_true", help="Create a separate test Work with the same name")
     add_variant_options(new)
     new.set_defaults(handler=command_new)
 
     commands.add_parser("current").set_defaults(handler=command_current)
-    commands.add_parser("list").set_defaults(handler=command_list)
+    listing = commands.add_parser("list")
+    listing.add_argument("--tree", action="store_true")
+    listing.set_defaults(handler=command_list)
+    browser = commands.add_parser("browser", help="Rebuild the disposable WorkStore directory")
+    browser.add_argument("action", choices=("rebuild",))
+    browser.set_defaults(handler=command_browser_rebuild)
+    find = commands.add_parser("find", help="Find video Variants by series number")
+    find.add_argument("--series", required=True)
+    find.add_argument("--number", type=int, required=True)
+    find.add_argument("--account")
+    find.set_defaults(handler=command_find)
+    migrate = commands.add_parser("migrate", help="One-time RC2 video identity migration")
+    migrations = migrate.add_subparsers(dest="migrate_command", required=True)
+    dry_run = migrations.add_parser("dry-run")
+    dry_run.add_argument("--title-overrides", help="JSON map of old Work ID to semantic title")
+    dry_run.add_argument("--purpose-overrides", help="JSON map of old Work ID to explicit purpose")
+    dry_run.add_argument("--only", action="append", help="Migrate a safe Work subset; repeat for multiple IDs")
+    dry_run.add_argument("--output", help="Write the exact mapping for later apply")
+    dry_run.set_defaults(handler=command_migrate)
+    apply = migrations.add_parser("apply")
+    apply.add_argument("--mapping", required=True, help="Mapping produced by migrate dry-run")
+    apply.set_defaults(handler=command_migrate)
     research_catalog.register_cli(commands)
     appearance_parser = commands.add_parser("appearance", help="Resolve or explicitly rebind exact appearance assets")
     appearance_commands = appearance_parser.add_subparsers(dest="appearance_command", required=True)
@@ -2544,6 +2842,10 @@ def build_parser() -> argparse.ArgumentParser:
             if operation == "put":
                 operation_parser.add_argument("--file", required=True)
             operation_parser.set_defaults(handler=command_config)
+        if kind == "series":
+            move = operations.add_parser("move", help="Move the selected production video Work to another series")
+            move.add_argument("identity")
+            move.set_defaults(handler=command_series_move)
     root_command = commands.add_parser("root", help="Show or set the external WorkStore root")
     root_commands = root_command.add_subparsers(dest="root_command", required=True)
     root_commands.add_parser("show").set_defaults(handler=command_root_show)
@@ -2652,12 +2954,16 @@ def build_parser() -> argparse.ArgumentParser:
     variant_add = variant_commands.add_parser("add")
     variant_add.add_argument("variant_id")
     variant_add.add_argument("--from", dest="copy_from")
+    variant_add.add_argument("--name")
     add_variant_options(variant_add)
     variant_add.set_defaults(handler=command_variant_add)
     variant_use = variant_commands.add_parser("use")
     variant_use.add_argument("variant_id")
     variant_use.set_defaults(handler=command_variant_use)
     variant_commands.add_parser("list").set_defaults(handler=command_variant_list)
+    variant_name = variant_commands.add_parser("name")
+    variant_name.add_argument("name")
+    variant_name.set_defaults(handler=command_variant_name)
 
     wait = commands.add_parser("wait")
     wait.add_argument("reason", choices=sorted(WAIT_REASONS))
@@ -2745,6 +3051,9 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
             if (args.command not in {"status", "current", "review"}
                     and not (args.command == "root" and args.root_command == "show")):
                 raise HarnessError("Candidate Harness requires an isolated Review root")
+        migration_journal = runtime_root(target_root) / work_migration.JOURNAL
+        if migration_journal.is_file() and not (args.command == "migrate" and args.migrate_command == "apply"):
+            raise HarnessError(f"RC2 migration is incomplete; resume with migrate apply: {migration_journal}")
         if review or (store / ".runtime" / "review.json").exists():
             identity = work_requests.review_identity(store)
             if not review:
@@ -2753,15 +3062,30 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
                                          or args.variant_override not in (None, identity["variant"])
                                          or args.command == "use" and args.work_id != identity["work"]):
                 raise HarnessError("Request Review is pinned to its exact Work/Variant")
-            if (args.command in {"finalize", "archive", "reopen", "park", "review"}
+            if (args.command in {"finalize", "archive", "reopen", "park", "review", "migrate"}
                     or args.command == "root" and args.root_command == "set"
                     or args.command == "preview" and (args.preview_command == "accept" or getattr(args, "final", False))
                     or args.command == "component" and args.component_command in {"install", "accept"}
                     and not os.environ.get("HYPERFRAMES_AI_ASSET_REVIEW_ROOT")
                     or args.command == "request" and args.request_command not in {"freeze", "export", "feedback"}):
                 raise HarnessError("Review forbids production acceptance, installation and lifecycle promotion")
-        args.handler(target_root, args)
-    except (HarnessError, ComponentError, VisualPlanError, appearance.AppearanceError, storage.StorageError, work_requests.RequestError) as exc:
+        if args.command == "preview" and args.preview_command == "render":
+            with naming_lock(target_root):
+                args.handler(target_root, args)
+        else:
+            args.handler(target_root, args)
+        if (args.command in {"new", "name", "wait", "resume", "park", "archive", "reopen", "finalize"}
+                or args.command == "variant" and args.variant_command in {"add", "name"}
+                or args.command == "series" and args.operation in {"put", "move"}
+                or args.command == "account" and args.operation == "put"
+                or args.command == "preview" and args.preview_command == "accept"
+                or args.command == "migrate" and args.migrate_command == "apply" and args.migration_applied):
+            try:
+                refresh_browser(target_root)
+            except (HarnessError, OSError) as exc:
+                print(f"warning: browser directory not refreshed: {exc}", file=sys.stderr)
+    except (HarnessError, ComponentError, VisualPlanError, appearance.AppearanceError, storage.StorageError,
+            work_requests.RequestError, work_migration.MigrationError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return 0

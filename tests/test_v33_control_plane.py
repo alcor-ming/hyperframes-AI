@@ -17,10 +17,16 @@ class ControlPlaneTest(unittest.TestCase):
         self.root = Path(self.temp.name)
         shutil.copytree(REPO / ".studio/templates", self.root / ".studio/templates")
         cli.account_service(self.root).put("account", "main", {"name": "Fixture"})
+        cli.account_service(self.root).put("series", "fixture", {"name": "Fixture"})
 
     def run_cli(self, *args):
         if "new" in args and "--account" not in args and "test" not in args:
             args += ("--account", "main")
+        if "new" in args and "hyperframes_video" in args:
+            if "--purpose" not in args:
+                args += ("--purpose", "standard")
+            if "--series" not in args and args[args.index("--purpose") + 1] != "test":
+                args += ("--series", "fixture")
         parsed = cli.build_parser().parse_args(args)
         with redirect_stdout(io.StringIO()) as output:
             parsed.handler(self.root, parsed)
@@ -46,8 +52,8 @@ class ControlPlaneTest(unittest.TestCase):
         self.assertFalse((b / "SCRIPT.md").exists())
         self.put("account", "b", name="New B", theme="clean", ratio="16:9", mode="animation-led")
         self.assertEqual(1, cli.read_json(b / "variant.yaml")["account_revision"])
-        with self.assertRaisesRegex(cli.HarnessError, "already has"):
-            self.run_cli("variant", "add", "duplicate", "--account", "b")
+        self.run_cli("variant", "add", "duplicate", "--account", "b")
+        self.assertEqual("b", cli.read_json(work / "variants/duplicate/variant.yaml")["account"])
         with self.assertRaisesRegex(cli.HarnessError, "does not support"):
             self.run_cli("variant", "add", "portrait", "--account", "main", "--theme", "clean", "--ratio", "9:16")
         self.put("account", "branch", name="Branch")

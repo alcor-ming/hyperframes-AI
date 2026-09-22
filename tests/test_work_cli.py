@@ -27,6 +27,7 @@ class WorkCliTest(unittest.TestCase):
         shutil.copytree(REPO / ".studio" / "templates", self.root / ".studio" / "templates")
         for identity in ("main", "douyin-9x16", "wide", "bilibili-16x9"):
             WORK_CLI.account_service(self.root).put("account", identity, {"name": identity})
+        WORK_CLI.account_service(self.root).put("series", "alpha", {"name": "Alpha"})
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -34,6 +35,11 @@ class WorkCliTest(unittest.TestCase):
     def invoke(self, *arguments: str, expected: int = 0) -> str:
         if "new" in arguments and "hyperframes_video" in arguments and "--account" not in arguments:
             arguments += ("--account", "main")
+        if "new" in arguments and "hyperframes_video" in arguments:
+            if "--purpose" not in arguments:
+                arguments += ("--purpose", "standard")
+            if "--series" not in arguments and "--purpose" in arguments and arguments[arguments.index("--purpose") + 1] != "test":
+                arguments += ("--series", "alpha")
         if len(arguments) > 2 and arguments[:2] == ("variant", "add") and "--account" not in arguments:
             arguments += ("--account", arguments[2])
         stdout = io.StringIO()
@@ -263,6 +269,7 @@ class WorkCliTest(unittest.TestCase):
             self.assertTrue(configured["configured"])
             self.assertEqual(str(external), configured["work_root"])
             WORK_CLI.account_service(self.root).put("account", "main", {"name": "External fixture"})
+            WORK_CLI.account_service(self.root).put("series", "alpha", {"name": "Alpha"})
             work_id = self.invoke("new", "External", "--workflow", "hyperframes_video")
             self.assertTrue((external / "works" / "active" / work_id).is_dir())
             self.assertEqual(work_id, (external / ".runtime" / "current-work").read_text().strip())
@@ -288,9 +295,9 @@ class WorkCliTest(unittest.TestCase):
 
         numbered_id, numbered = self.new_work("007-Old video")
         future_id, _ = self.new_work("Future video")
-        self.assertEqual("work-hyperframes_video-001", numbered_id)
-        self.assertEqual("001-Old video", WORK_CLI.read_frontmatter(numbered / "WORK.md")["title"])
-        self.assertEqual("002-新主题", self.invoke("--work", future_id, "name", "新主题"))
+        self.assertEqual("work-hyperframes_video-001-007-Old-video", numbered_id)
+        self.assertEqual("007-Old video", WORK_CLI.read_frontmatter(numbered / "WORK.md")["title"])
+        self.assertEqual("新主题", self.invoke("--work", future_id, "name", "新主题"))
 
     def test_detached_concurrent_work_creation_allocates_unique_ids(self) -> None:
         def create(title: str) -> None:

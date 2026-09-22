@@ -1,12 +1,12 @@
 # HyperFrames AI vNext PRD Master
 
-状态：v3.3 制作机制与工程控制面候选；不是软件发行、部署或实机通过声明
+状态：v3.3 为既有制作/工程基线，RC2 已在 WSL 实现并通过合成验证；部署、真实数据迁移和实机内容验收分别记录
 
 风险：T3 Parent PRD
 
-日期：2026-09-17
+日期：2026-09-22
 
-当前增量见 [v3.3 制作与工程合同](./hyperframes-v33-production-contract.md)。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作采用三项入口、四阶段、独立 Finalize 与软归档。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
+当前增量合同见 [RC2 执行方案](./hyperframes-rc2-execution-plan.md)，v3.3 制作与工程合同仍是已有基线。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作采用三项入口、四阶段、独立 Finalize 与软归档。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
 
 ## 当前路径
 
@@ -79,7 +79,8 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 
 ## PRD 索引
 
-- [v3.3 制作与工程合同](./hyperframes-v33-production-contract.md)：当前增量、规则归属、历史兼容与尚需原生/生产证据的边界。
+- [HyperFrames RC2 执行方案](./hyperframes-rc2-execution-plan.md)：仅限视频的创建分流、系列编号、旧 Work 名称/身份迁移、可读导航、账号版本、临时实验及文字节奏；WSL 实现已完成，生产数据迁移仍需单独授权。
+- [v3.3 制作与工程合同](./hyperframes-v33-production-contract.md)：既有基线、规则归属、历史兼容与尚需原生/生产证据的边界。
 
 - [Scene 与独立资产合同](./hyperframes-component-motion.md)：类型边界、Windows 内容开发、最小 module/media、精确冻结与旧合同兼容。
 - [逐 Scene 复用、缺口 Plan 与官方 Studio](./hyperframes-visual-plan-motion-reuse.md)：保留内容质量、轻量 Plan、局部反馈与真实验收。

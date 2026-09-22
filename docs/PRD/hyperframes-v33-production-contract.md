@@ -18,7 +18,7 @@
 
 显式原位重绑定先展示差异再提交，保持同一 Variant 和历史文件，失效的新外观接受/Final 关联不得继承；中断须恢复一致状态，旧 runtime 仅在明确目标可编辑副本中受控升级。本地 Theme 字体经统一 load 等待后应用，实例隔离与清理，不静默回退。资产发现、MP3 media 与研究登记复用现有 CLI，查询/刷新/研究不修改已有 Work 或提升接受状态；精确命令与技术合同见 [hyperframes](../../.studio/spec/hyperframes.md)，不在本页维护第二份字段表。
 
-软归档/恢复与制作状态正交：无 Final 可归档，不搬目录、不自动清理；查看不激活，继续制作保留旧接受/Final。旧 main、无系列、Profile 与物理归档保留读取，不批量历史迁移。
+软归档/恢复与制作状态正交：无 Final 可归档，不搬目录、不自动清理；查看不激活，继续制作保留旧接受/Final。旧 main、无系列、Profile 与物理归档保留读取，不默认批量历史迁移；[RC2 执行方案](./hyperframes-rc2-execution-plan.md)另行定义仍保留的视频 Work 的一次性身份与名称迁移，不改冻结接受和 Final。
 
 每个生产 Variant 独立 Finalize，编排必要镜头生成、正式渲染、编码 QA 和版本化交付，失败不覆盖旧 Final。接受来源、收据和文件保护继续保留，完成交付不自动归档。Draft、test-work 与测试路径禁止生成视频，Studio 受限不以短段/预渲染 MP4 绕过。Review 隔离不授予生产 Finalize。
 

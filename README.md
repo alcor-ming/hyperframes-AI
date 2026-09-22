@@ -76,13 +76,15 @@ Draft 与 Final 生命周期：
 
 ## v3.3 候选边界
 
-系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。候选提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；`new` 可指定 `--purpose standard|ip|test`、`--series`、`--batch`、`--theme`、`--mode text-led|animation-led` 与 `--ratio`。生产视频 `new` 和 `variant add` 必须指定已登记的 `--account`；test Work 不绑定账号。未指定模式时默认 `text-led`，不再默认填 Profile。账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；IP Beta 不机械套标准模式。
+系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。候选提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series` 和已登记的 `--account`，可另指定 `--batch`、`--theme`、`--mode text-led|animation-led` 与 `--ratio`；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。未指定模式时默认 `text-led`，不再默认填 Profile。账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；IP Beta 不机械套标准模式。播客新建与三位序号规则不变。
 
 静态外观支持 schema 2 Theme/Background/Motion 资产，沿用 `component pack/import/accept`，不另建主题库。新账号以 `{ref,kind,package_sha256}` 保存 theme/background，motion 槽位可显式设 null；旧 `theme put/get` 只承载兼容配置，不写新制式资产。`appearance resolve --account <id> --appearance-file <json>` 只读展示最终选择；`new`/`variant add` 同样接受 `--appearance-file`、独立 `--background <id@vN>`、`--fps` 和 `--seed`。锁与真实 vendor 一起冻结并纳入 preview，不依赖源库在线。字段及参数结构见 [资产合同](.studio/spec/hyperframes.md)。候选能力不等于已部署；动态背景、选择 UI、真实 Paper 拆分和 Windows 原生换配效果不由这些合同证明。
 
 所有新视频 Work 默认把 Script/Research 放在 `shared/`，各 Variant 通过 `shared_inputs` 引用同一源，Plan/工程/接受/Final 各自独立。`variant add --from <variant-id>` 显式创建内容分支，不是仅为了新增账号而必需；旧 Variant 内文稿仍按原位置读取。创建隔离测试可用 `work new "联动测试" --workflow hyperframes_video --purpose test --batch <batch-id>`，只进行 Studio 验证，不导出视频。
 
-三项入口、四阶段及历史兼容见 [v3.3 合同](docs/PRD/hyperframes-v33-production-contract.md)。这些是 WSL 候选能力和规则，不代表生产已安装；Remotion Windows 原生 Studio 联动、真实生产 Finalize/缓存复用和新 Work 内容反馈须分别取得证据，不以 mock 或文档冒充完成。旧物理归档、接受快照与 Final 不批量迁移。
+RC2 视频 Work 的全局 ID 与系列号独立递增且不封顶于 999；`name` 与 `series move <id>` 不改 ID/目录，旧系列号保留为查询别名。`list --tree`、`find --series <id> --number <n> [--account <id>]`、`account get <id>` 和可重建的 WorkStore `浏览目录.md` 用于定位。旧视频 Work 的一次性改名只经 `migrate dry-run --output <map.json>` 审阅映射，再由 `migrate apply --mapping <map.json>` 显式执行；缺用途或含糊标题可用 `--purpose-overrides` / `--title-overrides` JSON 映射重做 dry-run。若一项被阻断，可用重复的 `--only <old-id>` 生成安全子集映射；同系列须按旧 ID 顺序迁移。映射文件必须新建于 WorkStore 外。迁移只在 WSL 合成 WorkStore 验证，尚未对生产 WorkStore dry-run/apply；工具部署状态以目标根的部署收据为准。
+
+三项入口、四阶段及历史兼容见 [v3.3 合同](docs/PRD/hyperframes-v33-production-contract.md)，RC2 范围见 [RC2 执行方案](docs/PRD/hyperframes-rc2-execution-plan.md)。工具安装不等于 Remotion Windows 原生 Studio 联动、真实生产 Finalize/缓存复用或新 Work 内容验收；这些结果须分别取得证据，不以 mock 或文档冒充完成。除 RC2 明确的一次性旧视频 Work 身份迁移外，不批量迁移播客、接受快照与 Final。
 
 ## 外观、资产与研究入口
 

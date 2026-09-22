@@ -79,8 +79,6 @@ def rebind(root, work, variant, state, args, api):
         raise appearance.AppearanceError("Appearance recovery pending; run appearance recover for this Work/Variant")
     current = state.get("appearance_lock")
     account = api.account_service(root).get("account", args.account) if args.account else state.get("account_settings", {})
-    if args.account and any(path != variant and api.read_json(path / "variant.yaml").get("account") == args.account for path in api.variant_paths(work)):
-        raise appearance.AppearanceError("Account already has another Variant in this Work")
     overrides = api.appearance_options(root, args)
     if current and not args.account:
         choices = {**current["selection"], **{key: current[key] for key in ("mode", "ratio", "width", "height", "fps", "seed")},

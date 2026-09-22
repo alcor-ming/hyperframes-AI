@@ -19,6 +19,7 @@ class VisualPlanTest(unittest.TestCase):
         repo = Path(__file__).resolve().parents[1]
         shutil.copytree(repo / ".studio" / "templates", self.root / ".studio" / "templates")
         WORK_CLI.account_service(self.root).put("account", "main", {"name": "Fixture"})
+        WORK_CLI.account_service(self.root).put("series", "fixture", {"name": "Fixture"})
         self.run_cli("new", "Visual test", "--workflow", "hyperframes_video", "--account", "main")
         self.variant = next((self.root / "works" / "active").iterdir()) / "variants" / "main"
         self.project = self.variant / "project"
@@ -34,6 +35,8 @@ class VisualPlanTest(unittest.TestCase):
         (self.project / "project-config.json").write_text("{}")
 
     def run_cli(self, *args):
+        if "new" in args and "hyperframes_video" in args:
+            args += ("--purpose", "standard", "--series", "fixture")
         parsed = WORK_CLI.build_parser().parse_args(args)
         return parsed.handler(self.root, parsed)
 
