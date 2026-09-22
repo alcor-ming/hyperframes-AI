@@ -78,6 +78,10 @@ def directory_sha256(root: Path) -> str:
 def release_checks(root: Path) -> None:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    parser = REPO / ".studio/.runtime/dependency-parser"
+    if not all((parser / "node_modules" / name).is_dir() for name in ("acorn", "esbuild")):
+        raise ReleaseError("Install the pinned WSL dependency parser with prepare_windows_runtime.py dev-parser before building")
+    env["HYPERFRAMES_DEPENDENCY_MODULE_ROOT"] = str(parser)
     subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-q"],
         cwd=root,

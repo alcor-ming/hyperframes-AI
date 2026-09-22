@@ -6,9 +6,9 @@ const { createRequire } = require('node:module');
 function dependency(name) {
   const root = path.resolve(__dirname, '..');
   const runtime = path.join(root, 'runtime/npm/package.json');
-  const bases = fs.existsSync(runtime) ? [runtime]
-    : process.env.HYPERFRAMES_DEPENDENCY_MODULE_ROOT
+  const bases = process.platform !== 'win32' && process.env.HYPERFRAMES_DEPENDENCY_MODULE_ROOT
       ? [path.join(process.env.HYPERFRAMES_DEPENDENCY_MODULE_ROOT, 'package.json')]
+    : fs.existsSync(runtime) ? [runtime]
       : [path.join(__dirname, '.runtime/dependency-parser/package.json'),
         path.join(__dirname, 'package.json'), path.join(__dirname, 'remotion/package.json')];
   for (const base of bases) {

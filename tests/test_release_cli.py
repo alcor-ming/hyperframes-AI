@@ -23,6 +23,18 @@ LOADER.exec_module(RELEASE)
 
 
 class ReleaseCliTest(unittest.TestCase):
+    def test_staged_checks_use_pinned_wsl_parser(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            parser = repo / ".studio/.runtime/dependency-parser"
+            for package in ("acorn", "esbuild"):
+                (parser / "node_modules" / package).mkdir(parents=True)
+            with mock.patch.object(RELEASE, "REPO", repo), mock.patch.object(RELEASE.subprocess, "run") as run:
+                RELEASE.release_checks(repo / "staging")
+            self.assertEqual(2, run.call_count)
+            self.assertTrue(all(call.kwargs["env"]["HYPERFRAMES_DEPENDENCY_MODULE_ROOT"] == str(parser)
+                                for call in run.call_args_list))
+
     @unittest.skipUnless(sys.platform == "linux" and os.environ.get("HF_DEPLOY_NATIVE_TEST_ROOT"),
                          "Set HF_DEPLOY_NATIVE_TEST_ROOT to a Windows-mounted isolated test parent")
     def test_native_deployment_entrypoint(self):

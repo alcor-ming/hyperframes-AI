@@ -2,6 +2,8 @@
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -25,6 +27,20 @@ class DependencyScanTest(unittest.TestCase):
     def scan(self, source):
         self.write("entry.js", source)
         return validate_dependencies(self.root, entry="entry.js")
+
+    @unittest.skipUnless(sys.platform == "linux", "WSL staging parser precedence")
+    def test_pinned_parser_overrides_staged_windows_runtime(self):
+        source = Path(__file__).resolve().parents[1] / ".studio/dependency_scan.cjs"
+        script = self.root / ".studio/dependency_scan.cjs"
+        script.parent.mkdir()
+        shutil.copy2(source, script)
+        self.write("runtime/npm/package.json", '{"name":"windows-runtime"}')
+        parser = os.environ.get("HYPERFRAMES_DEPENDENCY_MODULE_ROOT") or str(source.parent / ".runtime/dependency-parser")
+        env = {**os.environ, "HYPERFRAMES_DEPENDENCY_MODULE_ROOT": parser}
+        result = subprocess.run(["node", str(script)], input=json.dumps([{"kind": "js", "mode": "module",
+                                                                    "text": "const value = 1"}]),
+                                capture_output=True, text=True, env=env)
+        self.assertEqual(0, result.returncode, result.stderr)
 
     def test_diagnostics_comments_regex_and_template_text_are_not_imports(self):
         source = r'''
