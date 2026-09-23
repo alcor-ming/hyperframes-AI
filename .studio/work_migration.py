@@ -84,14 +84,63 @@ def _pending_dependencies(store: Path, old_id: str) -> list[str]:
     return blockers
 
 
-def _studio_records(work: Path, api: Any) -> tuple[list[Path], list[str]]:
+def _historical_session_copy(path: Path, data: dict[str, Any], expected_ids: tuple[str, str], api: Any) -> bool:
+    if not re.fullmatch(r"studio-s\d{2}-session\.json", path.name):
+        return False
+    target = data["target"]
+    if not re.fullmatch(r"(?:plan|draft)-v\d+", target):
+        return False
+    try:
+        current = api.read_json(path.with_name(f"studio-{target}.json"))
+    except (OSError, UnicodeError, api.HarnessError):
+        return False
+    old_id, new_id = expected_ids
+    old_root = str(path.parents[3].with_name(old_id)) + os.sep
+    new_root = str(path.parents[3].with_name(new_id)) + os.sep
+    relocated = (old_id != new_id and data["work"] == old_id and current.get("work") == new_id
+                 and data["project"].startswith(old_root)
+                 and current.get("project") == new_root + data["project"][len(old_root):])
+    return (set(current) == set(data)
+            and all(current[key] == value for key, value in data.items()
+                    if key not in {"opened_at", "work", "project"})
+            and ((current.get("work") == data["work"] and current.get("project") == data["project"])
+                 or relocated))
+
+
+def _studio_records(work: Path, api: Any, expected_ids: tuple[str, str] | None = None) -> tuple[list[Path], list[str]]:
     files, blockers = [], []
+    expected_ids = expected_ids or (work.name, work.name)
+    qa_fields = {
+        "studio-initial.json": {"url", "errors", "dnt", "frames", "buttons"},
+        "studio-qa.json": {"errors", "dnt", "initial", "samples", "emphasis", "playing",
+                           "paused", "pausedLater", "lint"},
+    }
     for path in sorted(work.glob("variants/*/.runtime/studio-*.json")):
-        data = api.read_json(path)
-        if not data.get("stopped_at") and not api.storage.process_stopped(data.get("pid")):
+        try:
+            data = api.read_json(path)
+        except (OSError, UnicodeError, api.HarnessError):
             blockers.append(str(path))
-        else:
+            continue
+        if set(data) == qa_fields.get(path.name):
+            continue
+        pid = data.get("pid")
+        session = (type(pid) is int and 0 < pid <= 0xFFFFFFFF
+                   and isinstance(data.get("work"), str) and data["work"] in expected_ids
+                   and data.get("variant") == path.parents[1].name
+                   and isinstance(data.get("target"), str)
+                   and all(isinstance(data.get(key), str) and data[key]
+                           for key in ("project", "kind", "cli_sha256"))
+                   and type(data.get("port")) is int and 0 < data["port"] <= 65535
+                   and ("stopped_at" not in data or isinstance(data["stopped_at"], str)
+                        and bool(data["stopped_at"])))
+        if not session or not data.get("stopped_at") and not api.storage.process_stopped(pid):
+            blockers.append(str(path))
+        elif data["target"] == path.stem.removeprefix("studio-"):
             files.append(path)
+        elif _historical_session_copy(path, data, expected_ids, api):
+            continue
+        else:
+            blockers.append(str(path))
     return files, blockers
 
 
@@ -313,7 +362,7 @@ def apply_plan(root: Path, plan: dict[str, Any], api: Any) -> dict[str, Any]:
             work = store / target["old_path"]
             if not work.is_dir():
                 work = store / target["new_path"]
-            _, live = _studio_records(work, api)
+            _, live = _studio_records(work, api, (target["old_id"], target["new_id"]))
             blockers = _pending_dependencies(store, target["old_id"]) + live
             if blockers:
                 raise MigrationError("RC2 migration has active dependencies: " + "; ".join(blockers))

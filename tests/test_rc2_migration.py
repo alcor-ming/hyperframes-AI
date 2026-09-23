@@ -40,6 +40,11 @@ class Rc2MigrationTest(unittest.TestCase):
         (variant / "variant.yaml").write_text('{"id":"main","status":"active"}\n', encoding="utf-8")
         return path
 
+    def studio_session(self, work, pid, **changes):
+        return {"pid": pid, "work": work.name, "variant": "main", "target": "current",
+                "project": str(work / "variants/main/project"), "kind": "executable",
+                "port": 4321, "cli_sha256": "a" * 64} | changes
+
     def test_dry_run_apply_and_retry_preserve_frozen_files(self):
         first = self.work("active", "work-hyperframes_video-001", "001-第一期")
         second = self.work("parked", "work-hyperframes_video-002", "002-第二期",
@@ -55,9 +60,8 @@ class Rc2MigrationTest(unittest.TestCase):
         (first / "variants" / "main" / "project" / "vendor" / "asset.js").write_bytes(b"vendor")
         studio = first / "variants" / "main" / ".runtime"
         studio.mkdir(parents=True)
-        (studio / "studio-current.json").write_text(json.dumps({
-            "pid": 99999999, "stopped_at": "2026-09-01", "work": first.name,
-            "project": str(first / "variants" / "main" / "project")}), encoding="utf-8")
+        (studio / "studio-current.json").write_text(json.dumps(
+            self.studio_session(first, 99999999, stopped_at="2026-09-01")), encoding="utf-8")
         WORK.write_pointer(self.root, "current-work", first.name)
         plan = MIGRATION.build_plan(self.root, WORK)
         self.assertEqual([], plan["blockers"])
@@ -117,13 +121,132 @@ class Rc2MigrationTest(unittest.TestCase):
         (request / "request.json").write_text(json.dumps({"work": work.name, "revision": 1}), encoding="utf-8")
         studio = work / "variants" / "main" / ".runtime"
         studio.mkdir(parents=True)
-        (studio / "studio-current.json").write_text(json.dumps({"pid": os.getpid(), "work": work.name}), encoding="utf-8")
+        (studio / "studio-current.json").write_text(json.dumps(
+            self.studio_session(work, os.getpid())), encoding="utf-8")
         plan = MIGRATION.build_plan(self.root, WORK)
         self.assertIn("request.json", " ".join(plan["blockers"]))
         self.assertIn("studio-current.json", " ".join(plan["blockers"]))
         with self.assertRaises(MIGRATION.MigrationError):
             MIGRATION.apply_plan(self.root, plan, WORK)
         self.assertTrue(work.exists())
+
+    def test_historical_qa_reports_are_not_sessions_or_rewritten(self):
+        work = self.work("active", "work-hyperframes_video-019", "019-QA")
+        runtime = work / "variants/main/.runtime"
+        runtime.mkdir()
+        reports = {
+            "studio-initial.json": {"url": "http://localhost", "errors": [], "dnt": [],
+                                    "frames": [], "buttons": []},
+            "studio-qa.json": {"errors": [], "dnt": [], "initial": {}, "samples": [],
+                               "emphasis": [], "playing": {}, "paused": {}, "pausedLater": {}, "lint": []},
+        }
+        originals = {}
+        for name, report in reports.items():
+            path = runtime / name
+            path.write_bytes(json.dumps(report, indent=1).encode("utf-8") + b"\n")
+            originals[name] = path.read_bytes()
+        source = work / "variants/main/delegation/S05-QA.md"
+        source.parent.mkdir()
+        source.write_text("../.runtime/studio-qa.json\n", encoding="utf-8")
+        before = {path.relative_to(self.root): path.read_bytes()
+                  for path in self.root.rglob("*") if path.is_file()}
+        plan = MIGRATION.build_plan(self.root, WORK)
+        self.assertEqual([], plan["blockers"])
+        self.assertEqual(before, {path.relative_to(self.root): path.read_bytes()
+                                  for path in self.root.rglob("*") if path.is_file()})
+        self.assertFalse(any("studio-qa.json" in op["path"] or "studio-initial.json" in op["path"]
+                             for op in plan["operations"]))
+        MIGRATION.apply_plan(self.root, plan, WORK)
+        migrated = self.root / plan["targets"][0]["new_path"]
+        for name, original in originals.items():
+            self.assertEqual(original, (migrated / "variants/main/.runtime" / name).read_bytes())
+        self.assertEqual("../.runtime/studio-qa.json\n", (migrated / source.relative_to(work)).read_text())
+        self.assertEqual({"migrated": 0, "numbered": 0, "applied": False},
+                         MIGRATION.apply_plan(self.root, plan, WORK))
+
+    def test_incomplete_qa_like_record_still_blocks(self):
+        work = self.work("active", "work-hyperframes_video-019", "019-QA")
+        runtime = work / "variants/main/.runtime"
+        runtime.mkdir()
+        path = runtime / "studio-initial.json"
+        path.write_text(json.dumps({"url": "http://localhost", "errors": [], "frames": [], "buttons": []}),
+                        encoding="utf-8")
+        self.assertIn(str(path), " ".join(MIGRATION.build_plan(self.root, WORK)["blockers"]))
+
+    def test_stopped_scene_session_copy_is_preserved_only_when_canonical_matches(self):
+        work = self.work("active", "work-hyperframes_video-019", "019-Session")
+        runtime = work / "variants/main/.runtime"
+        runtime.mkdir()
+        session = self.studio_session(work, 43210, target="plan-v008", opened_at="later")
+        canonical = runtime / "studio-plan-v008.json"
+        canonical.write_text(json.dumps(session), encoding="utf-8")
+        copy = runtime / "studio-s05-session.json"
+        copy.write_text(json.dumps(session | {"opened_at": "earlier"}, indent=1), encoding="utf-8")
+        original = copy.read_bytes()
+        with mock.patch.object(WORK.storage, "process_stopped", return_value=True):
+            plan = MIGRATION.build_plan(self.root, WORK)
+            self.assertEqual([], plan["blockers"])
+            self.assertFalse(any(op["path"].endswith("studio-s05-session.json") for op in plan["operations"]))
+            actual_write = WORK.atomic_write
+            writes = 0
+
+            def interrupted(path, content):
+                nonlocal writes
+                writes += 1
+                if writes == 4:
+                    raise OSError("simulated interruption after session rewrite")
+                return actual_write(path, content)
+
+            with mock.patch.object(WORK, "atomic_write", side_effect=interrupted):
+                with self.assertRaisesRegex(OSError, "simulated interruption"):
+                    MIGRATION.apply_plan(self.root, plan, WORK)
+            MIGRATION.apply_plan(self.root, plan, WORK)
+        migrated = self.root / plan["targets"][0]["new_path"] / "variants/main/.runtime"
+        self.assertEqual(original, (migrated / copy.name).read_bytes())
+        self.assertEqual(plan["targets"][0]["new_id"], WORK.read_json(migrated / canonical.name)["work"])
+
+    def test_unmatched_scene_session_copy_still_blocks(self):
+        work = self.work("active", "work-hyperframes_video-019", "019-Session")
+        runtime = work / "variants/main/.runtime"
+        runtime.mkdir()
+        session = self.studio_session(work, 43210, target="plan-v008", opened_at="later")
+        (runtime / "studio-plan-v008.json").write_text(json.dumps(session), encoding="utf-8")
+        copy = runtime / "studio-s05-session.json"
+        for changes in ({"cli_sha256": "b" * 64}, {"project": str(self.root / "other")},
+                        {"work": "work-hyperframes_video-999"}):
+            with self.subTest(changes=changes):
+                copy.write_text(json.dumps(session | changes), encoding="utf-8")
+                with mock.patch.object(WORK.storage, "process_stopped", return_value=True):
+                    self.assertIn(str(copy), " ".join(MIGRATION.build_plan(self.root, WORK)["blockers"]))
+
+    def test_only_valid_stopped_sessions_can_be_rewritten(self):
+        work = self.work("active", "work-hyperframes_video-019", "019-Session")
+        runtime = work / "variants/main/.runtime"
+        runtime.mkdir()
+        path = runtime / "studio-current.json"
+        valid = self.studio_session(work, 43210)
+        cases = [
+            ("running", valid, False),
+            ("missing pid", {key: value for key, value in valid.items() if key != "pid"} | {"stopped_at": "now"}, False),
+            ("invalid pid", valid | {"pid": "43210", "stopped_at": "now"}, False),
+            ("unknown record", {"unknown": "report"}, False),
+            ("incomplete session", {"pid": 43210, "work": work.name, "stopped_at": "now"}, False),
+            ("stopped marker", valid | {"stopped_at": "now"}, True),
+            ("stopped process", valid, True),
+        ]
+        for label, record, allowed in cases:
+            with self.subTest(label=label):
+                path.write_text(json.dumps(record), encoding="utf-8")
+                with mock.patch.object(WORK.storage, "process_stopped", return_value=allowed):
+                    plan = MIGRATION.build_plan(self.root, WORK)
+                self.assertEqual(allowed, not plan["blockers"])
+                self.assertEqual(allowed, any(op["kind"] == "studio" for op in plan["operations"]))
+        for contents in ("{broken", "[]"):
+            path.write_text(contents, encoding="utf-8")
+            self.assertIn(str(path), " ".join(MIGRATION.build_plan(self.root, WORK)["blockers"]))
+        path.write_text(json.dumps(valid), encoding="utf-8")
+        with mock.patch.object(WORK, "read_json", side_effect=OSError("access denied")):
+            self.assertIn(str(path), " ".join(MIGRATION._studio_records(work, WORK)[1]))
 
     def test_accepted_delivery_does_not_hide_another_pending_review(self):
         work = self.work("active", "work-hyperframes_video-001", "001-第一期")
