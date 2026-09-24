@@ -25,11 +25,23 @@ class WorkCliTest(unittest.TestCase):
         self.root = Path(self.temporary.name)
         (self.root / ".studio").mkdir()
         shutil.copytree(REPO / ".studio" / "templates", self.root / ".studio" / "templates")
+        for identity in ("main", "douyin-9x16", "wide", "bilibili-16x9"):
+            WORK_CLI.account_service(self.root).put("account", identity, {"name": identity})
+        WORK_CLI.account_service(self.root).put("series", "alpha", {"name": "Alpha"})
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
     def invoke(self, *arguments: str, expected: int = 0) -> str:
+        if "new" in arguments and "hyperframes_video" in arguments and "--account" not in arguments:
+            arguments += ("--account", "main")
+        if "new" in arguments and "hyperframes_video" in arguments:
+            if "--purpose" not in arguments:
+                arguments += ("--purpose", "standard")
+            if "--series" not in arguments and "--purpose" in arguments and arguments[arguments.index("--purpose") + 1] != "test":
+                arguments += ("--series", "alpha")
+        if len(arguments) > 2 and arguments[:2] == ("variant", "add") and "--account" not in arguments:
+            arguments += ("--account", arguments[2])
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
@@ -119,7 +131,7 @@ class WorkCliTest(unittest.TestCase):
     def prepare_preview(self, work: Path, variant_id: str = "main", content: bytes = b"draft") -> Path:
         variant = work / "variants" / variant_id
         self.update_frontmatter(variant / "ANIMATION_PLAN.md", status="approved")
-        self.update_frontmatter(variant / "RESEARCH.md", status="ready")
+        self.update_frontmatter(WORK_CLI.input_path(variant, "RESEARCH.md"), status="ready")
         project = variant / "project"
         (project / "index.html").write_text("<html></html>", encoding="utf-8")
         (project / "compositions").mkdir(exist_ok=True)
@@ -134,8 +146,8 @@ class WorkCliTest(unittest.TestCase):
 
     def test_new_variant_and_status(self) -> None:
         work_id, work = self.new_work("中文标题")
-        self.assertTrue((work / "variants" / "main" / "SCRIPT.md").is_file())
-        self.assertTrue((work / "variants" / "main" / "RESEARCH.md").is_file())
+        self.assertTrue((work / "shared" / "SCRIPT.md").is_file())
+        self.assertTrue((work / "shared" / "RESEARCH.md").is_file())
         self.assertEqual("16:9", json.loads((work / "variants" / "main" / "variant.yaml").read_text())["ratio"])
         package = (work / "variants" / "main" / "PACKAGE.md").read_text(encoding="utf-8")
         self.assertIn("## 标题", package)
@@ -145,10 +157,10 @@ class WorkCliTest(unittest.TestCase):
         self.assertEqual(work_id, (self.root / ".studio" / ".runtime" / "current-work").read_text().strip())
         self.assertEqual("hyperframes_video", WORK_CLI.read_frontmatter(work / "WORK.md")["workflow"])
 
-        script = work / "variants" / "main" / "SCRIPT.md"
+        script = work / "shared" / "SCRIPT.md"
         script.write_text(script.read_text(encoding="utf-8") + "正文\n", encoding="utf-8")
         self.update_frontmatter(script, revision=2)
-        self.update_frontmatter(work / "variants" / "main" / "RESEARCH.md", status="ready", revision=3, script_revision=2)
+        self.update_frontmatter(work / "shared" / "RESEARCH.md", status="ready", revision=3, script_revision=2)
         self.invoke("variant", "add", "douyin-9x16", "--from", "main", "--profile", "kami_editorial")
         copied_variant = work / "variants" / "douyin-9x16"
         copied = copied_variant / "SCRIPT.md"
@@ -185,7 +197,7 @@ class WorkCliTest(unittest.TestCase):
 
     def test_script_text_excludes_scene_index_and_preserves_legacy_anchors(self) -> None:
         _, work = self.new_work()
-        script = work / "variants" / "main" / "SCRIPT.md"
+        script = work / "shared" / "SCRIPT.md"
         narration = "<!-- P001 -->\nOriginal narration.\n\n<!-- P002 -->\nSecond paragraph."
         header = '---\n{"revision":1}\n---\n\n'
         script.write_text(header + narration + "\n", encoding="utf-8")
@@ -209,7 +221,7 @@ class WorkCliTest(unittest.TestCase):
         movie = self.prepare_preview(work)
         variant = work / "variants" / "main"
         self.update_frontmatter(variant / "ANIMATION_PLAN.md", research_revision=None)
-        (variant / "RESEARCH.md").unlink()
+        WORK_CLI.input_path(variant, "RESEARCH.md").unlink()
         self.assertEqual("draft-v001", self.invoke("preview", "register", str(movie)))
         preview = variant / "previews" / "draft-v001"
         self.assertNotIn("input_sha256", WORK_CLI.preview_metadata(preview))
@@ -256,6 +268,8 @@ class WorkCliTest(unittest.TestCase):
             configured = json.loads(self.invoke("root", "set", str(external)))
             self.assertTrue(configured["configured"])
             self.assertEqual(str(external), configured["work_root"])
+            WORK_CLI.account_service(self.root).put("account", "main", {"name": "External fixture"})
+            WORK_CLI.account_service(self.root).put("series", "alpha", {"name": "Alpha"})
             work_id = self.invoke("new", "External", "--workflow", "hyperframes_video")
             self.assertTrue((external / "works" / "active" / work_id).is_dir())
             self.assertEqual(work_id, (external / ".runtime" / "current-work").read_text().strip())
@@ -281,23 +295,15 @@ class WorkCliTest(unittest.TestCase):
 
         numbered_id, numbered = self.new_work("007-Old video")
         future_id, _ = self.new_work("Future video")
-        self.assertEqual("work-hyperframes_video-001", numbered_id)
-        self.assertEqual("001-Old video", WORK_CLI.read_frontmatter(numbered / "WORK.md")["title"])
-        self.assertEqual("002-新主题", self.invoke("--work", future_id, "name", "新主题"))
+        self.assertEqual("work-hyperframes_video-001-007-Old-video", numbered_id)
+        self.assertEqual("007-Old video", WORK_CLI.read_frontmatter(numbered / "WORK.md")["title"])
+        self.assertEqual("新主题", self.invoke("--work", future_id, "name", "新主题"))
 
     def test_detached_concurrent_work_creation_allocates_unique_ids(self) -> None:
         def create(title: str) -> None:
             WORK_CLI.command_new(
                 self.root,
-                mock.Mock(
-                    title=title,
-                    workflow="podcast_quote_image",
-                    template=None,
-                    profile=None,
-                    ratio=None,
-                    subject_position=None,
-                    detached=True,
-                ),
+                WORK_CLI.build_parser().parse_args(["new", title, "--workflow", "podcast_quote_image", "--detached"]),
             )
 
         with mock.patch("builtins.print"), ThreadPoolExecutor(max_workers=2) as executor:
@@ -372,7 +378,7 @@ class WorkCliTest(unittest.TestCase):
         self.assertIn("RESEARCH.md is not ready", result)
         self.assertFalse((variant / "previews" / "draft-v001").exists())
 
-    def test_finalize_recovers_archive_and_rotates_history(self) -> None:
+    def test_finalize_is_independent_of_archive_and_rotates_history(self) -> None:
         work_id, work = self.new_work()
         draft = self.prepare_preview(work)
         self.invoke("preview", "register", str(draft))
@@ -381,15 +387,14 @@ class WorkCliTest(unittest.TestCase):
         final_one.write_bytes(b"final-one")
 
         with mock.patch.object(WORK_CLI, "move_to_archive", side_effect=OSError("simulated")):
-            result = self.invoke("finalize", str(final_one), "--qa-passed", expected=2)
-        self.assertIn("archive is pending", result)
+            self.invoke("finalize", str(final_one), "--qa-passed")
         self.assertEqual(b"final-one", (work / "variants" / "main" / "final" / "final.mp4").read_bytes())
         manifest_path = work / "variants" / "main" / "final" / "manifest.json"
         first_manifest = manifest_path.read_bytes()
 
         archived_final = Path(self.invoke("finalize", str(final_one), "--qa-passed"))
         self.assertTrue(archived_final.is_file())
-        self.assertIn("/archive/", archived_final.as_posix())
+        self.assertIn("/active/", archived_final.as_posix())
         self.assertEqual(first_manifest, (archived_final.parent / "manifest.json").read_bytes())
         archived_variant = archived_final.parent.parent
         (archived_variant / ".runtime" / "finalize.json").write_text(
@@ -399,7 +404,7 @@ class WorkCliTest(unittest.TestCase):
         (self.root / ".studio" / ".runtime" / "current-variant").write_text("main", encoding="utf-8")
         self.assertEqual(str(archived_final), self.invoke("--work", work_id, "finalize", str(final_one), "--qa-passed"))
         self.assertEqual("complete", json.loads((archived_variant / ".runtime" / "finalize.json").read_text())["state"])
-        self.assertFalse((self.root / ".studio" / ".runtime" / "current-work").exists())
+        self.assertTrue((self.root / ".studio" / ".runtime" / "current-work").exists())
 
         self.invoke("reopen", work_id)
         final_two = self.root / "final-two.mp4"
@@ -484,7 +489,7 @@ class WorkCliTest(unittest.TestCase):
         self.assertIn("legacy final-render snapshot differs", result)
         self.assertTrue(work.is_dir())
 
-    def test_required_variants_delay_auto_archive(self) -> None:
+    def test_required_variants_do_not_couple_finalize_or_archive(self) -> None:
         work_id, work = self.new_work()
         self.invoke("variant", "add", "bilibili-16x9", "--from", "main", "--ratio", "16:9")
         self.update_frontmatter(work / "WORK.md", required_variants=["main", "bilibili-16x9"])
@@ -497,16 +502,13 @@ class WorkCliTest(unittest.TestCase):
             final = self.root / f"{variant_id}-final.mp4"
             final.write_bytes((variant_id + "-final").encode())
             output = Path(self.invoke("finalize", str(final), "--qa-passed"))
-            if variant_id == "main":
-                self.assertIn("/active/", output.as_posix())
-            else:
-                self.assertIn("/archive/", output.as_posix())
+            self.assertIn("/active/", output.as_posix())
 
         archived, location = WORK_CLI.locate_work(self.root, work_id)
-        self.assertEqual("archive", location)
+        self.assertEqual("active", location)
         self.assertTrue((archived / "variants" / "main" / "final" / "final.mp4").is_file())
 
-    def test_podcast_final_promotes_manifest_directory_and_archives(self) -> None:
+    def test_podcast_final_promotes_manifest_directory_without_archiving(self) -> None:
         work_id, _ = self.new_work("Podcast quotes", "podcast_quote_image")
         candidate = self.prepare_package_final()
         result = self.invoke("finalize", str(candidate), expected=2)
@@ -514,7 +516,7 @@ class WorkCliTest(unittest.TestCase):
 
         archived_final = Path(self.invoke("finalize", str(candidate), "--qa-passed"))
         self.assertTrue((archived_final / "manifest.json").is_file())
-        self.assertIn("/archive/", archived_final.as_posix())
+        self.assertIn("/active/", archived_final.as_posix())
         self.assertEqual(
             "manifest.json",
             json.loads((archived_final.parent / "variant.yaml").read_text(encoding="utf-8"))["current_final"],
@@ -526,6 +528,41 @@ class WorkCliTest(unittest.TestCase):
         replaced_final = Path(self.invoke("finalize", str(replacement), "--qa-passed"))
         self.assertEqual(b"two1", (replaced_final / "01.jpg").read_bytes())
         self.assertEqual(b"one1", (replaced_final / "history" / "final-v001" / "01.jpg").read_bytes())
+
+
+    def test_final_manifest_failure_restores_prior_video_metadata_and_state(self):
+        _, work = self.new_work()
+        draft = self.prepare_preview(work)
+        self.invoke("preview", "register", str(draft))
+        self.invoke("preview", "accept", "draft-v001")
+        first, second = self.root / "one.mp4", self.root / "two.mp4"
+        first.write_bytes(b"original")
+        second.write_bytes(b"replacement")
+        self.invoke("finalize", str(first), "--qa-passed")
+        variant = work / "variants/main"
+        paths = [variant / name for name in ("final/final.mp4", "final/manifest.json", "variant.yaml")]
+        before = [path.read_bytes() for path in paths]
+        original_write = WORK_CLI.write_json
+        def fail_manifest(path, data):
+            if path == variant / "final/manifest.json":
+                raise OSError("injected manifest write failure")
+            original_write(path, data)
+        with mock.patch.object(WORK_CLI, "write_json", side_effect=fail_manifest):
+            with self.assertRaisesRegex(OSError, "injected manifest"):
+                self.invoke("finalize", str(second), "--qa-passed")
+        self.assertEqual(before, [path.read_bytes() for path in paths])
+        self.assertTrue((variant / ".runtime/final-promotion/restored.json").is_file())
+        original_replace = WORK_CLI.os.replace
+        def fail_commit(source, target):
+            if Path(target).name == "committed.json":
+                raise OSError("injected commit marker failure")
+            original_replace(source, target)
+        with mock.patch.object(WORK_CLI.os, "replace", side_effect=fail_commit):
+            with self.assertRaisesRegex(OSError, "commit marker"):
+                self.invoke("finalize", str(second), "--qa-passed")
+        self.assertEqual(before, [path.read_bytes() for path in paths])
+        self.invoke("finalize", str(second), "--qa-passed")
+        self.assertEqual(b"replacement", paths[0].read_bytes())
 
 
 if __name__ == "__main__":

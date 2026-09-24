@@ -43,6 +43,107 @@ class RootDeploymentTests(unittest.TestCase):
         deploy.write_json(root / ".release.json", {"release": "candidate-" + name, "channel": "candidate", "target": "windows-x64", "layout": "root-v1", "files": {"work.cmd": deploy.digest(root / "work.cmd")}})
         return root
 
+    def add_files(self, package, files):
+        manifest = deploy.read(package / ".release.json")
+        for name, content in files.items():
+            path = package / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+            manifest["files"][name] = deploy.digest(path)
+        (package / ".release.json").write_text(json.dumps(manifest))
+
+    def test_incremental_backup_removal_and_two_step_rollback(self):
+        first = self.package("one")
+        self.add_files(first, {"runtime/python/python.exe": "fixed", "obsolete.txt": "old"})
+        deploy.deploy(first, self.root, self.config)
+        runtime = self.root / "runtime/python/python.exe"
+        stamp = runtime.stat().st_mtime_ns
+        second = self.package("two")
+        self.add_files(second, {"runtime/python/python.exe": "fixed", "new.txt": "new"})
+        result = deploy.deploy(second, self.root, None)
+        self.assertEqual(runtime.stat().st_mtime_ns, stamp)
+        self.assertFalse((self.root / result["backup"] / "runtime").exists())
+        self.assertFalse((self.root / "obsolete.txt").exists())
+        third = self.package("three")
+        self.add_files(third, {"runtime/python/python.exe": "fixed", "new.txt": "newer"})
+        deploy.deploy(third, self.root, None)
+        self.assertEqual(len(list((self.root / deploy.STATE / "deploy-backups").iterdir())), 2)
+        deploy.recover(self.root, rollback=True)
+        self.assertEqual((self.root / "new.txt").read_text(), "new")
+        deploy.recover(self.root, rollback=True)
+        self.assertEqual((self.root / "obsolete.txt").read_text(), "old")
+        self.assertFalse((self.root / "new.txt").exists())
+        self.assertEqual(runtime.read_text(), "fixed")
+
+    def test_retention_preserves_legacy_unknown_modified_and_failed_backups(self):
+        deploy.deploy(self.package("one"), self.root, self.config)
+        parent = self.root / deploy.STATE / "deploy-backups"
+        legacy = parent / ("a" * 32)
+        legacy.mkdir()
+        (legacy / "transaction.json").write_text("{}")
+        original = deploy.replace_file
+        def fail(source, destination, data=None):
+            if source and Path(source).name == "work.cmd" and Path(source).read_text() == "failure":
+                raise OSError("failure")
+            original(source, destination, data)
+        with patch.object(deploy, "replace_file", side_effect=fail):
+            with self.assertRaisesRegex(OSError, "failure"):
+                deploy.deploy(self.package("failure"), self.root, None)
+        failed = next(path for path in parent.iterdir() if path != legacy and not (path / "completed.json").exists())
+        result = deploy.deploy(self.package("two"), self.root, None)
+        modified = self.root / result["backup"]
+        (modified / "user.txt").write_text("keep me")
+        deploy.deploy(self.package("three"), self.root, None)
+        result = deploy.deploy(self.package("four"), self.root, None)
+        self.assertTrue(legacy.exists())
+        self.assertTrue(failed.exists())
+        self.assertEqual((modified / "user.txt").read_text(), "keep me")
+        self.assertEqual(len(result["cleanup"]["retained"]), 3)
+        deploy.write_json(self.root / deploy.PENDING, {})
+        with self.assertRaisesRegex(ValueError, "Interrupted"):
+            deploy.prune_backups(self.root)
+
+    def test_tools_package_pins_runtime_and_can_roll_back(self):
+        full = self.package("full")
+        self.add_files(full, {"windows-runtime.lock.json": "locked", "runtime/python/python.exe": "fixed"})
+        initial = deploy.deploy(full, self.root, self.config)
+        tools = self.package("tools")
+        self.add_files(tools, {"windows-runtime.lock.json": "locked"})
+        manifest = deploy.read(tools / ".release.json")
+        manifest.update(package_kind="tools", runtime_files={"runtime/python/python.exe": initial["files"]["runtime/python/python.exe"]},
+                        runtime_lock_sha256=initial["files"]["windows-runtime.lock.json"])
+        (tools / ".release.json").write_text(json.dumps(manifest))
+        result = deploy.deploy(tools, self.root, None)
+        self.assertFalse((self.root / result["backup"] / "runtime").exists())
+        self.assertIn("runtime/python/python.exe", result["files"])
+        deploy.recover(self.root, rollback=True)
+        self.assertEqual(deploy.verify_root(self.root)["release"], "candidate-full")
+        manifest["runtime_files"]["runtime/python/python.exe"] = "0" * 64
+        (tools / ".release.json").write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "Installed runtime differs"):
+            deploy.deploy(tools, self.root, None)
+        manifest["runtime_lock_sha256"] = "1" * 64
+        (tools / ".release.json").write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "runtime lock mismatch"):
+            deploy.verify_package(tools)
+
+    def test_retention_does_not_follow_links(self):
+        deploy.deploy(self.package("one"), self.root, self.config)
+        parent = self.root / deploy.STATE / "deploy-backups"
+        external = self.base / "external"
+        external.mkdir()
+        (external / "valuable").write_text("keep")
+        link = parent / ("b" * 32)
+        if os.name == "nt":
+            subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(link), str(external)], check=True, capture_output=True)
+            self.addCleanup(lambda: os.rmdir(link))
+        else:
+            link.symlink_to(external, target_is_directory=True)
+        with command_lock(self.root):
+            result = deploy.prune_backups(self.root)
+        self.assertEqual(len(result["retained"]), 1)
+        self.assertEqual((external / "valuable").read_text(), "keep")
+
     def test_update_rollback_preserves_user_content_and_config(self):
         first = self.package("one")
         deploy.deploy(first, self.root, self.config)

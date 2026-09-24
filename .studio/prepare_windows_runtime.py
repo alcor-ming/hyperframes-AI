@@ -13,7 +13,7 @@ from urllib.request import urlopen
 import zipfile
 
 REPO = Path(__file__).resolve().parent.parent
-VERSIONS = {"hyperframes": "0.8.27", "gsap": "3.14.2", "three": "0.160.0"}
+VERSIONS = {"hyperframes": "0.8.27", "gsap": "3.14.2", "three": "0.160.0", "acorn": "8.15.0"}
 ARCHIVES = [
     {"kind": "zip", "file": "node-v22.22.2-win-x64.zip", "target": "runtime/node",
      "strip_prefix": "node-v22.22.2-win-x64", "url": "https://nodejs.org/dist/v22.22.2/node-v22.22.2-win-x64.zip"},
@@ -40,8 +40,8 @@ def seed_lock(source: Path, metadata: list[Path], output: Path) -> None:
     for path in metadata:
         package = read(path)
         name = package["name"]
-        if name not in ("gsap", "three") or package["version"] != VERSIONS[name] or package.get("dependencies"):
-            raise ValueError("Expected dependency-free GSAP 3.14.2 or Three 0.160.0 metadata")
+        if name not in ("gsap", "three", "acorn") or package["version"] != VERSIONS[name] or package.get("dependencies"):
+            raise ValueError("Expected dependency-free metadata matching the pinned GSAP, Three or Acorn version")
         lock["packages"][f"node_modules/{name}"] = {
             "version": package["version"], "resolved": package["dist"]["tarball"],
             "integrity": package["dist"]["integrity"], "license": package["license"],
@@ -118,6 +118,28 @@ def npm_archive(lock_path: Path, cache: Path) -> Path:
     return archive
 
 
+def dev_parser(npm_lock: Path, cache: Path, output: Path, *, offline: bool = False) -> None:
+    """Derive an ignored local parser install from the authoritative Windows pins."""
+    lock = read(npm_lock)
+    validate_npm_lock(lock)
+    packages = {name: package for name, package in lock["packages"].items()
+                if name in ("node_modules/acorn", "node_modules/esbuild") or name.startswith("node_modules/@esbuild/")}
+    manifest = {"name": "hyperframes-dependency-parser", "version": "1.0.0", "private": True,
+                "dependencies": {name: packages[f"node_modules/{name}"]["version"] for name in ("acorn", "esbuild")}}
+    derived = {"name": manifest["name"], "version": manifest["version"], "lockfileVersion": 3,
+               "requires": True, "packages": {"": manifest, **packages}}
+    output.mkdir(parents=True, exist_ok=True)
+    for filename, data in (("package.json", manifest), ("package-lock.json", derived)):
+        (output / filename).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    subprocess.run(["npm", "ci", "--ignore-scripts", "--bin-links=false", "--no-audit", "--no-fund",
+                    "--cache", str(cache), *(["--offline"] if offline else [])], cwd=output, check=True)
+    subprocess.run(["node", "-e", "const path=require('node:path');"
+                    "require(path.resolve('node_modules/acorn')).parse('const x=1',{ecmaVersion:'latest'});"
+                    "require(path.resolve('node_modules/esbuild')).transformSync('a{color:red}',{loader:'css'});"],
+                   cwd=output, check=True)
+    print(output)
+
+
 def prepare(cache: Path, npm_lock: Path, output_lock: Path) -> None:
     cache.mkdir(parents=True, exist_ok=True)
     lock = read(REPO / "windows-runtime.lock.json")
@@ -165,15 +187,22 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     seed = commands.add_parser("seed-lock", help="No downloads; merge a verified HF lock and local registry metadata")
     seed.add_argument("--from-npm-lock", type=Path, required=True)
-    seed.add_argument("--metadata", type=Path, nargs=2, required=True)
+    seed.add_argument("--metadata", type=Path, nargs="+", required=True)
     seed.add_argument("--output", type=Path, default=REPO / "windows-npm.lock.json")
     build = commands.add_parser("prepare", help="Explicit build-time downloads; obtain download authorization before running")
     build.add_argument("--cache", type=Path, required=True)
     build.add_argument("--npm-lock", type=Path, default=REPO / "windows-npm.lock.json")
     build.add_argument("--output-lock", type=Path, required=True)
+    parser_install = commands.add_parser("dev-parser", help="Install WSL parsers from Windows pins into ignored local runtime")
+    parser_install.add_argument("--cache", type=Path, default=REPO / ".studio/.runtime/windows-runtime-cache/npm-cache")
+    parser_install.add_argument("--npm-lock", type=Path, default=REPO / "windows-npm.lock.json")
+    parser_install.add_argument("--output", type=Path, default=REPO / ".studio/.runtime/dependency-parser")
+    parser_install.add_argument("--offline", action="store_true", help="Only use already cached integrity-checked npm packages")
     args = parser.parse_args()
     if args.command == "seed-lock":
         seed_lock(args.from_npm_lock, args.metadata, args.output)
+    elif args.command == "dev-parser":
+        dev_parser(args.npm_lock.resolve(), args.cache.resolve(), args.output.resolve(), offline=args.offline)
     else:
         prepare(args.cache.resolve(), args.npm_lock.resolve(), args.output_lock.resolve())
 

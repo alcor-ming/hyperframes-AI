@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import math
+import os
 import re
 import shutil
 import stat
+import subprocess
 import warnings
 import xml.etree.ElementTree as ET
 
@@ -29,6 +33,234 @@ SVG_ATTRS = set("id class version x y x1 y1 x2 y2 dx dy width height viewBox pre
                 "maskUnits maskContentUnits href font-family font-size font-weight font-style text-anchor "
                 "dominant-baseline alignment-baseline textLength lengthAdjust vector-effect "
                 "shape-rendering color display visibility overflow".split())
+
+KINDS = {"module", "media", "theme", "background", "motion"}
+DECLARATIVE = {"theme", "background", "motion"}
+
+
+def asset_requires_runtime(metadata):
+    return metadata.get("kind", metadata.get("asset_type")) not in DECLARATIVE | {"media"}
+
+
+def _fields(value, allowed, required=(), label="asset"):
+    if not isinstance(value, dict) or set(value) - set(allowed) or set(required) - set(value):
+        raise COMPONENT.ComponentError(f"Invalid {label} fields; allowed: {sorted(allowed)}")
+
+
+def validate_reference(value):
+    _fields(value, {"ref", "kind", "package_sha256"}, {"ref", "kind", "package_sha256"}, "asset reference")
+    if (not isinstance(value["ref"], str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*@v[1-9][0-9]*", value["ref"])
+            or not isinstance(value["kind"], str) or value["kind"] not in KINDS
+            or not isinstance(value["package_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", value["package_sha256"])):
+        raise COMPONENT.ComponentError("Asset reference requires exact ref, kind and package_sha256")
+
+
+def validate_parameter(value, spec):
+    _fields(spec, {"type", "default", "minimum", "maximum", "enum"}, {"type", "default"}, "parameter schema")
+    kinds = {"string": str, "number": (int, float), "integer": int, "boolean": bool}
+    kind = spec["type"]
+    if not isinstance(kind, str) or kind not in kinds:
+        raise COMPONENT.ComponentError("Unsupported parameter type")
+    if not isinstance(value, kinds[kind]) or (kind in {"number", "integer"} and (isinstance(value, bool) or not math.isfinite(value))):
+        raise COMPONENT.ComponentError("Parameter value has incorrect type")
+    for bound in ("minimum", "maximum"):
+        if bound in spec and (kind not in {"number", "integer"} or type(spec[bound]) not in {int, float} or not math.isfinite(spec[bound])):
+            raise COMPONENT.ComponentError("Invalid parameter numeric bounds")
+    if (("minimum" in spec and value < spec["minimum"]) or ("maximum" in spec and value > spec["maximum"])):
+        raise COMPONENT.ComponentError("Parameter value is outside allowed range")
+    if "enum" in spec and (not isinstance(spec["enum"], list) or not spec["enum"] or value not in spec["enum"]):
+        raise COMPONENT.ComponentError("Parameter value is outside allowed enum")
+    if isinstance(value, str) and re.search(r"[<>;{}]|url\s*\(|expression\s*\(|javascript:", value, re.I):
+        raise COMPONENT.ComponentError("Executable expressions are not permitted in declarations")
+
+
+def _declaration(directory, metadata):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise COMPONENT.ComponentError(f"Duplicate declaration key: {key}")
+            result[key] = value
+        return result
+
+    try:
+        payload = json.loads((directory / metadata["entry"]).read_text(encoding="utf-8"), object_pairs_hook=unique,
+                             parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+    except (ValueError, OSError, UnicodeError) as exc:
+        raise COMPONENT.ComponentError("Invalid asset declaration JSON") from exc
+    return validate_declaration(payload, metadata, directory, check_defaults=True)
+
+
+def validate_declaration(payload, metadata, directory, *, check_defaults=False):
+    """Validate both package defaults and resolved, explicitly overridden declarations."""
+    kind = metadata["kind"]
+    if kind == "theme":
+        _fields(payload, {"tokens", "fonts"}, {"tokens"}, "Theme")
+        _fields(payload["tokens"], {"typography", "colors", "surface", "border", "radius", "shadow", "lines"}, label="Theme tokens")
+        fonts = payload.get("fonts", [])
+        if not isinstance(fonts, list):
+            raise COMPONENT.ComponentError("Theme fonts must be an array")
+        for font in fonts:
+            _fields(font, {"family", "path", "license", "style", "weight"}, {"family", "path", "license"}, "Theme font")
+            if not isinstance(font["family"], str) or not font["family"].strip():
+                raise COMPONENT.ComponentError("Font requires a family")
+            if font.get("style", "normal") not in ("normal", "italic", "oblique"):
+                raise COMPONENT.ComponentError("Font style must be normal, italic or oblique")
+            weight = font.get("weight", "normal")
+            if not (type(weight) is int and 1 <= weight <= 1000):
+                if not isinstance(weight, str) or not re.fullmatch(r"normal|bold|[1-9][0-9]{0,3}(?: [1-9][0-9]{0,3})?", weight):
+                    raise COMPONENT.ComponentError("Invalid font weight or variable weight range")
+                if weight not in ("normal", "bold"):
+                    weights = list(map(int, weight.split()))
+                    if max(weights) > 1000 or weights != sorted(weights):
+                        raise COMPONENT.ComponentError("Invalid font weight or variable weight range")
+            for key in ("path", "license"):
+                if _relative(directory, font[key]) not in metadata.get("dependencies", []):
+                    raise COMPONENT.ComponentError("Font files and license must be declared dependencies")
+    elif kind == "background":
+        _fields(payload, {"renderer", "parameters", "readability"}, {"renderer", "parameters"}, "Background")
+        if payload["renderer"] not in ("solid", "transparent"):
+            raise COMPONENT.ComponentError("Dynamic Background renderers are not supported yet")
+        _fields(payload["parameters"], {"color"} if payload["renderer"] == "solid" else set(),
+                {"color"} if payload["renderer"] == "solid" else set(), "Background parameters")
+        if payload["renderer"] == "solid" and not re.fullmatch(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", str(payload["parameters"]["color"])):
+            raise COMPONENT.ComponentError("Solid Background needs a hex color")
+        if "readability" in payload:
+            _fields(payload["readability"], {"foreground", "regions"}, label="Background readability")
+            if payload["readability"].get("foreground", "any") not in ("light", "dark", "any"):
+                raise COMPONENT.ComponentError("Invalid foreground readability condition")
+    elif kind == "motion" and metadata.get("contract_version", 1) == 2:
+        _motion2(payload)
+    else:
+        _fields(payload, {"slots", "reduced_motion"}, {"slots", "reduced_motion"}, "Motion")
+        for group in (payload["slots"], payload["reduced_motion"]):
+            _fields(group, {"reveal", "emphasis", "exit", "transition"}, label="Motion slots")
+            for settings in group.values():
+                _fields(settings, {"duration", "easing", "x", "y", "scale", "stagger"}, {"duration", "easing"}, "Motion slot")
+                for key, value in settings.items():
+                    if key == "easing":
+                        if not isinstance(value, str) or not re.fullmatch(r"(?:none|linear|power[1-4]\.(?:in|out|inOut)|(?:sine|expo|circ|back|bounce)\.(?:in|out|inOut))", value):
+                            raise COMPONENT.ComponentError("Unsupported Motion easing")
+                    elif type(value) not in {int, float} or not math.isfinite(value) or (key in {"duration", "stagger", "scale"} and value < 0):
+                        raise COMPONENT.ComponentError("Invalid Motion numeric value")
+    def inspect(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in {"mode", "modes", "layout", "cue", "script", "background", "motion"}:
+                    raise COMPONENT.ComponentError(f"Declaration contains forbidden field: {key}")
+                inspect(child)
+        elif isinstance(value, list):
+            for child in value:
+                inspect(child)
+        elif isinstance(value, str):
+            if re.search(r"[<>;{}]|url\s*\(|expression\s*\(|javascript:", value, re.I):
+                raise COMPONENT.ComponentError("Executable expressions are not permitted in declarations")
+        elif value is not None and type(value) not in {bool, int, float}:
+            raise COMPONENT.ComponentError("Invalid declaration value")
+    inspect(payload)
+    for path, spec in metadata["parameters"].items():
+        prefixes = {"theme": ("tokens.",), "background": ("parameters.",),
+                    "motion": ("slots.", "reduced_motion.")}
+        if not path.startswith(prefixes[kind]):
+            raise COMPONENT.ComponentError(f"Asset identity or dependency field cannot be overridden: {path}")
+        if kind == "motion" and metadata.get("contract_version", 1) == 2 and (len(path.split(".")) != 3 or path.split(".")[-1] in {"effect", "color_token"}):
+            raise COMPONENT.ComponentError(f"Motion identity cannot be overridden: {path}")
+        current = payload
+        for part in path.split("."):
+            if not isinstance(current, dict) or part not in current:
+                raise COMPONENT.ComponentError(f"Parameter path is not in the declaration: {path}")
+            current = current[part]
+        validate_parameter(current, spec)
+        if check_defaults and current != spec["default"]:
+            raise COMPONENT.ComponentError(f"Parameter default differs from declaration: {path}")
+    return payload
+
+
+def _motion2(payload):
+    slots = {"reveal", "emphasis", "exit", "transition"}
+    _fields(payload, {"capability_version", "slots", "reduced_motion"}, {"capability_version", "slots", "reduced_motion"}, "Motion v2")
+    if type(payload["capability_version"]) is not int or payload["capability_version"] != 2:
+        raise COMPONENT.ComponentError("Unsupported Motion capability_version")
+    for name in ("slots", "reduced_motion"):
+        _fields(payload[name], slots, slots, "Motion v2 slots")
+        for slot, settings in payload[name].items():
+            required = {"effect", "duration", "easing"}
+            optional = set()
+            effects = {"reveal": {"fade", "short-rise"}, "exit": {"fade-out"},
+                       "emphasis": {"focus-restore"}, "transition": {"crossfade", "cut"}}
+            if slot in {"reveal", "exit"}:
+                required |= {"opacity_from", "opacity_to"}
+                if slot == "exit" or isinstance(settings, dict) and settings.get("effect") == "short-rise":
+                    optional |= {"x", "y", "scale"}
+                if slot == "reveal":
+                    optional.add("hide_before")
+            elif slot == "emphasis":
+                required |= {"restore_duration", "color_token", "outline_width"}
+            _fields(settings, required | optional, required, f"Motion v2 {slot}")
+            if not isinstance(settings["effect"], str) or settings["effect"] not in effects[slot] or settings["easing"] not in ("none", "linear", "ease-in", "ease-out", "ease-in-out"):
+                raise COMPONENT.ComponentError("Unsupported Motion effect or easing")
+            for key, value in settings.items():
+                if key in {"effect", "easing"}:
+                    continue
+                if key == "hide_before":
+                    if type(value) is not bool:
+                        raise COMPONENT.ComponentError("Motion hide_before must be boolean")
+                elif key == "color_token":
+                    if not isinstance(value, str) or not re.fullmatch(r"(?:typography|colors|surface|border|radius|shadow|lines)(?:\.[a-zA-Z][a-zA-Z0-9_-]*)+", value):
+                        raise COMPONENT.ComponentError("Motion emphasis requires a theme color_token path")
+                elif (type(value) not in {int, float} or not math.isfinite(value)
+                      or key not in {"x", "y"} and value < 0
+                      or key.startswith("opacity_") and value > 1):
+                    raise COMPONENT.ComponentError("Invalid Motion numeric value")
+            if slot in {"reveal", "exit"} and settings["opacity_to"] != (1 if slot == "reveal" else 0):
+                raise COMPONENT.ComponentError("Motion opacity_to must restore reveal or hide exit")
+            if slot == "transition" and settings["effect"] == "cut" and settings["duration"] != 0:
+                raise COMPONENT.ComponentError("Motion cut requires zero duration")
+            if name == "reduced_motion":
+                if slot in {"reveal", "exit"} and settings["duration"] > payload["slots"][slot]["duration"]:
+                    raise COMPONENT.ComponentError("Reduced Motion cannot lengthen duration")
+                if slot in {"reveal", "exit"} and any(settings.get(key, default) != default for key, default in (("x", 0), ("y", 0), ("scale", 1))):
+                    raise COMPONENT.ComponentError("Reduced Motion cannot move or scale")
+                if slot == "emphasis" and (settings["duration"] != 0 or settings["restore_duration"] != 0):
+                    raise COMPONENT.ComponentError("Reduced Motion emphasis must be static")
+                if slot == "transition" and settings["effect"] != "cut":
+                    raise COMPONENT.ComponentError("Reduced Motion transition must cut")
+
+
+def _schema2(directory, metadata):
+    _fields(metadata, {"schema_version", "id", "version", "kind", "entry", "contract_version", "parameters",
+                      "compatibility", "dependencies", "asset_dependencies", "runtime", "usage", "example", "license",
+                      "files", "description", "source_url", "rights"},
+            {"contract_version", "parameters", "compatibility"}, "schema 2 manifest")
+    if type(metadata["contract_version"]) is not int or metadata["contract_version"] not in ({1, 2} if metadata["kind"] == "motion" else {1}):
+        raise COMPONENT.ComponentError("Unsupported asset contract_version")
+    compatibility = metadata["compatibility"]
+    _fields(compatibility, {"ratios"}, label="asset compatibility")
+    ratios = compatibility.get("ratios", [])
+    if not isinstance(ratios, list) or any(ratio not in ("9:16", "16:9", "4:3", "1:1") for ratio in ratios):
+        raise COMPONENT.ComponentError("Invalid asset compatible ratios")
+    parameters = metadata["parameters"]
+    if not isinstance(parameters, dict):
+        raise COMPONENT.ComponentError("Asset parameters must be a path/schema object")
+    for path, spec in parameters.items():
+        if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*", path):
+            raise COMPONENT.ComponentError("Invalid parameter path")
+        validate_parameter(spec.get("default") if isinstance(spec, dict) else None, spec)
+    dependencies = metadata.get("asset_dependencies", [])
+    if not isinstance(dependencies, list):
+        raise COMPONENT.ComponentError("Asset dependencies must be an array of exact references")
+    seen = set()
+    for dependency in dependencies:
+        validate_reference(dependency)
+        if dependency["ref"] in seen or dependency["ref"] == f"{metadata['id']}@v{metadata['version']}":
+            raise COMPONENT.ComponentError("Duplicate or cyclic asset dependency")
+        seen.add(dependency["ref"])
+        if metadata["kind"] in DECLARATIVE and dependency["kind"] != "media":
+            raise COMPONENT.ComponentError("Declarative assets can only depend on Media, not other appearance or executable assets")
+    if metadata["kind"] in DECLARATIVE:
+        if metadata.get("runtime"):
+            raise COMPONENT.ComponentError("Declarative assets cannot require runtime libraries")
+        _declaration(directory, metadata)
 
 
 def _check_name(name):
@@ -145,21 +377,53 @@ def _check_image(path):
             raise COMPONENT.ComponentError(f"Invalid image: {path.name}: {exc}") from exc
 
 
+def _check_audio(path):
+    """Probe and decode local MP3 bytes without granting media network access."""
+    probe = os.environ.get("HYPERFRAMES_FFPROBE_PATH", "ffprobe")
+    decoder = os.environ.get("HYPERFRAMES_FFMPEG_PATH", "ffmpeg")
+    try:
+        result = subprocess.run([probe, "-v", "error", "-protocol_whitelist", "file,pipe",
+            "-show_entries", "stream=codec_type,codec_name,sample_rate,channels:format=format_name,duration",
+            "-of", "json", str(path)], capture_output=True, text=True, timeout=30)
+        if result.returncode or result.stderr.strip():
+            raise ValueError(result.stderr.strip() or "probe failed")
+        report = json.loads(result.stdout)
+        streams = [item for item in report["streams"] if item.get("codec_type") == "audio"]
+        if report["format"]["format_name"] != "mp3" or len(streams) != 1 or streams[0]["codec_name"] != "mp3":
+            raise ValueError("MP3 extension requires one real MP3 audio stream")
+        stream = streams[0]
+        duration = float(report["format"]["duration"])
+        rate, channels = int(stream["sample_rate"]), int(stream["channels"])
+        if not math.isfinite(duration) or duration <= 0 or rate <= 0 or channels <= 0:
+            raise ValueError("invalid duration, sample rate or channels")
+        result = subprocess.run([decoder, "-nostdin", "-v", "error", "-xerror", "-err_detect", "explode",
+            "-protocol_whitelist", "file,pipe", "-i", str(path), "-map", "0:a:0", "-f", "null", "-"],
+            capture_output=True, text=True, timeout=120)
+        if result.returncode or result.stderr.strip():
+            raise ValueError(result.stderr.strip() or "decode failed")
+        return {"format": "mp3", "codec": "mp3", "duration": duration, "sample_rate": rate, "channels": channels}
+    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
+        raise COMPONENT.ComponentError(f"Invalid MP3 audio {path.name}; local ffprobe/ffmpeg required: {exc}") from exc
+
+
 def _inputs(directory):
     _relative(directory, "asset.json")
     metadata = COMPONENT._read_json(directory / "asset.json")
     asset_id, version, kind = (metadata.get(key) for key in ("id", "version", "kind"))
-    if (type(metadata.get("schema_version")) is not int or metadata.get("schema_version") != 1
+    if (type(metadata.get("schema_version")) is not int or metadata.get("schema_version") not in {1, 2}
             or not isinstance(asset_id, str) or not ID.fullmatch(asset_id)
             or type(version) is not int or version < 1 or not isinstance(kind, str)
-            or kind not in {"module", "media"}):
-        raise COMPONENT.ComponentError("asset.json requires schema_version 1, slug id, positive version and module/media kind")
+            or kind not in (KINDS if metadata.get("schema_version") == 2 else {"module", "media"})):
+        raise COMPONENT.ComponentError("asset.json requires a supported schema_version, slug id, positive version and kind")
     _check_name(asset_id)
     entry = _relative(directory, metadata.get("entry"))
     suffix = Path(entry).suffix
     if ((kind == "module" and suffix not in {".js", ".mjs"})
-            or (kind == "media" and suffix.lower() not in {*RASTER, ".svg"})):
-        raise COMPONENT.ComponentError("Asset entry must be JS/MJS for module or PNG/JPEG/WebP/SVG for media")
+            or (kind == "media" and suffix.lower() not in {*RASTER, ".svg", ".mp3"})
+            or (kind in DECLARATIVE and suffix != ".json")):
+        raise COMPONENT.ComponentError("Asset entry must be JS/MJS for module or PNG/JPEG/WebP/SVG/MP3 for media")
+    if metadata["schema_version"] == 2:
+        _schema2(directory, metadata)
     runtime = metadata.get("runtime", {})
     if not isinstance(runtime, dict) or not isinstance(runtime.get("versions", {}), dict):
         raise COMPONENT.ComponentError("Asset runtime and runtime.versions must be objects")
@@ -199,7 +463,13 @@ def _inputs(directory):
                 raise COMPONENT.ComponentError(f"Asset paths have a case-insensitive collision: {name}")
             names[folded] = prefix.as_posix()
     for name in sorted(files):
+        if kind in DECLARATIVE and Path(name).suffix.lower() in {".js", ".mjs", ".cjs", ".html", ".htm", ".css", ".wasm"}:
+            raise COMPONENT.ComponentError("Declarative assets cannot contain executable dependencies")
         _check_image(directory / name)
+        if Path(name).suffix.lower() == ".mp3":
+            audio = _check_audio(directory / name)
+            if kind == "media" and name == entry:
+                metadata = {**metadata, "media_type": "audio", "audio": audio}
     return metadata, sorted(files)
 
 

@@ -168,7 +168,10 @@ def _validate_package(directory: Path, expected_ref: str | None = None) -> dict:
     if not (directory / "COMPONENT.md").is_file() and not (directory / "asset.json").is_file():
         raise ComponentError("Unsupported asset contract; a Component Release is required")
     report = validate_component_release(directory, expected_ref=expected_ref, allow_unapproved=True)
-    if report["metadata"].get("asset_type", "component") not in {"component", "effect", "module", "media"}:
+    kinds = {"component", "effect", "module", "media"}
+    if (directory / "asset.json").is_file():
+        kinds |= {"theme", "background", "motion"}
+    if report["metadata"].get("asset_type", "component") not in kinds:
         raise ComponentError("Unsupported asset type for the Component contract")
     return report
 
@@ -212,6 +215,7 @@ def pack_source(store: Path, source: Path) -> dict:
 
 def _import_package(store: Path, source: Path, *, original_source: Path | None = None) -> dict:
     report = _validate_package(source)
+    _accepted_closure(store, report["metadata"].get("asset_dependencies", []), visiting={report["component_ref"]})
     relative = _relative(report["component_ref"])
     destination = _target(store, (Path("candidates") / relative).as_posix())
     accepted = _target(store, (Path("packages") / relative).as_posix())
@@ -248,17 +252,21 @@ def accept_component(store: Path, ref: str, sha256: str, note: str, *, runtime_r
     if not _same_tree(candidate / "package", candidate / "review"):
         raise ComponentError("Review copy changed; package changes as a new version before acceptance")
     _validate_dependencies(candidate / "package", report)
-    lock = _read_json(runtime_root / "windows-runtime.lock.json")
+    _accepted_closure(store, report["metadata"].get("asset_dependencies", []), runtime_root=runtime_root,
+                      visiting={ref})
+    from asset_contract import asset_requires_runtime
+    executable = asset_requires_runtime(report["metadata"])
+    lock = _read_json(runtime_root / "windows-runtime.lock.json") if executable else {"target": "declarative", "versions": {}}
     declared_runtime = report["metadata"].get("runtime", {})
     declared_versions = declared_runtime.get("versions", {}) if isinstance(declared_runtime, dict) else None
     if not isinstance(declared_versions, dict):
         raise ComponentError("Asset runtime versions must be an object")
-    required_versions = {"hyperframes", *declared_versions}
+    required_versions = {"hyperframes", *declared_versions} if executable else set()
     entry = report["metadata"].get("entry", "component.html")
-    source = "" if report["metadata"].get("asset_type") == "media" else (candidate / "package" / entry).read_text(encoding="utf-8")
+    source = (candidate / "package" / entry).read_text(encoding="utf-8") if executable else ""
     # ponytail: literal legacy use detection; indirect aliases need runtime.versions metadata.
     for name, marker in (("gsap", "gsap."), ("three", "THREE.")):
-        if marker in source or any(name in item["path"].lower() for item in report["files"]):
+        if executable and (marker in source or any(name in item["path"].lower() for item in report["files"])):
             required_versions.add(name)
     if required_versions - set(lock["versions"]):
         raise ComponentError("Asset declares unsupported runtime dependencies")
@@ -293,7 +301,12 @@ def accept_component(store: Path, ref: str, sha256: str, note: str, *, runtime_r
     return acceptance
 
 
-def discover_components(root: Path, query: str = "") -> dict:
+def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
+                        recommendation=None, rebuild=False, research_root=None) -> dict:
+    def declared_ratios(metadata):
+        compatibility = metadata.get("compatibility", {})
+        return compatibility.get("ratios", []) if isinstance(compatibility, dict) else []
+
     roots = [(root / ".studio/components", "legacy")]
     try:
         store = asset_store_root(root)
@@ -304,7 +317,42 @@ def discover_components(root: Path, query: str = "") -> dict:
         sources = _configured_sources(root, store)
         roots += [(Path(path), "source") for path in sources]
     assets, errors = [], []
+    cache_path = _target(store, ".discovery-cache.json") if store else None
+    try:
+        cache = _read_json(cache_path) if cache_path and cache_path.is_file() and not rebuild else {}
+    except (ComponentError, ValueError, OSError):
+        cache = {}
+    fresh, refreshed = {}, []
+
+    def read(path):
+        stat = path.stat()
+        key = str(path.resolve())
+        signature = [stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size]
+        item = cache.get(key)
+        if not isinstance(item, dict) or item.get("signature") != signature:
+            item = {"signature": signature, "value": _read_frontmatter(path) if path.name == "COMPONENT.md" else _read_json(path)}
+            refreshed.append(key)
+        fresh[key] = item
+        return item["value"]
+
+    selection = {}
+    if store and (store / "selection.json").exists():
+        try:
+            selection = read(store / "selection.json")
+            if not isinstance(selection, dict) or any(not isinstance(value, dict) for value in selection.values()):
+                raise ComponentError("Selection metadata must map exact asset refs to objects")
+            for ref, value in selection.items():
+                parse_component_ref(ref)
+                for field in ("aliases", "tags", "examples", "limitations"):
+                    if field in value and (not isinstance(value[field], list) or not all(isinstance(item, str) for item in value[field])):
+                        raise ComponentError(f"Selection {field} must be an array of strings")
+                if "recommendation" in value and value["recommendation"] not in ("recommended", "historical", "pending"):
+                    raise ComponentError("Selection recommendation must be recommended, historical or pending")
+        except (ComponentError, OSError, ValueError) as error:
+            selection = {}
+            errors.append({"path": str(store / "selection.json"), "error": str(error), "unsynchronized": True})
     seen = set()
+    observed_hashes = {}
     for directory, origin in roots:
         if not directory.is_dir():
             if origin == "source":
@@ -319,53 +367,95 @@ def discover_components(root: Path, query: str = "") -> dict:
             seen.add(package.resolve())
             try:
                 if origin == "source" and metadata_path.name == "asset.json" and not (package / "HASHES.json").exists():
-                    metadata = _read_json(metadata_path)
+                    metadata = read(metadata_path)
                     ref = f"{metadata['id']}@v{metadata['version']}"
                     parse_component_ref(ref)
                     assets.append({"component_ref": ref, "package_sha256": None, "path": str(package.resolve()),
                                    "origin": origin, "available": False, "status": "editable-source",
-                                   "asset_type": metadata["kind"]})
+                                   "asset_type": metadata["kind"], "ratio": metadata.get("ratio"),
+                                   "ratios": declared_ratios(metadata),
+                                   "communication_goal": metadata.get("description", ""),
+                                   "verification": "metadata-only; source is not accepted"})
                     continue
-                if origin == "legacy":
-                    report = _validate_package(package)
-                else:
-                    metadata = _read_json(metadata_path) if metadata_path.name == "asset.json" else _read_frontmatter(metadata_path)
-                    if metadata_path.name == "asset.json":
-                        metadata = {**metadata, "asset_type": metadata["kind"]}
-                    hashes = _read_json(package / "HASHES.json")
-                    ref = hashes.get("component_ref", hashes.get("asset_ref"))
-                    if not isinstance(ref, str):
-                        raise ComponentError("Asset manifest requires a string reference")
-                    parse_component_ref(ref)
-                    report = {"component_ref": ref, "metadata": metadata, "ratio": metadata.get("ratio"),
-                              "package_sha256": hashes["package_sha256"]}
+                metadata = read(metadata_path)
+                if metadata_path.name == "asset.json":
+                    metadata = {**metadata, "asset_type": metadata["kind"]}
+                hashes = read(package / "HASHES.json")
+                ref = hashes.get("component_ref", hashes.get("asset_ref"))
+                if not isinstance(ref, str):
+                    raise ComponentError("Asset manifest requires a string reference")
+                parse_component_ref(ref)
+                observed_hashes.setdefault(ref, set()).add(hashes["package_sha256"])
+                if metadata_path.name == "asset.json" and ref != f"{metadata['id']}@v{metadata['version']}":
+                    raise ComponentError("Asset metadata identity disagrees with manifest")
+                if not isinstance(hashes.get("files"), list) or not hashes["files"]:
+                    raise ComponentError("Asset manifest requires files")
+                for entry in hashes["files"]:
+                    dependency = package / _safe_relative(entry["path"], "manifest file")
+                    if not dependency.resolve().is_relative_to(package.resolve()) or not dependency.is_file():
+                        raise ComponentError(f"Manifest file missing or outside package: {entry['path']}")
+                report = {"component_ref": ref, "metadata": metadata, "ratio": metadata.get("ratio"),
+                          "package_sha256": hashes["package_sha256"]}
                 metadata, ref = report["metadata"], report["component_ref"]
                 available = origin == "legacy" and metadata.get("status") == "library-approved"
                 acceptance = None
                 if origin == "accepted":
-                    acceptance = _read_json(store / "acceptances" / _relative(ref) / "acceptance.json")
+                    acceptance = read(store / "acceptances" / _relative(ref) / "acceptance.json")
                     validate_component_acceptance(acceptance, report, runtime_root=root)
                     available = True
                 assets.append({"component_ref": ref, "package_sha256": report["package_sha256"],
                                "path": str(package.resolve()), "origin": origin, "available": available,
                                "status": "accepted" if acceptance else metadata.get("status", "candidate"),
                                "asset_type": metadata.get("asset_type", "component"), "ratio": report["ratio"],
+                               "ratios": declared_ratios(metadata),
                                "communication_goal": metadata.get("communication_goal", metadata.get("description", "")),
                                "information_shapes": metadata.get("information_shapes", []),
                                "anti_use_cases": metadata.get("anti_use_cases", []), "acceptance": acceptance,
-                               "verification": "verified" if origin == "legacy" else "metadata-only; verified on use"})
-            except (ComponentError, OSError, ValueError, KeyError) as error:
+                               "verification": "metadata-only; verified on use"})
+                if str(metadata.get("entry", "")).lower().endswith(".mp3"):
+                    assets[-1]["media_type"] = "audio"
+            except (ComponentError, OSError, ValueError, KeyError, TypeError) as error:
                 errors.append({"path": str(package), "error": str(error)})
-    hashes: dict[str, set[str]] = {}
+    hashes: dict[str, set[str]] = observed_hashes
     for asset in assets:
         if asset["package_sha256"]:
             hashes.setdefault(asset["component_ref"], set()).add(asset["package_sha256"])
     for asset in assets:
         if len(hashes.get(asset["component_ref"], set())) > 1:
             asset.update(available=False, conflict="Same identity/version has different package hashes")
+        extra = selection.get(asset["component_ref"], {})
+        asset.update({key: extra[key] for key in ("aliases", "tags", "purpose", "examples", "limitations", "replacement") if key in extra})
+        state = extra.get("recommendation", "pending")
+        asset["recommendation"] = state if state in {"recommended", "historical", "pending"} else "pending"
+        asset["ratio"] = asset.get("ratio") or "unknown"
+        asset["ratios"] = asset.get("ratios") or ([asset["ratio"]] if asset["ratio"] != "unknown" else [])
+        if not isinstance(asset["ratios"], list) or not all(isinstance(value, str) for value in asset["ratios"]):
+            asset["ratios"] = []
+        if asset["ratio"] == "unknown" and len(asset["ratios"]) == 1:
+            asset["ratio"] = asset["ratios"][0]
+        asset["check_scope"] = asset.get("verification", "metadata-only")
+        asset["group"] = asset["origin"]
+        asset["match_reasons"] = [key for key in ("component_ref", "communication_goal", "purpose", "aliases", "tags", "information_shapes")
+                                  if query and query.casefold() in json.dumps(asset.get(key, ""), ensure_ascii=False).casefold()]
+        asset["use"] = ("appearance binding with exact ref/hash" if asset["asset_type"] in {"theme", "background", "motion"}
+                        else "component install with exact ref/hash") if asset["available"] else "reference only; not accepted for use"
     if query:
-        assets = [asset for asset in assets if query.casefold() in json.dumps(asset, ensure_ascii=False).casefold()]
-    return {"assets": assets, "errors": errors}
+        assets = [asset for asset in assets if asset["match_reasons"]]
+    assets = [asset for asset in assets if (not kind or asset["asset_type"] == kind or asset.get("media_type") == kind)
+              and (not ratio or ratio in asset["ratios"] or ratio == "unknown" and not asset["ratios"])
+              and (not tag or tag in asset.get("tags", []))
+              and (not recommendation or asset["recommendation"] == recommendation)]
+    assets.sort(key=lambda asset: (not asset["available"], {"recommended": 0, "pending": 1, "historical": 2}[asset["recommendation"]], asset["component_ref"]))
+    if cache_path and fresh != cache:
+        try:
+            _atomic_json(cache_path, fresh)
+        except (ComponentError, OSError) as error:
+            errors.append({"path": str(cache_path), "error": str(error), "unsynchronized": True})
+    result = {"assets": assets, "errors": errors, "refreshed": refreshed}
+    if research_root is not None:
+        from research_catalog import query as research_query
+        result["research"] = research_query(research_root, query)["documents"]
+    return result
 
 
 def resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:
@@ -389,3 +479,59 @@ def resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:
     if acceptance is not None:
         validate_component_acceptance(acceptance, report, runtime_root=root)
     return selected, acceptance
+
+
+def _accepted_closure(store, references, *, runtime_root=None, visiting=None):
+    from asset_contract import validate_reference
+    if not isinstance(references, list):
+        raise ComponentError("Asset references must be a list")
+    visiting, resolved = set(visiting or ()), {}
+
+    def visit(reference):
+        validate_reference(reference)
+        ref = reference["ref"]
+        if ref in visiting:
+            raise ComponentError(f"Cyclic asset dependency: {ref}")
+        if ref in resolved:
+            if any(reference[key] != resolved[ref][key] for key in ("kind", "package_sha256")):
+                raise ComponentError(f"Conflicting exact asset references: {ref}")
+            return
+        relative = _relative(ref)
+        package = _target(store, (Path("packages") / relative).as_posix())
+        record = _target(store, (Path("acceptances") / relative / "acceptance.json").as_posix())
+        if not package.is_dir() or not record.is_file():
+            raise ComponentError(f"Asset dependency is not accepted: {ref}")
+        report = _validate_package(package, ref)
+        if (report["metadata"].get("kind") != reference["kind"] or report["package_sha256"] != reference["package_sha256"]):
+            raise ComponentError(f"Asset reference kind/hash mismatch: {ref}")
+        acceptance = _read_json(record)
+        validate_component_acceptance(acceptance, report, runtime_root=runtime_root)
+        candidate = _target(store, (Path("candidates") / relative / "package").as_posix())
+        if candidate.exists() and _validate_package(candidate, ref)["package_sha256"] != reference["package_sha256"]:
+            raise ComponentError(f"Conflicting identity/version across asset sources: {ref}")
+        visiting.add(ref)
+        for dependency in report["metadata"].get("asset_dependencies", []):
+            visit(dependency)
+        visiting.remove(ref)
+        resolved[ref] = {**reference, "path": str(package), "metadata": report["metadata"], "acceptance": acceptance}
+
+    for reference in references:
+        visit(reference)
+    return list(resolved.values())
+
+
+def resolve_asset_closure(root: Path, references: list[dict]) -> list[dict]:
+    """Resolve dependency-first accepted packages, never candidates or floating versions."""
+    closure = _accepted_closure(asset_store_root(root), references, runtime_root=root)
+    resolved_refs = {item["ref"] for item in closure}
+    for item in discover_components(root)["assets"]:
+        if item["component_ref"] in resolved_refs and item.get("conflict"):
+            raise ComponentError(f"Conflicting identity/version across asset sources: {item['component_ref']}")
+    return closure
+
+
+def resolve_asset(root: Path, reference: dict) -> tuple[Path, dict, dict]:
+    closure = resolve_asset_closure(root, [reference])
+    item = next(item for item in closure if item["ref"] == reference["ref"])
+    path = Path(item["path"])
+    return path, _validate_package(path, item["ref"]), item["acceptance"]

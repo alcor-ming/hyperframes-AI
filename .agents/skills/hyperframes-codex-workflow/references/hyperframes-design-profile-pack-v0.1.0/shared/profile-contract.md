@@ -29,7 +29,7 @@ A Profile must define:
 
 - how a focal point is established;
 - how supporting evidence is grouped;
-- how relationships and sequence are shown;
+- stylistic treatment of relationships and sequence selected by the Plan;
 - default information density;
 - how negative space functions;
 - how 16:9 and 9:16 differ without changing identity.
@@ -61,7 +61,7 @@ Do not package or redistribute font files. Only reference legally available syst
 
 ## 6. Motion grammar
 
-Each Profile must define 4–6 motion verbs. Every scene animation must map to one of them.
+Profiles may offer motion verbs as stylistic guidance, not a mandatory narrative formula. The main type and Plan choose objects, cards, decorative assets, keyword emphasis and A/B rhythm; a Profile must not force all content into mechanism animation.
 
 The motion grammar must specify:
 
@@ -92,4 +92,4 @@ Anti-patterns are hard bans unless explicitly approved. They should be concrete 
 
 ## 9. QA
 
-Every Profile must provide a short scene-level checklist that can be answered from rendered frames and source code.
+Every Profile provides a short identity checklist. Actual playback separately checks reading, audible timing and the maximum 2-second completely static whole frame; stable text is allowed. Static frames/source code alone cannot prove this. Recheck only affected scope, never reopen accepted unchanged design merely for Final encoding or archive.

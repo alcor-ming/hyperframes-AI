@@ -38,7 +38,7 @@ It is less suitable for dense multi-variable technical explanation unless the co
 
 ### Gate 1：Distill
 
-Before designing a scene, state the one message it must communicate. Remove repeated copy, decorative lines, redundant labels and unnecessary containers.
+Before designing a scene, state the message it must communicate. Remove repeated copy, redundant labels and unnecessary containers; restrained decorative icons, images and lines are allowed, especially on text-led cards.
 
 ### Gate 2：Quieter
 
@@ -183,7 +183,7 @@ At 60fps:
 ## Talking-head mapping
 
 - Use sparse large keywords, short rules or one key number.
-- Avoid background cards; let type sit in clean negative space.
+- Use text-led cards or unframed type according to the Plan; keep hierarchy and clean negative space.
 - Do not make every spoken sentence a title card.
 - Lower overlay frequency than the other Profiles.
 - A champagne accent may mark one climactic word, not every section.
@@ -208,7 +208,7 @@ At 60fps:
 - ultra-thin Chinese body text;
 - continuous slow motion on every scene;
 - excessive centered composition;
-- adding decoration after the four gates already produced a complete frame.
+- decorative clutter that competes with reading or obscures the focal point.
 
 ## Scene QA
 

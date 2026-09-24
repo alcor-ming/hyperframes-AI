@@ -1,6 +1,6 @@
 # HyperFrames Codex Workflow v2.1.0
 
-这是 HyperFrames AI 创作 Harness 的薄路由 Skill。产品工作流、规范、Recipe 和模板统一由仓库根目录 `.studio/` 管理；Skill 不再维护第二套流程文档。下载视频支持 DBS 改写或逐字保留两条 Script 路径，两者都先形成 `RESEARCH.md`，再逐 Scene 筛选信息和匹配已接纳资产。Plan 仅为真实缺口制作样段，数量可为零；默认使用锁定官方 Studio，局部方案不自动套全片，资产独立接纳后由 Work 固定副本。
+这是 HyperFrames AI 创作 Harness 的薄路由 Skill。产品工作流、规范、Recipe 和模板由 `.studio/` 管理。下载视频支持 DBS 或逐字保留路径；Research 提供候选，Plan 选材并写明实际屏幕文字。动画型/文字型独立于 Template/Profile。整片 Plan 与一个真实 Scene 动态参考一次方向批准，再扩完整占位 Draft；素材齐备后注册 Studio Draft、打开准确版本并接受，无整片 MP4 前置。Final 从接受快照正式渲染，编码 QA 后 Finalize/自动归档；局部方案不自动套全片，按实际变化范围复核。
 
 保留内容：
 
