@@ -6,6 +6,8 @@
 
 日期：2026-09-22
 
+v3.4.2 增量见 [上屏提炼与持续视觉变化](./hyperframes-v342-visual-outcomes.md)：上屏文字不整段照搬原稿、整画面不静止停留，并提供只定位疑点的辅助诊断（WSL 实现与隔离夹具已验证，未部署，Windows 原生与生产未验证）。
+
 当前增量合同见 [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：归档同号继任、零 Variant 内容准备与平级账号版本；覆盖 RC2 中必须先绑定账号及 main 优先的旧假设。[RC2 执行方案](./hyperframes-rc2-execution-plan.md) 与 v3.3 制作工程合同仍为其余既有基线。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作采用三项入口、四阶段、独立 Finalize 与软归档。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
 
 ## 当前路径

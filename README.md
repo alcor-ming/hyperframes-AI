@@ -63,6 +63,8 @@ Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话�
 
 Studio 修改同步原文案真源或暂停对应再生成，旧 MP4 / QA 不继续代表新源码。`reference` Plan 没有虚构的可播放工程，直接审阅其资产引用。
 
+对已打开的准确目标运行 `./work --work <id> --variant <id> preview diagnose <current或Draft-ID>`，只读输出上屏照搬、Plan 偏离和静止疑点，不作 QA 通过判断。登记 Draft 使用同版冻结输入，当前文稿变化另列；输入在诊断期间变化则报告过期。参数及明确引用例外见 `preview diagnose --help`。未采样状态、无法确认 ready 的媒体/子画面及图片内文字保留未验证，仍需按 [Draft QA](.studio/spec/hyperframes.md#draft-qa) 连续观看；诊断不导出视频或修改接受状态。
+
 Draft 与 Final 生命周期：
 
 ```bash

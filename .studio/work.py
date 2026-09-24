@@ -21,7 +21,7 @@ from typing import Any, Iterable
 from types import SimpleNamespace
 import unicodedata
 import uuid
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 
 try:
@@ -51,6 +51,7 @@ except ModuleNotFoundError:  # Loading this file by path from repository tests.
 from visual_plan import VisualPlanError, scene_projection, layout_projection, reference_projection, validate_dependencies, source_changes, serve
 import work_requests
 import studio_preview
+import visual_diagnostics
 import asset_store
 import control_plane
 import appearance
@@ -2126,6 +2127,92 @@ def command_preview_studio(root: Path, args: argparse.Namespace) -> None:
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
+    if not args.work_override or not args.variant_override:
+        raise HarnessError('Diagnostics require explicit --work and --variant; no Current fallback')
+    parameters = visual_diagnostics.parameters(args)
+    work, _ = selected_work(root, args, allow_archive=True)
+    require_workflow(work, 'hyperframes_video')
+    variant, _ = selected_variant(root, work, args)
+    target = validate_id(args.preview_id, 'preview')
+    record = bound_studio(variant, target)
+    project = Path(record['project'])
+    try:
+        url = urlsplit(record['url'])
+        valid_url = (url.scheme == 'http' and url.hostname in {'localhost', '127.0.0.1', '::1'}
+                     and url.port == record['port'] and unquote(url.fragment) == f'project/{project.name}')
+    except ValueError:
+        valid_url = False
+    if not valid_url:
+        raise HarnessError('Diagnostic URL does not match the bound Studio project and port; reopen this target')
+    if record['kind'] != 'executable':
+        raise HarnessError('Diagnostics require an executable Studio Draft, not a static/reference Plan')
+    documents = variant
+    if target != 'current':
+        documents, metadata = checked_preview(variant, target)
+        if metadata.get('purpose') != 'draft':
+            raise HarnessError('Diagnostics target must be current or a registered Draft')
+        if snapshot_digest(project) != metadata['snapshot_sha256']:
+            raise HarnessError('Studio review copy changed; diagnose current or register the edited version')
+    if project.is_symlink() or any(path.is_symlink() for path in project.rglob('*')):
+        raise HarnessError('Diagnostic project cannot contain external/frozen symlinks')
+    before = {'input_sha256': preview_input_hashes(documents), 'snapshot_sha256': snapshot_digest(project)}
+    contents = {name: input_path(documents, name).read_text(encoding='utf-8-sig') for name in PREVIEW_DOCUMENTS}
+    scenes = scene_projection(project, contents['ANIMATION_PLAN.md'])
+    dependencies = validate_dependencies(project)
+    inventory = visual_diagnostics.static_inventory(project, dependencies)
+    exceptions = []
+    if args.exceptions:
+        try:
+            exceptions = json.loads(Path(args.exceptions).read_text(encoding='utf-8-sig'))
+        except (OSError, ValueError) as error:
+            raise HarnessError(f'Cannot read confirmed exceptions: {error}') from error
+    # Validate confirmation input before launching a browser.
+    information, mapping = visual_diagnostics.plan_information(contents['ANIMATION_PLAN.md'])
+    visual_diagnostics.checked_exceptions(exceptions, visual_diagnostics.source_sections(
+        contents['SCRIPT.md'], contents['RESEARCH.md'], information), mapping)
+    cli = runtime_path(args.hyperframes_cli, 'HYPERFRAMES_CLI')
+    if file_sha256(cli) != record['cli_sha256']:
+        raise HarnessError('Studio runtime changed; reopen this exact target')
+    studio_preview.context(cli, project, record['port'], 'server')
+    browser = args.browser or os.environ.get('HYPERFRAMES_BROWSER_PATH') or str(studio_preview.browser_path())
+    request = {'cli': str(cli), 'url': record['url'], 'browser': browser,
+               'scenes': scenes, 'parameters': parameters}
+    sampled = visual_diagnostics.probe(request, os.environ.get('HYPERFRAMES_NODE', 'node'))
+    text = visual_diagnostics.text_diagnostics(sampled['samples'], contents['SCRIPT.md'], contents['RESEARCH.md'],
+                                               contents['ANIMATION_PLAN.md'], minimum=args.minimum,
+                                               similarity=args.similarity, exceptions=exceptions)
+    observed = visual_diagnostics.normalize(''.join(
+        item['text'] for sample in sampled['samples'] if sample.get('ready') for item in sample.get('texts', [])))
+    static_unverified = [entry for entry in inventory if visual_diagnostics.normalize(entry['text']) not in observed]
+    try:
+        after = {'input_sha256': preview_input_hashes(documents), 'snapshot_sha256': snapshot_digest(project)}
+    except (HarnessError, VisualPlanError, OSError):
+        after = None
+    motion = [{**entry, 'scenes': [scene['id'] for scene in scenes
+                                 if scene['start'] <= entry['end'] and scene['start'] + scene['duration'] >= entry['start']]}
+              for entry in sampled.get('motion', [])]
+    report = {'status': 'diagnostic_only' if before == after else 'stale',
+              'work': work.name, 'variant': variant.name, 'target': target, **before,
+              'parameters': {**parameters, 'minimum': args.minimum, 'similarity': args.similarity},
+              'd1': text, 'd2': motion, 'timeline': sampled.get('timeline', []),
+              'samples': sampled['samples'], 'viewport': sampled.get('viewport'),
+              'unverified': sampled.get('unverified', []) + [
+                  {'reason': 'finite_sampling_not_full_playback_or_quality_acceptance'},
+                  {'reason': 'script_generated_text_between_samples_not_verified',
+                   'files': [name for name in dependencies if Path(name).suffix in {'.js', '.mjs'}]},
+                  {'reason': 'static_candidates_not_observed_not_screen_text', 'entries': static_unverified}],
+              'cross_version_differences': []}
+    if target != 'current':
+        for name, frozen in contents.items():
+            current_path = input_path(variant, name)
+            if not current_path.is_file() or current_path.read_text(encoding='utf-8-sig') != frozen:
+                report['cross_version_differences'].append(name)
+    if before != after:
+        report['unverified'].append({'reason': 'inputs_changed_during_diagnosis'})
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def command_preview_diff(root: Path, args: argparse.Namespace) -> None:
     work, _ = selected_work(root, args, allow_archive=not bool(args.note))
     require_workflow(work, "hyperframes_video")
@@ -3088,6 +3175,20 @@ def build_parser() -> argparse.ArgumentParser:
     preview_open.add_argument("--hyperframes-dist", help="Player bundles for --legacy only")
     preview_open.add_argument("--port", type=int, default=0)
     preview_open.set_defaults(handler=command_preview_open)
+    diagnose = preview_commands.add_parser('diagnose', help='Read-only D1/D2 hints for an already opened Studio target; never QA PASS')
+    diagnose.add_argument('preview_id', help='current or an exact registered draft ID; requires explicit --work/--variant')
+    diagnose.add_argument('--hyperframes-cli')
+    diagnose.add_argument('--browser', help='Chrome/Chromium executable (defaults to bundled HYPERFRAMES_BROWSER_PATH; no download)')
+    diagnose.add_argument('--minimum', type=int, default=20, help='Minimum normalized text characters (default: 20)')
+    diagnose.add_argument('--similarity', type=float, default=0.8, help='Ordered/continuous copy coverage hint threshold (default: 0.8)')
+    diagnose.add_argument('--step', type=float, default=0.5, help='Base sample interval in seconds (default: 0.5)')
+    diagnose.add_argument('--window', type=float, default=2.0, help='Suspected stillness window, not allowed pause duration (default: 2.0 seconds)')
+    diagnose.add_argument('--pixel-delta', type=int, default=12, help='Per-channel noise threshold (default: 12/255)')
+    diagnose.add_argument('--area-ratio', type=float, default=0.005, help='Minimum changed area fraction (default: 0.005); not semantic quality')
+    diagnose.add_argument('--width', type=int, default=960, help='Target sampled display width (160..4096; default: 960)')
+    diagnose.add_argument('--timeout-ms', type=int, default=5000, help='Readiness timeout per sample (100..30000; default: 5000)')
+    diagnose.add_argument('--exceptions', help='JSON array of confirmed {scene,text,source,reason}; source e.g. SCRIPT.md#P001; no automatic exemptions')
+    diagnose.set_defaults(handler=command_preview_diagnose)
     for name in ("context", "stop"):
         studio_command = preview_commands.add_parser(name)
         studio_command.add_argument("preview_id", nargs="?", default="current")

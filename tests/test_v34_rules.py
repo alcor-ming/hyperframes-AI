@@ -17,7 +17,7 @@ class V34RulesTests(unittest.TestCase):
                 self.assertIn("Windows", text)
         design = (ROOT / ".studio/spec/visual-design.md").read_text(encoding="utf-8")
         for rule in ("文字与 SVG/icon 互补", "不逐图审批", "不设图标数量",
-                     "不能为了加图删改批准文字", "宿主唯一时间线",
+                     "不能为了加图损伤已批准内容", "宿主唯一时间线",
                      "语义揭示与停留期活动独立检查", "不是 WSL 随工具包交付"):
             self.assertIn(rule, design)
         self.assertNotIn("必要时才少量辅助运动", design)

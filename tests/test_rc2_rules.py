@@ -19,11 +19,11 @@ class RC2RulesTests(unittest.TestCase):
         self.assertIn("## 4. Scene 节拍表", template)
         self.assertIn("不在 Scene 节拍表重抄", template)
 
-    def test_video_edit_does_not_force_research_rewrite_or_motion(self):
+    def test_video_edit_preserves_research_ownership_and_reading_stability(self):
         creative = (ROOT / ".studio/spec/creative.md").read_text(encoding="utf-8")
         design = (ROOT / ".studio/spec/visual-design.md").read_text(encoding="utf-8")
         self.assertIn("不为等义编辑回写第二份 Research 文案", creative)
-        self.assertIn("正常阅读可以静止", design)
+        self.assertIn("阅读区域保持稳定", design)
         self.assertIn("读完可移动、归组或退场", design)
 
 
