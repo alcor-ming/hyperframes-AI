@@ -4,9 +4,9 @@
 
 用户直接在 Codex App 打开本目录并下达任务，无需打开 CMD 或建立 Harness session。Agent 使用本根 `work.cmd` 的绝对路径；它运行同根 `runtime/` 与 `.studio/`，配置读取 `.studio/.runtime/local.json`，不调用 WSL 创作入口或历史 session 启动器。`work.cmd doctor` 查看实际身份与 Review 范围。
 
-前台先调用 `work.cmd current`，无 Current 时 `work.cmd list`，不猜作品。后台必须明确 Work/Variant，并以 `work.cmd --work <id> --variant <id> status` 启动；同一 Work/Variant 同时只允许一个执行者。生命周期、指针、接受、Final 与归档只通过 Work CLI。
+前台先调用 `work.cmd current`，无 Current 时 `work.cmd list`，不猜作品。后台始终明确 Work，内容准备可用 `work.cmd --work <id> status`，版本制作再明确 `--variant <id>`；不改 Current，同一 Work/Variant 同时只允许一个执行者。生命周期、指针、接受、Final 与归档只通过 Work CLI。
 
-读取当前 `WORK.md` 与 `variant.yaml` 后按 workflow 加载 Skill：`hyperframes_video` 用 `hyperframes-codex-workflow`，按 Router 只加载当前阶段必要资料；不强制 Profile 或包装前置。`podcast_quote_image` 在方案批准前用 planner_skill，批准后用 copy_skill，不加载视频规则。详细创作合同见 `.studio/workflow.md`，实现/QA 按需读取 `.studio/spec/`。
+读取当前 `WORK.md`，选定 Variant 时再读 `variant.yaml`，按 workflow 加载 Skill：`hyperframes_video` 用 `hyperframes-codex-workflow`，按 Router 只加载当前阶段必要资料；不强制 Profile 或包装前置。视频 Work 可先无账号、零 Variant，准备共享内容不强制选版本；生产 Variant 仍须准确账号并冻结配置。多个候选未选定时不默认 main，Current 不跨 Work 沿用；零版本不能制作、预览或 Finalize，空交付集合不算完成。`podcast_quote_image` 保留原创建与选择合同，方案批准前用 planner_skill，批准后用 copy_skill，不加载视频规则。详细创作合同见 `.studio/workflow.md`，实现/QA 按需读取 `.studio/spec/`。
 
 Windows 负责 Work-local 或登记 AssetSource 的内容和视觉代码，包括 Scene、GSAP、Three.js、shader、SVG、模型及内容脚本；复杂或可复用不因此交回 WSL。WSL 只修工具、宿主、合同、依赖与安装器，接收准确工具缺口的冻结最小复现，不写生产 Work/资产源。
 
