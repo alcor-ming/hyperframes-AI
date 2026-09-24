@@ -6,7 +6,7 @@
 
 日期：2026-09-22
 
-当前增量合同见 [RC2 执行方案](./hyperframes-rc2-execution-plan.md)，v3.3 制作与工程合同仍是已有基线。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作采用三项入口、四阶段、独立 Finalize 与软归档。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
+当前增量合同见 [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：归档同号继任、零 Variant 内容准备与平级账号版本；覆盖 RC2 中必须先绑定账号及 main 优先的旧假设。[RC2 执行方案](./hyperframes-rc2-execution-plan.md) 与 v3.3 制作工程合同仍为其余既有基线。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作采用三项入口、四阶段、独立 Finalize 与软归档。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
 
 ## 当前路径
 
@@ -78,6 +78,8 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 - 历史决策保留在[原决策台账](./_ledger/component-driven-motion-vnext.md)；不回写过去记录，不将已替换的五阶段、双画幅或透明根层规则继续施加给新模块。
 
 ## PRD 索引
+
+- [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：已批准并由 WSL 采用的归档同号继任及取消 main 特权；保留完整设计与合成验收，不包含真实生产对象清单。实现、测试和部署结果分别报告。
 
 - [HyperFrames RC2 执行方案](./hyperframes-rc2-execution-plan.md)：仅限视频的创建分流、系列编号、旧 Work 名称/身份迁移、可读导航、账号版本、临时实验及文字节奏；WSL 实现已完成，生产数据迁移仍需单独授权。
 - [v3.3 制作与工程合同](./hyperframes-v33-production-contract.md)：既有基线、规则归属、历史兼容与尚需原生/生产证据的边界。

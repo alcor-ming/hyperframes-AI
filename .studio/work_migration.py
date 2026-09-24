@@ -153,7 +153,7 @@ def build_plan(root: Path, api: Any, *, title_overrides: dict[str, str] | None =
     purposes = purpose_overrides or {}
     if any(value not in {"standard", "ip", "test"} for value in purposes.values()):
         raise MigrationError("Purpose override must be standard, ip, or test")
-    rows = api.list_work_rows(root)
+    rows = api.list_work_rows(root, validate_identity=False)
     all_ids = {row["id"] for row in rows}
     paths: dict[str, Path] = {}
     duplicate_ids = set()
@@ -174,6 +174,10 @@ def build_plan(root: Path, api: Any, *, title_overrides: dict[str, str] | None =
         raise MigrationError("Unknown retained video Work: " + ", ".join(sorted(unknown)))
     targets = []
     blockers = [f"Duplicate physical Work ID: {item}" for item in sorted(duplicate_ids & selected)]
+    try:
+        api.work_successor.validate(rows, state, api)
+    except api.HarnessError as exc:
+        blockers.append(str(exc))
     used_numbers = {series: int(value) for series, value in state["series_highwater"].items()}
     for key in state["series_aliases"]:
         series, separator, number = key.rpartition(":")
@@ -185,7 +189,8 @@ def build_plan(root: Path, api: Any, *, title_overrides: dict[str, str] | None =
         if row["workflow"] != VIDEO or row.get("purpose") == "test" or not row.get("series_number"):
             continue
         key = (row.get("series"), int(row["series_number"]))
-        if key in occupied and occupied[key] != row["id"]:
+        if (key in occupied and occupied[key] != row["id"]
+                and f"{key[0]}:{key[1]}" not in state["successions"]):
             conflicts.setdefault(key[0], []).append(f"Series number conflict: {key}: {occupied[key]}, {row['id']}")
         occupied[key] = row["id"]
         used_numbers[key[0]] = max(used_numbers.get(key[0], 0), key[1])
@@ -234,6 +239,8 @@ def build_plan(root: Path, api: Any, *, title_overrides: dict[str, str] | None =
         new_id = old_id if canonical or number is None else f"work-{VIDEO}-{number:03d}-{api.work_slug(new_title)}"
         if new_id != old_id and (new_id in all_ids or new_id in aliases):
             issues.append(f"Target ID or alias already exists: {new_id}")
+        if new_id != old_id and any(old_id in record["chain"] for record in state["successions"].values()):
+            issues.append("Succession history identities are immutable; do not rerun legacy identity migration")
         new_path = old_path.with_name(new_id)
         if new_id != old_id and (new_path.exists() or new_path.is_symlink()):
             issues.append(f"Target path already exists: {new_path}")
@@ -288,6 +295,8 @@ def build_plan(root: Path, api: Any, *, title_overrides: dict[str, str] | None =
         if source in rename:
             changes["source_work"] = rename[source]
         if changes:
+            if any(row["id"] in record["chain"][:-1] for record in state["successions"].values()):
+                blockers.append(f"Succession predecessor is read-only: {row['id']}")
             desired = _work_text(file, api, changes.copy())
             operations.append({"kind": "work", "path": _relative(store, file), "changes": changes,
                                "before": _hash(file), "after": _digest(desired)})

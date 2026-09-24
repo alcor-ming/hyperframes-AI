@@ -69,10 +69,14 @@ class ProductionRulesTests(unittest.TestCase):
         for path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
             self.assertIn("Draft 与 test-work 不导出视频", read(path))
 
-    def test_new_video_examples_bind_production_accounts(self):
+    def test_new_video_examples_separate_work_and_variant_accounts(self):
         for line in read("README.md").splitlines():
             if line.startswith("./work new ") and "--workflow hyperframes_video" in line:
-                self.assertTrue("--account " in line or "--purpose test" in line, line)
+                self.assertIn("--purpose ", line)
+                if "--purpose test" not in line:
+                    self.assertIn("--series ", line)
+                if "--variant-id " in line:
+                    self.assertIn("--account ", line)
         self.assertIn("shared_inputs", read(ROUTER))
         self.assertIn("text-led", read(ROUTER))
 
