@@ -1251,7 +1251,7 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
         result = asset_store.configure_asset_store(root, Path(args.path)) if args.path else {"asset_root": str(asset_store.asset_store_root(root))}
     elif action == "list":
         result = asset_store.discover_components(root, args.query, kind=args.kind, ratio=args.ratio, tag=args.tag,
-            recommendation=args.recommendation, rebuild=args.rebuild, research_root=args.research_root)
+            recommendation=args.recommendation, rebuild=args.rebuild, research_root=args.research_root, audit=args.audit)
     else:
         store = asset_store.asset_store_root(root)
         from component_harness import package_write_lock
@@ -2181,7 +2181,7 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     sampled = visual_diagnostics.probe(request, os.environ.get('HYPERFRAMES_NODE', 'node'))
     text = visual_diagnostics.text_diagnostics(sampled['samples'], contents['SCRIPT.md'], contents['RESEARCH.md'],
                                                contents['ANIMATION_PLAN.md'], minimum=args.minimum,
-                                               similarity=args.similarity, exceptions=exceptions)
+                                               similarity=args.similarity, exceptions=exceptions, scenes=scenes)
     observed = visual_diagnostics.normalize(''.join(
         item['text'] for sample in sampled['samples'] if sample.get('ready') for item in sample.get('texts', [])))
     static_unverified = [entry for entry in inventory if visual_diagnostics.normalize(entry['text']) not in observed]
@@ -3097,7 +3097,8 @@ def build_parser() -> argparse.ArgumentParser:
         command.set_defaults(handler=command_component_store)
     component_list = component_commands.add_parser("list", help="Discover packages from their metadata, not a Harness allowlist")
     component_list.add_argument("--query", default="")
-    component_list.add_argument("--kind", choices=("component", "module", "media", "audio", "theme", "background", "motion"))
+    component_list.add_argument("--kind", choices=("component", "module", "media", "audio", "theme", "background", "motion", "scene-source", "recipe"))
+    component_list.add_argument("--audit", action="store_true", help="Read-only discovery metadata and file audit")
     component_list.add_argument("--ratio")
     component_list.add_argument("--tag")
     component_list.add_argument("--recommendation", choices=("recommended", "historical", "pending"))

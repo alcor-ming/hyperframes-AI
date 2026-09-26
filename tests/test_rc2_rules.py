@@ -13,9 +13,10 @@ from visual_plan import plan_scene_rows
 class RC2RulesTests(unittest.TestCase):
     def test_two_plan_views_keep_one_scene_index_and_one_screen_copy(self):
         template = (ROOT / ".studio/templates/ANIMATION_PLAN.template.md").read_text(encoding="utf-8")
-        plan = template.replace("`<保留实际 ID>`", "S01").replace("`<真实变化或持续阅读状态>`", "01")
+        plan = template.replace("`<保留原 Scene ID>`", "S01")
         self.assertEqual(["S01"], list(plan_scene_rows(plan)))
-        self.assertIn("## 3. 上屏信息表", template)
+        self.assertIn("## 3. 上屏信息块", template)
+        self.assertEqual(1, template.count("```screen\n"))
         self.assertIn("## 4. Scene 节拍表", template)
         self.assertIn("不在 Scene 节拍表重抄", template)
 

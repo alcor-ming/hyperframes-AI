@@ -41,8 +41,7 @@ class V342RulesTests(unittest.TestCase):
                     self.assertNotIn("拆行、拆卡、逐句揭示或少量换词", content)
                     self.assertNotIn("提炼说明", content)
                     self.assertNotIn("相似度证明", content)
-        for path in (".agents/skills/hyperframes-codex-workflow/SKILL.md",
-                     ".agents/skills/hyperframes-anti-ppt/SKILL.md"):
+        for path in (".agents/skills/hyperframes-codex-workflow/SKILL.md",):
             self.assertIn("visual-design.md", read(path))
             self.assertNotIn("拆行、拆卡、逐句揭示或少量换词", read(path))
 

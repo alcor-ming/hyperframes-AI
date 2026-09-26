@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from visual_plan import VisualPlanError, plan_scene_rows
+from visual_plan import VisualPlanError, markdown_structure_lines, plan_scene_rows
 
 
 def normalize(text):
@@ -18,8 +18,15 @@ def normalize(text):
 
 
 def plan_information(text):
-    rows, headers = {}, []
-    for line in text.splitlines():
+    rows, headers, headings = {}, [], []
+    screen_starts = set()
+    for match in markdown_structure_lines(text):
+        line = match[0]
+        if re.fullmatch(r'```screen\s*', line):
+            screen_starts.add(match.start())
+        heading = re.match(r'^#{1,6}\s+(.+)$', line)
+        if heading:
+            headings.append((match.start(), match.end(), heading[1]))
         if not line.lstrip().startswith('|'):
             continue
         cells = [cell.strip().strip('`') for cell in re.split(r'(?<!\\)\|', line.strip().strip('|'))]
@@ -28,8 +35,21 @@ def plan_information(text):
         elif headers and len(cells) == len(headers) and re.match(r'^I\d+\b', cells[0]):
             identity = re.match(r'^I\d+', cells[0])[0]
             rows[identity] = dict(zip(headers, cells))
+    for index, heading in enumerate(headings):
+        identity = re.match(r'`?(I\d+)\b', heading[2])
+        if not identity:
+            continue
+        end = headings[index + 1][0] if index + 1 < len(headings) else len(text)
+        block = text[heading[1]:end]
+        screen = next((item for item in re.finditer(r'^```screen[^\S\n]*\n(.*?)^```[^\S\n]*$', block, re.M | re.S)
+                       if heading[1] + item.start() in screen_starts), None)
+        if screen:
+            source = re.search(r'^\s*(?:-\s*)?(?:\*\*)?来源\s*[:：](?:\*\*)?\s*(.+)$', block, re.M)
+            rows[identity[1]] = {'实际表达': screen[1].rstrip('\n'),
+                                 '信息 ID / 来源': source[1].strip() if source else heading[2]}
     scenes = plan_scene_rows(text)
-    mapping = {sid: re.findall(r'\bI\d+\b', row.get('使用信息 ID', '')) for sid, row in scenes.items()}
+    mapping = {sid: re.findall(r'\bI\d+\b', row.get('使用信息 ID', row.get('信息 ID', '')))
+               for sid, row in scenes.items()}
     return rows, mapping
 
 
@@ -130,18 +150,28 @@ def copy_match(text, sources):
     return best
 
 
-def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=0.8, exceptions=None):
+def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=0.8, exceptions=None, scenes=None):
     information, mapping = plan_information(plan)
     sources = source_sections(script, research, information)
     exceptions = checked_exceptions(exceptions or [], sources, mapping)
     groups, findings, unverified, excluded, source_groups = {}, [], [], [], {}
+    covered, failed = set(), set()
     for sample in sorted(samples, key=lambda item: item['time']):
+        active = {scene['id'] for scene in scenes or []
+                  if scene['start'] <= sample['time'] < scene['start'] + scene['duration']}
         if not sample.get('ready'):
+            failed.update(active)
+            failed.update(item.get('scene') for item in sample.get('texts', []))
             continue
+        covered.update(active)
         for item in sample.get('texts', []):
             scene, info = item.get('scene', ''), item.get('info', '')
             if scene not in mapping:
                 unverified.append({'reason': 'unmapped_scene', 'time': sample['time'], 'text': item['text']})
+                continue
+            covered.add(scene)
+            text = item['text'].strip()
+            if not text:
                 continue
             choices = mapping[scene]
             if not info and len(choices) == 1:
@@ -152,9 +182,6 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             if info not in choices or info not in information:
                 info = ''
             group = groups.setdefault((scene, info), {'parts': [], 'locations': [], 'times': []})
-            text = item['text'].strip()
-            if not text:
-                continue
             # Deduplicate persistent and progressively revealed text across seek samples.
             if not any(normalize(text) in normalize(part) for part in group['parts']):
                 group['parts'] = [part for part in group['parts'] if normalize(part) not in normalize(text)]
@@ -172,8 +199,13 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             unverified.append({**location, 'reason': 'semantic_mapping_requires_review'})
         else:
             planned = information[info]['实际表达']
-            if normalize(planned) != normalized:
-                findings.append({**location, 'kind': 'plan_implementation_difference', 'planned': planned,
+            expected = normalize(planned)
+            if expected != normalized:
+                remaining = iter(expected)
+                # ponytail: half-length is a relative shortening hint; semantic equivalence needs review.
+                truncated = bool(normalized) and len(normalized) < len(expected) and (
+                    all(char in remaining for char in normalized) or len(normalized) <= len(expected) / 2)
+                findings.append({**location, 'kind': 'plan_information_truncated' if truncated else 'plan_implementation_difference', 'planned': planned,
                                  'source': information[info].get('信息 ID / 来源', '')})
         for entry in exceptions:
             if entry['scene'] == scene and normalize(entry['text']) in normalized:
@@ -206,8 +238,18 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             findings.append({'kind': 'suspected_split_copy', 'scenes': list(dict.fromkeys(item['scene'] for item, _ in ordered)),
                              'text': combined, 'members': [item for item, _ in ordered], **best,
                              'semantic_review': 'Source-anchor aggregation is a hint, not proof of one semantic unit'})
+    for scene, identities in mapping.items():
+        for info in identities:
+            if (scene, info) in groups:
+                continue
+            row = information.get(info)
+            entry = {'scene': scene, 'info': info, 'source': row.get('信息 ID / 来源', '') if row else ''}
+            if scene in covered and scene not in failed and row:
+                findings.append({**entry, 'kind': 'plan_information_missing', 'planned': row['实际表达']})
+            else:
+                unverified.append({**entry, 'reason': 'plan_information_not_observed' if row else 'plan_information_undefined'})
     for info, row in information.items():
-        if not any(key[1] == info for key in groups):
+        if not any(info in identities for identities in mapping.values()):
             unverified.append({'info': info, 'reason': 'plan_information_not_observed', 'source': row.get('信息 ID / 来源', '')})
     unverified.append({'reason': 'external_or_unresolved_adopted_sources_require_review'})
     return {'findings': findings, 'unverified': unverified, 'confirmed_exceptions': excluded,

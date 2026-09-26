@@ -26,7 +26,6 @@ class ProductionRulesTests(unittest.TestCase):
         )
         for path in (
             ROUTER,
-            ".agents/skills/hyperframes-anti-ppt/SKILL.md",
             ".studio/recipes/pure-hyperframes.md",
             ".studio/recipes/talking-head.md",
         ):

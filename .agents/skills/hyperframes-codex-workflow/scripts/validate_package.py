@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the thin Skill, Profile registry, and repository Harness."""
+"""Validate the thin Skill and repository Harness; profiles are legacy data."""
 
 from __future__ import annotations
 
@@ -15,12 +15,11 @@ REQUIRED_PACKAGE = [
     "SKILL.md",
     "CHANGELOG.md",
     "VERSION",
-    "profile-registry.json",
 ]
 REQUIRED_HARNESS = [
     "AGENTS.md",
     "work",
-    ".agents/skills/hyperframes-anti-ppt/SKILL.md",
+    ".studio/spec/visual-design.md",
     ".studio/work.py",
     ".studio/workflow.md",
     ".studio/capabilities.yaml",
@@ -48,19 +47,6 @@ def main() -> int:
                 json.load(handle)
         except Exception as exc:  # noqa: BLE001
             errors.append(f"invalid json: {path.relative_to(ROOT)}: {exc}")
-
-    registry_path = ROOT / "profile-registry.json"
-    if registry_path.is_file():
-        registry = json.loads(registry_path.read_text(encoding="utf-8"))
-        for profile in registry.get("profiles", []):
-            for key in ("profile_path", "tokens_path"):
-                if not (ROOT / profile[key]).is_file():
-                    errors.append(f"missing profile asset: {profile[key]}")
-            tokens_path = ROOT / profile["tokens_path"]
-            if tokens_path.is_file():
-                tokens = json.loads(tokens_path.read_text(encoding="utf-8"))
-                if tokens.get("profile_id") != profile.get("id"):
-                    errors.append(f"profile id mismatch: {profile.get('id')}")
 
     if errors:
         for error in errors:

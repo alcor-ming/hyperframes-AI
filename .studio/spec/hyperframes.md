@@ -57,6 +57,8 @@ npx --no-install hyperframes check
 
 辅助诊断使用 `work --work <id> --variant <id> preview diagnose <target>`，`target` 为 `current` 或准确的登记 Draft ID；先用既有 `preview open <target>` 打开同一目标，参数见诊断命令 `--help`。登记 Draft 使用同版冻结文稿和工程，当前 Plan 差异单列；诊断中输入变化标过期。上屏文字照搬定位（D1）与整画面静止定位（D2）只输出疑点、版本/Scene/文字或时间范围及未验证项。文本相似度、timeline 空档和画面采样只定位候选问题，未覆盖范围标未验证；不报告工具 PASS，不以 tween 数量或像素变化代替观看判断。诊断只读 Work，不写 Plan、接受状态或 Final，不导出或编码视频。
 
+D1 同时读取 Plan 的 `screen` 信息块与旧表格，按 Scene 反向核对实际上屏信息。就绪样本已覆盖的 Scene 中，未出现的信息报 `plan_information_missing`，真子集或明显缩短的表达报 `plan_information_truncated`，其他差异报 `plan_implementation_difference`；未覆盖 Scene 仍为未验证。截短是相对 Plan 的疑点，不是按字数判断内容质量，仍需人工核验语义和阅读效果。
+
 ## Final QA
 
 生产 `finalize` 不带文件参数时编排接受源渲染、ffprobe 与全量解码 QA，保留失败恢复 journal；该机器检查不替代实际声音/视觉和首次跨引擎一致性证据。记录实际 render/probe/decode 调用次数、耗时与返回码；工具内部重试、缓存命中、tokens 和成本未知时保留 null，不推算成功率或节省。

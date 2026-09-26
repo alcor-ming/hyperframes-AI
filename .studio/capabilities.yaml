@@ -3,7 +3,6 @@ version: 1
 workflows:
   hyperframes_video:
     skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md
-    anti_ppt_skill: ../.agents/skills/hyperframes-anti-ppt/SKILL.md
   podcast_quote_image:
     planner_skill: ../.agents/skills/podcast-quote-image/SKILL.md
     copy_skill: ../.agents/skills/xiaohongshu-article-copy/SKILL.md
@@ -19,19 +18,7 @@ templates:
   talking_head: recipes/talking-head.md
   pure_hyperframes: recipes/pure-hyperframes.md
 
-profiles:
-  optical_fluidity:
-    profile: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/01-optical-fluidity/PROFILE.md
-    tokens: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/01-optical-fluidity/tokens.json
-  kami_editorial:
-    profile: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/02-kami-editorial/PROFILE.md
-    tokens: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/02-kami-editorial/tokens.json
-  monochrome_atelier:
-    profile: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/03-monochrome-atelier/PROFILE.md
-    tokens: ../.agents/skills/hyperframes-codex-workflow/references/hyperframes-design-profile-pack-v0.1.0/profiles/03-monochrome-atelier/tokens.json
-
 copywriting:
-  default: [dbs-content, dbs-hook, dbs-script-flow, dbs-ai-check]
   optional: [dbs-xhs-title, media-publish-check]
   podcast_quote_image:
     candidate_analysis: [dbs-spread, dbs-resonate]

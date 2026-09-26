@@ -301,23 +301,104 @@ def accept_component(store: Path, ref: str, sha256: str, note: str, *, runtime_r
     return acceptance
 
 
+def _discover_references(directory: Path) -> tuple[list[dict], list[dict]]:
+    assets, warnings = [], []
+    required = ("source_ref", "title", "purpose", "tags", "workflow_role",
+                "primary_category", "classification_status", "limits")
+    candidates = {path: "scene-source" for path in directory.rglob("manifest.json")}
+    candidates.update({path: "recipe" for path in directory.rglob("*.md") if path.name != "COMPONENT.md"})
+    for acceptance in directory.rglob("ACCEPTANCE.json"):
+        candidates.setdefault(acceptance.parent / "manifest.json", "scene-source")
+    for path, kind in sorted(candidates.items()):
+        try:
+            inside = path.resolve().is_relative_to(directory.resolve())
+        except (OSError, RuntimeError):
+            inside = False
+        if not inside:
+            warnings.append({"path": str(path), "code": "unsafe_reference_path"})
+            continue
+        try:
+            if kind == "recipe":
+                lines = path.read_text(encoding="utf-8-sig").splitlines()
+                if not lines or lines[0] != "---":
+                    continue
+                frontmatter = "\n".join(lines[1:lines.index("---", 1)] if "---" in lines[1:] else lines[1:])
+                try:
+                    metadata = json.loads(frontmatter)
+                except ValueError as error:
+                    if not any(f'"{key}"' in frontmatter or f"{key}:" in frontmatter
+                               for key in ("source_ref", "workflow_role", "entry")):
+                        continue
+                    raise ComponentError(f"Invalid JSON reference front matter: {error}") from error
+                if not isinstance(metadata, dict):
+                    continue
+                if "---" not in lines[1:] and any(key in metadata for key in ("source_ref", "workflow_role", "entry")):
+                    raise ComponentError("Reference requires an object in closed JSON front matter")
+            else:
+                metadata = _read_json(path) if path.is_file() else {}
+            if not any(key in metadata for key in ("source_ref", "workflow_role", "entry")) and not (
+                    kind == "scene-source" and (path.parent / "ACCEPTANCE.json").is_file()):
+                continue
+            fields = required + (("entry",) if kind == "scene-source" else ())
+            missing = [key for key in fields if key not in metadata or
+                       (key not in ("tags", "limits") and
+                        (not isinstance(metadata[key], str) or not metadata[key].strip()))]
+            for key in ("tags", "limits"):
+                if key == "limits" and isinstance(metadata.get(key), str):
+                    continue
+                if key in metadata and (not isinstance(metadata[key], list) or
+                        not all(isinstance(value, str) for value in metadata[key])):
+                    missing.append(key)
+            if missing:
+                warnings.append({"path": str(path), "code": "missing_discovery_fields", "fields": missing})
+            invalid_entry = False
+            if "entry" in metadata:
+                try:
+                    entry = path.parent / _safe_relative(metadata["entry"], "reference entry")
+                    if not entry.resolve().is_relative_to(path.parent.resolve()):
+                        raise ComponentError("Reference entry escapes its directory")
+                    if not entry.is_file():
+                        warnings.append({"path": str(path), "code": "missing_reference_file", "entry": metadata["entry"]})
+                        invalid_entry = True
+                except (ComponentError, OSError, RuntimeError, TypeError):
+                    warnings.append({"path": str(path), "code": "unsafe_reference_path", "entry": metadata["entry"]})
+                    invalid_entry = True
+            if missing or invalid_entry:
+                continue
+            assets.append({**{key: metadata[key] for key in fields},
+                "component_ref": metadata["source_ref"], "package_sha256": None,
+                "path": str(path), "origin": "source", "available": False, "installable": False,
+                "reference_only": True, "status": "derivation-reference", "asset_type": kind,
+                "communication_goal": metadata["purpose"], "verification": "self-described reference; not a package"})
+        except (ComponentError, OSError, UnicodeError) as error:
+            warnings.append({"path": str(path), "code": "invalid_discovery_metadata", "error": str(error)})
+    return assets, warnings
+
+
 def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
-                        recommendation=None, rebuild=False, research_root=None) -> dict:
+                        recommendation=None, rebuild=False, research_root=None, audit=False,
+                        config=None) -> dict:
     def declared_ratios(metadata):
         compatibility = metadata.get("compatibility", {})
         return compatibility.get("ratios", []) if isinstance(compatibility, dict) else []
 
     roots = [(root / ".studio/components", "legacy")]
+    if config is not None:
+        if not isinstance(config.get("asset_root"), str) or not Path(config["asset_root"]).is_absolute():
+            raise ComponentError("AssetStore requires an absolute path")
+        sources = config.get("asset_source_roots", [])
+        if not isinstance(sources, list) or not all(isinstance(p, str) and Path(p).is_absolute() for p in sources):
+            raise ComponentError("Configured asset_source_roots must be absolute directories")
     try:
-        store = asset_store_root(root)
+        store = asset_store_root(root) if config is None else Path(config["asset_root"]).resolve()
     except ComponentError:
         store = None
     if store:
         roots += [(store / "packages", "accepted"), (store / "candidates", "candidate")]
-        sources = _configured_sources(root, store)
+        sources = _configured_sources(root, store) if config is None else config.get("asset_source_roots", [])
         roots += [(Path(path), "source") for path in sources]
-    assets, errors = [], []
-    cache_path = _target(store, ".discovery-cache.json") if store else None
+    assets, errors, warnings = [], [], []
+    cache_path = _target(store, ".discovery-cache.json") if store and not audit else None
     try:
         cache = _read_json(cache_path) if cache_path and cache_path.is_file() and not rebuild else {}
     except (ComponentError, ValueError, OSError):
@@ -358,7 +439,18 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
             if origin == "source":
                 errors.append({"path": str(directory), "error": "Source is unavailable"})
             continue
+        if origin == "source":
+            references, reference_warnings = _discover_references(directory)
+            assets.extend(references)
+            warnings.extend(reference_warnings)
         for metadata_path in sorted([*directory.rglob("COMPONENT.md"), *directory.rglob("asset.json")]):
+            try:
+                inside = metadata_path.resolve().is_relative_to(directory.resolve())
+            except (OSError, RuntimeError):
+                inside = False
+            if not inside:
+                errors.append({"path": str(metadata_path), "error": "Metadata path escapes asset root"})
+                continue
             if origin == "candidate" and "review" in metadata_path.relative_to(directory).parts:
                 continue
             package = metadata_path.parent
@@ -421,9 +513,14 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
         if asset["package_sha256"]:
             hashes.setdefault(asset["component_ref"], set()).add(asset["package_sha256"])
     for asset in assets:
-        if len(hashes.get(asset["component_ref"], set())) > 1:
+        if not asset.get("reference_only") and len(hashes.get(asset["component_ref"], set())) > 1:
             asset.update(available=False, conflict="Same identity/version has different package hashes")
-        extra = selection.get(asset["component_ref"], {})
+        extra = {} if asset.get("reference_only") else selection.get(asset["component_ref"], {})
+        if asset["origin"] == "accepted":
+            missing = [key for key in ("purpose", "tags") if not extra.get(key)]
+            if missing:
+                warnings.append({"path": str(store / "selection.json"), "code": "missing_selection_fields",
+                                 "component_ref": asset["component_ref"], "fields": missing})
         asset.update({key: extra[key] for key in ("aliases", "tags", "purpose", "examples", "limitations", "replacement") if key in extra})
         state = extra.get("recommendation", "pending")
         asset["recommendation"] = state if state in {"recommended", "historical", "pending"} else "pending"
@@ -435,10 +532,12 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
             asset["ratio"] = asset["ratios"][0]
         asset["check_scope"] = asset.get("verification", "metadata-only")
         asset["group"] = asset["origin"]
-        asset["match_reasons"] = [key for key in ("component_ref", "communication_goal", "purpose", "aliases", "tags", "information_shapes")
+        asset["match_reasons"] = [key for key in ("component_ref", "title", "communication_goal", "purpose", "aliases", "tags", "information_shapes", "workflow_role", "primary_category", "limits")
                                   if query and query.casefold() in json.dumps(asset.get(key, ""), ensure_ascii=False).casefold()]
         asset["use"] = ("appearance binding with exact ref/hash" if asset["asset_type"] in {"theme", "background", "motion"}
                         else "component install with exact ref/hash") if asset["available"] else "reference only; not accepted for use"
+        if asset.get("reference_only"):
+            asset["use"] = "derivation reference only; not installable"
     if query:
         assets = [asset for asset in assets if asset["match_reasons"]]
     assets = [asset for asset in assets if (not kind or asset["asset_type"] == kind or asset.get("media_type") == kind)
@@ -452,6 +551,8 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
         except (ComponentError, OSError) as error:
             errors.append({"path": str(cache_path), "error": str(error), "unsynchronized": True})
     result = {"assets": assets, "errors": errors, "refreshed": refreshed}
+    if audit:
+        result["audit"] = {"warnings": warnings, "warning_count": len(warnings), "error_count": len(errors)}
     if research_root is not None:
         from research_catalog import query as research_query
         result["research"] = research_query(research_root, query)["documents"]
@@ -466,7 +567,7 @@ def resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:
     ref = _validate_package(path)["component_ref"] if is_path else value
     parse_component_ref(ref)
     inventory = discover_components(root)
-    matches = [item for item in inventory["assets"] if item["component_ref"] == ref]
+    matches = [item for item in inventory["assets"] if item["component_ref"] == ref and not item.get("reference_only")]
     if any(item.get("conflict") for item in matches):
         raise ComponentError(f"Conflicting identity/version across asset sources: {ref}")
     available = [item for item in matches if item["available"] and (not is_path or Path(item["path"]) == path.resolve())]

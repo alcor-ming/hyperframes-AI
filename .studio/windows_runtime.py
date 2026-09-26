@@ -216,6 +216,15 @@ def doctor(root: Path, env: dict[str, str]) -> dict:
             result["checks"][name] = {"status": "unavailable", "error": str(error)}
     result["gpu"] = "pending-native-render-verification"
     result["fonts"] = "system-fonts; validate actual Work line breaks and glyph coverage"
+    if config.get("asset_root"):
+        from asset_store import ComponentError, discover_components
+        try:
+            audit = discover_components(root, audit=True, config=config)["audit"]
+            result["asset_audit"] = {key: audit[key] for key in ("warning_count", "error_count")}
+        except (ComponentError, OSError, ValueError) as error:
+            result["asset_audit"] = {"status": "unavailable", "error": str(error)}
+    else:
+        result["asset_audit"] = {"status": "not-configured"}
     return result
 
 

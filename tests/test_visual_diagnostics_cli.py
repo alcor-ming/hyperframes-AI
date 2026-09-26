@@ -104,6 +104,18 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
         self.assertIn("suspected_copy", [item["kind"] for item in report["d1"]["findings"]])
         self.assertEqual([], report["cross_version_differences"])
 
+    def test_screen_plan_empty_ready_scene_is_missing_without_writes(self):
+        self.plan.write_text(
+            '---\n{"status":"approved","revision":1,"script_revision":1,"research_revision":1}\n---\n'
+            '| Scene | 信息 ID |\n|---|---|\n| S01 | I01 |\n'
+            '### I01\n**来源：** SCRIPT.md#P001\n```screen\n先明确用户的问题\n```\n', encoding="utf-8")
+        self.sampled['samples'][0]['texts'] = []
+        before = self.files()
+        report = json.loads(self.diagnose())
+        self.assertEqual(before, self.files())
+        self.assertEqual([('S01', 'I01', 'plan_information_missing')],
+                         [(item['scene'], item['info'], item['kind']) for item in report['d1']['findings']])
+
     def test_current_input_or_project_changes_during_probe_mark_result_stale(self):
         for path in (self.plan, self.project / "index.html"):
             with self.subTest(path=path.name):

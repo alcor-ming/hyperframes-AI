@@ -32,10 +32,28 @@ class Composition(HTMLParser):
         self.nodes.append((tag, dict(attrs)))
 
 
+def markdown_structure_lines(text):
+    """Yield structural lines and fence boundaries with offsets into the source."""
+    fence = None
+    for match in re.finditer(r'^.*$', text, re.M):
+        marker = re.match(r'^ {0,3}(`{3,}|~{3,})(.*)$', match[0])
+        if fence:
+            if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not marker[2].strip():
+                fence = None
+                yield match
+            continue
+        if marker:
+            fence = marker[1]
+            yield match
+            continue
+        yield match
+
+
 def plan_scene_rows(plan_text):
     rows = {}
     headers = []
-    for line in plan_text.splitlines():
+    for match in markdown_structure_lines(plan_text):
+        line = match[0]
         if not line.strip().startswith("|"):
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]

@@ -8,7 +8,7 @@
 - 所有作品的当前真源位于外部 WorkStore `D:\AI\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`）的 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入开发仓或 Git。
 - 不公开发布内容、不购买额度。只有用户对准确 Work 与 Variant 明确授权后，才可使用其已登录的 Windows Chrome 保存到小红书创作者平台草稿箱；不得读取 Cookie、调用未公开接口或点击发布。
 - `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
-- 默认不生成 AI 图片；Plan 列明拟生成素材的用途、数量、风格和 Asset Brief 后，方向批准一并授权这些素材，不逐张询问；未列用途或明显超量再确认，私有内容转交新外部提供方仍需明确授权。生成内容不冒充真实界面、操作结果或数据证据。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。视频不生成或烧录底部字幕；播客图文沿用自己的双语字幕合同。
+- 视频按 Plan 逐 Scene 评估图片、真实界面与库内场景源，写明取舍及一句理由，选择性生成；全片零图须在方向确认中明示。Plan 列明拟生成素材的用途、数量、风格和 Asset Brief 后，方向批准一并授权这些素材；未列用途或明显超量再确认，私有内容转交新外部提供方仍需明确授权。生成内容不冒充真实界面、操作结果或数据证据。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。视频不生成或烧录底部字幕；播客图文沿用自己的双语字幕合同。
 
 ## 开发仓与 WorkStore 路径
 

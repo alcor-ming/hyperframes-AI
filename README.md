@@ -63,7 +63,7 @@ Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话�
 
 Studio 修改同步原文案真源或暂停对应再生成，旧 MP4 / QA 不继续代表新源码。`reference` Plan 没有虚构的可播放工程，直接审阅其资产引用。
 
-对已打开的准确目标运行 `./work --work <id> --variant <id> preview diagnose <current或Draft-ID>`，只读输出上屏照搬、Plan 偏离和静止疑点，不作 QA 通过判断。登记 Draft 使用同版冻结输入，当前文稿变化另列；输入在诊断期间变化则报告过期。参数及明确引用例外见 `preview diagnose --help`。未采样状态、无法确认 ready 的媒体/子画面及图片内文字保留未验证，仍需按 [Draft QA](.studio/spec/hyperframes.md#draft-qa) 连续观看；诊断不导出视频或修改接受状态。
+对已打开的准确目标运行 `./work --work <id> --variant <id> preview diagnose <current或Draft-ID>`，只读输出上屏照搬、Plan 信息缺失/截短、其他实现偏离和静止疑点，不作 QA 通过判断。Plan 支持新 `screen` 信息块与旧表格格式。登记 Draft 使用同版冻结输入，当前文稿变化另列；输入在诊断期间变化则报告过期。参数及明确引用例外见 `preview diagnose --help`。未采样状态、无法确认 ready 的媒体/子画面及图片内文字保留未验证，仍需按 [Draft QA](.studio/spec/hyperframes.md#draft-qa) 连续观看；诊断不导出视频或修改接受状态。
 
 Draft 与 Final 生命周期：
 
@@ -118,7 +118,6 @@ RC2 视频 Work 的全局 ID 与系列号独立递增且不封顶于 999；`name
 - `AGENTS.md`：环境与权限边界。
 - `.studio/`：工作流、能力表、规范、Recipe、模板和生命周期 CLI。
 - `.agents/skills/hyperframes-codex-workflow/`：阶段路由 Skill 与可选的旧外观参考。
-- `.agents/skills/hyperframes-anti-ppt/`：指向单一表达合同的兼容检查入口。
 - `.agents/skills/podcast-quote-image/`：转录理解、原文证据整理与 3 个文章候选方案 Skill。
 - `.agents/skills/xiaohongshu-article-copy/`：标题、开篇、每图文案、DBS 检查、取帧、渲染与 QA Skill。
 - `.agents/skills/native-subtitle-quote-image/`：无法转录时经人工确认启用的 [原版 v1.0.0 Skill](https://github.com/chengyi-ai/native-subtitle-quote-image/tree/f1fa5b70448f620ea92179357eca4b0222481b9d)。
@@ -142,6 +141,14 @@ M1 扩展 module/media 最小子集，旧 Component 合同保留兼容；Templat
 ```
 
 资产配置归属当前入口根，变更只影响后续命令，长进程固定启动时输入；Review 不修改生产配置。module/media 的 `asset.json` 与 Binding 示例见 [资产 PRD](docs/PRD/hyperframes-component-motion.md#4-m1-最小资产合同)。独立样例沿用已实现的 `component install ... --project <registered-source/sample>` 与 `component verify --project <registered-source/sample>`，不伪装正式 Work，不增加另一套播放器。
+
+Windows 资产开发任务完成指：包已打包接纳，或场景源/配方已写发现字段，并且 `component list --audit` 无该项告警。配方目录先用 `component source-add <目录>` 登记为 AssetSource。场景源和配方是派生参考、不可安装，可用 `component list --kind scene-source|recipe --query <用途>` 检索；`doctor` 显示只读漏登审计摘要。现有 5 个场景源和 18 条配方由 Windows 补字段，WSL 不代改。
+
+场景源 `manifest.json` 使用以下发现字段；`entry` 为相对场景源目录的文件，`tags` 为数组，`limits` 为字符串或数组。配方 Markdown 沿用项目的 JSON front matter（`---` 内放 JSON 对象），使用相同字段但省略 `entry`：
+
+```json
+{"source_ref":"card-family-v1","title":"卡片家族","purpose":"文字信息卡片","tags":["card","text-led"],"workflow_role":"scene-source","primary_category":"card","classification_status":"approved","entry":"index.html","limits":["派生参考，不可直接安装"]}
+```
 
 ## WSL 解析器开发依赖
 

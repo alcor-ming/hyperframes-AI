@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '.studio'))
-from visual_diagnostics import normalize, static_inventory, text_diagnostics
+from visual_diagnostics import normalize, plan_information, static_inventory, text_diagnostics
 from visual_plan import VisualPlanError
 
 
@@ -86,6 +86,101 @@ class VisualTextTests(unittest.TestCase):
         states[0]['ready'] = False
         self.assertEqual([], self.diagnose(states)['findings'])
         self.assertEqual('不低于-1.5%且≤20kg', normalize('不低于 -1.5%，且 ≤ 20 kg。'))
+
+    def test_screen_blocks_keep_line_breaks_sources_and_information_boundaries(self):
+        document = '''| Scene | 信息 ID |
+| --- | --- |
+| S01 | I01 I02 I03 |
+
+### I01
+**来源：** SCRIPT.md#P001
+```screen
+给模型厂商和工具服务商
+制定统一协议
+# 字面标题
+### I99
+```
+
+### I02
+来源：RESEARCH.md#R001
+尚无上屏正文。
+````markdown
+### I97
+```screen
+示例而非当前信息正文
+```
+````
+
+### I03
+来源：RESEARCH.md#R002
+```screen
+完整结论
+| Scene | 信息 ID |
+| --- | --- |
+| S99 | I99 |
+```
+
+````markdown
+### I98
+```screen
+示例而非信息声明
+```
+````
+'''
+        information, mapping = plan_information(document)
+        self.assertEqual('给模型厂商和工具服务商\n制定统一协议\n# 字面标题\n### I99', information['I01']['实际表达'])
+        self.assertEqual({'I01', 'I03'}, set(information))
+        self.assertEqual('SCRIPT.md#P001', information['I01']['信息 ID / 来源'])
+        self.assertNotIn('I02', information)
+        self.assertEqual('完整结论\n| Scene | 信息 ID |\n| --- | --- |\n| S99 | I99 |', information['I03']['实际表达'])
+        self.assertEqual({'S01': ['I01', 'I02', 'I03']}, mapping)
+        report = self.diagnose(samples('给模型厂商和工具服务商\n制定统一协议'), plan=document)
+        self.assertIn({'scene': 'S01', 'info': 'I02', 'source': '', 'reason': 'plan_information_undefined'},
+                      report['unverified'])
+
+    def test_missing_truncated_difference_and_uncovered_in_both_plan_formats(self):
+        expected = '统一协议让模型厂商与工具服务商交换完整消息'
+        overview = '| Scene | 信息 ID |\n| --- | --- |\n| S01 | I01 |\n| S02 | I01 |\n'
+        formats = [overview + f'| 信息 ID / 来源 | 实际表达 |\n| --- | --- |\n| I01 · P001 | {expected} |\n',
+                   overview + f'### I01\n来源：SCRIPT.md#P001\n```screen\n{expected}\n```\n']
+        timeline = [{'id': 'S01', 'start': 0, 'duration': 2}, {'id': 'S02', 'start': 2, 'duration': 2}]
+        for document in formats:
+            for actual, kind in [('统一协议', 'plan_information_truncated'),
+                                 ('模型厂商与工具服务商交换消息', 'plan_information_truncated'),
+                                 ('互通', 'plan_information_truncated'),
+                                 ('另一项流程为所有业务对象提供完全不同且更详细的处理方案', 'plan_implementation_difference')]:
+                with self.subTest(document=document, actual=actual):
+                    report = self.diagnose(samples(actual), plan=document, scenes=timeline)
+                    self.assertEqual([kind], [hit['kind'] for hit in report['findings']])
+                    self.assertIn({'scene': 'S02', 'info': 'I01', 'source': plan_information(document)[0]['I01']['信息 ID / 来源'],
+                                   'reason': 'plan_information_not_observed'}, report['unverified'])
+            report = self.diagnose([{'time': 0, 'ready': True, 'texts': []}], plan=document, scenes=timeline)
+            self.assertEqual([('S01', 'plan_information_missing')],
+                             [(hit['scene'], hit['kind']) for hit in report['findings']])
+            states = samples(expected) + [{'time': 2, 'ready': True, 'texts': []}]
+            report = self.diagnose(states, plan=document, scenes=timeline)
+            self.assertEqual([('S02', 'plan_information_missing')],
+                             [(hit['scene'], hit['kind']) for hit in report['findings']])
+            states[1]['ready'] = False
+            self.assertEqual([], self.diagnose(states, plan=document, scenes=timeline)['findings'])
+
+    def test_empty_visible_text_does_not_create_a_group_or_hide_missing_information(self):
+        report = self.diagnose(samples('   '))
+        self.assertEqual(0, report['observed_groups'])
+        self.assertEqual(['plan_information_missing'], [hit['kind'] for hit in report['findings']])
+
+    def test_partly_unready_scene_keeps_unobserved_information_unverified(self):
+        document = plan('完整定义和结论', info='I01 I02') + '| I02 · P001 | 另一个完整结论 | 定义 |\n'
+        timeline = [{'id': 'S01', 'start': 0, 'duration': 2}]
+        states = samples('定义') + [{'time': 1, 'ready': False, 'texts': []}]
+        report = self.diagnose(states, plan=document, scenes=timeline)
+        self.assertEqual(['plan_information_truncated'], [hit['kind'] for hit in report['findings']])
+        self.assertIn({'scene': 'S01', 'info': 'I02', 'source': 'I02 · P001',
+                       'reason': 'plan_information_not_observed'}, report['unverified'])
+        states[1]['ready'] = True
+        report = self.diagnose(states, plan=document, scenes=timeline)
+        self.assertEqual(['plan_information_truncated', 'plan_information_missing'],
+                         [hit['kind'] for hit in report['findings']])
 
     def test_static_text_is_inventory_not_visibility_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
