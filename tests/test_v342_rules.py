@@ -51,7 +51,7 @@ class V342RulesTests(unittest.TestCase):
             "来源与实际可见文字", "准确 Studio Draft 中连续观看", "可读性和声画含义",
             "不阻止保存、打开与继续修复 Draft", "QA 通过和接受就绪声明",
             "preview diagnose <target>", "上屏文字照搬定位（D1）", "整画面静止定位（D2）",
-            "未覆盖范围标未验证", "不报告工具 PASS", "不导出或编码视频",
+            "范围内未覆盖部分标未验证", "不报告工具 PASS", "不导出或编码视频",
             "不写 Plan、接受状态或 Final", "不以 tween 数量或像素变化代替观看判断",
         ):
             with self.subTest(rule=rule):

@@ -150,8 +150,14 @@ def copy_match(text, sources):
     return best
 
 
-def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=0.8, exceptions=None, scenes=None):
+def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=0.8, exceptions=None, scenes=None,
+                     scene_ids=None):
     information, mapping = plan_information(plan)
+    outside = {sid: ids for sid, ids in mapping.items() if scene_ids is not None and sid not in scene_ids}
+    if scene_ids is not None:
+        mapping = {sid: ids for sid, ids in mapping.items() if sid in scene_ids}
+        selected = {info for ids in mapping.values() for info in ids}
+        information = {info: row for info, row in information.items() if info in selected}
     sources = source_sections(script, research, information)
     exceptions = checked_exceptions(exceptions or [], sources, mapping)
     groups, findings, unverified, excluded, source_groups = {}, [], [], [], {}
@@ -166,6 +172,8 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
         covered.update(active)
         for item in sample.get('texts', []):
             scene, info = item.get('scene', ''), item.get('info', '')
+            if scene in outside:
+                continue
             if scene not in mapping:
                 unverified.append({'reason': 'unmapped_scene', 'time': sample['time'], 'text': item['text']})
                 continue
@@ -253,6 +261,8 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             unverified.append({'info': info, 'reason': 'plan_information_not_observed', 'source': row.get('信息 ID / 来源', '')})
     unverified.append({'reason': 'external_or_unresolved_adopted_sources_require_review'})
     return {'findings': findings, 'unverified': unverified, 'confirmed_exceptions': excluded,
+            'out_of_scope': [{'scene': sid, 'information_ids': ids, 'reason': 'outside_reference_scope'}
+                             for sid, ids in outside.items()],
             'sources': list(sources), 'observed_groups': len(groups)}
 
 

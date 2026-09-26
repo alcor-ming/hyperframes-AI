@@ -55,9 +55,9 @@ npx --no-install hyperframes check
 
 表达与观看检查统一按 `visual-design.md`：对照来源与实际可见文字核验上屏提炼和必要信息完整性，并在准确 Studio Draft 中连续观看，核验持续视觉变化、可读性和声画含义。语义揭示和全画面静止分别验收。确认缺陷阻止该版本作出相应 QA 通过和接受就绪声明，但不阻止保存、打开与继续修复 Draft；沿用原有方向确认、准确 Draft 接受及无导出边界。技术检查、设计兑现与用户接受分别保留。Windows Studio 实际声音、连续播放、暂停、seek/回拖缺证据时记未验证；播放受限交工具缺口，不导出带声短段或整片 Draft。
 
-辅助诊断使用 `work --work <id> --variant <id> preview diagnose <target>`，`target` 为 `current` 或准确的登记 Draft ID；先用既有 `preview open <target>` 打开同一目标，参数见诊断命令 `--help`。登记 Draft 使用同版冻结文稿和工程，当前 Plan 差异单列；诊断中输入变化标过期。上屏文字照搬定位（D1）与整画面静止定位（D2）只输出疑点、版本/Scene/文字或时间范围及未验证项。文本相似度、timeline 空档和画面采样只定位候选问题，未覆盖范围标未验证；不报告工具 PASS，不以 tween 数量或像素变化代替观看判断。诊断只读 Work，不写 Plan、接受状态或 Final，不导出或编码视频。
+辅助诊断使用 `work --work <id> --variant <id> preview diagnose <target>`，`target` 为 `current` 或准确的 executable Plan/Draft 登记 ID（`plan-vNNN` / `draft-vNNN`）；静态 `reference` 和 `layout` 类型不支持。先用既有 `preview open <target>` 打开同一目标，参数见诊断命令 `--help`。登记 Plan/Draft 使用同版冻结的 Script、Research、Plan 和工程，当前文稿的跨版本差异单列；诊断中输入变化标过期。`scope: scene` 的 Plan 参考按登记的 `sample_scenes` 投影和采样，D1 只核对这些 Scene 映射的信息单元；其他 Scene 在 `d1.out_of_scope` 中以 `outside_reference_scope` 标明“不在本参考范围”，不报缺失或未验证。上屏文字照搬定位（D1）与整画面静止定位（D2）只输出疑点、版本/Scene/文字或时间范围及未验证项。文本相似度、timeline 空档和画面采样只定位候选问题，范围内未覆盖部分标未验证；不报告工具 PASS，不以 tween 数量或像素变化代替观看判断。诊断只读 Work，不写 Plan、接受状态或 Final，不导出或编码视频。
 
-D1 同时读取 Plan 的 `screen` 信息块与旧表格，按 Scene 反向核对实际上屏信息。就绪样本已覆盖的 Scene 中，未出现的信息报 `plan_information_missing`，真子集或明显缩短的表达报 `plan_information_truncated`，其他差异报 `plan_implementation_difference`；未覆盖 Scene 仍为未验证。截短是相对 Plan 的疑点，不是按字数判断内容质量，仍需人工核验语义和阅读效果。
+D1 同时读取 Plan 的 `screen` 信息块与旧表格，按 Scene 反向核对实际上屏信息。就绪样本已覆盖的 Scene 中，未出现的信息报 `plan_information_missing`，真子集或明显缩短的表达报 `plan_information_truncated`，其他差异报 `plan_implementation_difference`；诊断范围内未覆盖 Scene 仍为未验证。截短是相对 Plan 的疑点，不是按字数判断内容质量，仍需人工核验语义和阅读效果。
 
 ## Final QA
 

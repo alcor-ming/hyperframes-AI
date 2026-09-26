@@ -34,6 +34,18 @@ class VisualTextTests(unittest.TestCase):
     def diagnose(self, parts, **kwargs):
         return text_diagnostics(parts, '<!-- P001 -->\n' + SOURCE, '', kwargs.pop('plan', plan()), **kwargs)
 
+    def test_reference_scope_skips_outside_text_and_shared_information(self):
+        document = plan('完整定义').replace('| S01 | I01 |', '| S01 | I01 |\n| S02 | I01 I02 |')
+        document += '| I02 · P001 | 其他场景的完整结论 | 结论 |\n'
+        states = samples('完整定义')
+        states[0]['texts'].append({'scene': 'S02', 'info': 'I02', 'text': '其他', 'selector': '#outside'})
+        report = self.diagnose(states, plan=document, scene_ids=['S01'])
+        self.assertEqual([], report['findings'])
+        self.assertEqual(1, report['observed_groups'])
+        self.assertFalse(any(hit.get('info') or hit.get('scene') for hit in report['unverified']))
+        self.assertEqual([{'scene': 'S02', 'information_ids': ['I01', 'I02'],
+                           'reason': 'outside_reference_scope'}], report['out_of_scope'])
+
     def test_copy_split_cards_and_distributed_rewording(self):
         changed = SOURCE.replace('首先', '先行').replace('然后', '随后').replace('最后', '最终')
         for states in (samples(SOURCE), samples(SOURCE[:16], SOURCE[16:32], SOURCE[32:]), samples(changed)):

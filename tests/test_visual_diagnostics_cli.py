@@ -64,9 +64,8 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
                            "--hyperframes-cli", str(self.cli), "--browser", str(self.root / "unused-browser"),
                            *options, expected=expected)
 
-    def freeze(self):
-        target = self.invoke("--work", self.work_id, "--variant", "main", "preview", "register")
-        self.assertEqual("draft-v001", target)
+    def freeze(self, *options):
+        target = self.invoke("--work", self.work_id, "--variant", "main", "preview", "register", *options)
         frozen = self.variant / "previews" / target
         review = self.variant / ".runtime" / "studio-review-fixture" / target
         shutil.copytree(frozen / "source-snapshot", review)
@@ -144,6 +143,45 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
         (review / "index.html").write_text("changed review", encoding="utf-8")
         self.assertIn("Studio review copy changed", self.diagnose("draft-v001", expected=2))
         self.probe.assert_not_called()
+
+    def test_scene_plan_uses_frozen_inputs_and_excludes_other_scene_information(self):
+        self.plan.write_text(self.plan.read_text(encoding="utf-8")
+                             .replace('| S01 | I01 |', '| S01 | I01 |\n| S02 | I01 I02 |')
+                             + '| I02 · SCRIPT.md#P001 | 其他场景的完整结论 |\n', encoding="utf-8")
+        frozen, _ = self.freeze("--purpose", "plan", "--scope", "scene", "--scene", "S01")
+        for name in CLI.PREVIEW_DOCUMENTS:
+            path = CLI.input_path(self.variant, name)
+            path.write_text(path.read_text(encoding="utf-8") + '\nCurrent-only change\n', encoding="utf-8")
+        for actual, kind in (([], 'plan_information_missing'),
+                             ([{"scene": "S01", "info": "I01", "text": "用户", "selector": "#S01"}],
+                              'plan_information_truncated')):
+            with self.subTest(kind=kind):
+                self.sampled['samples'][0]['texts'] = actual
+                before = self.files()
+                report = json.loads(self.diagnose("plan-v001"))
+                self.assertEqual(before, self.files())
+                self.assertEqual("diagnostic_only", report['status'])
+                self.assertEqual(CLI.preview_input_hashes(frozen), report['input_sha256'])
+                self.assertCountEqual(CLI.PREVIEW_DOCUMENTS, report['cross_version_differences'])
+                self.assertEqual([('S01', 'I01', kind)],
+                                 [(hit['scene'], hit['info'], hit['kind']) for hit in report['d1']['findings']])
+                self.assertEqual('先明确用户的问题', report['d1']['findings'][0]['planned'])
+                self.assertFalse(any(hit.get('scene') == 'S02' or hit.get('info') == 'I02'
+                                     for hit in report['d1']['unverified']))
+                self.assertEqual([{'scene': 'S02', 'information_ids': ['I01', 'I02'],
+                                   'reason': 'outside_reference_scope'}], report['d1']['out_of_scope'])
+                self.assertEqual(['S01'], [scene['id'] for scene in self.probe.call_args.args[0]['scenes']])
+
+    def test_full_executable_plan_can_be_diagnosed(self):
+        self.freeze("--purpose", "plan")
+        report = json.loads(self.diagnose("plan-v001"))
+        self.assertEqual("diagnostic_only", report['status'])
+
+    def test_registered_reference_plan_is_rejected_even_with_executable_studio_record(self):
+        self.freeze("--purpose", "plan", "--kind", "reference")
+        self.assertIn("executable", self.diagnose("plan-v001", expected=2))
+        self.probe.assert_not_called()
+        self.context.assert_not_called()
 
     def test_url_cannot_select_a_different_project_or_port(self):
         path = CLI.studio_record(self.variant, 'current')

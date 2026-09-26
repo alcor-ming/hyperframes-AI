@@ -2146,19 +2146,22 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     if not valid_url:
         raise HarnessError('Diagnostic URL does not match the bound Studio project and port; reopen this target')
     if record['kind'] != 'executable':
-        raise HarnessError('Diagnostics require an executable Studio Draft, not a static/reference Plan')
+        raise HarnessError('Diagnostics require an executable Studio Plan or Draft, not a static/reference Plan')
     documents = variant
+    sample_scenes = None
     if target != 'current':
         documents, metadata = checked_preview(variant, target)
-        if metadata.get('purpose') != 'draft':
-            raise HarnessError('Diagnostics target must be current or a registered Draft')
+        if metadata.get('purpose') not in {'plan', 'draft'} or metadata.get('kind', 'executable') != 'executable':
+            raise HarnessError('Diagnostics target must be current or a registered executable Plan or Draft')
+        if metadata.get('scope') == 'scene':
+            sample_scenes = metadata.get('sample_scenes')
         if snapshot_digest(project) != metadata['snapshot_sha256']:
             raise HarnessError('Studio review copy changed; diagnose current or register the edited version')
     if project.is_symlink() or any(path.is_symlink() for path in project.rglob('*')):
         raise HarnessError('Diagnostic project cannot contain external/frozen symlinks')
     before = {'input_sha256': preview_input_hashes(documents), 'snapshot_sha256': snapshot_digest(project)}
     contents = {name: input_path(documents, name).read_text(encoding='utf-8-sig') for name in PREVIEW_DOCUMENTS}
-    scenes = scene_projection(project, contents['ANIMATION_PLAN.md'])
+    scenes = scene_projection(project, contents['ANIMATION_PLAN.md'], sample_scenes)
     dependencies = validate_dependencies(project)
     inventory = visual_diagnostics.static_inventory(project, dependencies)
     exceptions = []
@@ -2169,6 +2172,8 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
             raise HarnessError(f'Cannot read confirmed exceptions: {error}') from error
     # Validate confirmation input before launching a browser.
     information, mapping = visual_diagnostics.plan_information(contents['ANIMATION_PLAN.md'])
+    if sample_scenes is not None:
+        mapping = {sid: ids for sid, ids in mapping.items() if sid in sample_scenes}
     visual_diagnostics.checked_exceptions(exceptions, visual_diagnostics.source_sections(
         contents['SCRIPT.md'], contents['RESEARCH.md'], information), mapping)
     cli = runtime_path(args.hyperframes_cli, 'HYPERFRAMES_CLI')
@@ -2181,7 +2186,8 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     sampled = visual_diagnostics.probe(request, os.environ.get('HYPERFRAMES_NODE', 'node'))
     text = visual_diagnostics.text_diagnostics(sampled['samples'], contents['SCRIPT.md'], contents['RESEARCH.md'],
                                                contents['ANIMATION_PLAN.md'], minimum=args.minimum,
-                                               similarity=args.similarity, exceptions=exceptions, scenes=scenes)
+                                               similarity=args.similarity, exceptions=exceptions, scenes=scenes,
+                                               scene_ids=sample_scenes)
     observed = visual_diagnostics.normalize(''.join(
         item['text'] for sample in sampled['samples'] if sample.get('ready') for item in sample.get('texts', [])))
     static_unverified = [entry for entry in inventory if visual_diagnostics.normalize(entry['text']) not in observed]
@@ -3177,7 +3183,7 @@ def build_parser() -> argparse.ArgumentParser:
     preview_open.add_argument("--port", type=int, default=0)
     preview_open.set_defaults(handler=command_preview_open)
     diagnose = preview_commands.add_parser('diagnose', help='Read-only D1/D2 hints for an already opened Studio target; never QA PASS')
-    diagnose.add_argument('preview_id', help='current or an exact registered draft ID; requires explicit --work/--variant')
+    diagnose.add_argument('preview_id', help='current or an exact registered executable Plan/Draft ID; requires explicit --work/--variant')
     diagnose.add_argument('--hyperframes-cli')
     diagnose.add_argument('--browser', help='Chrome/Chromium executable (defaults to bundled HYPERFRAMES_BROWSER_PATH; no download)')
     diagnose.add_argument('--minimum', type=int, default=20, help='Minimum normalized text characters (default: 20)')
