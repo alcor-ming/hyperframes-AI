@@ -71,6 +71,13 @@ class AppearanceRebindTest(unittest.TestCase):
             self.update("--apply", "--upgrade-runtime")
         self.assertEqual(before, self.contents())
 
+    def test_mode_switch_defaults_captions_without_mutating_preview(self):
+        preview = self.update("--mode", "explainer")
+        self.assertTrue(preview["changes"]["selection"]["after"]["captions"])
+        self.assertEqual(self.before, self.contents())
+        preview = self.update("--mode", "explainer", "--captions", "off")
+        self.assertFalse(preview["changes"]["selection"]["after"]["captions"])
+
     def test_commit_failure_rolls_back_and_interruption_requires_recovery(self):
         plan = self.variant / "ANIMATION_PLAN.md"
         plan.write_bytes(plan.read_bytes().replace(b"\n", b"\r\n"))

@@ -59,6 +59,30 @@ class AppearanceResolverTest(unittest.TestCase):
         result = service.appearance({"theme": "single-mode", "ratio": "16:9", "mode": "animation-led"})
         self.assertEqual(result["name"], "Legacy")
 
+    def test_explainer_captions_and_legacy_lock(self):
+        lock = appearance.resolve(self.root, self.account, {"mode": "explainer"})
+        self.assertTrue(lock["selection"]["captions"])
+        appearance._check_lock(lock)
+        self.assertFalse(appearance.resolve(self.root, self.account, {"mode": "explainer", "captions": False})["selection"]["captions"])
+        for change in ({"captions": True}, {"captions": "on"}, {"mode": "explainer", "ratio": "4:3"}, {"mode": "explainer", "ratio": "source", "width": 800, "height": 600}):
+            with self.subTest(change=change), self.assertRaises(appearance.AppearanceError):
+                appearance.resolve(self.root, self.account, change)
+        old = appearance.resolve(self.root, self.account)
+        del old["selection"]["captions"]
+        old["sha256"] = appearance.digest({k: v for k, v in old.items() if k != "sha256"})
+        before = json.dumps(old)
+        appearance._check_lock(old)
+        self.assertEqual(before, json.dumps(old))
+
+    def test_module_background_only_in_explainer(self):
+        background = self.assets[1]
+        (background["path"] / "main.js").write_text("export function create() {}")
+        background["metadata"]["dependencies"] = ["main.js"]
+        (background["path"] / "entry.json").write_text(json.dumps({"renderer": "module", "entry": "main.js", "parameters": {"moods": [{"cue": "hello", "tint": "#ffffff"}]}}))
+        with self.assertRaises(appearance.AppearanceError):
+            appearance.resolve(self.root, self.account)
+        appearance._check_lock(appearance.resolve(self.root, self.account, {"mode": "explainer"}))
+
     def test_effective_declaration_rejects_semantically_invalid_parameters(self):
         self.assets[2]["metadata"]["parameters"] = {"slots.reveal.duration": {"type": "number", "default": 0.2}}
         self.assets[1]["metadata"]["parameters"] = {"parameters.color": {"type": "string", "default": "#ffffff"}}

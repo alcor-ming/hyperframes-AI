@@ -114,7 +114,8 @@ function inspectFrame(scenes, time) {
       const active = scenes.filter(item => time >= item.start && time < item.start + item.duration);
       if (active.length === 1) scene = active[0].id;
     }
-    texts.push({scene: scene || null, info, text: node.textContent.trim(), selector: selector(element), frame: location.href});
+    texts.push({scene: scene || null, info, text: node.textContent.trim(), selector: selector(element), frame: location.href,
+      layer: element.closest('[data-hf-layer]')?.getAttribute('data-hf-layer') || null});
   }
   for (const element of document.querySelectorAll('*')) {
     if (!visible(element)) continue;

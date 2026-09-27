@@ -37,6 +37,36 @@
 
 ## 音频与裁取
 
+### explainer 五层与运行时
+
+三种模式为 `text-led`、`animation-led` 与 `explainer`。默认仍为 text-led；explainer 只接受 16:9 / 9:16，`--captions on|off` 仅用于 explainer，缺省开启。`appearance_lock.selection.captions` 冻结布尔开关，卡片模式固定 false；旧 lock 缺字段按 false 读取，不写回、不重算 hash。
+
+五层是模式无关目标，v3.5 对 explainer 强制，卡片模式后续迁移：
+
+| 层 | `data-hf-layer` | 责任与宿主 |
+|---|---|---|
+| 1 | `background` | 根常驻背景，只呈现世界/情绪 |
+| 2 | `stage` | Scene 主体、角色、图片、图解及附着标签 |
+| 3 | `overlay` | Scene 强调与转场，不独立承载信息，不遮挡阅读 |
+| 4 | `text` | Scene 独立文字，主题样式与阅读保护 |
+| 5 | `captions` | 根唯一口播字幕宿主，最高层安全区；关闭时不生成 |
+
+根 composition 显式标注宿主，Scene 内第 2/3/4 层是同一 sub-composition 的三个显式容器。CSS `z-index` 决定叠放顺序，Studio 轨道号只决定显示，不代替 CSS；声音另占 audio 轨。A1 只约束第 4 层，字幕不是新增解释文字。
+
+`work --work <id> --variant <id> cues build --alignment <characters.json>` 读取已批准的 `work script text` 口播文本，与 `characters[]` 字符级对齐，生成 `project/runtime/cues.json`，冻结文本/对齐来源 SHA-256、逐字符 start/end/aligned 与不一致报告。未匹配字符标为 `aligned:false`，不插值。将本地 `cues.js` 纳入闭包，通过 `await HarnessCues.load()` 后的 `find(token, {nth, within:[start,end], edge})` 查询全局秒数；nth 从 1 起，edge 为 start/end。缺词 `cue_not_found`、未指明重复词 `cue_ambiguous`、命中未对齐字符 `cue_unaligned` 均明确失败。
+
+`captions.js` 按标点与画幅最大字数分组，以 `renderAt(t)` 直接求当前字幕与逐字高亮。未对齐字跟随下一个已对齐字的起点，不捏造时间；主题 `--appearance-*` token 控制样式，安全区位于各画幅 title-safe 底部。通过 `scene-binding.js` 的 `hf-seek` 驱动，关闭开关时不创建 captions 宿主，不能另挂播放时钟。
+
+`work --work <id> --variant <id> sound build` 必须从已批准 Plan 中恰好一个 `sound` JSON 代码块导出 `project/sound.json`；缺失、重复或未批准均失败，不回退读取可变的 sound.json。结构为 `bgm: {ref,start_cue,end_cue,gain}` 与 `sfx: [{ref,cue,event,tier,gain}]`，cue 为字符串或 `{token,nth,within,edge}`。构建器更新 index.html 中命名标记包围的音轨与 audio group，SFX `data-start = cue - hit_offset`，负起点明确失败，需调整素材/计划而非静默裁切。BGM 利用锁定 0.8.27 的 `hf-audio-group` / automation 在人声区间 ducking；只引用 appearance lock 或已安装 Binding 的本地 media 闭包，越界报 `sound_asset_outside_closure`，预览与 Final 共用输入。
+
+Background 的 `renderer:"module"` 只用于 explainer，声明包内 JS `entry` 与 `parameters`（可含 `moods:[{cue,tint}]`）。`HarnessAppearance.mountBackground(stage, appearance, cues)` 加载导出的 `create(el, params, {seed,width,height})`，返回 `renderAt(t)` / `dispose()`；背景由时间纯函数求值、按 cue 变色，经 scene-binding 接宿主，不依赖历史帧或自行 RAF。文件与参数进入冻结闭包，卡片模式仍只用 solid/transparent。
+
+`character` 是 schema 2 声明式资产，entry `character.json` 包含 `name`、`profile`、`series_style`、`reference`、`states:{id:{file,anchor:[x,y],facing:"left"|"right"}}`、`default_state`、`provenance`。状态图必须为带 alpha 通道的 PNG，锚点在图像范围内，默认状态存在，参考与状态文件都在包内。沿用 pack/validate/accept/install/verify，Binding schema 3 的 `usage.role` 为 character；同身份同版本不同内容拒绝覆盖。
+
+`await HarnessFigures.load(lock)` 从闭包加载角色，提供 `figure(el, characterRef)` / `image(el)`，支持 enter/exit/idle/bounce/squash/pan/zoom/point/state(cue,id)/talk(intervals)。动作按 `{start,duration,fn(localT)}` 登记，由 `renderAt(t)` 合成 transform 与状态图，不依赖 tween 回调。talk 使用 cue 数据中相邻已对齐字符间隔小于 0.35 秒合并的人声活动段，不做骨骼或口型。Helper 与所用资源复制进工程并随快照冻结，不读取安装根活跃源码。
+
+`work component import-sfx --from <hyperframes 包根> --source <AssetSource 根>` 读取本机 `dist/skills/media-use/audio/assets/sfx/manifest.json` 与 `CREDITS.md`，生成带 purpose/tags/license/hit_offset 的可编辑 media 源，不自动 accept。ffmpeg `silencedetect` 的 -40 dB 门限求首个非静音点；检测失败用 0 并标注 `hit_offset_estimated:false`。第三方音效不进入仓库或发行包，WSL 测试仅使用合成夹具。
+
 优先复用 timestamps 与 `section_map.json`。语义 cue 定位 Anchor、字符范围或明确 occurrence，未可靠对齐的字符不均匀插值。源片段采用半开区间，按 `timeline_in + (source_time - source_in) / rate` 映射；多 take 明确选择，被删除词无有效 cue。单 Scene 预览减去 crop 起点而不改原对齐，仅在输出 fps 时量化。
 
 文字新增按所对应短句或核心词的实际起点快速揭示，不能等整句结束或提前透露后文；非文字视觉事件再按语义选择动作开始、完成或结果可读。SFX 按内部 hit offset 反算起点，负起点明确 preroll/裁切/替换。Preview 和 render 共用 cue/mix 输入，不以 seek 回调即时播放音轨；关键画面同样可按目标时间重建。音乐分析只在需要时按 hash/参数离线缓存，不依赖实时 WebAudio；缺 BGM 或 Blender 不阻塞非依赖场景。
@@ -44,6 +74,8 @@
 在 Studio 验证源声音、工程映射、命中前后帧及连续播放；未试听明确说明，计算误差不冒充 ASR 声学精度。已有音轨不重复 ASR。
 
 ## Draft QA
+
+explainer 的 `preview diagnose` 另报告 `explainer_layer_missing`、`captions_lock_mismatch` 与 `sound_asset_outside_closure`，闭包检查覆盖音轨和 character。口播 audio 显式标注 `data-audio-role="voice"` 才豁免声音资产检查，其余 audio 必须来自 media 闭包，不能把 BGM/SFX 标为 voice 绕过校验。角色 DOM 标注 `data-character-ref="<id@vN>"` 辅助静态 diagnose 核对 character 闭包。均为静态疑点，不改变 D1/D2 的现有语义；第 5 层口播字幕不按第 4 层 A1 判为照搬。Plan/Q1 还需人工核验每场可见事件、角色与图片风格、遮挡和有声观看，技术报告不代替接受。
 
 在项目目录使用已锁定的本地 CLI；以下 `npx --no-install` 不下载或升级依赖：
 
@@ -55,7 +87,7 @@ npx --no-install hyperframes check
 
 表达与观看检查统一按 `visual-design.md`：对照来源与实际可见文字核验上屏提炼和必要信息完整性，并在准确 Studio Draft 中连续观看，核验持续视觉变化、可读性和声画含义。语义揭示和全画面静止分别验收。确认缺陷阻止该版本作出相应 QA 通过和接受就绪声明，但不阻止保存、打开与继续修复 Draft；沿用原有方向确认、准确 Draft 接受及无导出边界。技术检查、设计兑现与用户接受分别保留。Windows Studio 实际声音、连续播放、暂停、seek/回拖缺证据时记未验证；播放受限交工具缺口，不导出带声短段或整片 Draft。
 
-辅助诊断使用 `work --work <id> --variant <id> preview diagnose <target>`，`target` 为 `current` 或准确的 executable Plan/Draft 登记 ID（`plan-vNNN` / `draft-vNNN`）；静态 `reference` 和 `layout` 类型不支持。先用既有 `preview open <target>` 打开同一目标，参数见诊断命令 `--help`。登记 Plan/Draft 使用同版冻结的 Script、Research、Plan 和工程，当前文稿的跨版本差异单列；诊断中输入变化标过期。`scope: scene` 的 Plan 参考按登记的 `sample_scenes` 投影和采样，D1 只核对这些 Scene 映射的信息单元；其他 Scene 在 `d1.out_of_scope` 中以 `outside_reference_scope` 标明“不在本参考范围”，不报缺失或未验证。上屏文字照搬定位（D1）与整画面静止定位（D2）只输出疑点、版本/Scene/文字或时间范围及未验证项。文本相似度、timeline 空档和画面采样只定位候选问题，范围内未覆盖部分标未验证；不报告工具 PASS，不以 tween 数量或像素变化代替观看判断。诊断只读 Work，不写 Plan、接受状态或 Final，不导出或编码视频。
+辅助诊断使用 `work --work <id> --variant <id> preview diagnose <target>`，`target` 为 `current` 或准确的 executable Plan/Draft 登记 ID（`plan-vNNN` / `draft-vNNN`）；静态 `reference` 和 `layout` 类型不支持。先用既有 `preview open <target>` 打开同一目标，参数见诊断命令 `--help`。登记 Plan/Draft 使用同版冻结的 Script、Research、Plan 和工程，当前文稿的跨版本差异单列；诊断中输入变化标过期。`scope: scene` 的 Plan 参考按登记的 `sample_scenes` 投影和采样，D1 只核对这些 Scene 映射的信息单元；其他 Scene 在 `d1.out_of_scope` 中以 `outside_reference_scope` 标明“不在本参考范围”，不报缺失或未验证。可见文字归属信息单元依次按元素最近的 `data-info-id`、与该 Scene 唯一信息块全文或某行完全相同、为唯一信息块的子串判定；多块同时匹配或无匹配保持未归属，按元素单列待人工核验，不合并做照搬比对，该 Scene 未观测的信息标 `plan_information_mapping_unresolved` 而非缺失。`data-info-id` 可选，多信息 Scene 推荐在信息块容器上标注。上屏文字照搬定位（D1）与整画面静止定位（D2）只输出疑点、版本/Scene/文字或时间范围及未验证项。文本相似度、timeline 空档和画面采样只定位候选问题，范围内未覆盖部分标未验证；不报告工具 PASS，不以 tween 数量或像素变化代替观看判断。诊断只读 Work，不写 Plan、接受状态或 Final，不导出或编码视频。
 
 D1 同时读取 Plan 的 `screen` 信息块与旧表格，按 Scene 反向核对实际上屏信息。就绪样本已覆盖的 Scene 中，未出现的信息报 `plan_information_missing`，真子集或明显缩短的表达报 `plan_information_truncated`，其他差异报 `plan_implementation_difference`；诊断范围内未覆盖 Scene 仍为未验证。截短是相对 Plan 的疑点，不是按字数判断内容质量，仍需人工核验语义和阅读效果。
 
@@ -79,7 +111,7 @@ QA 按影响范围：已接受且未变仅检查来源/证据适用性；局部�
 
 通过现有 `component` 能力从已配置的外部资产来源检索，以资产元数据和接纳记录为准；旧 `.studio/components/**/COMPONENT.md` 仅作只读兼容来源，身份冲突不静默覆盖。按 Scene 关系、真实文字及可选说明、素材形态、画幅、可用时间和状态变化核对适配；名字相近或能换标题不算适配。模块 / 媒体读匹配的 `asset.json` 与声明的用法 / 样例，旧组件读 `COMPONENT.md`、必要 `cases/**/CASE.md` 和边界 Fixture，Case 不扩大公共合同。已适配或能通过合同内组合 / 参数解决的能力直接复用，不重做审批样段。语义简报、精确版本、Binding 与必要差异保留在 Plan 原有资产列，不新建数据库。
 
-统一发现入口是 `work component list --query <用途或别名>`，按需使用 `--kind media|audio|module|theme|background|motion|component`、`--ratio`、`--tag`、`--recommendation recommended|historical|pending`；`--research-root <明确登记根>` 加入仅供参考的研究，`--rebuild` 重建派生缓存。结果区分接纳、推荐/历史/待补、可用性和检查范围；画幅未知不等于支持，metadata-only 不等于闭包已验证，候选、源和研究不冒充可安装包。新接纳但缺选型信息的包仍可发现；同 ref 不同 hash、缺文件或异常 acceptance 不得被旧缓存遮蔽。刷新失败标未同步并重试，不自动补接受、不把派生缓存变成权威。
+统一发现入口是 `work component list --query <用途或别名>`，按需使用 `--kind media|audio|module|theme|background|motion|character|component`、`--ratio`、`--tag`、`--recommendation recommended|historical|pending`；`--research-root <明确登记根>` 加入仅供参考的研究，`--rebuild` 重建派生缓存。结果区分接纳、推荐/历史/待补、可用性和检查范围；画幅未知不等于支持，metadata-only 不等于闭包已验证，候选、源和研究不冒充可安装包。新接纳但缺选型信息的包仍可发现；同 ref 不同 hash、缺文件或异常 acceptance 不得被旧缓存遮蔽。刷新失败标未同步并重试，不自动补接受、不把派生缓存变成权威。
 
 按结果给出的实际取用方式处理：组件安装、外观绑定、原材料复制、依赖调用或仅供参考不能混同。采用时固定精确版本并重新校验 hash/闭包；查询、刷新、接纳新版、修改推荐和研究均不升级已有 Work。普通辅助图形的表达要求只见 `visual-design.md`；没有可用对象则由 Windows 在可编辑源制作，不要求 WSL 交付图形预设。
 
@@ -91,7 +123,7 @@ module/media 使用 Binding schema 3 的 `component_ref`、`scene` 和 `usage`�
 
 音频首轮仅支持原生 MP3 media entry，一个音效一个条目；集合关系留外部索引，保留原文件 ID、来源、许可及字节 hash，不伪装成 JS module。沿用 pack/validate/accept/list/install/verify，使用现有 ffprobe/ffmpeg 检查真实格式、时长、编码、采样率、声道及全量解码；缺工具、损坏或伪装文件明确失败。包已落盘但 acceptance 写入中断时不算已接纳，只能经准确 ref/hash 的显式重试恢复。音频入库不等于听感、响度、cue、混音或成片声音接受，不自动添加 BGM/SFX，不改变宿主唯一时钟。
 
-2026-09-18 候选增量：`asset.json` schema 2 在相同管道加入声明式 theme/background/motion，保留 schema 1 字节与 hash。共同字段为 `contract_version:1`、`parameters`（可覆盖点路径到 type/default/minimum/maximum/enum）和 `compatibility`（ratios）；`asset_dependencies` 保存 `{ref,kind,package_sha256}` 精确依赖，不复用本地 `dependencies` 文件字段。当前静态声明资产跨包仅依赖 media，其他组合和动态 renderer 明确拒绝，不假装已支持。Theme entry 为 tokens/fonts JSON，Motion 为 slots/reduced_motion，Background 为 solid/transparent 与自身参数；字体和许可均在文件闭包。Theme 不声明 mode，mode 不参与 Theme 身份校验。
+2026-09-18 候选增量：`asset.json` schema 2 在相同管道加入声明式 theme/background/motion，保留 schema 1 字节与 hash。共同字段为 `contract_version:1`、`parameters`（可覆盖点路径到 type/default/minimum/maximum/enum）和 `compatibility`（ratios）；`asset_dependencies` 保存 `{ref,kind,package_sha256}` 精确依赖，不复用本地 `dependencies` 文件字段。当前静态声明资产跨包仅依赖 media，其他跨包组合明确拒绝；explainer 的 module 背景和 character 增量按上文合同。Theme entry 为 tokens/fonts JSON，Motion 为 slots/reduced_motion，Background 为 solid/transparent 与自身参数；字体和许可均在文件闭包。Theme 不声明 mode，mode 不参与 Theme 身份校验。
 
 纯声明资产的 Binding schema 3 不要求 Scene，`usage.role` 为该 kind；递归依赖可标 `scope:dependency`，但必须从正常绑定根资产的精确依赖图可达，不构成绕过接纳的入口。每包沿用准确接受记录、hash 和本地 vendor 校验。JSON 预设不冒充可执行组件，也不因纯 JSON 强加动态 runtime 审片。
 
@@ -105,7 +137,7 @@ module/media 使用 Binding schema 3 的 `component_ref`、`scene` 和 `usage`�
 
 load 默认以当前页面目录为 project；显式 projectURL 必须是同源项目目录并保留末尾 `/`，例如 `await HarnessAppearance.load("./project/")`，不能传外部 URL 或把文件 URL 当目录。
 
-当前适配器仅 solid/transparent 背景。Motion v1 保留 reveal/exit、linear/none、无 stagger 的旧调用；新四槽资产采用 manifest `contract_version:2` 和 entry `capability_version:2`，不可覆盖旧 ref/hash。含 v2 Motion 的闭包生成 appearance lock schema/contract 2、resolver 1，旧宿主明确拒绝。工具安装不升级旧 Work 的冻结 runtime；明确目标的更新仍用上文 rebind/upgrade-runtime，不修改历史快照或自动接纳资产。
+卡片模式适配器仅 solid/transparent 背景，explainer 另支持上述 module 背景。Motion v1 保留 reveal/exit、linear/none、无 stagger 的旧调用；新四槽资产采用 manifest `contract_version:2` 和 entry `capability_version:2`，不可覆盖旧 ref/hash。含 v2 Motion 的闭包生成 appearance lock schema/contract 2、resolver 1，旧宿主明确拒绝。工具安装不升级旧 Work 的冻结 runtime；明确目标的更新仍用上文 rebind/upgrade-runtime，不修改历史快照或自动接纳资产。
 
 Motion v2 的 `slots` 与 `reduced_motion` 均须完整声明四槽，选择的 entry 必须等于槽名。公共字段为 duration（非负秒）、easing（none/linear/ease-in/ease-out/ease-in-out）。下例是 entry JSON；资产 manifest 仍按既有 schema 2 包装，只有声明在 parameters 的叶子可覆盖，effect/color_token 不可覆盖，0/false 保留原义：
 

@@ -3,6 +3,9 @@ version: 1
 workflows:
   hyperframes_video:
     skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md
+    modes: [text-led, animation-led, explainer]
+    default_mode: text-led
+    ip_recommended_mode: explainer
   podcast_quote_image:
     planner_skill: ../.agents/skills/podcast-quote-image/SKILL.md
     copy_skill: ../.agents/skills/xiaohongshu-article-copy/SKILL.md
@@ -11,8 +14,6 @@ workflows:
     downloader_contract: "2.0"
     youtube_transcript: youtube-transcript-api
     youtube_transcript_optional: true
-    publish_payload: xiaohongshu_creator_draft_v1
-    creator_draft: explicit_authorization
 
 templates:
   talking_head: recipes/talking-head.md
@@ -41,5 +42,5 @@ packaging:
 
 excluded_v1:
   global: [prompt_library, public_publishing]
-  hyperframes_video: [bottom_subtitles]
+  hyperframes_video_card_modes: [bottom_subtitles]
   podcast_quote_image: [bundled_asr, image_generation]

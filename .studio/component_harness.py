@@ -509,7 +509,7 @@ def _safe_relative(value: str, label: str) -> str:
 
 def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[str, Any]:
     kind = release["metadata"].get("asset_type")
-    if kind in {"theme", "background", "motion", "module", "media"} and isinstance(binding, dict) and binding.get("scope") == "dependency":
+    if kind in {"theme", "background", "motion", "module", "media", "character"} and isinstance(binding, dict) and binding.get("scope") == "dependency":
         if (binding != {"schema_version": 3, "component_ref": release["component_ref"], "scope": "dependency"}):
             raise ComponentError("Dependency Binding requires schema_version 3 and exact component_ref")
         return binding
@@ -521,14 +521,15 @@ def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[s
                 or binding["usage"]["required"] is not True):
             raise ComponentError("Appearance Binding requires exact ref and kind usage")
         return binding
-    if release["metadata"].get("asset_type") in {"module", "media"}:
+    if kind in {"module", "media", "character"}:
         if (not isinstance(binding, dict) or binding.get("schema_version") != 3
                 or binding.get("component_ref") != release["component_ref"]):
             raise ComponentError("Asset Binding requires schema_version 3 and exact component_ref")
         if not isinstance(binding.get("scene"), str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", binding["scene"]):
             raise ComponentError("Binding scene is invalid")
         usage = binding.get("usage")
-        if (not isinstance(usage, dict) or usage.get("role") not in {"subject", "evidence", "texture", "auxiliary"}
+        roles = {"character"} if kind == "character" else {"subject", "evidence", "texture", "auxiliary"}
+        if (not isinstance(usage, dict) or usage.get("role") not in roles
                 or not isinstance(usage.get("required"), bool)):
             raise ComponentError("Asset Binding usage requires role and boolean required")
         if set(usage) - {"role", "required", "fit", "focal_point"}:
@@ -1008,7 +1009,7 @@ def install_component(
             raise ComponentError("Candidate installation requires an isolated Review project")
     allow_unapproved = review_root is not None or acceptance is not None
     release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=allow_unapproved)
-    generic = release["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion"}
+    generic = release["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character"}
     if generic and acceptance is None:
         raise ComponentError("Asset installation requires exact asset acceptance")
     if acceptance is not None:
@@ -1118,7 +1119,7 @@ def validate_component_mounts(
     if all(_read_json(Path(project) / item["path"]).get("scope") == "dependency"
            for item in _lock_bindings(record)):
         return {"mounts": []}
-    if release["metadata"].get("asset_type") in {"module", "media"}:
+    if release["metadata"].get("asset_type") in {"module", "media", "character"}:
         from visual_plan import VisualPlanError, validate_dependencies
         entry = f"{record['vendor_path']}/{release['metadata']['entry']}"
         try:
@@ -1318,7 +1319,8 @@ def validate_snapshot_closure(source: Path, snapshot: Path) -> dict[str, Any]:
     return {"closed": True, "items": checked}
 
 
-def verify_installation(project: Path, *, public_root: Path | None = None, component_ref: str | None = None) -> dict[str, Any]:
+def verify_installation(project: Path, *, public_root: Path | None = None, component_ref: str | None = None,
+                        check_mounts: bool = True) -> dict[str, Any]:
     """Verify Work vendor, bindings, and lock records without repairing them."""
 
     project = Path(project)
@@ -1343,7 +1345,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
                                              allow_unapproved=review_root is not None or record.get("acceptance") is not None)
         kind = release["metadata"].get("asset_type")
         acceptance = record.get("acceptance")
-        if kind in {"module", "media", "theme", "background", "motion"}:
+        if kind in {"module", "media", "theme", "background", "motion", "character"}:
             if record.get("asset_kind") != kind or acceptance is None:
                 raise ComponentError("Asset lock requires matching kind and exact acceptance")
         if acceptance is not None:
@@ -1393,7 +1395,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         vendor_path = project / vendor_rel
         acceptance = record.get("acceptance")
         vendor = releases[ref]
-        generic = vendor["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion"}
+        generic = vendor["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character"}
         if public_root is not None and acceptance is None:
             public_path = Path(public_root) / ".studio" / "components" / component_id / f"v{version}"
             public = validate_component_release(public_path, expected_ref=ref)
@@ -1423,7 +1425,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         }
         if actual_files != expected_files:
             raise ComponentError(f"Installed file list mismatch: {ref}")
-        mounts = validate_component_mounts(project, vendor, record)
+        mounts = validate_component_mounts(project, vendor, record) if check_mounts else {"mounts": []}
         checked.append(
             {
                 "component_ref": ref,

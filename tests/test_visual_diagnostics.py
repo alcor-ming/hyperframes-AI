@@ -4,10 +4,12 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '.studio'))
 from visual_diagnostics import normalize, plan_information, static_inventory, text_diagnostics
 from visual_plan import VisualPlanError
+from visual_diagnostics import explainer_diagnostics
 
 
 SOURCE = '系统首先读取用户提供的原始材料然后提取关键事实并保留必要条件最后生成简洁清楚且便于理解的上屏文字'
@@ -30,9 +32,46 @@ def samples(*parts, info='I01'):
         for index, part in enumerate(parts)]
 
 
+class ExplainerDiagnosticsTests(unittest.TestCase):
+    def test_layers_captions_assets_and_plan_are_advisory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp)
+            (project / 'index.html').write_text('<main data-hf-layer="background"><audio src="outside.mp3"></audio>'
+                '<img data-character-ref="missing@v1"></main>', encoding='utf-8')
+            lock = {'mode': 'explainer', 'selection': {'captions': True}}
+            report = explainer_diagnostics(project, ['index.html'], lock,
+                '| 原 Scene ID | 主载体 | 事件与层 |\n|---|---|---|\n| S01 | | |\n')
+            kinds = [item['kind'] for item in report['findings']]
+            self.assertEqual(3, kinds.count('explainer_layer_missing'))
+            self.assertIn('captions_lock_mismatch', kinds)
+            self.assertIn('sound_asset_outside_closure', kinds)
+            self.assertIn('character_asset_outside_closure', kinds)
+            self.assertEqual(2, kinds.count('explainer_plan_missing'))
+            self.assertEqual([], explainer_diagnostics(project, ['index.html'], {'mode': 'text-led'})['findings'])
+            (project / 'index.html').write_text(''.join(f'<div data-hf-layer="{layer}"></div>'
+                for layer in ('background', 'stage', 'overlay', 'text'))
+                + '<audio data-audio-role="voice" src="speech.wav"></audio>'
+                + '<audio data-asset-ref="tone@v1" src="vendor/tone.mp3"></audio>'
+                + '<img data-character-ref="host@v1">', encoding='utf-8')
+            assets = {'tone@v1': {'vendor_path': 'vendor', 'metadata': {'kind': 'media', 'entry': 'tone.mp3'}},
+                      'host@v1': {'vendor_path': 'vendor', 'metadata': {'kind': 'character', 'entry': 'character.json'}}}
+            with mock.patch('explainer.installed_assets', return_value=assets):
+                self.assertEqual([], explainer_diagnostics(project, ['index.html'],
+                    {'mode': 'explainer', 'selection': {'captions': False}})['findings'])
+
+
 class VisualTextTests(unittest.TestCase):
     def diagnose(self, parts, **kwargs):
         return text_diagnostics(parts, '<!-- P001 -->\n' + SOURCE, '', kwargs.pop('plan', plan()), **kwargs)
+
+    def test_explainer_copy_hint_only_applies_to_text_layer(self):
+        states = samples(SOURCE)
+        for layer in ('captions', 'stage', 'text'):
+            states[0]['texts'][0]['layer'] = layer
+            report = self.diagnose(states, mode='explainer')
+            self.assertEqual(layer == 'text', any(hit['kind'] == 'suspected_copy' for hit in report['findings']))
+        states[0]['texts'][0]['layer'] = 'captions'
+        self.assertTrue(any(hit['kind'] == 'suspected_copy' for hit in self.diagnose(states)['findings']))
 
     def test_reference_scope_skips_outside_text_and_shared_information(self):
         document = plan('完整定义').replace('| S01 | I01 |', '| S01 | I01 |\n| S02 | I01 I02 |')
@@ -86,9 +125,11 @@ class VisualTextTests(unittest.TestCase):
     def test_plan_difference_and_missing_mapping_are_advisory(self):
         report = self.diagnose(samples(SOURCE), plan=plan('读取材料，保留条件，提炼表达'))
         self.assertIn('plan_implementation_difference', [hit['kind'] for hit in report['findings']])
-        report = self.diagnose(samples(SOURCE, info=''), plan=plan(info='I01 I02'))
+        ambiguous = plan(info='I01 I02') + f'| I02 · P001 | {SOURCE} | 定义 |\n'
+        report = self.diagnose(samples(SOURCE, info=''), plan=ambiguous)
         self.assertIn('semantic_mapping_requires_review', [entry['reason'] for entry in report['unverified']])
         self.assertIn('suspected_copy', [hit['kind'] for hit in report['findings']])
+        self.assertNotIn('plan_information_missing', [hit['kind'] for hit in report['findings']])
         report = self.diagnose(samples('Unrelated decorative label', info=''), plan=plan())
         self.assertFalse(any(hit['kind'] == 'plan_implementation_difference' for hit in report['findings']))
         self.assertIn('semantic_mapping_requires_review', [entry['reason'] for entry in report['unverified']])
@@ -193,6 +234,47 @@ class VisualTextTests(unittest.TestCase):
         report = self.diagnose(states, plan=document, scenes=timeline)
         self.assertEqual(['plan_information_truncated', 'plan_information_missing'],
                          [hit['kind'] for hit in report['findings']])
+
+    def test_multi_information_scene_resolves_exact_text_without_ids(self):
+        # Synthetic mirror of a native reference Scene: seven blocks, split nodes, shared words, no data-info-id.
+        blocks = {'I15': 'ALPHA', 'I16': '共同规则，使两端连通', 'I17': 'R = Rule\n规则', 'I18': '约定\n逐条执行',
+                  'I19': 'ALPHA 甲端\n请求方', 'I20': 'ALPHA 乙端\n提供方', 'I21': '经 ALPHA 连接'}
+        document = '| Scene | 信息 ID |\n| --- | --- |\n| S06 | ' + ' '.join(blocks) + ' |\n'
+        narration = {'I15': 'ALPHA 是这一段的主题。', 'I16': '它是一套共同规则，它使两端连通。', 'I17': 'R 就是 Rule，也就是规则。',
+                     'I18': '可以把它想成一份约定，大家逐条执行。', 'I19': '一边是 ALPHA 甲端，也就是请求方；',
+                     'I20': '另一边是 ALPHA 乙端，也就是提供方；', 'I21': '两端经 ALPHA 连接。'}
+        # Each block cites its own anchor, as the native Plan does.
+        document += ''.join(f'\n### {info}\n来源：SCRIPT.md#P0{60 + int(info[1:])}\n```screen\n{text}\n```\n'
+                            for info, text in blocks.items())
+        script = ''.join(f'<!-- P0{60 + int(info[1:])} -->\n{text}\n' for info, text in narration.items())
+        # Role lines are sampled before names to prove comparison follows Plan order, not DOM/reveal order.
+        visible = ['ALPHA', '共同规则', '使两端连通', 'R = Rule', '规则', '约定', '逐条执行',
+                   '请求方', 'ALPHA 甲端', '提供方', 'ALPHA 乙端', '经 ALPHA 连接']
+        timeline = [{'id': 'S06', 'start': 0, 'duration': 6}]
+        states = [{'time': index * 0.5, 'ready': True,
+                   'texts': [{'scene': 'S06', 'info': None, 'text': text, 'selector': f'#n{position}'}
+                             for position, text in enumerate(visible[:index + 1])]}
+                  for index in range(len(visible))]
+        report = text_diagnostics(states, script, '', document, scenes=timeline)
+        self.assertEqual([], report['findings'])
+        self.assertEqual(7, report['observed_groups'])
+        self.assertNotIn('semantic_mapping_requires_review', [entry['reason'] for entry in report['unverified']])
+
+        # Ambiguous (several blocks) or unmatched text keeps element identity: no merged copy candidate, missing becomes unverified.
+        extra = [{'scene': 'S06', 'info': None, 'text': text, 'selector': f'#x{position}'}
+                 for position, text in enumerate(['端', '装饰小字'])]
+        report = text_diagnostics([{'time': 0, 'ready': True, 'texts': extra}], script, '', document, scenes=timeline)
+        self.assertEqual([], report['findings'])
+        unresolved = [entry for entry in report['unverified'] if entry['reason'] == 'semantic_mapping_requires_review']
+        self.assertEqual([['#x0'], ['#x1']], [entry['selectors'] for entry in unresolved])
+        self.assertEqual(7, sum(entry['reason'] == 'plan_information_mapping_unresolved' for entry in report['unverified']))
+
+        # Explicit data-info-id takes precedence over text matching.
+        explicit = [{'scene': 'S06', 'info': 'I18', 'text': 'ALPHA', 'selector': '#card'}]
+        report = text_diagnostics([{'time': 0, 'ready': True, 'texts': explicit}], script, '', document, scenes=timeline)
+        self.assertIn(('I18', 'plan_implementation_difference'),
+                      [(hit.get('info'), hit['kind']) for hit in report['findings']])
+        self.assertIn(('I15', 'plan_information_missing'), [(hit.get('info'), hit['kind']) for hit in report['findings']])
 
     def test_static_text_is_inventory_not_visibility_evidence(self):
         with tempfile.TemporaryDirectory() as directory:

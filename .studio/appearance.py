@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 SLOTS = ("reveal", "emphasis", "exit", "transition")
+MODES = ("text-led", "animation-led", "explainer")
 RATIOS = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080), "4:3": (1440, 1080), "3:4": (1080, 1440), "4:5": (1080, 1350)}
 
 
@@ -53,7 +54,7 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
     from asset_store import resolve_asset_closure
     from component_harness import parse_component_ref
     overrides = {} if overrides is None else overrides
-    allowed = {"theme", "background", "motion", "mode", "ratio", "width", "height", "fps", "seed", "parameters"}
+    allowed = {"theme", "background", "motion", "mode", "ratio", "width", "height", "fps", "seed", "parameters", "captions"}
     if not isinstance(overrides, dict) or set(overrides) - allowed:
         raise AppearanceError("Unknown appearance selection override")
     selected = {**account, **overrides}
@@ -74,8 +75,12 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
             refs.append(value["asset"])
         selections["motion"][slot] = value
     mode = selected.get("mode", "text-led")
-    if mode not in ("text-led", "animation-led"):
+    if mode not in MODES:
         raise AppearanceError("Unknown narrative mode")
+    captions = selected.get("captions", mode == "explainer")
+    if type(captions) is not bool or captions and mode != "explainer":
+        raise AppearanceError("captions require explainer mode and a boolean value")
+    selections["captions"] = captions
     ratio = selected.get("ratio", "16:9")
     if not isinstance(ratio, str):
         raise AppearanceError("Ratio must be a string")
@@ -95,12 +100,14 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
                 raise AppearanceError("Dimensions do not match ratio")
     else:
         raise AppearanceError("Unknown ratio")
+    if mode == "explainer" and width * 9 != height * 16 and width * 16 != height * 9:
+        raise AppearanceError("explainer only supports 16:9 and 9:16")
     fps, seed = selected.get("fps", 30), selected.get("seed", 0)
     if type(fps) is not int or not 1 <= fps <= 240 or type(seed) is not int:
         raise AppearanceError("fps must be an integer in 1..240 and seed an integer")
     closure = resolve_asset_closure(root, refs)
     parameter_layers = [("account", account.get("overrides", {})), ("explicit", overrides.get("parameters", {}))]
-    values, sources = _resolve_parameters(closure, selections, ratio, parameter_layers)
+    values, sources = _resolve_parameters(closure, selections, ratio, parameter_layers, mode)
     frozen = []
     for item in closure:
         identity, version = parse_component_ref(item["ref"])
@@ -118,7 +125,7 @@ def _closure_version(closure):
     return 2 if any(item["kind"] == "motion" and item["metadata"].get("contract_version") == 2 for item in closure) else 1
 
 
-def _resolve_parameters(closure, selections, ratio, parameter_layers):
+def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="text-led"):
     from asset_contract import validate_declaration
     by_ref = {item["ref"]: item for item in closure}
     for _, layer in parameter_layers:
@@ -137,7 +144,7 @@ def _resolve_parameters(closure, selections, ratio, parameter_layers):
         if ratios and ratio not in ratios:
             raise AppearanceError(f"Asset {item['ref']} does not support ratio {ratio}")
         payload = json.loads((Path(item["path"]) / metadata["entry"]).read_text(encoding="utf-8-sig"))
-        if role == "background" and payload.get("renderer") not in ("solid", "transparent"):
+        if role == "background" and payload.get("renderer") not in (("solid", "transparent", "module") if mode == "explainer" else ("solid", "transparent")):
             raise AppearanceError("Dynamic background is not supported by this resolver")
         if role in SLOTS:
             if selections["motion"][role]["entry"] not in payload.get("slots", {}):
@@ -183,11 +190,13 @@ def _check_lock(lock: dict) -> None:
     required = {"schema_version", "resolver_version", "contract_version", "hash_algorithm", "account", "selection", "assets", "mode", "ratio", "width", "height", "fps", "seed", "time_unit", "overrides", "parameters", "sources", "sha256"}
     if not isinstance(lock, dict) or set(lock) != required or any(type(lock[key]) is not int for key in ("schema_version", "resolver_version", "contract_version")) or lock["resolver_version"] != 1 or lock["schema_version"] not in (1, 2) or lock["contract_version"] != lock["schema_version"] or digest({key: value for key, value in lock.items() if key != "sha256"}) != lock.get("sha256"):
         raise AppearanceError("Appearance lock schema or hash mismatch")
-    if lock["hash_algorithm"] != "sha256-canonical-json-utf8-v1" or lock["time_unit"] != "seconds" or lock["mode"] not in ("text-led", "animation-led"):
+    if lock["hash_algorithm"] != "sha256-canonical-json-utf8-v1" or lock["time_unit"] != "seconds" or lock["mode"] not in MODES:
         raise AppearanceError("Invalid frozen appearance contract")
     if not isinstance(lock["ratio"], str) or not re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*", lock["ratio"]):
         raise AppearanceError("Invalid frozen ratio")
     a, b = map(int, lock["ratio"].split(":"))
+    if lock["mode"] == "explainer" and a * 9 != b * 16 and a * 16 != b * 9:
+        raise AppearanceError("explainer only supports 16:9 and 9:16")
     if any(type(lock[key]) is not int or lock[key] <= 0 for key in ("width", "height", "fps")) or lock["fps"] > 240 or type(lock["seed"]) is not int or lock["width"] * b != lock["height"] * a:
         raise AppearanceError("Invalid frozen dimensions, fps or seed")
     account = lock["account"]
@@ -197,7 +206,7 @@ def _check_lock(lock: dict) -> None:
         raise AppearanceError("Invalid frozen asset closure")
     assets = {}
     for item in lock["assets"]:
-        if not isinstance(item, dict) or set(item) != {"ref", "kind", "package_sha256", "version", "vendor_path"} or item["kind"] not in ("theme", "background", "motion", "module", "media"):
+        if not isinstance(item, dict) or set(item) != {"ref", "kind", "package_sha256", "version", "vendor_path"} or item["kind"] not in ("theme", "background", "motion", "module", "media", "character"):
             raise AppearanceError("Invalid frozen asset")
         reference = _reference({key: item[key] for key in ("ref", "kind", "package_sha256")}, item["kind"])
         identity, version = parse_component_ref(reference["ref"])
@@ -205,8 +214,10 @@ def _check_lock(lock: dict) -> None:
             raise AppearanceError("Frozen asset identity or path mismatch")
         assets[reference["ref"]] = reference
     selection = lock["selection"]
-    if not isinstance(selection, dict) or set(selection) != {"theme", "background", "motion"} or not isinstance(selection["motion"], dict) or set(selection["motion"]) != set(SLOTS):
+    if not isinstance(selection, dict) or set(selection) not in ({"theme", "background", "motion"}, {"theme", "background", "motion", "captions"}) or not isinstance(selection["motion"], dict) or set(selection["motion"]) != set(SLOTS):
         raise AppearanceError("Invalid frozen appearance selections")
+    if type(selection.get("captions", False)) is not bool or selection.get("captions", False) and lock["mode"] != "explainer":
+        raise AppearanceError("Invalid frozen captions selection")
     references = [(selection[kind], kind) for kind in ("theme", "background")]
     for value in selection["motion"].values():
         if value is not None:
@@ -227,10 +238,14 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
     from work_requests import safe
     import shutil
     _check_lock(lock)
-    runtime = safe(project, "runtime/appearance.js")
-    source = Path(__file__).parent / "runtime/appearance.js"
-    if runtime.exists() and runtime.read_bytes() != source.read_bytes():
-        raise AppearanceError("Existing appearance runtime differs; keep the frozen project unchanged")
+    runtime_names = ["appearance.js"]
+    if lock["mode"] == "explainer":
+        runtime_names += ["cues.js", "captions.js", "figures.js", "scene-binding.js"]
+    for name in runtime_names:
+        runtime = safe(project, f"runtime/{name}")
+        source = Path(__file__).parent / "runtime" / name
+        if runtime.exists() and runtime.read_bytes() != source.read_bytes():
+            raise AppearanceError("Existing appearance runtime differs; keep the frozen project unchanged")
     config_path = safe(project, "project-config.json")
     try:
         config = json.loads(config_path.read_text(encoding="utf-8-sig")) if config_path.exists() else {}
@@ -255,12 +270,15 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
                           binding_path=f"component-bindings/appearance.{identity}.v{version}.json",
                           expected_ref=item["ref"], acceptance=item["acceptance"])
     _atomic_json(project / "appearance-lock.json", lock)
-    if not runtime.exists():
-        runtime.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, runtime)
+    for name in runtime_names:
+        runtime = safe(project, f"runtime/{name}")
+        if not runtime.exists():
+            runtime.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(Path(__file__).parent / "runtime" / name, runtime)
     verify(project, lock)
     declared = set(config.get("snapshot_dependencies", []))
     declared.update(("appearance-lock.json", "runtime/appearance.js", "COMPONENT_LOCK.json"))
+    declared.update(f"runtime/{name}" for name in runtime_names)
     for item in lock["assets"]:
         identity, version = parse_component_ref(item["ref"])
         declared.add(f"component-bindings/appearance.{identity}.v{version}.json")
@@ -269,14 +287,14 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
     return deepcopy(lock)
 
 
-def verify(project: Path, lock: dict) -> dict:
+def verify(project: Path, lock: dict, *, check_mounts: bool = True) -> dict:
     from component_harness import verify_installation, validate_component_release
     from work_requests import safe
     _check_lock(lock)
     disk = safe(project, "appearance-lock.json")
     if not disk.is_file() or digest(json.loads(disk.read_text(encoding="utf-8"))) != digest(lock):
         raise AppearanceError("Frozen appearance lock differs from Variant")
-    report = verify_installation(project)
+    report = verify_installation(project, check_mounts=check_mounts)
     installed = json.loads((project / "COMPONENT_LOCK.json").read_text(encoding="utf-8"))
     records = {item["component_ref"]: item for item in installed["components"]}
     closure = []
@@ -289,7 +307,7 @@ def verify(project: Path, lock: dict) -> dict:
         closure.append({**item, "path": path, "metadata": metadata})
     if lock["schema_version"] != _closure_version(closure):
         raise AppearanceError("Appearance lock capability differs from asset closure")
-    values, sources = _resolve_parameters(closure, lock["selection"], lock["ratio"], list(lock["overrides"].items()))
+    values, sources = _resolve_parameters(closure, lock["selection"], lock["ratio"], list(lock["overrides"].items()), lock["mode"])
     if digest(values) != digest(lock["parameters"]) or digest(sources) != digest(lock["sources"]):
         raise AppearanceError("Frozen effective parameters differ from accepted assets and overrides")
     return report

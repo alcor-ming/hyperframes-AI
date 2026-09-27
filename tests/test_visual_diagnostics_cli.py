@@ -64,6 +64,16 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
                            "--hyperframes-cli", str(self.cli), "--browser", str(self.root / "unused-browser"),
                            *options, expected=expected)
 
+    def test_explainer_findings_are_in_cli_report_without_replacing_d1_d2(self):
+        (self.project / 'appearance-lock.json').write_text(json.dumps({
+            'mode': 'explainer', 'selection': {'captions': True}}))
+        report = json.loads(self.diagnose())
+        kinds = {item['kind'] for item in report['explainer']['findings']}
+        self.assertIn('captions_lock_mismatch', kinds)
+        self.assertIn('explainer_layer_missing', kinds)
+        self.assertIn('d1', report)
+        self.assertIn('d2', report)
+
     def freeze(self, *options):
         target = self.invoke("--work", self.work_id, "--variant", "main", "preview", "register", *options)
         frozen = self.variant / "previews" / target

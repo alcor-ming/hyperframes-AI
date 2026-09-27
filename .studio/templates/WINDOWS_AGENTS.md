@@ -1,5 +1,7 @@
 # HyperFrames Windows 创作根
 
+视频有 `text-led`、`animation-led` 两种卡片模式与 `explainer` 有声动态图解。`purpose=ip` 推荐 explainer，默认仍为 text-led；explainer 的五层结构、角色与图片、声音层见 `.studio/spec/visual-design.md` 与 `.studio/spec/hyperframes.md`，卡片模式后续迁移。explainer 生图是常规素材，授权方式不变。生产 Finalize 渲染出最终 MP4。
+
 若根目录存在 `AGENTS.local.md`，同时读取其中保留的本机提供方与用户规则；本文件负责当前工具入口，不恢复旧 session 或历史安装路径。
 
 用户直接在 Codex App 打开本目录并下达任务，无需打开 CMD 或建立 Harness session。Agent 使用本根 `work.cmd` 的绝对路径；它运行同根 `runtime/` 与 `.studio/`，配置读取 `.studio/.runtime/local.json`，不调用 WSL 创作入口或历史 session 启动器。`work.cmd doctor` 查看实际身份与 Review 范围。
@@ -20,6 +22,6 @@ Draft 与 test-work 不导出视频，包括带声短段和预渲染镜头；Stu
 
 Review 候选使用自己的根配置、WorkStore、AssetStore 与必要 source-copy；禁止修改生产 Current、源、接纳记录、全局默认配置，禁止正式 Finalize、归档完成、平台草稿或发布。测试接受不转为生产接受。未明确授权不删除历史包、作品或不可替代数据；不自行 commit/tag/push。
 
-不公开上传/发布或购买额度。平台草稿须对准确 Work/Variant 明确授权，不点击发布、不读取 Cookie。视频按 Plan 逐 Scene 评估图片、真实界面与库内场景源，写明取舍及一句理由，选择性生成；全片零图须在方向确认中明示。Plan 列明生成素材用途、数量、风格和 Asset Brief 后，方向批准一并授权；未列用途或明显超量再确认，生成图不冒充真实界面、操作结果或数据证据，私有内容转交新外部提供方仍需明确授权。视频不烧录底部字幕，播客图文遵守自己的字幕合同。缺音乐或 Blender 不阻塞非依赖制作。
+不公开上传/发布或购买额度。不点击发布、不读取 Cookie；外部或付费服务必须单独取得用户授权。视频按 Plan 逐 Scene 评估图片、真实界面与库内场景源，写明取舍及一句理由，选择性生成；全片零图须在方向确认中明示。Plan 列明生成素材用途、数量、风格和 Asset Brief 后，方向批准一并授权；未列用途或明显超量再确认，生成图不冒充真实界面、操作结果或数据证据，私有内容转交新外部提供方仍需明确授权。卡片模式不烧录底部字幕、不默认新增 BGM/SFX；explainer 默认逐字高亮字幕，可按 Variant 关闭，播客图文遵守自己的字幕合同。缺音乐或 Blender 不阻塞非依赖制作。
 
 只报告实际结果、改动、缺口和必要决定；WSL/mock、Windows 原生、带声渲染和生产验收分别报告，未验证不冒充通过。

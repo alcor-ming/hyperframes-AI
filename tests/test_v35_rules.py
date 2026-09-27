@@ -1,0 +1,83 @@
+"""Guard explainer routing, retained authority, and release closure."""
+
+from importlib.machinery import SourceFileLoader
+import importlib.util
+from pathlib import Path
+import tempfile
+import unittest
+from unittest import mock
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(path):
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+class V35RulesTests(unittest.TestCase):
+    def test_mode_scope_direction_and_authority(self):
+        for path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md",
+                     ".studio/workflow.md", ".studio/spec/creative.md", "README.md"):
+            with self.subTest(path=path):
+                text = read(path)
+                for token in ("text-led", "animation-led", "explainer", "卡片模式", "五层", "BGM/SFX"):
+                    self.assertIn(token, text)
+                if path != "README.md":
+                    for token in ("Asset Brief", "一并授权", "提供方"):
+                        self.assertIn(token, text)
+                self.assertNotIn("可保存到创作者平台草稿箱", text)
+                self.assertNotIn("才可用已登录浏览器保存草稿", text)
+        for path in ("AGENTS.md", ".studio/spec/privacy.md"):
+            for boundary in ("不公开发布", "不购买额度", "不得读取 Cookie", "单独取得用户授权"):
+                self.assertIn(boundary, read(path))
+        caps = read(".studio/capabilities.yaml")
+        self.assertIn("hyperframes_video_card_modes: [bottom_subtitles]", caps)
+        self.assertNotIn("creator_draft:", caps)
+        self.assertNotIn("publish_payload:", caps)
+        self.assertIn("podcast_quote_image: [bundled_asr, image_generation]", caps)
+
+    def test_design_and_plan_preserve_explainer_contract(self):
+        design = read(".studio/spec/visual-design.md")
+        for token in ("## 有声动态图解（explainer）", "## 叙事模式（卡片模式）",
+                      "任一通道", "A1 只约束第 4 层", "第 5 层口播原文不受 A1",
+                      "镜像回收", "系列声音签名", "同帧可见事件", "ducking",
+                      "不设固定数量或间隔配额", "未试听", "Plan 检查与 Q1"):
+            self.assertIn(token, design)
+        plan = read(".studio/templates/ANIMATION_PLAN.template.md")
+        for token in ("全片方向", "系列角色与生图清单", "声音层", "主载体", "事件与层",
+                      "start_cue", "end_cue", "gain", "nth", "卡片模式不默认新增"):
+            self.assertIn(token, plan)
+        spec = read(".studio/spec/hyperframes.md")
+        for token in ("data-hf-layer", "`background`", "`stage`", "`overlay`", "`text`",
+                      "`captions`", "后续迁移", "cue_not_found", "cue_ambiguous", "cue_unaligned",
+                      "HarnessFigures.load(lock)", "renderAt(t)", "character.json",
+                      "captions_lock_mismatch", "sound_asset_outside_closure", "不重算 hash",
+                      "已批准 Plan 中恰好一个", "不回退读取可变的 sound.json",
+                      'data-audio-role="voice"', 'data-character-ref="<id@vN>"',
+                      "其余 audio 必须来自 media 闭包"):
+            self.assertIn(token, spec)
+
+    def test_release_freezes_new_runtime_without_media_or_trellis(self):
+        loader = SourceFileLoader("release_v35", str(ROOT / "release"))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        release = importlib.util.module_from_spec(spec)
+        loader.exec_module(release)
+        files = [".studio/runtime/" + name for name in
+                 ("appearance.js", "scene-binding.js", "cues.js", "captions.js", "figures.js")]
+        files += [".studio/explainer.py", ".studio/sfx_import.py"]
+        validator = read(".agents/skills/hyperframes-codex-workflow/scripts/validate_package.py")
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            with mock.patch.object(release.subprocess, "check_output", return_value=b""):
+                hashes = release.freeze_sources(stage, files, repo=ROOT)
+            self.assertEqual(set(hashes), set(files))
+            for path in files:
+                self.assertIn(path, validator)
+                self.assertEqual(release.sha256(ROOT / path), release.sha256(stage / path))
+            self.assertFalse(list(stage.rglob("*.mp3")))
+            release.assert_no_development_harness(stage)
+
+
+if __name__ == "__main__":
+    unittest.main()

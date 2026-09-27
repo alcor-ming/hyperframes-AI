@@ -20,7 +20,7 @@ class AccountService:
         identity = self.api.validate_id(identity, kind)
         if not isinstance(data.get("name"), str) or not data["name"].strip():
             raise self.api.HarnessError("Configuration requires a name")
-        allowed = {"account": {"name", "theme", "background", "motion", "overrides", "fps", "seed", "ratio", "mode", "style", "delivery"},
+        allowed = {"account": {"name", "theme", "background", "motion", "overrides", "fps", "seed", "ratio", "mode", "captions", "style", "delivery"},
                    "series": {"name", "route", "accounts", "ip"},
                    "theme": {"name", "ratios", "modes", "tokens"}}[kind]
         if set(data) - allowed:
@@ -55,8 +55,12 @@ class AccountService:
                 raise self.api.HarnessError(str(error)) from error
         if any(key in settings for key in ("background", "overrides")):
             raise self.api.HarnessError("Background and overrides require exact appearance asset references")
-        if settings.get("mode") not in (None, "text-led", "animation-led"):
+        if settings.get("mode") not in (None, "text-led", "animation-led", "explainer"):
             raise self.api.HarnessError("Unknown narrative mode")
+        if "captions" in settings and (type(settings["captions"]) is not bool or settings["captions"] and settings.get("mode") != "explainer"):
+            raise self.api.HarnessError("captions require explainer mode and a boolean value")
+        if settings.get("mode") == "explainer" and settings.get("ratio", "16:9") not in ("16:9", "9:16", "source"):
+            raise self.api.HarnessError("explainer only supports 16:9 and 9:16")
         if settings.get("ratio") not in (None, *self.api.RATIOS):
             raise self.api.HarnessError("Unknown ratio")
         if settings.get("theme"):

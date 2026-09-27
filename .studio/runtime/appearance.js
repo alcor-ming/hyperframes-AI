@@ -5,6 +5,7 @@
   "use strict";
   const preparedFonts = new WeakMap();
   const motionOwners = new WeakMap();
+  const backgroundPackages = new WeakMap();
   let fontInstance = 0;
   function resolved(payload, parameters) {
     const result = structuredClone(payload);
@@ -46,6 +47,10 @@
       if (metadata.kind !== kind || `${metadata.id}@v${metadata.version}` !== selected.ref) throw new Error("Appearance package identity mismatch");
       if (kind === "theme") themePackage = { asset, metadata };
       const value = await read(`${asset.vendor_path}/${metadata.entry}`);
+      if (kind === "background" && value.renderer === "module") {
+        if (lock.mode !== "explainer" || !metadata.dependencies?.includes(value.entry)) throw new Error("Invalid module Background closure");
+        backgroundPackages.set(result, localURL(`${asset.vendor_path}/${value.entry}`).href);
+      }
       if (kind === "motion") {
         if (![1, 2].includes(metadata.contract_version) || (metadata.contract_version === 2) !== (value.capability_version === 2)
             || metadata.contract_version === 2 && lock.schema_version !== 2) throw new Error("Unsupported Motion capability");
@@ -125,8 +130,8 @@
     const { lock } = appearance;
     const theme = resolved(appearance.theme, lock.parameters.theme);
     const background = resolved(appearance.background, lock.parameters.background);
-    const color = background.renderer === "transparent" ? "transparent" : background.parameters.color;
-    if (!["solid", "transparent"].includes(background.renderer) || !CSS.supports("color", color)) throw new Error("Unsupported static Background");
+    const color = ["transparent", "module"].includes(background.renderer) ? "transparent" : background.parameters.color;
+    if (!["solid", "transparent", "module"].includes(background.renderer) || background.renderer === "module" && lock.mode !== "explainer" || !CSS.supports("color", color)) throw new Error("Unsupported Background");
     const fonts = preparedFonts.get(appearance);
     if (fonts ? fonts.disposed || fonts.declaration !== JSON.stringify(theme.fonts || []) : (theme.fonts || []).length) {
       throw new Error("Theme fonts must be prepared by load() and not disposed or changed");
@@ -302,5 +307,22 @@
       return binding;
     } catch (error) { binding.dispose(); throw error; }
   }
-  global.HarnessAppearance = { load, apply, bindMotion };
+  async function mountBackground(stage, appearance, cues) {
+    if (!isElement(stage)) throw new TypeError("Background requires an element");
+    const payload = resolved(appearance.background, appearance.lock.parameters.background);
+    if (payload.renderer !== "module") {
+      stage.style.backgroundColor = payload.renderer === "transparent" ? "transparent" : payload.parameters.color;
+      return { renderAt() {}, dispose() {} };
+    }
+    const entry = backgroundPackages.get(appearance);
+    if (!entry || appearance.lock.mode !== "explainer") throw new Error("Unprepared module Background");
+    const params = structuredClone(payload.parameters);
+    params.moods = (params.moods || []).map(mood => ({ ...mood, cue: cues.find(mood.cue) }));
+    const module = await import(entry);
+    if (typeof module.create !== "function") throw new Error("Background module requires create");
+    const binding = await module.create(stage, params, { seed: appearance.lock.seed ?? 0, width: stage.clientWidth, height: stage.clientHeight });
+    if (typeof binding?.renderAt !== "function" || typeof binding?.dispose !== "function") throw new Error("Invalid Background module binding");
+    return binding;
+  }
+  global.HarnessAppearance = { load, apply, bindMotion, mountBackground };
 })(window);

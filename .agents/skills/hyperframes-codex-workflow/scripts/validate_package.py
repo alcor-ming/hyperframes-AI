@@ -21,6 +21,8 @@ REQUIRED_HARNESS = [
     "work",
     ".studio/spec/visual-design.md",
     ".studio/work.py",
+    ".studio/explainer.py",
+    ".studio/sfx_import.py",
     ".studio/workflow.md",
     ".studio/capabilities.yaml",
     ".studio/spec/creative.md",
@@ -29,6 +31,11 @@ REQUIRED_HARNESS = [
     ".studio/recipes/talking-head.md",
     ".studio/recipes/pure-hyperframes.md",
     ".studio/templates/RESEARCH.template.md",
+    ".studio/runtime/appearance.js",
+    ".studio/runtime/scene-binding.js",
+    ".studio/runtime/cues.js",
+    ".studio/runtime/captions.js",
+    ".studio/runtime/figures.js",
 ]
 
 

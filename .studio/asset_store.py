@@ -170,7 +170,7 @@ def _validate_package(directory: Path, expected_ref: str | None = None) -> dict:
     report = validate_component_release(directory, expected_ref=expected_ref, allow_unapproved=True)
     kinds = {"component", "effect", "module", "media"}
     if (directory / "asset.json").is_file():
-        kinds |= {"theme", "background", "motion"}
+        kinds |= {"theme", "background", "motion", "character"}
     if report["metadata"].get("asset_type", "component") not in kinds:
         raise ComponentError("Unsupported asset type for the Component contract")
     return report
@@ -468,6 +468,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                                    "ratios": declared_ratios(metadata),
                                    "communication_goal": metadata.get("description", ""),
                                    "verification": "metadata-only; source is not accepted"})
+                    assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated") if key in metadata})
                     continue
                 metadata = read(metadata_path)
                 if metadata_path.name == "asset.json":
@@ -504,6 +505,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                                "information_shapes": metadata.get("information_shapes", []),
                                "anti_use_cases": metadata.get("anti_use_cases", []), "acceptance": acceptance,
                                "verification": "metadata-only; verified on use"})
+                assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated") if key in metadata})
                 if str(metadata.get("entry", "")).lower().endswith(".mp3"):
                     assets[-1]["media_type"] = "audio"
             except (ComponentError, OSError, ValueError, KeyError, TypeError) as error:
@@ -517,7 +519,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
             asset.update(available=False, conflict="Same identity/version has different package hashes")
         extra = {} if asset.get("reference_only") else selection.get(asset["component_ref"], {})
         if asset["origin"] == "accepted":
-            missing = [key for key in ("purpose", "tags") if not extra.get(key)]
+            missing = [key for key in ("purpose", "tags") if not extra.get(key, asset.get(key))]
             if missing:
                 warnings.append({"path": str(store / "selection.json"), "code": "missing_selection_fields",
                                  "component_ref": asset["component_ref"], "fields": missing})

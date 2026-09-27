@@ -34,8 +34,8 @@ SVG_ATTRS = set("id class version x y x1 y1 x2 y2 dx dy width height viewBox pre
                 "dominant-baseline alignment-baseline textLength lengthAdjust vector-effect "
                 "shape-rendering color display visibility overflow".split())
 
-KINDS = {"module", "media", "theme", "background", "motion"}
-DECLARATIVE = {"theme", "background", "motion"}
+KINDS = {"module", "media", "theme", "background", "motion", "character"}
+DECLARATIVE = {"theme", "background", "motion", "character"}
 
 
 def asset_requires_runtime(metadata):
@@ -118,17 +118,45 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
                 if _relative(directory, font[key]) not in metadata.get("dependencies", []):
                     raise COMPONENT.ComponentError("Font files and license must be declared dependencies")
     elif kind == "background":
-        _fields(payload, {"renderer", "parameters", "readability"}, {"renderer", "parameters"}, "Background")
-        if payload["renderer"] not in ("solid", "transparent"):
+        _fields(payload, {"renderer", "parameters", "readability", "entry"}, {"renderer", "parameters"}, "Background")
+        if payload["renderer"] not in ("solid", "transparent", "module"):
             raise COMPONENT.ComponentError("Dynamic Background renderers are not supported yet")
-        _fields(payload["parameters"], {"color"} if payload["renderer"] == "solid" else set(),
-                {"color"} if payload["renderer"] == "solid" else set(), "Background parameters")
+        if payload["renderer"] == "module":
+            entry = _relative(directory, payload.get("entry"))
+            if Path(entry).suffix not in {".js", ".mjs"} or entry not in metadata.get("dependencies", []):
+                raise COMPONENT.ComponentError("Module Background entry must be a declared local JS dependency")
+            if not isinstance(payload["parameters"], dict):
+                raise COMPONENT.ComponentError("Module Background parameters must be an object")
+            moods = payload["parameters"].get("moods", [])
+            if not isinstance(moods, list):
+                raise COMPONENT.ComponentError("Background moods must be an array")
+            for mood in moods:
+                _fields(mood, {"cue", "tint"}, {"cue", "tint"}, "Background mood")
+                cue = mood["cue"]
+                if not isinstance(cue, (str, dict)) or not cue:
+                    raise COMPONENT.ComponentError("Background mood requires a cue")
+                if isinstance(cue, dict):
+                    _fields(cue, {"token", "nth", "within", "edge"}, {"token"}, "Background cue")
+                    if not isinstance(cue["token"], str) or not cue["token"] or "nth" in cue and (type(cue["nth"]) is not int or cue["nth"] < 1) or cue.get("edge", "start") not in ("start", "end"):
+                        raise COMPONENT.ComponentError("Invalid Background cue query")
+                    within = cue.get("within")
+                    if within is not None and (not isinstance(within, list) or len(within) != 2 or any(type(v) not in {int, float} or not math.isfinite(v) or v < 0 for v in within) or within[0] > within[1]):
+                        raise COMPONENT.ComponentError("Invalid Background cue window")
+                if not re.fullmatch(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", str(mood["tint"])):
+                    raise COMPONENT.ComponentError("Background mood requires a hex tint")
+        else:
+            if "entry" in payload:
+                raise COMPONENT.ComponentError("Only Module Background may have an entry")
+            _fields(payload["parameters"], {"color"} if payload["renderer"] == "solid" else set(),
+                    {"color"} if payload["renderer"] == "solid" else set(), "Background parameters")
         if payload["renderer"] == "solid" and not re.fullmatch(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", str(payload["parameters"]["color"])):
             raise COMPONENT.ComponentError("Solid Background needs a hex color")
         if "readability" in payload:
             _fields(payload["readability"], {"foreground", "regions"}, label="Background readability")
             if payload["readability"].get("foreground", "any") not in ("light", "dark", "any"):
                 raise COMPONENT.ComponentError("Invalid foreground readability condition")
+    elif kind == "character":
+        _character(payload, metadata, directory)
     elif kind == "motion" and metadata.get("contract_version", 1) == 2:
         _motion2(payload)
     else:
@@ -143,15 +171,16 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
                             raise COMPONENT.ComponentError("Unsupported Motion easing")
                     elif type(value) not in {int, float} or not math.isfinite(value) or (key in {"duration", "stagger", "scale"} and value < 0):
                         raise COMPONENT.ComponentError("Invalid Motion numeric value")
-    def inspect(value):
+    def inspect(value, path=()):
         if isinstance(value, dict):
             for key, child in value.items():
-                if key in {"mode", "modes", "layout", "cue", "script", "background", "motion"}:
+                mood_cue = kind == "background" and payload.get("renderer") == "module" and key == "cue" and path == ("parameters", "moods", "[]")
+                if key in {"mode", "modes", "layout", "cue", "script", "background", "motion"} and not mood_cue:
                     raise COMPONENT.ComponentError(f"Declaration contains forbidden field: {key}")
-                inspect(child)
+                inspect(child, (*path, key))
         elif isinstance(value, list):
             for child in value:
-                inspect(child)
+                inspect(child, (*path, "[]"))
         elif isinstance(value, str):
             if re.search(r"[<>;{}]|url\s*\(|expression\s*\(|javascript:", value, re.I):
                 raise COMPONENT.ComponentError("Executable expressions are not permitted in declarations")
@@ -160,7 +189,7 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
     inspect(payload)
     for path, spec in metadata["parameters"].items():
         prefixes = {"theme": ("tokens.",), "background": ("parameters.",),
-                    "motion": ("slots.", "reduced_motion.")}
+                    "motion": ("slots.", "reduced_motion."), "character": ()}
         if not path.startswith(prefixes[kind]):
             raise COMPONENT.ComponentError(f"Asset identity or dependency field cannot be overridden: {path}")
         if kind == "motion" and metadata.get("contract_version", 1) == 2 and (len(path.split(".")) != 3 or path.split(".")[-1] in {"effect", "color_token"}):
@@ -174,6 +203,41 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
         if check_defaults and current != spec["default"]:
             raise COMPONENT.ComponentError(f"Parameter default differs from declaration: {path}")
     return payload
+
+
+def _character(payload, metadata, directory):
+    fields = {"name", "profile", "series_style", "reference", "states", "default_state", "provenance"}
+    _fields(payload, fields, fields, "Character")
+    if metadata["entry"] != "character.json" or metadata["parameters"]:
+        raise COMPONENT.ComponentError("Character requires character.json and no parameter overrides")
+    for key in ("name", "profile", "series_style", "reference"):
+        if not isinstance(payload[key], str) or not payload[key].strip():
+            raise COMPONENT.ComponentError(f"Character requires {key}")
+    if not isinstance(payload["provenance"], (dict, str)) or not payload["provenance"]:
+        raise COMPONENT.ComponentError("Character requires provenance")
+    reference = _relative(directory, payload["reference"])
+    if reference not in metadata.get("dependencies", []) or Path(reference).suffix.lower() not in RASTER:
+        raise COMPONENT.ComponentError("Character reference must be a declared local reference image")
+    states = payload["states"]
+    if not isinstance(states, dict) or not states or not isinstance(payload["default_state"], str) or payload["default_state"] not in states:
+        raise COMPONENT.ComponentError("Character default_state must exist")
+    for name, state in states.items():
+        if not ID.fullmatch(name):
+            raise COMPONENT.ComponentError("Invalid Character state id")
+        _fields(state, {"file", "anchor", "facing"}, {"file", "anchor", "facing"}, "Character state")
+        path = directory / _relative(directory, state["file"])
+        if state["file"] not in metadata.get("dependencies", []):
+            raise COMPONENT.ComponentError("Character states must be declared dependencies")
+        with path.open("rb") as stream:
+            header = stream.read(33)
+        if path.suffix.lower() != ".png" or len(header) < 33 or header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR" or header[25] not in {4, 6}:
+            raise COMPONENT.ComponentError("Character states require PNG with alpha channel")
+        width, height = int.from_bytes(header[16:20], "big"), int.from_bytes(header[20:24], "big")
+        anchor = state["anchor"]
+        if not isinstance(anchor, list) or len(anchor) != 2 or any(type(v) not in {int, float} or not math.isfinite(v) or not 0 <= v < bound for v, bound in zip(anchor, (width, height))):
+            raise COMPONENT.ComponentError("Character anchor must be within image bounds")
+        if state["facing"] not in ("left", "right"):
+            raise COMPONENT.ComponentError("Character facing must be left or right")
 
 
 def _motion2(payload):
@@ -230,8 +294,16 @@ def _motion2(payload):
 def _schema2(directory, metadata):
     _fields(metadata, {"schema_version", "id", "version", "kind", "entry", "contract_version", "parameters",
                       "compatibility", "dependencies", "asset_dependencies", "runtime", "usage", "example", "license",
-                      "files", "description", "source_url", "rights"},
+                      "files", "description", "source_url", "rights", "purpose", "tags", "hit_offset", "hit_offset_estimated"},
             {"contract_version", "parameters", "compatibility"}, "schema 2 manifest")
+    if "hit_offset" in metadata and (type(metadata["hit_offset"]) not in {int, float} or not math.isfinite(metadata["hit_offset"]) or metadata["hit_offset"] < 0):
+        raise COMPONENT.ComponentError("hit_offset must be finite nonnegative seconds")
+    if "hit_offset_estimated" in metadata and type(metadata["hit_offset_estimated"]) is not bool:
+        raise COMPONENT.ComponentError("hit_offset_estimated must be boolean")
+    if "purpose" in metadata and (not isinstance(metadata["purpose"], str) or not metadata["purpose"].strip()):
+        raise COMPONENT.ComponentError("Asset purpose must be nonempty text")
+    if "tags" in metadata and (not isinstance(metadata["tags"], list) or any(not isinstance(tag, str) or not tag.strip() for tag in metadata["tags"])):
+        raise COMPONENT.ComponentError("Asset tags must be strings")
     if type(metadata["contract_version"]) is not int or metadata["contract_version"] not in ({1, 2} if metadata["kind"] == "motion" else {1}):
         raise COMPONENT.ComponentError("Unsupported asset contract_version")
     compatibility = metadata["compatibility"]
@@ -462,8 +534,9 @@ def _inputs(directory):
             if folded in names and names[folded] != prefix.as_posix():
                 raise COMPONENT.ComponentError(f"Asset paths have a case-insensitive collision: {name}")
             names[folded] = prefix.as_posix()
+    module_background = kind == "background" and _declaration(directory, metadata).get("renderer") == "module"
     for name in sorted(files):
-        if kind in DECLARATIVE and Path(name).suffix.lower() in {".js", ".mjs", ".cjs", ".html", ".htm", ".css", ".wasm"}:
+        if kind in DECLARATIVE and not module_background and Path(name).suffix.lower() in {".js", ".mjs", ".cjs", ".html", ".htm", ".css", ".wasm"}:
             raise COMPONENT.ComponentError("Declarative assets cannot contain executable dependencies")
         _check_image(directory / name)
         if Path(name).suffix.lower() == ".mp3":

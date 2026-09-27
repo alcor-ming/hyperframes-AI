@@ -6,9 +6,11 @@
 - WSL 是 Harness 工具的唯一开发面，负责 CLI、宿主接线、依赖装配与安装器；Windows 负责 Work 和视觉资产内容，包括 Work-local 或已登记 AssetSource 内的 Scene、GSAP 动作、Three.js、shader、SVG、模型与内容脚本。分类看职责，不以扩展名、复杂度或可复用性把视觉内容交回 WSL。
 - Windows 不修改安装包、已接纳 AssetStore 包、冻结 vendor 或 Accepted Snapshot；变化在可编辑源中完成，需要复用时生成新版本。WSL 默认只读正式 Work 与生产资产源；仅按工具缺陷请求，在冻结最小私有副本中调试，不改生产 Current、Binding、接受状态或 Final。
 - 所有作品的当前真源位于外部 WorkStore `D:\AI\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`）的 `works/`，包括文案、媒体、工程、Draft、Final 和运行状态；这些内容不得进入开发仓或 Git。
-- 不公开发布内容、不购买额度。只有用户对准确 Work 与 Variant 明确授权后，才可使用其已登录的 Windows Chrome 保存到小红书创作者平台草稿箱；不得读取 Cookie、调用未公开接口或点击发布。
+- 不公开发布内容、不购买额度；不得读取 Cookie、调用未公开接口或点击发布。外部或付费服务必须单独取得用户授权。
 - `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
-- 视频按 Plan 逐 Scene 评估图片、真实界面与库内场景源，写明取舍及一句理由，选择性生成；全片零图须在方向确认中明示。Plan 列明拟生成素材的用途、数量、风格和 Asset Brief 后，方向批准一并授权这些素材；未列用途或明显超量再确认，私有内容转交新外部提供方仍需明确授权。生成内容不冒充真实界面、操作结果或数据证据。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。视频不生成或烧录底部字幕；播客图文沿用自己的双语字幕合同。
+- 视频按 Plan 逐 Scene 评估图片、真实界面与库内场景源，写明取舍及一句理由，选择性生成；全片零图须在方向确认中明示。Plan 列明拟生成素材的用途、数量、风格和 Asset Brief 后，方向批准一并授权这些素材；未列用途或明显超量再确认，私有内容转交新外部提供方仍需明确授权。生成内容不冒充真实界面、操作结果或数据证据。`design-taste-frontend` 仅用于已批准且明确要求其介入的图片 Asset Brief。不查询图片 Prompt 库。卡片模式不生成或烧录底部字幕；explainer 默认口播字幕，播客图文沿用自己的双语字幕合同。
+
+视频支持 `text-led`、`animation-led` 两种卡片模式与 `explainer` 有声动态图解；`purpose=ip` 推荐 `explainer`，默认仍为 `text-led`。卡片模式不生成底部字幕、不默认新增 BGM/SFX；explainer 以角色 + 图片或动态图解为主载体，生图是常规素材，默认逐字高亮字幕，可按 Variant 关闭。explainer 强制五层结构，合同见 `.studio/spec/hyperframes.md`；卡片模式后续迁移。生产 Finalize 渲染出最终 MP4。
 
 ## 开发仓与 WorkStore 路径
 

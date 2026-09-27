@@ -122,6 +122,67 @@ def static_inventory(project, dependencies):
     return entries
 
 
+def explainer_diagnostics(project, dependencies, lock, plan=""):
+    """Static explainer hints supplement D1/D2; they are never visual acceptance."""
+    if not lock or lock.get("mode") != "explainer":
+        return {"findings": [], "unverified": []}
+    from visual_plan import Composition
+    from explainer import installed_assets
+    from component_harness import ComponentError
+    from urllib.parse import unquote, urlsplit
+    findings, unverified = [], []
+    nodes = {}
+    for name in dependencies:
+        if Path(name).suffix.lower() in {".html", ".htm"}:
+            nodes[name] = Composition((project / name).read_text(encoding="utf-8-sig")).nodes
+    root = nodes.get("index.html", [])
+    layers = [attrs.get("data-hf-layer") for _, attrs in root]
+    expected = {"background", "stage", "overlay", "text"}
+    for layer in sorted(expected - set(layers)):
+        findings.append({"kind": "explainer_layer_missing", "file": "index.html", "layer": layer})
+    captions = [(name, attrs) for name, entries in nodes.items() for _, attrs in entries
+                if attrs.get("data-hf-layer") == "captions"]
+    enabled = lock.get("selection", {}).get("captions", False)
+    if len(captions) != int(enabled) or captions and captions[0][0] != "index.html":
+        findings.append({"kind": "captions_lock_mismatch", "enabled": enabled, "hosts": len(captions)})
+    for name, entries in nodes.items():
+        if name == "index.html":
+            continue
+        if any("data-composition-id" in attrs for _, attrs in entries):
+            local = {attrs.get("data-hf-layer") for _, attrs in entries}
+            for layer in sorted({"stage", "overlay", "text"} - local):
+                findings.append({"kind": "explainer_layer_missing", "file": name, "layer": layer})
+    try:
+        assets = installed_assets(project)
+    except (ValueError, OSError, ComponentError) as exc:
+        assets = {}
+        unverified.append({"reason": "asset_closure_invalid", "detail": str(exc)})
+    allowed = {ref: (project / item["vendor_path"] / item["metadata"]["entry"]).resolve()
+               for ref, item in assets.items() if item["metadata"].get("kind") == "media"
+               and Path(item["metadata"]["entry"]).suffix.lower() == ".mp3"}
+    for name, entries in nodes.items():
+        for tag, attrs in entries:
+            character = attrs.get("data-character-ref")
+            if character and (character not in assets or assets[character]["metadata"].get("kind") != "character"):
+                findings.append({"kind": "character_asset_outside_closure", "file": name, "ref": character})
+            if tag != "audio" or attrs.get("data-audio-role") == "voice":
+                continue
+            ref, src = attrs.get("data-asset-ref"), attrs.get("src", "")
+            url = urlsplit(src)
+            path = (project / name).parent / unquote(url.path)
+            valid = not url.scheme and not url.netloc and path.resolve() in allowed.values()
+            if ref:
+                valid = valid and allowed.get(ref) == path.resolve()
+            if not valid:
+                findings.append({"kind": "sound_asset_outside_closure", "file": name, "ref": ref, "src": src})
+    for scene, row in (plan_scene_rows(plan) if plan else {}).items():
+        for field in ("主载体", "事件与层"):
+            if not row.get(field, "").strip():
+                findings.append({"kind": "explainer_plan_missing", "scene": scene, "field": field})
+    unverified.append({"reason": "dynamic_hosts_and_refs_require_browser_review"})
+    return {"findings": findings, "unverified": unverified}
+
+
 def checked_exceptions(entries, sources, scene_ids):
     if not isinstance(entries, list):
         raise VisualPlanError('Exceptions must be a JSON array of scene, text, source, reason objects')
@@ -150,8 +211,22 @@ def copy_match(text, sources):
     return best
 
 
+def resolve_information(text, choices, information):
+    """Assign text to one Plan block by exact string evidence only; ambiguity stays unresolved."""
+    value = normalize(text)
+    blocks = {info: information[info]['实际表达'] for info in choices if info in information}
+    if not value or not blocks:
+        return ''
+    exact = [info for info, planned in blocks.items()
+             if value == normalize(planned) or any(value == normalize(line) for line in planned.splitlines())]
+    if exact:
+        return exact[0] if len(exact) == 1 else ''
+    contained = [info for info, planned in blocks.items() if value in normalize(planned)]
+    return contained[0] if len(contained) == 1 else ''
+
+
 def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=0.8, exceptions=None, scenes=None,
-                     scene_ids=None):
+                     scene_ids=None, mode=None):
     information, mapping = plan_information(plan)
     outside = {sid: ids for sid, ids in mapping.items() if scene_ids is not None and sid not in scene_ids}
     if scene_ids is not None:
@@ -171,6 +246,8 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             continue
         covered.update(active)
         for item in sample.get('texts', []):
+            if mode == 'explainer' and item.get('layer') == 'captions':
+                continue
             scene, info = item.get('scene', ''), item.get('info', '')
             if scene in outside:
                 continue
@@ -182,14 +259,14 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             if not text:
                 continue
             choices = mapping[scene]
-            if not info and len(choices) == 1:
-                candidate = choices[0]
-                if (candidate in information and normalize(item['text'])
-                        and normalize(item['text']) in normalize(information[candidate]['实际表达'])):
-                    info = candidate
+            if not info:
+                info = resolve_information(text, choices, information)
             if info not in choices or info not in information:
                 info = ''
-            group = groups.setdefault((scene, info), {'parts': [], 'locations': [], 'times': []})
+            # Unresolved text keeps its element identity instead of merging into one Scene string.
+            key = (scene, info, '' if info else item.get('selector', '') or text)
+            group = groups.setdefault(key, {'parts': [], 'locations': [], 'times': [], 'check_copy': False})
+            group['check_copy'] |= mode != 'explainer' or item.get('layer') == 'text'
             # Deduplicate persistent and progressively revealed text across seek samples.
             if not any(normalize(text) in normalize(part) for part in group['parts']):
                 group['parts'] = [part for part in group['parts'] if normalize(part) not in normalize(text)]
@@ -198,8 +275,13 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             if location not in group['locations']:
                 group['locations'].append(location)
             group['times'].append(sample['time'])
-    for (scene, info), group in groups.items():
-        text = ''.join(group['parts'])
+    for (scene, info, _), group in groups.items():
+        parts = group['parts']
+        if info:
+            # Several DOM nodes may form one block; compare them in Plan order, not reveal order.
+            expected = normalize(information[info]['实际表达'])
+            parts = sorted(parts, key=lambda part: (expected.find(normalize(part)) % (len(expected) + 1)))
+        text = ''.join(parts)
         normalized = normalize(text)
         location = {'scene': scene, 'info': info or None, 'text': text,
                     'selectors': group['locations'], 'start': min(group['times']), 'end': max(group['times'])}
@@ -219,7 +301,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             if entry['scene'] == scene and normalize(entry['text']) in normalized:
                 normalized = normalized.replace(normalize(entry['text']), '')
                 excluded.append(entry)
-        if info and normalized:
+        if info and normalized and group['check_copy']:
             reference = information[info].get('信息 ID / 来源', '')
             anchors = re.findall(r'\b[A-Z]+\d+\b', reference)
             for anchor in anchors:
@@ -228,7 +310,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
                 key = next((key for key in sources if key.endswith('#' + anchor)), None)
                 if key:
                     source_groups.setdefault(key, []).append((location, normalized))
-        if len(normalized) < minimum:
+        if len(normalized) < minimum or not group['check_copy']:
             continue
         best = copy_match(normalized, sources)
         if best and best['coverage'] >= similarity:
@@ -246,16 +328,21 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             findings.append({'kind': 'suspected_split_copy', 'scenes': list(dict.fromkeys(item['scene'] for item, _ in ordered)),
                              'text': combined, 'members': [item for item, _ in ordered], **best,
                              'semantic_review': 'Source-anchor aggregation is a hint, not proof of one semantic unit'})
+    unresolved = {scene for scene, info, _ in groups if not info}
     for scene, identities in mapping.items():
         for info in identities:
-            if (scene, info) in groups:
+            if (scene, info, '') in groups:
                 continue
             row = information.get(info)
             entry = {'scene': scene, 'info': info, 'source': row.get('信息 ID / 来源', '') if row else ''}
-            if scene in covered and scene not in failed and row:
+            if not row:
+                unverified.append({**entry, 'reason': 'plan_information_undefined'})
+            elif scene in unresolved:
+                unverified.append({**entry, 'reason': 'plan_information_mapping_unresolved'})
+            elif scene in covered and scene not in failed:
                 findings.append({**entry, 'kind': 'plan_information_missing', 'planned': row['实际表达']})
             else:
-                unverified.append({**entry, 'reason': 'plan_information_not_observed' if row else 'plan_information_undefined'})
+                unverified.append({**entry, 'reason': 'plan_information_not_observed'})
     for info, row in information.items():
         if not any(info in identities for identities in mapping.values()):
             unverified.append({'info': info, 'reason': 'plan_information_not_observed', 'source': row.get('信息 ID / 来源', '')})
