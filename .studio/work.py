@@ -2064,12 +2064,23 @@ def _command_preview_open(root: Path, args: argparse.Namespace) -> None:
             serve(preview, None if kind == "layout" else runtime_path(args.hyperframes_dist, "HYPERFRAMES_DIST"), args.port,
                   metadata.get("review"), layout=kind == "layout")
             return
+        project = None
         if studio_record(variant, target).is_file():
             previous = bound_studio(variant, target)
             if previous.get("snapshot_sha256") != metadata["snapshot_sha256"]:
                 raise HarnessError("Studio review source differs from the registered snapshot")
             project = Path(previous["project"])
-        else:
+            if project.is_symlink() or any(path.is_symlink() for path in project.rglob("*")):
+                raise HarnessError("Studio review copy cannot contain symlinks")
+            # Layout copies have deterministic Studio metadata added after copying.
+            expected = previous.get("opened_source_sha256") if kind == "layout" else metadata["snapshot_sha256"]
+            try:
+                intact = snapshot_digest(project, kind) == expected
+            except VisualPlanError:
+                intact = False
+            if not intact:
+                project = None
+        if project is None:
             project = variant / ".runtime" / f"studio-review-{uuid.uuid4().hex}" / target
             if kind == "executable":
                 assert_snapshot_source(preview / "source-snapshot")
@@ -2085,13 +2096,20 @@ def _command_preview_open(root: Path, args: argparse.Namespace) -> None:
     validate_dependencies(project, layout=kind == "layout")
     if (project / "COMPONENT_LOCK.json").is_file():
         verify_installation(project)
+    opened_digest = snapshot_digest(project, kind)
+    if target != "current":
+        # Studio stamps IDs only when source files are writable; keep cache directories writable.
+        for path in project.rglob("*"):
+            if path.is_file():
+                path.chmod(path.stat().st_mode & ~0o222)
     cli = runtime_path(args.hyperframes_cli, "HYPERFRAMES_CLI")
     session = studio_preview.start(cli, project.resolve(), args.port, no_open=args.no_open, layout=kind == "layout")
     previous = read_json(studio_record(variant, target)) if studio_record(variant, target).is_file() else {}
     record = {"work": work.name, "variant": variant.name, "target": target, "project": str(project.resolve()),
               "kind": kind, "port": session["port"], "url": session["studioUrl"], "pid": session.get("pid"),
               "snapshot_sha256": metadata.get("snapshot_sha256"), "cli_sha256": file_sha256(cli),
-              "opened_source_sha256": previous.get("opened_source_sha256", snapshot_digest(project, kind)), "opened_at": now()}
+              "opened_source_sha256": previous.get("opened_source_sha256", opened_digest) if target == "current" else opened_digest,
+              "opened_at": now()}
     if os.environ.get("HYPERFRAMES_AI_RESOLVED_CONFIG"):
         config = json.loads(os.environ["HYPERFRAMES_AI_RESOLVED_CONFIG"])
         record["tool_root"] = str(root)

@@ -84,6 +84,7 @@ class VisualPlanTest(unittest.TestCase):
         record = WORK_CLI.bound_studio(self.variant, "draft-v002")
         review_scene = Path(record["project"]) / "compositions/S01.html"
         original = review_scene.read_bytes()
+        review_scene.chmod(0o644)
         review_scene.write_bytes(b"changed review copy")
         with self.assertRaisesRegex(WORK_CLI.HarnessError, "Studio review source changed"):
             self.run_cli("preview", "accept", "draft-v002")
@@ -244,7 +245,7 @@ class VisualPlanTest(unittest.TestCase):
         self.assertEqual(["S01", "S02"], metadata["sample_scenes"])
         self.assertNotIn("S02", (self.variant / "layout" / "index.html").read_text())
 
-    def test_studio_default_isolates_frozen_sample_and_preserves_review_edits(self):
+    def test_studio_default_isolates_layout_and_rebuilds_changed_review(self):
         self.layout_sample()
         self.register_layout()
         snapshot = self.variant / "previews" / "plan-v001" / "source-snapshot"
@@ -258,13 +259,49 @@ class VisualPlanTest(unittest.TestCase):
             self.assertNotEqual(project, snapshot)
             self.assertFalse(os.path.samefile(project / "index.html", snapshot / "index.html"))
             self.assertIn('data-composition-id="layout-sample"', (project / "index.html").read_text())
-            (project / "styles.css").write_text("h1 { color: red; }")
             self.run_cli("preview", "open", "plan-v001", "--hyperframes-cli", str(cli))
             self.assertEqual(project, start.call_args.args[1])
+            (project / "styles.css").chmod(0o644)
+            (project / "styles.css").write_text("h1 { color: red; }")
+            self.run_cli("preview", "open", "plan-v001", "--hyperframes-cli", str(cli))
+            self.assertNotEqual(project, start.call_args.args[1])
+            self.assertEqual("h1 { color: #246; }", (start.call_args.args[1] / "styles.css").read_text())
             self.assertEqual("h1 { color: red; }", (project / "styles.css").read_text())
             legacy.assert_not_called()
         self.assertEqual(before, WORK_CLI.snapshot_digest(snapshot, "layout"))
         self.run_cli("preview", "accept", "plan-v001")
+
+    def test_executable_review_is_readonly_reused_then_rebuilt_without_deleting_old_copy(self):
+        self.run_cli("preview", "register", "--purpose", "plan", "--scope", "scene", "--scene", "S01")
+        snapshot = self.variant / "previews/plan-v001/source-snapshot"
+        expected = WORK_CLI.snapshot_digest(snapshot)
+        cli = self.root / "cli.js"
+        cli.write_text("// fixture")
+
+        def start(cli, project, *args, **kwargs):
+            for file in project.rglob("*"):
+                if file.is_file():
+                    self.assertEqual(0, file.stat().st_mode & 0o222, str(file))
+            self.assertEqual(expected, WORK_CLI.snapshot_digest(project))
+            return {"port": 3101, "studioUrl": "http://127.0.0.1:3101/#project/plan-v001"}
+
+        with patch.object(WORK_CLI.studio_preview, "start", side_effect=start):
+            self.run_cli("preview", "open", "plan-v001", "--hyperframes-cli", str(cli))
+            first = WORK_CLI.bound_studio(self.variant, "plan-v001")
+            project = Path(first["project"])
+            self.run_cli("preview", "open", "plan-v001", "--hyperframes-cli", str(cli))
+            self.assertEqual(first["project"], WORK_CLI.bound_studio(self.variant, "plan-v001")["project"])
+            # Emulate an older writable review copy stamped by Studio.
+            index = project / "index.html"
+            index.chmod(0o644)
+            index.write_text(index.read_text().replace('<div ', '<div data-hf-id="old" '))
+            self.run_cli("preview", "open", "plan-v001", "--hyperframes-cli", str(cli))
+            rebuilt = WORK_CLI.bound_studio(self.variant, "plan-v001")
+            self.assertNotEqual(first["project"], rebuilt["project"])
+            self.assertEqual(expected, rebuilt["opened_source_sha256"])
+            self.assertIn('data-hf-id="old"', index.read_text())
+            self.assertEqual(expected, WORK_CLI.snapshot_digest(snapshot))
+            self.assertTrue((self.project / "index.html").stat().st_mode & 0o200)
 
     def test_old_output_cannot_be_registered_as_edited_source(self):
         self.run_cli("preview", "register", "--purpose", "plan")

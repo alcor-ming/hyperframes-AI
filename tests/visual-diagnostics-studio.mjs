@@ -1,6 +1,6 @@
 // Isolated native Studio, no WorkStore and no rendering/encoding paths.
 // HF_PACKAGE, CHROME_PATH and VIDEO_FIXTURE point to existing local dependencies.
-// VIDEO_FIXTURE: existing moving video of at least 2.5s, not generated/encoded here.
+// VIDEO_FIXTURE: existing moving video of at least 5s, not generated/encoded here.
 // Verified with https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -28,6 +28,11 @@ const checks = [];
 async function source(mode) {
   const video = mode.startsWith('video');
   const duration = video ? 2.5 : 4;
+  const mediaTiming = {
+    'video-offset': 'data-media-start="0.5" data-playback-rate="1.5" data-duration="2.5"',
+    'video-loop': 'data-media-start="4" data-playback-rate="2" data-duration="2.5" loop',
+    'video-default-duration': 'data-media-start="4" data-playback-rate="2"',
+  }[mode] || 'data-duration="2.5"';
   const actions = {
     static: '.to({}, {duration:4})',
     short: '.to("#block", {x:50,duration:.4}).to({}, {duration:3.6})',
@@ -38,7 +43,7 @@ async function source(mode) {
     video: '.to({}, {duration:2.5})',
     broken: '.to({}, {duration:4})',
     transition: '.to({}, {duration:4})',
-  }[mode];
+  }[mode] || (video ? '.to({}, {duration:2.5})' : '');
   await fs.writeFile(path.join(project, 'index.html'), `<!doctype html><html><head><meta charset="utf-8"><style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden}main{position:relative;width:960px;height:540px;background:rgb(250,250,250)}
 #block{position:absolute;width:250px;height:250px;left:100px;top:180px;background:#dd3155}#corner{position:absolute;right:0;top:0;width:5px;height:5px;background:#000}
@@ -47,13 +52,15 @@ p{position:absolute;font:26px Arial;left:100px;top:30px}video{position:absolute;
 <section data-scene-id="S01" class="clip" data-start="0" data-duration="${mode === 'transition' ? 2 : duration}"><p data-info-id="I01">Visible text <span>continues here.</span></p><p class="hidden">Hidden text must not appear.</p><div id="block"></div><div id="corner"></div>
 <svg width="300" height="100" style="position:absolute;left:400px;top:100px"><text x="0" y="40">SVG evidence</text></svg></section>
 ${mode === 'transition' ? '<section class="clip" data-scene-id="S02" data-start="2" data-duration="2"><p>Visible text <span>continues here.</span></p><div style="position:absolute;width:250px;height:250px;left:100px;top:180px;background:#dd3155"></div><svg width="300" height="100" style="position:absolute;left:400px;top:100px"><text x="0" y="40">SVG evidence</text></svg></section>' : ''}
-${video ? `<video src="${videoFile}" muted preload="auto" data-start="0" data-duration="2.5" data-track-index="1"></video>` : ''}
+${video ? `<video src="${videoFile}" muted preload="auto" data-start="0" ${mediaTiming} data-track-index="1"></video>` : ''}
 ${mode === 'broken' ? '<img src="missing.png">' : ''}
 </main>${mode === 'video-native' ? '' : `<script src="gsap.js"></script><script>window.__timelines={fixture:gsap.timeline({paused:true})${actions}};</script>`}</body></html>`);
 }
 try {
   const url = `http://127.0.0.1:${port}/#project/fixture`;
-  for (const mode of ['static', 'short', 'slow', 'periodic', 'corner', 'noise', 'transition', 'broken', ...(VIDEO_FIXTURE ? ['video', 'video-native'] : [])]) {
+  for (const mode of ['static', 'short', 'slow', 'periodic', 'corner', 'noise', 'transition', 'broken',
+    ...(VIDEO_FIXTURE ? ['video', 'video-native', 'video-offset', 'video-loop', 'video-default-duration'] : [])]
+    .filter(mode => !process.env.PROBE_MODES || process.env.PROBE_MODES.split(',').includes(mode))) {
     await source(mode);
     server = spawn(process.execPath, [cli, 'preview', project, '--port', String(port), '--foreground', '--no-open', '--no-proxy'],
       {env: {...process.env, HOME: root, XDG_CONFIG_HOME: root, XDG_CACHE_HOME: root, DO_NOT_TRACK: '1', HYPERFRAMES_NO_TELEMETRY: '1'}});
@@ -72,7 +79,8 @@ try {
       assert(report.samples.every(item => !item.ready)); assert.equal(report.motion.length, 0);
     } else {
       assert(report.samples.every(item => item.ready), `${mode}: ${JSON.stringify(report.samples.filter(item => !item.ready))}`);
-      assert.equal(report.motion.length > 0, ['static', 'short', 'corner', 'noise', 'transition'].includes(mode), `${mode}: ${JSON.stringify(report.motion)}`);
+      if (mode !== 'video-default-duration')
+        assert.equal(report.motion.length > 0, ['static', 'short', 'corner', 'noise', 'transition'].includes(mode), `${mode}: ${JSON.stringify(report.motion)}`);
       if (mode === 'static') assert.equal(report.motion[0].start, 0, 'opening static');
       if (mode === 'short') assert(report.motion.some(item => item.start >= .4 && item.end > 3), 'in-scene static after short tween');
       if (mode === 'transition') assert(report.motion.some(item => item.start <= 1 && item.end >= 3), 'static across scene boundary');

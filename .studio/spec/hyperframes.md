@@ -6,7 +6,7 @@
 - 默认 Scene 组合模块与本地媒体，旧完整组件只读兼容；M1 仅接入已交付的 module/media 子集，不假称 Template / Recipe 或通用依赖构建器已完成。Scene 只安排所需 Beat，允许计算布局和内聚空间舞台，不强制双画幅或透明根层。
 - 采用 Plan 已确定的视觉主题参数，不强制 Profile；旧字段只作兼容读取。
 - 阶段与接受边界只见 `.studio/workflow.md`；旧 reference/layout 记录保留原语义，不作为动态参考通过证明。
-- 日常制作与 QA 默认由 Work CLI 启动锁定官方 Studio；当前工程可编辑，登记版本只打开独立复制的审阅副本，不暴露冻结快照、vendor 或外部资产。历史自制页面仅限显式 `--legacy`。实际项目 URL 和定位端口来自启动结果，不硬编码或猜测；旧 MP4 / QA 与源码不一致时重新生成受影响证据。
+- 日常制作与 QA 默认由 Work CLI 启动锁定官方 Studio；当前工程可编辑，登记版本只打开文件只读的独立审阅副本，不支持 Studio 保存，不暴露冻结快照、vendor 或外部资产。重开时校验副本，变化则新建目录并保留旧副本；诊断仍严格核验内容哈希。历史自制页面仅限显式 `--legacy`。实际项目 URL 和定位端口来自启动结果，不硬编码或猜测；旧 MP4 / QA 与源码不一致时重新生成受影响证据。
 - 宿主 Timeline 必须同步、确定性构建，使用 `{ paused: true }` 并注册到 `window.__timelines`；模块将动作写入该 timeline，不另行注册全局播放权。异步媒体 / 几何准备须完成后再同步建 timeline，ready 前不首次 seek。
 - 动作不依赖 `Math.random()`、`Date.now()`、实时 delta、异步 Timeline、`repeat: -1` 或多个 Timeline 同时修改同一属性；可用固定 seed 初始化数据，再按时间直接求值。
 - composition 或 Scene 保留 `S01` 等稳定 ID；结构性偏离返回 Animation Plan。

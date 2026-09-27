@@ -30,6 +30,34 @@ export function isStill(samples, parameters) {
   return true;
 }
 
+export function frameResourcesReady(time) {
+  if (document.readyState !== 'complete' || document.fonts.status !== 'loaded') return false;
+  return [...document.images].every(image => image.complete && image.naturalWidth > 0) &&
+    [...document.querySelectorAll('video,audio')].every(media => {
+      const start = Number.parseFloat(media.dataset.start ?? '0');
+      if (!Number.isFinite(start) || !media.hasAttribute('data-start')) return false;
+      // Match the pinned runtime's media clip mapping, including trimmed loops.
+      const offset = value => value != null && value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0
+        ? Number(value) : null;
+      const mediaStart = offset(media.dataset.playbackStart) ?? offset(media.dataset.mediaStart) ?? 0;
+      const declaredRate = Number.parseFloat(media.dataset.playbackRate ?? '');
+      const baseRate = Number.isFinite(declaredRate) && declaredRate > 0 ? declaredRate : media.defaultPlaybackRate;
+      const rate = Number.isFinite(baseRate) && baseRate > 0 ? Math.max(0.1, Math.min(5, baseRate)) : 1;
+      const sourceDuration = Number.isFinite(media.duration) && media.duration > 0 ? media.duration : null;
+      let duration = Number.parseFloat(media.dataset.duration ?? '');
+      if (!Number.isFinite(duration) || duration < 0)
+        duration = sourceDuration == null ? Infinity : Math.max(0, (sourceDuration - mediaStart) / rate);
+      if (time < start || time >= start + duration) return true;
+      let expected = (time - start) * rate + mediaStart;
+      if (sourceDuration != null && expected >= sourceDuration) {
+        if (media.loop && sourceDuration > mediaStart)
+          expected = mediaStart + (expected - mediaStart) % (sourceDuration - mediaStart);
+        else if (!media.loop && media.tagName === 'VIDEO') expected = sourceDuration;
+      }
+      return !media.error && media.readyState >= 2 && !media.seeking && Math.abs(media.currentTime - expected) < 0.08;
+    });
+}
+
 function inspectFrame(scenes, time) {
   const visible = element => {
     const rect = element.getBoundingClientRect();
@@ -201,17 +229,7 @@ export async function probe(input) {
             const root = document.querySelector('[data-composition-id]');
             return window.__player?.getTime?.() ?? window.__timelines?.[root?.dataset.compositionId]?.time?.();
           });
-          await frame.waitForFunction(time => {
-            if (document.readyState !== 'complete' || document.fonts.status !== 'loaded') return false;
-            return [...document.images].every(image => image.complete && image.naturalWidth > 0) &&
-              [...document.querySelectorAll('video,audio')].every(media => {
-                const start = Number(media.dataset.start || 0), duration = Number(media.dataset.duration || Infinity);
-                if (time < start || time >= start + duration) return true;
-                if (!media.hasAttribute('data-start')) return false;
-                const expected = media.loop && Number.isFinite(media.duration) ? (time - start) % media.duration : time - start;
-                return !media.error && media.readyState >= 2 && !media.seeking && Math.abs(media.currentTime - expected) < 0.08;
-              });
-          }, remaining(), time);
+          await frame.waitForFunction(frameResourcesReady, remaining(), time);
           await frame.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           const box = await iframe.boundingBox();
           if (!box || Math.abs(box.width - size.width) > 1 || Math.abs(box.height - size.height) > 1)
