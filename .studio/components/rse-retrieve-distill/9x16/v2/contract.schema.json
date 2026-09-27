@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "component_ref": "rse-retrieve-distill/9x16@v2",
+  "ratio": "9x16",
+  "slots": {
+    "required": [],
+    "properties": {}
+  },
+  "timing": {
+    "allowed_time_scale": {
+      "minimum": 0.8,
+      "maximum": 1.2
+    }
+  },
+  "assets": {
+    "allowed_types": [],
+    "runtime_network": false
+  },
+  "layers": [
+    "stage",
+    "text"
+  ]
+}

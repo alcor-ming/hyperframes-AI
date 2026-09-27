@@ -37,6 +37,20 @@ class SuccessorTest(unittest.TestCase):
     def successor_args(self, work_id):
         return ("successor", work_id, "--source-variant", "main", "--source-version", "draft-v001", "--account", "a")
 
+    def test_retired_series_mode_blocks_new_successor_without_allocation(self):
+        source = self.accepted_archive(self.new("Original"))
+        service = cli.account_service(self.root)
+        series_path = service.directory / 'series/one.json'
+        series = cli.read_json(series_path)
+        before = cli.identity_state(self.root)
+        source_before = cli.snapshot_tree_manifest(source)
+        for mode in ('text-led', 'animation-led'):
+            cli.write_json(series_path, {**series, 'mode': mode})
+            self.assertIn('update settings to card', self.run_cli(*self.successor_args(source.name), expected=2))
+            self.assertEqual(before, cli.identity_state(self.root))
+            self.assertEqual(source_before, cli.snapshot_tree_manifest(source))
+            self.assertEqual(1, len(cli.list_work_rows(self.root)))
+
     def test_original_numbers_history_content_and_highwater(self):
         originals = [self.new(f"Episode {number}") for number in range(1, 16)]
         for number in (1, 2, 4):

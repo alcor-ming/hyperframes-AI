@@ -32,7 +32,7 @@ class V35RulesTests(unittest.TestCase):
             for boundary in ("不公开发布", "不购买额度", "不得读取 Cookie", "单独取得用户授权"):
                 self.assertIn(boundary, read(path))
         caps = read(".studio/capabilities.yaml")
-        self.assertIn("hyperframes_video_card_modes: [bottom_subtitles]", caps)
+        self.assertNotIn("bottom_subtitles", caps)
         self.assertNotIn("creator_draft:", caps)
         self.assertNotIn("publish_payload:", caps)
         self.assertIn("podcast_quote_image: [bundled_asr, image_generation]", caps)

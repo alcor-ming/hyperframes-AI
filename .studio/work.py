@@ -236,13 +236,13 @@ def command_explainer_build(root: Path, args: argparse.Namespace) -> None:
     variant, state = selected_variant(root, work, args)
     project = variant / "project"
     lock = state.get("appearance_lock")
-    if not lock or lock.get("mode") != "explainer":
-        raise HarnessError("Explainer build requires a frozen explainer appearance lock")
+    if not lock or lock.get("mode") not in appearance.MODES:
+        raise HarnessError("Build requires a frozen card or explainer appearance lock")
     with naming_lock(root), package_write_lock(work_requests.safe(variant, ".runtime/component-install.lock")):
         state = read_json(variant / "variant.yaml")
         lock = state.get("appearance_lock")
-        if not lock or lock.get("mode") != "explainer":
-            raise HarnessError("Explainer build requires a frozen explainer appearance lock")
+        if not lock or lock.get("mode") not in appearance.MODES:
+            raise HarnessError("Build requires a frozen card or explainer appearance lock")
         # Bindings and package hashes are checked before their audio mounts exist.
         appearance.verify(project, lock, check_mounts=False)
         script = input_path(variant, "SCRIPT.md")
@@ -362,8 +362,6 @@ def appearance_options(root: Path, args: argparse.Namespace) -> dict[str, Any]:
 def command_appearance_resolve(root: Path, args: argparse.Namespace) -> None:
     service = account_service(root)
     account = service.get("account", args.account) if args.account else {}
-    if args.captions is not None and (args.mode or account.get("mode")) != "explainer":
-        raise HarnessError("--captions is only available for explainer")
     print(json.dumps(appearance.resolve(root, account, appearance_options(root, args)), ensure_ascii=False, indent=2))
 
 
@@ -375,6 +373,11 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
     service = account_service(root)
     purpose = read_frontmatter(work / "WORK.md").get("purpose", "standard") if work else args.purpose or "standard"
     account = service.get("account", args.account) if args.account else {}
+    if (getattr(args, "workflow", None) == "hyperframes_video" or work and work_workflow(work) == "hyperframes_video"):
+        appearance.check_mode(account.get("mode"), "Account")
+        series = read_frontmatter(work / "WORK.md").get("series") if work else getattr(args, "series", None)
+        if series and series != "test":
+            appearance.check_mode(service.get("series", series).get("mode"), "Series")
     if (getattr(args, "workflow", None) == "hyperframes_video" or work and work_workflow(work) == "hyperframes_video") and purpose != "test" and not account:
         raise HarnessError("Production Variant requires --account; configure AccountService first")
     if purpose == "test" and account:
@@ -386,8 +389,6 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
         if any(read_json(path / "variant.yaml").get("batch") == batch for path in variant_paths(work)):
             raise HarnessError("A batch already has a Variant; revise that Variant")
     explicit = appearance_options(root, args)
-    if getattr(args, "captions", None) is not None and explicit.get("mode", account.get("mode")) != "explainer":
-        raise HarnessError("--captions is only available for explainer")
     if appearance.is_asset_appearance({**account, **explicit}):
         lock = appearance.resolve(root, account, explicit)
         return {"theme": lock["selection"]["theme"], "background": lock["selection"]["background"],
@@ -399,10 +400,11 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
     if explicit.get("mode", account.get("mode")) == "explainer":
         raise HarnessError("explainer requires exact Theme and Background assets")
     settings = {key: explicit.get(key, account.get(key)) for key in ("theme", "mode", "ratio")}
-    settings["mode"] = settings["mode"] or "text-led"
+    settings["mode"] = settings["mode"] or "card"
+    if settings["ratio"] == "source":
+        raise HarnessError("source ratio requires exact Theme and Background assets and concrete 16:9 or 9:16 dimensions")
     if settings["theme"]:
         settings["ratio"] = settings["ratio"] or "16:9"
-        settings["mode"] = settings["mode"] or "text-led"
     theme = service.appearance(settings)
     return {**settings, "account": args.account, "account_revision": account.get("revision"),
             "account_settings": account, "theme_revision": theme.get("revision"), "theme_settings": theme,
@@ -889,7 +891,9 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
     if args.purpose == "test" and args.series not in (None, "test"):
         raise HarnessError("test Work must use the test series")
     if series and series != "test":
-        account_service(root).get("series", series)
+        series_settings = account_service(root).get("series", series)
+        if args.workflow == "hyperframes_video":
+            appearance.check_mode(series_settings.get("mode"), "Series")
     if args.workflow == "hyperframes_video" and args.purpose != "test" and not series:
         raise HarnessError("Production video Work requires --series")
     if args.workflow == "podcast_quote_image" and any(
@@ -2311,13 +2315,10 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
         after = {'input_sha256': preview_input_hashes(documents), 'snapshot_sha256': snapshot_digest(project)}
     except (HarnessError, VisualPlanError, OSError):
         after = None
-    motion = [{**entry, 'scenes': [scene['id'] for scene in scenes
-                                 if scene['start'] <= entry['end'] and scene['start'] + scene['duration'] >= entry['start']]}
-              for entry in sampled.get('motion', [])]
     report = {'status': 'diagnostic_only' if before == after else 'stale',
               'work': work.name, 'variant': variant.name, 'target': target, **before,
               'parameters': {**parameters, 'minimum': args.minimum, 'similarity': args.similarity},
-              'd1': text, 'd2': motion, 'timeline': sampled.get('timeline', []),
+              'd1': text, 'timeline': sampled.get('timeline', []),
               'samples': sampled['samples'], 'viewport': sampled.get('viewport'),
               'unverified': sampled.get('unverified', []) + [
                   {'reason': 'finite_sampling_not_full_playback_or_quality_acceptance'},
@@ -3023,8 +3024,8 @@ def add_variant_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--appearance-file", help="JSON selections, motion slots and parameter overrides")
     parser.add_argument("--fps", type=int)
     parser.add_argument("--seed", type=int)
-    parser.add_argument("--mode", choices=("text-led", "animation-led", "explainer"))
-    parser.add_argument("--captions", choices=("on", "off"), help="Explainer captions frozen in the appearance lock")
+    parser.add_argument("--mode", choices=appearance.MODES)
+    parser.add_argument("--captions", choices=("on", "off"), help="Variant captions frozen in the appearance lock")
     parser.add_argument("--template", choices=sorted(TEMPLATES))
     parser.add_argument("--profile", choices=sorted(PROFILES))
     parser.add_argument("--ratio", choices=sorted(RATIOS))
@@ -3312,16 +3313,13 @@ def build_parser() -> argparse.ArgumentParser:
     preview_open.add_argument("--hyperframes-dist", help="Player bundles for --legacy only")
     preview_open.add_argument("--port", type=int, default=0)
     preview_open.set_defaults(handler=command_preview_open)
-    diagnose = preview_commands.add_parser('diagnose', help='Read-only D1/D2 hints for an already opened Studio target; never QA PASS')
+    diagnose = preview_commands.add_parser('diagnose', help='Read-only D1 hints for an already opened Studio target; never QA PASS')
     diagnose.add_argument('preview_id', help='current or an exact registered executable Plan/Draft ID; requires explicit --work/--variant')
     diagnose.add_argument('--hyperframes-cli')
     diagnose.add_argument('--browser', help='Chrome/Chromium executable (defaults to bundled HYPERFRAMES_BROWSER_PATH; no download)')
     diagnose.add_argument('--minimum', type=int, default=20, help='Minimum normalized text characters (default: 20)')
     diagnose.add_argument('--similarity', type=float, default=0.8, help='Ordered/continuous copy coverage hint threshold (default: 0.8)')
     diagnose.add_argument('--step', type=float, default=0.5, help='Base sample interval in seconds (default: 0.5)')
-    diagnose.add_argument('--window', type=float, default=2.0, help='Suspected stillness window, not allowed pause duration (default: 2.0 seconds)')
-    diagnose.add_argument('--pixel-delta', type=int, default=12, help='Per-channel noise threshold (default: 12/255)')
-    diagnose.add_argument('--area-ratio', type=float, default=0.005, help='Minimum changed area fraction (default: 0.005); not semantic quality')
     diagnose.add_argument('--width', type=int, default=960, help='Target sampled display width (160..4096; default: 960)')
     diagnose.add_argument('--timeout-ms', type=int, default=5000, help='Readiness timeout per sample (100..30000; default: 5000)')
     diagnose.add_argument('--exceptions', help='JSON array of confirmed {scene,text,source,reason}; source e.g. SCRIPT.md#P001; no automatic exemptions')

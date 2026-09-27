@@ -123,12 +123,12 @@ def static_inventory(project, dependencies):
 
 
 def explainer_diagnostics(project, dependencies, lock, plan=""):
-    """Static explainer hints supplement D1/D2; they are never visual acceptance."""
-    if not lock or lock.get("mode") != "explainer":
+    """Static five-layer hints supplement D1; they are never visual acceptance."""
+    if not lock or lock.get("mode") not in ("card", "explainer"):
         return {"findings": [], "unverified": []}
     from visual_plan import Composition
     from explainer import installed_assets
-    from component_harness import ComponentError
+    from component_harness import ComponentError, validate_component_release
     from urllib.parse import unquote, urlsplit
     findings, unverified = [], []
     nodes = {}
@@ -148,6 +148,12 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
     for name, entries in nodes.items():
         if name == "index.html":
             continue
+        if any("data-card-layers" in attrs for _, attrs in entries):
+            try:
+                validate_component_release((project / name).parent, allow_unapproved=True)
+            except (ComponentError, ValueError, OSError) as exc:
+                findings.append({"kind": "card_component_invalid", "file": name, "detail": str(exc)})
+            continue
         if any("data-composition-id" in attrs for _, attrs in entries):
             local = {attrs.get("data-hf-layer") for _, attrs in entries}
             for layer in sorted({"stage", "overlay", "text"} - local):
@@ -163,7 +169,8 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
     for name, entries in nodes.items():
         for tag, attrs in entries:
             character = attrs.get("data-character-ref")
-            if character and (character not in assets or assets[character]["metadata"].get("kind") != "character"):
+            if character and (
+                    character not in assets or assets[character]["metadata"].get("kind") != "character"):
                 findings.append({"kind": "character_asset_outside_closure", "file": name, "ref": character})
             if tag != "audio" or attrs.get("data-audio-role") == "voice":
                 continue
@@ -175,7 +182,7 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
                 valid = valid and allowed.get(ref) == path.resolve()
             if not valid:
                 findings.append({"kind": "sound_asset_outside_closure", "file": name, "ref": ref, "src": src})
-    for scene, row in (plan_scene_rows(plan) if plan else {}).items():
+    for scene, row in (plan_scene_rows(plan) if plan and lock["mode"] == "explainer" else {}).items():
         for field in ("主载体", "事件与层"):
             if not row.get(field, "").strip():
                 findings.append({"kind": "explainer_plan_missing", "scene": scene, "field": field})
@@ -246,7 +253,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             continue
         covered.update(active)
         for item in sample.get('texts', []):
-            if mode == 'explainer' and item.get('layer') == 'captions':
+            if mode in ('card', 'explainer') and item.get('layer') != 'text':
                 continue
             scene, info = item.get('scene', ''), item.get('info', '')
             if scene in outside:
@@ -265,8 +272,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
                 info = ''
             # Unresolved text keeps its element identity instead of merging into one Scene string.
             key = (scene, info, '' if info else item.get('selector', '') or text)
-            group = groups.setdefault(key, {'parts': [], 'locations': [], 'times': [], 'check_copy': False})
-            group['check_copy'] |= mode != 'explainer' or item.get('layer') == 'text'
+            group = groups.setdefault(key, {'parts': [], 'locations': [], 'times': []})
             # Deduplicate persistent and progressively revealed text across seek samples.
             if not any(normalize(text) in normalize(part) for part in group['parts']):
                 group['parts'] = [part for part in group['parts'] if normalize(part) not in normalize(text)]
@@ -301,7 +307,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             if entry['scene'] == scene and normalize(entry['text']) in normalized:
                 normalized = normalized.replace(normalize(entry['text']), '')
                 excluded.append(entry)
-        if info and normalized and group['check_copy']:
+        if info and normalized:
             reference = information[info].get('信息 ID / 来源', '')
             anchors = re.findall(r'\b[A-Z]+\d+\b', reference)
             for anchor in anchors:
@@ -310,7 +316,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
                 key = next((key for key in sources if key.endswith('#' + anchor)), None)
                 if key:
                     source_groups.setdefault(key, []).append((location, normalized))
-        if len(normalized) < minimum or not group['check_copy']:
+        if len(normalized) < minimum:
             continue
         best = copy_match(normalized, sources)
         if best and best['coverage'] >= similarity:
@@ -354,13 +360,11 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
 
 
 def parameters(args):
-    values = {'step': args.step, 'window': args.window, 'pixel_delta': args.pixel_delta,
-              'area_ratio': args.area_ratio, 'width': args.width, 'timeout_ms': args.timeout_ms}
+    values = {'step': args.step, 'width': args.width, 'timeout_ms': args.timeout_ms}
     if (any(not math.isfinite(value) or value <= 0 for value in values.values())
-            or args.step > args.window / 2 or args.pixel_delta > 255 or args.area_ratio >= 1
             or not 160 <= args.width <= 4096 or not 100 <= args.timeout_ms <= 30000
             or args.minimum < 1 or not math.isfinite(args.similarity) or not 0 < args.similarity <= 1):
-        raise VisualPlanError('Invalid diagnostic parameters: positive finite values, step <= window/2, pixel delta <=255, area/similarity <=1, width 160..4096, timeout 100..30000')
+        raise VisualPlanError('Invalid diagnostic parameters: positive finite values, similarity <=1, width 160..4096, timeout 100..30000')
     return values
 
 
@@ -376,5 +380,5 @@ def probe(request, node='node'):
             raise VisualPlanError('Studio sampling returned invalid evidence')
         return data
     except (OSError, subprocess.TimeoutExpired, ValueError, VisualPlanError) as error:
-        return {'samples': [], 'motion': [], 'timeline': [],
+        return {'samples': [], 'timeline': [],
                 'unverified': [{'reason': 'studio_sampling_unavailable', 'detail': str(error)}]}

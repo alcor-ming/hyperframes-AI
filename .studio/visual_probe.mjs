@@ -4,31 +4,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
-export const defaults = {step: 0.5, window: 2, pixel_delta: 12, area_ratio: 0.005, width: 960, timeout_ms: 5000};
-
-export function changed(a, b, parameters) {
-  if (!a || !b || a.length !== b.length) return true;
-  let count = 0;
-  for (let i = 0; i < a.length; i += 3) {
-    if (Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]),
-      Math.abs(a[i + 2] - b[i + 2])) >= parameters.pixel_delta) count++;
-  }
-  return count / (a.length / 3) >= parameters.area_ratio;
-}
-
-export function isStill(samples, parameters) {
-  if (samples.length < 3 || samples.some(sample => !sample.ready)) return false;
-  // The channel envelope captures cumulative slow motion in linear time.
-  const min = Buffer.from(samples[0].pixels), max = Buffer.from(min);
-  for (const {pixels} of samples.slice(1)) {
-    if (!pixels || pixels.length !== min.length) return false;
-    for (let i = 0; i < pixels.length; i++) {
-      min[i] = Math.min(min[i], pixels[i]); max[i] = Math.max(max[i], pixels[i]);
-    }
-    if (changed(min, max, parameters)) return false;
-  }
-  return true;
-}
+export const defaults = {step: 0.5, width: 960, timeout_ms: 5000};
 
 export function frameResourcesReady(time) {
   if (document.readyState !== 'complete' || document.fonts.status !== 'loaded') return false;
@@ -58,7 +34,7 @@ export function frameResourcesReady(time) {
     });
 }
 
-function inspectFrame(scenes, time) {
+function inspectFrame(scenes, time, projection = {}) {
   const visible = element => {
     const rect = element.getBoundingClientRect();
     if (!rect.width || !rect.height || rect.bottom <= 0 || rect.right <= 0 ||
@@ -66,6 +42,7 @@ function inspectFrame(scenes, time) {
     for (let parent = element; parent; parent = parent.parentElement) {
       const style = getComputedStyle(parent);
       if (style.display === 'none' || style.visibility !== 'visible' || +style.opacity < 0.02) return false;
+      if ([...style.filter.matchAll(/blur\(([\d.]+)px\)/g)].some(match => +match[1] > 0)) return false;
     }
     return true;
   };
@@ -100,9 +77,10 @@ function inspectFrame(scenes, time) {
       });
     });
     if (!exposed) continue;
-    const info = element.closest('[data-info-id]')?.getAttribute('data-info-id') || null;
+    const info = element.closest('[data-info-id]')?.getAttribute('data-info-id') || projection.info || null;
     const owner = element.closest('[data-scene-id]') || element.closest('[id]');
     let scene = owner?.getAttribute('data-scene-id');
+    scene ||= projection.scene;
     if (!scene) {
       let parent = element;
       while (parent) {
@@ -114,8 +92,9 @@ function inspectFrame(scenes, time) {
       const active = scenes.filter(item => time >= item.start && time < item.start + item.duration);
       if (active.length === 1) scene = active[0].id;
     }
-    texts.push({scene: scene || null, info, text: node.textContent.trim(), selector: selector(element), frame: location.href,
-      layer: element.closest('[data-hf-layer]')?.getAttribute('data-hf-layer') || null});
+    texts.push({scene: scene || null, info, text: node.textContent.trim(),
+      selector: (projection.selector ? projection.selector + ' :: ' : '') + selector(element), frame: location.href,
+      layer: projection.layer || element.closest('[data-hf-layer]')?.getAttribute('data-hf-layer') || null});
   }
   for (const element of document.querySelectorAll('*')) {
     if (!visible(element)) continue;
@@ -139,27 +118,75 @@ function inspectFrame(scenes, time) {
   return {texts, unverified: [...unverified], timeline};
 }
 
+export async function inspectCardFrames(frame, scenes, time, remaining) {
+  const result = {ready: true, texts: [], unverified: [], timeline: []};
+  for (const child of frame.childFrames()) {
+    const projection = await child.evaluate(scenes => {
+      const host = window.frameElement;
+      const layer = host?.dataset.cardLayer;
+      const root = document.querySelector('[data-composition-id]');
+      if (!host?.hasAttribute('srcdoc') || !['stage', 'text'].includes(layer) ||
+          document.documentElement.dataset.cardLayer !== layer || root?.dataset.cardLayers !== 'stage text') return null;
+      let visible = true, scene = host.closest('[data-scene-id]')?.dataset.sceneId;
+      for (let element = host; element; element = element.parentElement) {
+        const style = parent.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility !== 'visible' || +style.opacity < 0.02) visible = false;
+        if ([...style.filter.matchAll(/blur\(([\d.]+)px\)/g)].some(match => +match[1] > 0)) visible = false;
+        if (!scene && scenes.some(item => item.id === element.id)) scene = element.id;
+      }
+      const bounds = host.getBoundingClientRect();
+      visible &&= bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0 &&
+        bounds.left < parent.innerWidth && bounds.top < parent.innerHeight;
+      return {layer, scene, info: host.closest('[data-info-id]')?.dataset.infoId,
+        selector: `[data-card-layer="${layer}"]`, visible};
+    }, scenes);
+    if (!projection || child.childFrames().length) {
+      result.ready = false;
+      result.unverified.push('Nested frame text/resources/time mapping is not verified');
+      continue;
+    }
+    await child.waitForFunction(() => {
+      const root = document.querySelector('[data-composition-id]');
+      const track = window.__timelines?.[root?.dataset.compositionId];
+      const declared = window.frameElement.dataset.cardTime;
+      const expected = Number(declared);
+      return declared != null && Number.isFinite(expected) && track &&
+        Math.abs(track.time() - Math.min(expected, track.duration())) < 0.04;
+    }, remaining());
+    const localTime = await child.evaluate(() => Number(window.frameElement.dataset.cardTime));
+    await child.waitForFunction(frameResourcesReady, remaining(), localTime);
+    if (projection.layer === 'text' && projection.visible) {
+      const info = await child.evaluate(inspectFrame, scenes, time, projection);
+      result.texts.push(...info.texts);
+      result.unverified.push(...info.unverified);
+      result.timeline.push(...info.timeline);
+    }
+  }
+  return result;
+}
+
 export async function probe(input) {
   const deadline = Date.now() + 25 * 60 * 1000;
   const parameters = {...defaults, ...input.parameters};
   for (const key of Object.keys(defaults)) if (!Number.isFinite(parameters[key]) || parameters[key] <= 0)
     throw new Error('Invalid positive parameter: ' + key);
-  if (parameters.step > parameters.window / 2 || parameters.area_ratio > 1 || parameters.pixel_delta > 255 ||
-      parameters.width < 64 || parameters.width > 7680 || parameters.timeout_ms > 30000) throw new Error('Invalid sampling bounds');
+  if (parameters.width < 160 || parameters.width > 4096 || parameters.timeout_ms < 100 ||
+      parameters.timeout_ms > 30000) throw new Error('Invalid sampling bounds');
   const url = new URL(input.url);
   if (!['http:', 'https:'].includes(url.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
     throw new Error('Only an explicitly bound local Studio URL is allowed');
-  const require = createRequire(input.cli), puppeteer = require('puppeteer-core'), sharp = require('sharp');
+  const require = createRequire(input.cli), puppeteer = require('puppeteer-core');
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'hf-visual-probe-'));
   await fs.mkdir(path.join(profile, 'Default'));
   await fs.writeFile(path.join(profile, 'Default/Preferences'), JSON.stringify({enable_do_not_track: true}));
-  const result = {samples: [], motion: [], timeline: [], unverified: ['Finite sampling does not cover text or motion between sample times; motion semantics require viewing.'], viewport: {}, parameters};
+  const result = {samples: [], timeline: [], unverified: ['Finite sampling does not cover text between sample times; motion semantics require viewing.'], viewport: {}, parameters};
   let browser;
   try {
     browser = await puppeteer.launch({executablePath: input.browser, userDataDir: profile, headless: true, protocolTimeout: 30000,
       args: ['--disable-dev-shm-usage', '--disable-background-networking', '--disable-component-update',
         '--no-first-run', ...(process.platform === 'linux' ? ['--no-sandbox'] : [])]});
     const page = await browser.newPage();
+    page.on('pageerror', error => result.unverified.push('Page error: ' + error.message));
     let navigation = 0;
     page.on('framenavigated', () => { navigation++; });
     await page.setViewport({width: Math.max(1280, Math.ceil(parameters.width + 64)), height: 1080, deviceScaleFactor: 1});
@@ -193,8 +220,7 @@ export async function probe(input) {
     await page.mouse.move(size.width + 32, size.height + 32);
     const iframe = (await page.evaluateHandle(() => document.querySelector('hyperframes-player').iframeElement)).asElement();
     const frame = await iframe.contentFrame();
-    result.viewport = {...size, comparison_width: Math.min(320, size.width),
-      comparison_height: Math.round(size.height * Math.min(320, size.width) / size.width)};
+    result.viewport = {...size};
     const duration = await page.evaluate(() => document.querySelector('hyperframes-player').duration);
     if (!Number.isFinite(duration) || duration <= 0) throw new Error('Invalid Studio duration');
     if (duration / parameters.step > 2000) throw new Error('Sampling budget exceeded; increase step (maximum 2000 baseline samples)');
@@ -240,15 +266,14 @@ export async function probe(input) {
             return [[.02, .02], [.98, .02], [.02, .98], [.98, .98], [.5, .5]].every(([x, y]) =>
               document.elementFromPoint(box.x + box.width * x, box.y + box.height * y) === player);
           }, box)) throw new Error('Studio controls obscure the composition viewport');
-          const screenshot = await iframe.screenshot();
-          value.pixels = await sharp(screenshot).removeAlpha().resize({width: Math.min(320, size.width)}).raw().toBuffer();
           const info = await frame.evaluate(inspectFrame, input.scenes || [], time);
+          const cards = await inspectCardFrames(frame, input.scenes || [], time, remaining);
           if (before !== navigation || !await iframe.evaluate(element => getComputedStyle(element).visibility === 'visible'))
             throw new Error('Studio frame reloaded during sampling');
-          value.texts.push(...info.texts); value.unverified.push(...info.unverified);
-          result.timeline.push(...info.timeline);
-          if (frame.childFrames().length) value.unverified.push('Nested frame text/resources/time mapping is not verified; excluded from stillness verdicts');
-          else value.ready = true;
+          value.texts.push(...info.texts, ...cards.texts);
+          value.unverified.push(...info.unverified, ...cards.unverified);
+          result.timeline.push(...info.timeline, ...cards.timeline);
+          value.ready = cards.ready;
         } catch (error) {
           if (before !== navigation && Date.now() < sampleDeadline) { value.retried_after_navigation = true; continue; }
           value.unverified.push('Sample not verified: ' + error.message);
@@ -261,25 +286,7 @@ export async function probe(input) {
     for (let time = parameters.step; time < duration; time += parameters.step) times.add(time);
     for (const scene of input.scenes || []) if (scene.start >= 0 && scene.start < duration) times.add(scene.start);
     for (const time of [...times].sort((a, b) => a - b)) await sample(time);
-    for (let start = 0; start + parameters.window <= duration + 0.001; start += parameters.step) {
-      for (const value of samples.values()) if (value.time < start) delete value.pixels;
-      const end = Math.min(start + parameters.window, duration - 0.001);
-      const window = [...samples.values()].filter(value => value.time >= start && value.time <= end);
-      if (window.length > 128) {
-        result.unverified.push(`Comparison budget exceeded at ${start}-${end}; increase step or reduce window`);
-        continue;
-      }
-      if (!isStill(window, parameters)) continue;
-      // Irrational phase offset breaks common loop/step aliases without a second clock.
-      for (let time = start + parameters.step * 0.381966; time < end; time += parameters.step / 2)
-        window.push(await sample(time));
-      if (isStill(window, parameters)) {
-        const previous = result.motion.at(-1);
-        if (previous && previous.end >= start) previous.end = end;
-        else result.motion.push({start, end, reason: 'suspected still: no perceptible sampled change; requires viewing'});
-      }
-    }
-    result.samples = [...samples.values()].sort((a, b) => a.time - b.time).map(({pixels, ...value}) => value);
+    result.samples = [...samples.values()].sort((a, b) => a.time - b.time);
     result.timeline = [...new Map(result.timeline.map(value => [JSON.stringify(value), value])).values()];
     result.unverified = [...new Set(result.unverified)];
     return result;

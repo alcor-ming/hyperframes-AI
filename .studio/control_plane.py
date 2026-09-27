@@ -46,7 +46,7 @@ class AccountService:
         return record
 
     def appearance(self, settings: dict) -> dict:
-        from appearance import is_asset_appearance, resolve
+        from appearance import check_mode, is_asset_appearance, resolve
         from component_harness import ComponentError
         if is_asset_appearance(settings):
             try:
@@ -55,12 +55,13 @@ class AccountService:
                 raise self.api.HarnessError(str(error)) from error
         if any(key in settings for key in ("background", "overrides")):
             raise self.api.HarnessError("Background and overrides require exact appearance asset references")
-        if settings.get("mode") not in (None, "text-led", "animation-led", "explainer"):
-            raise self.api.HarnessError("Unknown narrative mode")
-        if "captions" in settings and (type(settings["captions"]) is not bool or settings["captions"] and settings.get("mode") != "explainer"):
-            raise self.api.HarnessError("captions require explainer mode and a boolean value")
-        if settings.get("mode") == "explainer" and settings.get("ratio", "16:9") not in ("16:9", "9:16", "source"):
-            raise self.api.HarnessError("explainer only supports 16:9 and 9:16")
+        check_mode(settings.get("mode"))
+        if "captions" in settings and type(settings["captions"]) is not bool:
+            raise self.api.HarnessError("captions require a boolean value")
+        if settings.get("captions"):
+            raise self.api.HarnessError("Captions require exact Theme and Background assets")
+        if settings.get("ratio") not in (None, "16:9", "9:16", "source"):
+            raise self.api.HarnessError("card and explainer only support 16:9 and 9:16")
         if settings.get("ratio") not in (None, *self.api.RATIOS):
             raise self.api.HarnessError("Unknown ratio")
         if settings.get("theme"):

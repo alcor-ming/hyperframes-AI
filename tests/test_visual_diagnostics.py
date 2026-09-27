@@ -3,6 +3,7 @@
 from pathlib import Path
 import sys
 import tempfile
+import shutil
 import unittest
 from unittest import mock
 
@@ -33,6 +34,35 @@ def samples(*parts, info='I01'):
 
 
 class ExplainerDiagnosticsTests(unittest.TestCase):
+    def test_vendor_card_projection_uses_component_contract_not_scene_host_layers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp)
+            component = project / 'vendor/card'
+            shutil.copytree(Path(__file__).resolve().parents[1] / '.studio/components/cover-title-core/16x9/v2', component)
+            (project / 'index.html').write_text(''.join(f'<div data-hf-layer="{layer}"></div>'
+                for layer in ('background', 'stage', 'overlay', 'text')), encoding='utf-8')
+            with mock.patch('explainer.installed_assets', return_value={}):
+                report = explainer_diagnostics(project, ['index.html', 'vendor/card/component.html'], {'mode': 'card'})
+                self.assertEqual([], report['findings'])
+                html = component / 'component.html'
+                html.write_text(html.read_text(encoding='utf-8').replace('data-card-layers="stage text"',
+                    'data-card-layers="background captions"'), encoding='utf-8')
+                report = explainer_diagnostics(project, ['index.html', 'vendor/card/component.html'], {'mode': 'card'})
+                self.assertEqual(['card_component_invalid'], [item['kind'] for item in report['findings']])
+
+    def test_card_checks_layer_and_explicit_assets_without_explainer_plan_requirements(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp)
+            (project / 'index.html').write_text('<main data-hf-layer="background">'
+                '<img data-character-ref="missing@v1"><audio src="outside.mp3"></audio></main>', encoding='utf-8')
+            report = explainer_diagnostics(project, ['index.html'], {'mode': 'card'},
+                '| 原 Scene ID | 使用信息 ID |\n|---|---|\n| S01 | I01 |\n')
+            kinds = [item['kind'] for item in report['findings']]
+            self.assertEqual(3, kinds.count('explainer_layer_missing'))
+            self.assertIn('sound_asset_outside_closure', kinds)
+            self.assertIn('character_asset_outside_closure', kinds)
+            self.assertNotIn('explainer_plan_missing', kinds)
+
     def test_layers_captions_assets_and_plan_are_advisory(self):
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp)
@@ -64,14 +94,31 @@ class VisualTextTests(unittest.TestCase):
     def diagnose(self, parts, **kwargs):
         return text_diagnostics(parts, '<!-- P001 -->\n' + SOURCE, '', kwargs.pop('plan', plan()), **kwargs)
 
-    def test_explainer_copy_hint_only_applies_to_text_layer(self):
+    def test_five_layer_copy_hint_only_applies_to_text_layer(self):
         states = samples(SOURCE)
-        for layer in ('captions', 'stage', 'text'):
-            states[0]['texts'][0]['layer'] = layer
-            report = self.diagnose(states, mode='explainer')
-            self.assertEqual(layer == 'text', any(hit['kind'] == 'suspected_copy' for hit in report['findings']))
+        for mode in ('card', 'explainer'):
+            for layer in ('captions', 'background', 'stage', 'overlay', 'text', None):
+                with self.subTest(mode=mode, layer=layer):
+                    states[0]['texts'][0]['layer'] = layer
+                    report = self.diagnose(states, mode=mode)
+                    self.assertEqual(layer == 'text', any(hit['kind'] == 'suspected_copy' for hit in report['findings']))
+                    if layer != 'text':
+                        self.assertEqual(0, report['observed_groups'])
         states[0]['texts'][0]['layer'] = 'captions'
         self.assertTrue(any(hit['kind'] == 'suspected_copy' for hit in self.diagnose(states)['findings']))
+
+    def test_same_information_id_in_other_layers_does_not_contaminate_text(self):
+        text = '材料与结论之间的联系'
+        for mode in ('card', 'explainer'):
+            with self.subTest(mode=mode):
+                states = samples(text)
+                states[0]['texts'][0]['layer'] = 'text'
+                states[0]['texts'].extend({'scene': 'S01', 'info': 'I01', 'text': SOURCE,
+                    'selector': '#' + layer, 'layer': layer}
+                    for layer in ('background', 'stage', 'overlay', 'captions'))
+                report = self.diagnose(states, mode=mode, plan=plan(text))
+                self.assertEqual([], report['findings'])
+                self.assertEqual(1, report['observed_groups'])
 
     def test_reference_scope_skips_outside_text_and_shared_information(self):
         document = plan('完整定义').replace('| S01 | I01 |', '| S01 | I01 |\n| S02 | I01 I02 |')

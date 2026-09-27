@@ -25,7 +25,7 @@ class AppearanceResolverTest(unittest.TestCase):
             self.assets.append({"ref": f"{kind}@v1", "kind": kind, "package_sha256": "a" * 64, "path": path,
                                 "metadata": {"kind": kind, "entry": "entry.json", "parameters": {}, "compatibility": {"ratios": ["16:9"]}}, "acceptance": {}})
         self.assets[0]["metadata"]["parameters"] = {"tokens.surface.amount": {"type": "number", "default": 1, "minimum": 0}, "tokens.surface.enabled": {"type": "boolean", "default": True}}
-        self.account = {"id": "main", "revision": 1, "theme": self.ref("theme"), "background": self.ref("background"), "mode": "animation-led", "motion": {"reveal": {"asset": self.ref("motion"), "entry": "reveal"}}, "overrides": {"theme": {"tokens.surface.amount": 2}}}
+        self.account = {"id": "main", "revision": 1, "theme": self.ref("theme"), "background": self.ref("background"), "mode": "card", "motion": {"reveal": {"asset": self.ref("motion"), "entry": "reveal"}}, "overrides": {"theme": {"tokens.surface.amount": 2}}}
         patcher = mock.patch("asset_store.resolve_asset_closure", return_value=self.assets, create=True)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -42,7 +42,7 @@ class AppearanceResolverTest(unittest.TestCase):
         self.assertNotIn(str(self.root), json.dumps(lock))
         self.account["overrides"]["theme"]["tokens.surface.amount"] = 4
         self.assertEqual(lock["overrides"]["account"]["theme"]["tokens.surface.amount"], 2)
-        self.assertEqual(lock["mode"], "animation-led")
+        self.assertEqual(lock["mode"], "card")
         appearance._check_lock(lock)
         lock["mode"] = "text-led"
         with self.assertRaisesRegex(appearance.AppearanceError, "hash mismatch"):
@@ -56,7 +56,7 @@ class AppearanceResolverTest(unittest.TestCase):
     def test_theme_mode_is_not_a_gate(self):
         service = cli.account_service(self.root)
         service.put("theme", "single-mode", {"name": "Legacy", "ratios": ["16:9"], "modes": ["text-led"]})
-        result = service.appearance({"theme": "single-mode", "ratio": "16:9", "mode": "animation-led"})
+        result = service.appearance({"theme": "single-mode", "ratio": "16:9", "mode": "card"})
         self.assertEqual(result["name"], "Legacy")
 
     def test_explainer_captions_and_legacy_lock(self):
@@ -64,7 +64,8 @@ class AppearanceResolverTest(unittest.TestCase):
         self.assertTrue(lock["selection"]["captions"])
         appearance._check_lock(lock)
         self.assertFalse(appearance.resolve(self.root, self.account, {"mode": "explainer", "captions": False})["selection"]["captions"])
-        for change in ({"captions": True}, {"captions": "on"}, {"mode": "explainer", "ratio": "4:3"}, {"mode": "explainer", "ratio": "source", "width": 800, "height": 600}):
+        self.assertTrue(appearance.resolve(self.root, self.account, {"captions": True})["selection"]["captions"])
+        for change in ({"captions": "on"}, {"mode": "explainer", "ratio": "4:3"}, {"mode": "explainer", "ratio": "source", "width": 800, "height": 600}):
             with self.subTest(change=change), self.assertRaises(appearance.AppearanceError):
                 appearance.resolve(self.root, self.account, change)
         old = appearance.resolve(self.root, self.account)
@@ -74,13 +75,12 @@ class AppearanceResolverTest(unittest.TestCase):
         appearance._check_lock(old)
         self.assertEqual(before, json.dumps(old))
 
-    def test_module_background_only_in_explainer(self):
+    def test_module_background_in_both_current_modes(self):
         background = self.assets[1]
         (background["path"] / "main.js").write_text("export function create() {}")
         background["metadata"]["dependencies"] = ["main.js"]
         (background["path"] / "entry.json").write_text(json.dumps({"renderer": "module", "entry": "main.js", "parameters": {"moods": [{"cue": "hello", "tint": "#ffffff"}]}}))
-        with self.assertRaises(appearance.AppearanceError):
-            appearance.resolve(self.root, self.account)
+        appearance._check_lock(appearance.resolve(self.root, self.account))
         appearance._check_lock(appearance.resolve(self.root, self.account, {"mode": "explainer"}))
 
     def test_effective_declaration_rejects_semantically_invalid_parameters(self):

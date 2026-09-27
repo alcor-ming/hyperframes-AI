@@ -64,7 +64,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
                            "--hyperframes-cli", str(self.cli), "--browser", str(self.root / "unused-browser"),
                            *options, expected=expected)
 
-    def test_explainer_findings_are_in_cli_report_without_replacing_d1_d2(self):
+    def test_explainer_findings_are_in_cli_report_with_d1_and_without_d2(self):
         (self.project / 'appearance-lock.json').write_text(json.dumps({
             'mode': 'explainer', 'selection': {'captions': True}}))
         report = json.loads(self.diagnose())
@@ -72,7 +72,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
         self.assertIn('captions_lock_mismatch', kinds)
         self.assertIn('explainer_layer_missing', kinds)
         self.assertIn('d1', report)
-        self.assertIn('d2', report)
+        self.assertNotIn('d2', report)
 
     def freeze(self, *options):
         target = self.invoke("--work", self.work_id, "--variant", "main", "preview", "register", *options)
@@ -95,13 +95,19 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
         self.context.assert_not_called()
 
     def test_invalid_parameters_fail_before_sampling(self):
-        for option, value in (("--minimum", "0"), ("--similarity", "nan"), ("--step", "2"),
-                              ("--window", "-1"), ("--pixel-delta", "256"),
-                              ("--area-ratio", "1"), ("--width", "159"), ("--timeout-ms", "99")):
+        for option, value in (("--minimum", "0"), ("--similarity", "nan"), ("--step", "0"),
+                              ("--width", "159"), ("--timeout-ms", "99")):
             with self.subTest(option=option):
                 self.assertIn("Invalid diagnostic parameters", self.diagnose("current", option, value, expected=2))
         self.probe.assert_not_called()
         self.context.assert_not_called()
+
+    def test_d2_is_not_emitted_even_if_an_old_probe_returns_motion(self):
+        self.sampled['motion'] = [{'start': 0, 'end': 2, 'reason': 'suspected still'}]
+        report = json.loads(self.diagnose())
+        self.assertNotIn('d2', report)
+        self.assertNotIn('motion', report)
+        self.assertIn('d1', report)
 
     def test_current_reports_findings_without_writing_any_fixture_file(self):
         before = self.files()

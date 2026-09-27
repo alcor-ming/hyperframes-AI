@@ -1,0 +1,35 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "a26ef266970a6c8beec97de511471d85b5139cee54e24030cbdd4cbdb5ad2277"
+    },
+    {
+      "path": "assets/vendor/gsap/CustomEase.min.js",
+      "sha256": "1d8a8575a2525f10b0ede48c915b6ad3738d09a2eeb0600f18fd0049aa24802d"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "1e942b0b92fcb154282290f56a313f1fe14c37dd76461fd08fff0f5a16e36e58"
+    },
+    {
+      "path": "component.html",
+      "sha256": "31dc2ce4654e13cb56c94f7317bdc8c6b322a53a88da7128757bfdaf7fac16c2"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "77ae98069e8dfbcfadf2bc9467dfab3d8662163e79cdcdb630e8028f60d0eff1"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "82e70805195fb358f5d2704d62a754e4e0a051fb84d2a4d31efbca952dc52288"
+    }
+  ],
+  "package_sha256": "d5f0039ae4b1e4a1d065eedfc1a0b3bd7dc0db46b44035618108ff31e441986e",
+  "asset_ref": "weekly-report-core/9x16@v2"
+}

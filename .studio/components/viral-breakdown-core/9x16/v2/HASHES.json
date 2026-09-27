@@ -1,0 +1,35 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "9cef10a8242d0d793c3f27a483f8bb4459698584aeaf762e8b8de01a03d96aaf"
+    },
+    {
+      "path": "assets/vendor/gsap/CustomEase.min.js",
+      "sha256": "1d8a8575a2525f10b0ede48c915b6ad3738d09a2eeb0600f18fd0049aa24802d"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "1e942b0b92fcb154282290f56a313f1fe14c37dd76461fd08fff0f5a16e36e58"
+    },
+    {
+      "path": "component.html",
+      "sha256": "ab8c5fcd9bfeccb7a8ff841ca37b6fd726a9a4b1cca08eba77927b63756a3679"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "63a8ddbf53a3a44b2e7dcbcaf5ca54a155357058061b668ec5170c01832ec3e8"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "6ba9902da7b572ed0434e0c5525c9c37faac46b4b300cf6eb569dc2cde838e72"
+    }
+  ],
+  "package_sha256": "a747ebf11aa3c9164810d8c5184f3dbe3dd04985f221a2a5a3107e6b401117c4",
+  "asset_ref": "viral-breakdown-core/9x16@v2"
+}

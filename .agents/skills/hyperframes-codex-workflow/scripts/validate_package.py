@@ -36,6 +36,8 @@ REQUIRED_HARNESS = [
     ".studio/runtime/cues.js",
     ".studio/runtime/captions.js",
     ".studio/runtime/figures.js",
+    ".studio/runtime/rolls.js",
+    ".studio/runtime/card-component.js",
 ]
 
 

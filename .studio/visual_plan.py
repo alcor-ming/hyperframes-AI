@@ -138,7 +138,8 @@ def validate_dependencies(project, *, layout=False, entry="index.html", check_pa
         text = path.read_text(encoding="utf-8")
         if path.suffix in {".html", ".htm"}:
             for tag, attrs in Composition(text).nodes:
-                if layout and (tag in {"audio", "video", "iframe", "object", "embed", "hyperframes-player"} or "data-composition-src" in attrs):
+                if layout and (tag in {"audio", "video", "iframe", "object", "embed", "hyperframes-player"}
+                               or "data-composition-src" in attrs or "data-card-source" in attrs):
                     raise VisualPlanError("Layout samples use semantic placeholders, not media or compositions")
                 if layout and ("srcset" in attrs or "imagesrcset" in attrs):
                     raise VisualPlanError("Layout samples use a single local src, not responsive image candidates")

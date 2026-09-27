@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>material-archive-core/9x16@v2</title></head><body>
+<template id="material-archive-core-template">
+<style>html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:transparent}*{box-sizing:border-box;letter-spacing:0}#root{width:1080px;height:1920px;position:relative;padding:90px 90px 100px;color:var(--hf-color-text-primary);font-family:var(--hf-font-body);--accent:var(--hf-color-accent-primary);--surface:var(--hf-color-surface);--muted:var(--hf-color-text-secondary);--line:color-mix(in srgb,var(--hf-color-text-secondary) 30%,transparent)}header{margin-bottom:54px}header p{font-size:32px;color:var(--muted);margin:0 0 24px}h1{font-size:68px;line-height:1.3;margin:0;font-weight:700}p{line-height:1.5}.box{padding:30px;border:2px solid var(--line);border-radius:8px;background:var(--surface)}.box strong{font-size:44px}.box p{font-size:34px;margin:12px 0 0}.box p:empty{display:none}
+html[data-card-layer="stage"] *,html[data-card-layer="stage"] *::before,html[data-card-layer="stage"] *::after{-webkit-text-fill-color:transparent!important;text-shadow:none!important}
+html[data-card-layer="text"] *,html[data-card-layer="text"] *::before,html[data-card-layer="text"] *::after{background:transparent!important;border-color:transparent!important;outline-color:transparent!important;box-shadow:none!important}html[data-card-layer="text"] svg{visibility:hidden!important}
+
+.input{font-size:34px;color:var(--muted)}h2{font-size:46px;margin:28px 0}.rights{font-size:34px;color:var(--accent)}.archive{display:grid;gap:28px;margin-top:44px}.archive-row{display:grid;grid-template-columns:180px 1fr;gap:28px;border:2px solid var(--line);border-radius:8px;padding:28px;align-items:center}.archive-row strong{font-size:52px;color:var(--accent)}.archive-row p{font-size:32px;margin:8px 0}.search{font-size:40px;border-top:4px solid var(--accent);padding-top:34px;margin-top:48px}.search span{float:right;color:var(--accent)}.output{font-size:42px;margin-top:46px}</style>
+<div data-hf-id="hf-9j4u" id="root" data-composition-id="material-archive-core" data-card-layers="stage text" data-composition-variables="[{&quot;id&quot;:&quot;time_scale&quot;,&quot;type&quot;:&quot;number&quot;,&quot;label&quot;:&quot;Time scale&quot;,&quot;default&quot;:1}]" data-width="1080" data-height="1920" data-start="0" data-duration="6.60" data-track-index="0">
+<header data-at=".1"><p>机制详解 · 09</p><h1>素材归档</h1></header>
+<p class="input" data-at=".3">产出 · 图文卡片 ×3</p><h2 data-at=".5">项目 · 做号一年</h2><p class="rights" data-at=".5">归档 ≠ 备份 · ≠ 版权授权</p><div class="archive"><article class="archive-row" data-at="0.8"><strong>截图</strong><div><p>来源 · 手机相册</p><p>权利 · 本人自截</p><p>日期 · 08-22</p><p>标签 · 封面 · 参考</p></div></article><article class="archive-row" data-at="1.5"><strong>视频</strong><div><p>来源 · 相机导入</p><p>权利 · 本人自录</p><p>日期 · 08-23</p><p>标签 · B-roll</p></div></article><article class="archive-row" data-at="2.2"><strong>链接</strong><div><p>来源 · 浏览器收藏</p><p>权利 · 仅存档原文</p><p>日期 · 08-24</p><p>标签 · 选题 · 参考</p></div></article></div><div class="search" data-at="3.6">检索 · <strong>封面</strong><span>归档命中</span></div><div class="output" data-at="4.4">产出 · 归档条目 ×3</div>
+</div>
+<script src="assets/vendor/gsap/gsap.min.js"></script>
+<script>const root=document.getElementById('root');
+const defaults=JSON.parse(root.dataset.compositionVariables);
+const supplied=window.__hyperframes?.getVariables?.()||{};
+const values=Object.fromEntries(defaults.map(item=>[item.id,Object.hasOwn(supplied,item.id)?supplied[item.id]:item.default]));
+for(const el of root.querySelectorAll('[data-slot]'))if(typeof values[el.dataset.slot]==='string')el.textContent=values[el.dataset.slot];
+
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const tl=gsap.timeline({paused:true});
+for(const el of document.querySelectorAll('[data-at]'))tl.fromTo(el,{opacity:0,y:reduced?0:18},{opacity:1,y:0,duration:reduced?.15:.35,ease:'power2.out'},Number(el.dataset.at));
+tl.to('.archive-row:first-child',{borderColor:'var(--accent)',duration:.3},3.7);
+tl.to({},{duration:.01},Number(root.dataset.duration)-.01);
+const scale=Number(values.time_scale);if(Number.isFinite(scale)&&scale>0)tl.timeScale(scale);
+window.__timelines={[root.dataset.compositionId]:tl};
+</script>
+</template></body></html>

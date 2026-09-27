@@ -49,13 +49,20 @@ class ExplainerCliTests(unittest.TestCase):
         lock = json.loads(self.invoke("appearance", "resolve", "--account", "a", "--mode", "explainer", "--captions", "off"))
         self.assertFalse(lock["selection"]["captions"])
         for option in ("on", "off"):
-            with self.assertRaisesRegex(cli.HarnessError, "only available"):
-                self.invoke("appearance", "resolve", "--account", "a", "--captions", option)
+            lock = json.loads(self.invoke("appearance", "resolve", "--account", "a", "--captions", option))
+            self.assertEqual("card", lock["mode"])
+            self.assertEqual(option == "on", lock["selection"]["captions"])
         with self.assertRaises(cli.appearance.AppearanceError):
             self.invoke("appearance", "resolve", "--account", "a", "--mode", "explainer", "--ratio", "4:3")
 
     def test_explicit_build_from_approved_narration_and_installed_sound(self):
-        identity = self.invoke("new", "Explainer", "--workflow", "hyperframes_video", "--account", "a", "--mode", "explainer")
+        self.check_sound_build("explainer")
+
+    def test_card_build_from_approved_narration_and_installed_sound(self):
+        self.check_sound_build("card")
+
+    def check_sound_build(self, mode):
+        identity = self.invoke("new", "Sound", "--workflow", "hyperframes_video", "--account", "a", "--mode", mode)
         work, _ = cli.locate_work(self.root, identity)
         variant = work / "variants/main"
         project = variant / "project"

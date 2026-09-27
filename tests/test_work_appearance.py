@@ -53,7 +53,7 @@ class WorkAppearanceTest(unittest.TestCase):
 
     def test_independent_selection_freezes_and_replays_without_store(self):
         resolved = json.loads(self.invoke("appearance", "resolve", "--account", "a", "--background", "green@v1",
-                                         "--mode", "animation-led", "--seed", "0"))
+                                         "--mode", "card", "--seed", "0"))
         self.assertEqual(resolved["selection"]["theme"], self.theme)
         self.assertEqual(resolved["selection"]["background"], self.green)
         self.assertFalse((self.root / "works").exists())
@@ -62,7 +62,7 @@ class WorkAppearanceTest(unittest.TestCase):
         variant = work / "variants/main"
         state = cli.read_json(variant / "variant.yaml")
         original = (variant / "variant.yaml").read_bytes()
-        cli.account_service(self.root).put("account", "a", {**self.account, "background": self.green, "mode": "animation-led"})
+        cli.account_service(self.root).put("account", "a", {**self.account, "background": self.green, "mode": "card"})
         self.assertEqual(original, (variant / "variant.yaml").read_bytes())
         self.assertEqual(1, state["account_revision"])
         self.assertEqual("main", state["id"])
@@ -87,13 +87,13 @@ class WorkAppearanceTest(unittest.TestCase):
 
     def test_source_ratio_freezes_concrete_dimensions(self):
         choices = self.base / "appearance.json"
-        choices.write_text(json.dumps({"ratio": "source", "width": 1200, "height": 1200}))
-        identity = self.invoke("new", "Square", "--workflow", "hyperframes_video", "--account", "a",
+        choices.write_text(json.dumps({"ratio": "source", "width": 1280, "height": 720}))
+        identity = self.invoke("new", "Wide", "--workflow", "hyperframes_video", "--account", "a",
                                "--appearance-file", str(choices))
         work, _ = cli.locate_work(self.root, identity)
         state = cli.read_json(work / "variants/main/variant.yaml")
-        self.assertEqual("1:1", state["ratio"])
-        self.assertEqual(1200, state["appearance_lock"]["width"])
+        self.assertEqual("16:9", state["ratio"])
+        self.assertEqual(1280, state["appearance_lock"]["width"])
 
     def test_explicit_snapshot_closure_keeps_appearance_and_detects_changes(self):
         identity = self.invoke("new", "Snapshot", "--workflow", "hyperframes_video", "--account", "a")

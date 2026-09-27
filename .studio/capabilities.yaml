@@ -3,8 +3,8 @@ version: 1
 workflows:
   hyperframes_video:
     skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md
-    modes: [text-led, animation-led, explainer]
-    default_mode: text-led
+    modes: [card, explainer]
+    default_mode: card
     ip_recommended_mode: explainer
   podcast_quote_image:
     planner_skill: ../.agents/skills/podcast-quote-image/SKILL.md
@@ -42,5 +42,4 @@ packaging:
 
 excluded_v1:
   global: [prompt_library, public_publishing]
-  hyperframes_video_card_modes: [bottom_subtitles]
   podcast_quote_image: [bundled_asr, image_generation]

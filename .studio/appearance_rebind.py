@@ -11,6 +11,7 @@ from component_harness import package_write_lock
 from work_requests import safe
 
 KNOWN_RUNTIMES = {"b6b0a69411f48d9f777a7e8fdf342a89e866b51d7d734d760b431ee9524908f0",
+                  "deb8ea501f19f0b5ebaf5c7a2b126f700127fc739e0a497b928cb82ddc620676",
                   "e80354186ac34db5d94a79febf4d1f4d84763f142f2b72465ff7150a0c35ff9b",
                   "51c9496479b3111f876a412cbf7133be7b7e203e517ea6d00390e92f8a622d9b"}
 FILES = ("ANIMATION_PLAN.md", "variant.yaml")
@@ -82,8 +83,8 @@ def rebind(root, work, variant, state, args, api):
     account = api.account_service(root).get("account", args.account) if args.account else state.get("account_settings", {})
     overrides = api.appearance_options(root, args)
     effective_mode = overrides.get("mode", account.get("mode") if args.account else (current or {}).get("mode", account.get("mode")))
-    if getattr(args, "captions", None) is not None and effective_mode != "explainer":
-        raise appearance.AppearanceError("--captions is only available for explainer")
+    if getattr(args, "captions", None) is not None:
+        appearance.check_mode(effective_mode)
     if current and not args.account:
         choices = {**current["selection"], **{key: current[key] for key in ("mode", "ratio", "width", "height", "fps", "seed")},
                    "parameters": deepcopy(current["overrides"]["explicit"])}
