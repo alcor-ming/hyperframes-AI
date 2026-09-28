@@ -520,11 +520,11 @@ def _safe_relative(value: str, label: str) -> str:
 
 def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[str, Any]:
     kind = release["metadata"].get("asset_type")
-    if kind in {"theme", "background", "motion", "module", "media", "character"} and isinstance(binding, dict) and binding.get("scope") == "dependency":
+    if kind in {"theme", "background", "motion", "module", "media", "character", "icon-set"} and isinstance(binding, dict) and binding.get("scope") == "dependency":
         if (binding != {"schema_version": 3, "component_ref": release["component_ref"], "scope": "dependency"}):
             raise ComponentError("Dependency Binding requires schema_version 3 and exact component_ref")
         return binding
-    if kind in {"theme", "background", "motion"}:
+    if kind in {"theme", "background", "motion", "icon-set"}:
         if (not isinstance(binding, dict) or binding.get("schema_version") != 3
                 or binding.get("component_ref") != release["component_ref"]
                 or set(binding) != {"schema_version", "component_ref", "usage"}
@@ -1020,7 +1020,7 @@ def install_component(
             raise ComponentError("Candidate installation requires an isolated Review project")
     allow_unapproved = review_root is not None or acceptance is not None
     release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=allow_unapproved)
-    generic = release["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character"}
+    generic = release["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character", "icon-set"}
     if generic and acceptance is None:
         raise ComponentError("Asset installation requires exact asset acceptance")
     if acceptance is not None:
@@ -1125,7 +1125,7 @@ def validate_component_mounts(
     record: dict[str, Any],
 ) -> dict[str, Any]:
     index_path = Path(project) / "index.html"
-    if release["metadata"].get("asset_type") in {"theme", "background", "motion"}:
+    if release["metadata"].get("asset_type") in {"theme", "background", "motion", "icon-set"}:
         return {"mounts": []}
     if all(_read_json(Path(project) / item["path"]).get("scope") == "dependency"
            for item in _lock_bindings(record)):
@@ -1363,7 +1363,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
                                              allow_unapproved=review_root is not None or record.get("acceptance") is not None)
         kind = release["metadata"].get("asset_type")
         acceptance = record.get("acceptance")
-        if kind in {"module", "media", "theme", "background", "motion", "character"}:
+        if kind in {"module", "media", "theme", "background", "motion", "character", "icon-set"}:
             if record.get("asset_kind") != kind or acceptance is None:
                 raise ComponentError("Asset lock requires matching kind and exact acceptance")
         if acceptance is not None:
@@ -1413,7 +1413,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         vendor_path = project / vendor_rel
         acceptance = record.get("acceptance")
         vendor = releases[ref]
-        generic = vendor["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character"}
+        generic = vendor["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character", "icon-set"}
         if public_root is not None and acceptance is None:
             public_path = Path(public_root) / ".studio" / "components" / component_id / f"v{version}"
             public = validate_component_release(public_path, expected_ref=ref)

@@ -14,7 +14,7 @@ from visual_plan import plan_scene_rows
 
 class VisualPlanTest(unittest.TestCase):
     def test_scene_local_parser_rejects_old_and_invalid_information(self):
-        plan = '## S04B\n### I01\n**来源：** SCRIPT.md#P001\n```screen\n## not a Scene\ntext\n```\n## S05\n**延续信息：** I01\n'
+        plan = '---\n{"plan_format":"3.5.2"}\n---\n## S04B\n### I01 · SCRIPT.md#P001\n```screen\n## not a Scene\ntext\n```\n## S05\n**延续信息：** I01\n'
         rows = plan_scene_rows(plan)
         self.assertEqual(['S04B', 'S05'], list(rows))
         self.assertEqual(rows['S04B']['screens'], rows['S05']['screens'])
@@ -198,7 +198,7 @@ class VisualPlanTest(unittest.TestCase):
 
     def test_existing_letter_suffix_scenes_are_preserved_in_all_projections(self):
         ids = ["S01", "S04", "S04B", "S04C"]
-        plan = "\n".join(f"## {sid}\nAccepted layout\n" for sid in ids)
+        plan = '---\n{"plan_format":"3.5.2"}\n---\n' + "\n".join(f"## {sid}\nAccepted layout\n" for sid in ids)
         html = '<main data-width="1920" data-height="1080">' + "".join(
             f'<section data-scene-id="{sid}" data-start="{i * 4}" data-duration="4"></section>'
             for i, sid in enumerate(ids)) + '</main>'

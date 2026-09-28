@@ -20,6 +20,92 @@ class VisualPlanError(ValueError):
 
 
 SCENE_ID = re.compile(r"S[0-9]+[A-Z]*")
+PLAN_FORMAT = '3.5.2'
+
+
+def plan_cue(value):
+    if value.strip().startswith('{'):
+        try:
+            query = json.loads(value)
+            if not isinstance(query, dict) or not isinstance(query.get('token'), str) or not query['token'].strip() or set(query) - {'token', 'nth', 'within', 'edge'}:
+                raise ValueError('expected cue query')
+            return query
+        except ValueError as error:
+            raise VisualPlanError(f'invalid cue query: {value}') from error
+    match = re.fullmatch(r'(.+?)#([1-9][0-9]*)', value.strip())
+    return {'token': match[1], 'nth': int(match[2])} if match else {'token': value.strip()}
+
+
+def plan_source(value):
+    return f'SCRIPT.md#{value}' if re.fullmatch(r'P[0-9]+', value) else value
+
+
+def card_content(value, identity):
+    match = re.fullmatch(r'((?:\\.|[^@\[])*)\s+@([^\[\]]+?)(?:\s+\[([^\[\]]+)\])?', value)
+    if not match or not match[1].strip() or not match[2].strip():
+        raise VisualPlanError(f'{identity}: card text requires text @cue [SVG reference]; escape @ and [ in text')
+    text = re.sub(r'\\([\\@\[\]])', r'\1', match[1].strip())
+    svg = match[3]
+    if svg and not re.fullmatch(r'(?:custom:.+\.svg|[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+(?:@[A-Za-z0-9_.-]+)?)', svg):
+        raise VisualPlanError(f'{identity}: invalid SVG reference {svg}')
+    return {'text': text, 'cue': plan_cue(match[2]), 'svg': svg}
+
+
+def parse_card(header, lines):
+    match = re.fullmatch(r'card ([A-Za-z][A-Za-z0-9_-]*)\s*·\s*(\S.*)', header)
+    if not match:
+        raise VisualPlanError('card requires card <ID> · <source anchor>')
+    card = {'id': match[1], 'source': plan_source(match[2]), 'lines': []}
+    for line in lines:
+        if not line.strip():
+            continue
+        if line.startswith('- '):
+            card['lines'].append(card_content(line[2:], card['id']))
+            continue
+        key, separator, value = line.partition(':')
+        value = value.strip()
+        if not separator or key not in {'preset', 'area', 'title', 'note', 'exit'} or key in card or not value:
+            raise VisualPlanError(f"{card['id']}: invalid or duplicate card field {key}")
+        card[key] = card_content(value, card['id']) if key in {'title', 'note'} else plan_cue(value) if key == 'exit' else value
+    if not re.fullmatch(r'F0[1-8]', card.get('preset', '')):
+        raise VisualPlanError(f"{card['id']}: preset must be F01-F08")
+    if not re.fullmatch(r'(?:[A-Za-z][A-Za-z0-9_-]*|[1-9][0-9]*(?:px)?\s*[x×]\s*[1-9][0-9]*(?:px)?)', card.get('area', '')):
+        raise VisualPlanError(f"{card['id']}: area requires a region name or positive pixel dimensions")
+    if not any(card.get(key) for key in ('title', 'lines', 'note')):
+        raise VisualPlanError(f"{card['id']}: card needs text")
+    return card
+
+
+def card_rows(card):
+    return ([('title', card['title'])] if 'title' in card else []) + list(enumerate(card['lines'], 1)) + ([('note', card['note'])] if 'note' in card else [])
+
+
+def validate_plan_cards(plan_text, cues, *, project, closure, icon_refs=(), scene_ids=None):
+    """Validate resolved card cues and SVGs against the frozen dependency closure."""
+    from explainer import find_cue
+    rows = plan_scene_rows(plan_text)
+    project = Path(project).resolve()
+    paths = {(project / item).resolve() for item in closure}
+    for sid, row in rows.items():
+        if scene_ids is not None and sid not in scene_ids:
+            continue
+        for card in row['cards'].values():
+            values = [value for _, value in card_rows(card)]
+            for value in values + ([{'cue': card['exit']}] if 'exit' in card else []):
+                try:
+                    find_cue(cues, value['cue'])
+                except (ValueError, TypeError, KeyError) as error:
+                    raise VisualPlanError(f"{card['id']}: card cue resolution failed: {error}") from error
+                svg = value.get('svg')
+                if not svg:
+                    continue
+                if svg.startswith('custom:'):
+                    path = (project / svg[7:]).resolve()
+                    if not path.is_relative_to(project) or path not in paths or not path.is_file():
+                        raise VisualPlanError(f"{card['id']}: SVG reference outside snapshot closure: {svg}")
+                elif svg not in icon_refs and ('@' in svg or len([ref for ref in icon_refs if ref.rsplit('@', 1)[0] == svg]) != 1):
+                    raise VisualPlanError(f"{card['id']}: SVG icon reference outside snapshot closure: {svg}")
+    return rows
 
 
 class Composition(HTMLParser):
@@ -51,11 +137,20 @@ def markdown_structure_lines(text):
 
 def plan_scene_rows(plan_text):
     """Parse Scene-local design only; overview tables are never design authority."""
+    metadata = re.match(r'\A---\s*\n(.*?)\n---(?:\n|$)', plan_text, re.S)
+    try:
+        supported = metadata and json.loads(metadata[1]).get('plan_format') == PLAN_FORMAT
+    except (ValueError, AttributeError):
+        supported = False
+    if not supported:
+        raise VisualPlanError(f'Animation Plan 格式不支持: expected plan_format {PLAN_FORMAT}')
     rows, information = {}, {}
-    screen_count = 0
+    screen_count = card_count = 0
     for match in markdown_structure_lines(plan_text):
         if re.fullmatch(r' {0,3}(?:`{3,}|~{3,})screen\s*', match[0]):
             screen_count += 1
+        if re.match(r' {0,3}(?:`{3,}|~{3,})card\b', match[0]):
+            card_count += 1
         cells = {cell.strip() for cell in match[0].strip().strip('|').split('|')}
         if match[0].lstrip().startswith('|') and cells.intersection({'实际表达', '使用信息 ID', '信息 ID', '原 Scene ID'}):
             raise VisualPlanError('Animation Plan 格式不支持: legacy design tables')
@@ -69,7 +164,7 @@ def plan_scene_rows(plan_text):
             raise VisualPlanError(f"Duplicate Plan Scene ID: {sid}")
         end = headings[index + 1].start() if index + 1 < len(headings) else len(plan_text)
         body = plan_text[heading.end():end]
-        row = {'Scene': sid, 'body': body, 'screens': {}, 'events': [], 'exceptions': []}
+        row = {'Scene': sid, 'body': body, 'screens': {}, 'cards': {}, 'events': [], 'exceptions': []}
         current, fence, collected = None, None, []
         for line in body.splitlines():
             marker = re.fullmatch(r' {0,3}(`{3,}|~{3,})(.*)', line)
@@ -79,18 +174,23 @@ def plan_scene_rows(plan_text):
                     if kind == 'screen':
                         if not current or current in information:
                             raise VisualPlanError(f"{sid}: screen needs a unique ### I<number> heading")
-                        value = {'实际表达': '\n'.join(collected), '信息 ID / 来源': source}
+                        value = {'实际表达': '\n'.join(collected), '信息 ID / 来源': plan_source(source)}
                         information[current] = value
                         row['screens'][current] = value
+                    elif kind.startswith('card'):
+                        card = parse_card(kind, collected)
+                        identity = card['id']
+                        if identity in information:
+                            raise VisualPlanError(f'{sid}: duplicate information/card ID {identity}')
+                        row['cards'][identity] = card
+                        value = {'实际表达': '\n'.join(item['text'] for _, item in card_rows(card)), '信息 ID / 来源': card['source']}
+                        information[identity] = row['screens'][identity] = value
+                        for number, item in card_rows(card):
+                            row['events'].append({'cue': item['cue'], 'layer': 4, 'target': f'{identity}:{number}', 'change': 'text_reveal', 'card': identity, 'row': number, 'info': identity, 'derived': True})
+                        if 'exit' in card:
+                            row['events'].append({'cue': card['exit'], 'layer': 2, 'target': identity, 'change': 'exit', 'card': identity, 'derived': True})
                     elif kind == 'rhythm':
-                        try:
-                            data = json.loads('\n'.join(collected))
-                            if not isinstance(data, dict) or any(not isinstance(data.get(k, []), list) or any(not isinstance(v, dict) for v in data.get(k, [])) for k in ('events', 'exceptions')):
-                                raise ValueError('events/exceptions must be lists of objects')
-                        except ValueError as error:
-                            raise VisualPlanError(f'{sid}: invalid rhythm JSON: {error}') from error
-                        for key in ('events', 'exceptions'):
-                            row[key].extend(data.get(key, []))
+                        raise VisualPlanError('Animation Plan 格式不支持: use an event table, not rhythm JSON')
                     fence, collected = None, []
                 else:
                     collected.append(line)
@@ -101,22 +201,32 @@ def plan_scene_rows(plan_text):
             info = re.fullmatch(r'### (I[0-9]+)(?:\s+.*)?', line)
             if line.startswith('### '):
                 current = info[1] if info else None
-                source = current or ''
+                source = line.partition('·')[2].strip() or current or ''
             origin = re.match(r'\*\*来源[:：]\*\*\s*(.*)', line)
             if origin and current:
                 source = origin[1]
+            if line.lstrip().startswith('|'):
+                cells = [cell.strip() for cell in re.split(r'(?<!\\)\|', line.strip().strip('|'))]
+                if cells[0] == '例外':
+                    if len(cells) != 5 or cells[3] not in {'pause', 'talking_head'} or not all(cells[1:]):
+                        raise VisualPlanError(f'{sid}: invalid event exception row')
+                    row['exceptions'].append(dict(start_cue=plan_cue(cells[1]), end_cue=plan_cue(cells[2]), kind=cells[3], reason=cells[4]))
+                elif cells[0] not in {'cue', 'Cue'} and not all(re.fullmatch(r':?-+:?', cell) for cell in cells):
+                    if len(cells) != 4 or cells[1] not in {'2', '3', '4'} or not cells[0] or not cells[3]:
+                        raise VisualPlanError(f'{sid}: event row requires cue | layer (2/3/4) | target | change')
+                    row['events'].append(dict(cue=plan_cue(cells[0]), layer=int(cells[1]), target=cells[2], change=cells[3]))
         if fence:
             raise VisualPlanError(f'{sid}: unclosed {fence[1]} fence')
         row['信息 ID'] = ', '.join(row['screens'])
         rows[sid] = row
     if not rows:
         raise VisualPlanError("Animation Plan 格式不支持: expected Scene sections (## S01) with embedded screen blocks")
-    if screen_count != len(information):
+    if screen_count + card_count != len(information):
         raise VisualPlanError('Animation Plan 格式不支持: screen blocks must belong to a Scene section')
     for sid, row in rows.items():
         refs = [m[1] for line in markdown_structure_lines(row['body'])
                 if (m := re.fullmatch(r'\*\*延续信息[:：]\*\*\s*(.*)', line[0]))]
-        for identity in re.findall(r'\bI[0-9]+\b', ' '.join(refs)):
+        for identity in re.findall(r'\b[A-Za-z][A-Za-z0-9_-]*\b', ' '.join(refs)):
             if identity not in information:
                 raise VisualPlanError(f'{sid}: unknown continuation information ID {identity}')
             row['screens'][identity] = information[identity]

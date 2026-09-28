@@ -14,14 +14,15 @@ from visual_diagnostics import explainer_diagnostics
 
 
 SOURCE = '系统首先读取用户提供的原始材料然后提取关键事实并保留必要条件最后生成简洁清楚且便于理解的上屏文字'
+FORMAT = '---\n{"plan_format":"3.5.2"}\n---\n'
 
 
 def plan(expression=SOURCE, info='I01'):
-    return '## S01\n' + information('I01', expression)
+    return FORMAT + '## S01\n' + information('I01', expression)
 
 
 def information(identity, expression):
-    return f'\n### {identity}\n**来源：** {identity} · P001\n```screen\n{expression}\n```\n'
+    return f'\n### {identity} · {identity} · P001\n```screen\n{expression}\n```\n'
 
 
 def samples(*parts, info='I01'):
@@ -184,7 +185,7 @@ class VisualTextTests(unittest.TestCase):
         self.assertEqual('不低于-1.5%且≤20kg', normalize('不低于 -1.5%，且 ≤ 20 kg。'))
 
     def test_screen_blocks_keep_line_breaks_sources_and_information_boundaries(self):
-        document = '''## S01
+        document = FORMAT + '''## S01
 
 ### I01
 **来源：** SCRIPT.md#P001
@@ -279,7 +280,7 @@ class VisualTextTests(unittest.TestCase):
         # Synthetic mirror of a native reference Scene: seven blocks, split nodes, shared words, no data-info-id.
         blocks = {'I15': 'ALPHA', 'I16': '共同规则，使两端连通', 'I17': 'R = Rule\n规则', 'I18': '约定\n逐条执行',
                   'I19': 'ALPHA 甲端\n请求方', 'I20': 'ALPHA 乙端\n提供方', 'I21': '经 ALPHA 连接'}
-        document = '## S06\n'
+        document = FORMAT + '## S06\n'
         narration = {'I15': 'ALPHA 是这一段的主题。', 'I16': '它是一套共同规则，它使两端连通。', 'I17': 'R 就是 Rule，也就是规则。',
                      'I18': '可以把它想成一份约定，大家逐条执行。', 'I19': '一边是 ALPHA 甲端，也就是请求方；',
                      'I20': '另一边是 ALPHA 乙端，也就是提供方；', 'I21': '两端经 ALPHA 连接。'}

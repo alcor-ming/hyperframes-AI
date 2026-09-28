@@ -21,5 +21,8 @@ For `podcast_quote_image`, retain its creation and selection contract: load `pla
 | Content preparation | Script, relevant Research and source/alignment evidence; `.studio/spec/creative.md` |
 | Plan | Current Plan, selected Research, `.studio/spec/visual-design.md`, applicable `.studio/recipes/` structural difference and selected asset data |
 | Draft | Current Plan and affected sources, `.studio/spec/visual-design.md`, `.studio/spec/hyperframes.md` implementation and QA |
-| Final delivery | Accepted version and provenance; `.studio/workflow.md` Final delivery; actual CLI help |
+| Selected assets / helpers | Selected interface card; `.studio/spec/runtime-interfaces.md`; `.studio/spec/hyperframes-assets.md` only for asset wiring |
+| Final delivery | Accepted version and provenance; `.studio/workflow.md` Final delivery; `.studio/spec/hyperframes-final.md`; actual CLI help |
+| Research registration | `.studio/spec/hyperframes-research.md` |
+| Remotion integration | `.studio/spec/hyperframes-remotion.md` only when selected |
 | Podcast images | Selected planner/copy Skill; `.studio/workflow.md` podcast branch and `.studio/spec/creative.md` podcast contracts |

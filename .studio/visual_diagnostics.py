@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from visual_plan import VisualPlanError, markdown_structure_lines, plan_scene_rows
+from visual_plan import VisualPlanError, card_rows, markdown_structure_lines, plan_scene_rows
 
 
 def normalize(text):
@@ -33,12 +33,16 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
         if not sample.get('ready'):
             unverified.append({'reason': 'rhythm_sample_unavailable', 'time': sample['time']})
             continue
+        unverified.extend(sample.get('motion_unverified', []))
         for candidate in sample.get('rhythm_candidates', []):
             candidates.setdefault(candidate['id'], []).append((sample['time'], candidate))
     allowed = {'text_reveal', 'b_enter', 'a_return', 'enter', 'exit', 'bounce', 'squash', 'point', 'state',
-               'pan_start', 'pan_end', 'zoom_start', 'zoom_end'}
+               'pan_start', 'pan_end', 'zoom_start', 'zoom_end', 'camera_start', 'camera_end', 'camera_turn', 'tween', 'tween_end', 'set'}
     for observations in candidates.values():
         candidate = observations[0][1]
+        if candidate.get('unverified'):
+            unverified.append({'reason': candidate['unverified'], 'time': candidate['time'], 'targets': candidate.get('targets', [])})
+            continue
         at, duration = candidate['time'], candidate['duration']
         if candidate['kind'] not in allowed or candidate['layer'] not in {'stage', 'overlay', 'text'}:
             continue
@@ -53,7 +57,26 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
         changed = before.get(key) != after.get(key)
         opening = at == 0 and candidate['kind'] in {'text_reveal', 'b_enter', 'enter'} and after['visible']
         if (changed and (before['visible'] or after['visible'])) or opening:
-            events.append({key: candidate[key] for key in ('id', 'time', 'kind', 'layer', 'scene')})
+            hit = {**{key: candidate[key] for key in ('id', 'time', 'kind', 'layer', 'scene')},
+                   'targets': candidate.get('targets', []), 'target_node': candidate.get('target_node')}
+            if candidate['kind'].startswith('camera_') and before.get('geometry') and after.get('geometry'):
+                hit['direction'] = [b - a for a, b in zip(before['geometry'], after['geometry'])]
+            events.append(hit)
+    # Adjacent camera segments continuing in the same direction are one movement.
+    redundant = set()
+    for end in events:
+        if end['kind'] != 'camera_end' or not end.get('direction'):
+            continue
+        for start in events:
+            if (start['kind'] != 'camera_start' or not end.get('target_node')
+                    or start.get('target_node') != end.get('target_node')
+                    or abs(start['time'] - end['time']) > .00001 or not start.get('direction')):
+                continue
+            a, b = start['direction'], end['direction']
+            norm = math.sqrt(sum(x*x for x in a) * sum(x*x for x in b))
+            if norm and sum(x*y for x, y in zip(a, b)) / norm > .999:
+                redundant.update([start['id'], end['id']])
+    events = [event for event in events if event.get('id') not in redundant]
     # Visible text content is a layer-specific observation, not a pixel/tween count.
     previous = None
     for sample in samples:
@@ -71,13 +94,31 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
         if sid not in bounds:
             continue
         screens, scheduled = row.get('screens', {}), {}
+        planned = {identity: value['实际表达'] for identity, value in screens.items()
+                   if identity not in row.get('cards', {})}
+        planned.update({f'{identity}:{number}': item['text'] for identity, card in row.get('cards', {}).items()
+                        for number, item in card_rows(card)})
         for event in row.get('events', []):
+            target = str(event.get('target') or '').lstrip('#')
+            location = {'scene': sid, 'target': target or None, 'cue': event['cue'], 'change': event.get('change', '')}
+            try:
+                query = {'token': event['cue']} if isinstance(event['cue'], str) else event['cue']
+                start = find_cue(cues, query)
+                end = find_cue(cues, {**query, 'edge': 'end'}) if isinstance(query, dict) else start
+                if not target:
+                    unverified.append({**location, 'reason': 'rhythm_declaration_target_missing'})
+                elif not any(hit['layer'] == {2: 'stage', 3: 'overlay', 4: 'text'}.get(event['layer'])
+                             and hit.get('scene') in {None, sid} and start <= hit['time'] <= end
+                             and target in hit.get('targets', []) for hit in events):
+                    findings.append({**location, 'kind': 'rhythm_declared_not_observed', 'start': start, 'end': end})
+            except (ValueError, TypeError, KeyError) as error:
+                unverified.append({**location, 'reason': 'rhythm_declaration_cue_unresolved', 'detail': str(error)})
             if event.get('layer') != 4:
                 continue
-            identities = re.findall(r'\bI[0-9]+\b', str(event.get('info', '')) + ' ' + str(event.get('change', '')))
+            identities = [target] if target in planned else []
             try:
                 at = find_cue(cues, event['cue'])
-                scheduled.update((identity, at) for identity in identities if identity in screens)
+                scheduled.update((identity, at) for identity in identities)
             except (ValueError, TypeError, KeyError):
                 pass
         if not scheduled:
@@ -88,9 +129,8 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
             visible_text = normalize(''.join(item['text'] for item in sample.get('texts', [])
                                             if item.get('scene') == sid and item.get('layer') == 'text'))
             early = [identity for identity, at in scheduled.items() if at - sample['time'] > 2
-                     and normalize(screens[identity]['实际表达'])
-                     and normalize(screens[identity]['实际表达']) in visible_text]
-            if len(early) > len(screens) / 2:
+                     and normalize(planned[identity]) and normalize(planned[identity]) in visible_text]
+            if len(early) > len(planned) / 2:
                 findings.append({'kind': 'suspected_lay_out_and_wait', 'scene': sid, 'time': sample['time'],
                                  'information_ids': early, 'planned_cues': {key: scheduled[key] for key in early}})
                 break
@@ -124,8 +164,8 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
                 continue
             findings.append({'kind': 'rhythm_gap', 'start': left, 'end': right, 'duration': right - left,
                              'scenes': [sid for sid, (a, b) in bounds.items() if a < right and b > left],
-                             'basis': 'observed_events_only', 'coverage': 'unverified_custom_motion', 'verdict': None})
-    unverified.append({'reason': 'untracked_layer_motion_media_canvas_and_between_samples_require_review'})
+                             'basis': 'observed_events_only', 'coverage': 'sampled_timeline_and_helpers', 'verdict': None})
+    unverified.append({'reason': 'finite_sampling_between_samples_requires_review'})
     return {'events': sorted(events, key=lambda item: item['time']), 'findings': findings,
             'declared_exceptions': declared, 'unverified': unverified, 'advisory_only': True}
 

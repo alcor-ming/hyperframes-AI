@@ -45,7 +45,7 @@ class WorkCliTest(unittest.TestCase):
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            result = WORK_CLI.main(list(arguments), root=self.root)
+            result = WORK_CLI.main(['--json', *arguments], root=self.root)
         self.assertEqual(expected, result, stderr.getvalue())
         return stdout.getvalue().strip() or stderr.getvalue().strip()
 

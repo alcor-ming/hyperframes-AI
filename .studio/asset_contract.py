@@ -34,8 +34,8 @@ SVG_ATTRS = set("id class version x y x1 y1 x2 y2 dx dy width height viewBox pre
                 "dominant-baseline alignment-baseline textLength lengthAdjust vector-effect "
                 "shape-rendering color display visibility overflow".split())
 
-KINDS = {"module", "media", "theme", "background", "motion", "character"}
-DECLARATIVE = {"theme", "background", "motion", "character"}
+KINDS = {"module", "media", "theme", "background", "motion", "character", "icon-set"}
+DECLARATIVE = {"theme", "background", "motion", "character", "icon-set"}
 
 
 def asset_requires_runtime(metadata):
@@ -94,7 +94,10 @@ def _declaration(directory, metadata):
 def validate_declaration(payload, metadata, directory, *, check_defaults=False):
     """Validate both package defaults and resolved, explicitly overridden declarations."""
     kind = metadata["kind"]
-    if kind == "theme":
+    if kind == "icon-set":
+        from icon_sets import validate_manifest
+        validate_manifest(payload, metadata, directory)
+    elif kind == "theme":
         _fields(payload, {"tokens", "fonts"}, {"tokens"}, "Theme")
         _fields(payload["tokens"], {"typography", "colors", "surface", "border", "radius", "shadow", "lines"}, label="Theme tokens")
         fonts = payload.get("fonts", [])
@@ -189,7 +192,7 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
     inspect(payload)
     for path, spec in metadata["parameters"].items():
         prefixes = {"theme": ("tokens.",), "background": ("parameters.",),
-                    "motion": ("slots.", "reduced_motion."), "character": ()}
+                    "motion": ("slots.", "reduced_motion."), "character": (), "icon-set": ()}
         if not path.startswith(prefixes[kind]):
             raise COMPONENT.ComponentError(f"Asset identity or dependency field cannot be overridden: {path}")
         if kind == "motion" and metadata.get("contract_version", 1) == 2 and (len(path.split(".")) != 3 or path.split(".")[-1] in {"effect", "color_token"}):

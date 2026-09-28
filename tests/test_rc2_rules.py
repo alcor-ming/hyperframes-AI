@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sys
+import re
 import unittest
 
 
@@ -13,7 +14,8 @@ from visual_plan import plan_scene_rows
 class RC2RulesTests(unittest.TestCase):
     def test_two_plan_views_keep_one_scene_index_and_one_screen_copy(self):
         template = (ROOT / ".studio/templates/ANIMATION_PLAN.template.md").read_text(encoding="utf-8")
-        plan = template.replace("`<保留原 Scene ID>`", "S01")
+        plan = re.sub(r'__[A-Z_]+__', 'null', template)
+        plan = re.sub(r'^\*\*延续信息：\*\*.*\n', '', plan, flags=re.M)
         self.assertEqual(["S01"], list(plan_scene_rows(plan)))
         self.assertIn("## S01", template)
         self.assertEqual(1, template.count("```screen\n"))

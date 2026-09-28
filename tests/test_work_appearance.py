@@ -46,7 +46,7 @@ class WorkAppearanceTest(unittest.TestCase):
     def invoke(self, *arguments):
         if "new" in arguments and "hyperframes_video" in arguments:
             arguments += ("--purpose", "standard", "--series", "fixture")
-        args = cli.build_parser().parse_args(arguments)
+        args = cli.build_parser().parse_args(['--json', *arguments])
         with redirect_stdout(io.StringIO()) as output:
             args.handler(self.root, args)
         return output.getvalue().strip()

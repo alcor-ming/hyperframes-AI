@@ -37,7 +37,7 @@ class V343RulesTests(unittest.TestCase):
                               .replace("__RESEARCH_REVISION__", "1")
                               .replace("__SUBJECT_POSITION__", "null"))
         self.assertNotIn("profile", metadata)
-        for text in ("### I01", "```screen", "## S01", "B 素材", "## 自检", "| Scene | 一句话摘要 |"):
+        for text in ("### I01", "```screen", "## S01", "B 素材", "模板说明", "| Scene | 一句话摘要 |"):
             self.assertIn(text, plan)
         self.assertNotIn("| 实际表达 |", plan)
         design = read(".studio/spec/visual-design.md")
@@ -48,8 +48,8 @@ class V343RulesTests(unittest.TestCase):
 
     def test_dispatch_follows_plan_and_discovery_precedes_dispatch(self):
         workflow = read(".studio/workflow.md")
-        for text in ("Plan 阶段", "查包、场景源与配方", "原样转交", "不附加比 Plan 更严",
-                     "完整上屏正文", "回报准确冲突", "短自检单"):
+        for text in ("Plan 阶段", "查包、场景源与配方", "Plan 路径", "不附加比 Plan 更严",
+                     "按引用读取同版", "回报准确冲突", "短自检单"):
             self.assertIn(text, workflow)
         router = read(ROUTER)
         for text in ("| Plan |", "| Draft |", "visual-design.md", "hyperframes.md"):

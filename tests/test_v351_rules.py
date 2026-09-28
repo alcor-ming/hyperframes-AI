@@ -13,7 +13,10 @@ VALIDATOR = ".agents/skills/hyperframes-codex-workflow/scripts/validate_package.
 RULES = ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md", ".studio/workflow.md",
          ".studio/spec/creative.md", ".studio/spec/visual-design.md",
          ".studio/spec/hyperframes.md", ".studio/spec/privacy.md", ROUTER,
-         ".studio/templates/RESEARCH.template.md", ".studio/templates/ANIMATION_PLAN.template.md")
+         ".studio/templates/RESEARCH.template.md", ".studio/templates/ANIMATION_PLAN.template.md",
+         ".studio/spec/runtime-interfaces.md", ".studio/spec/hyperframes-assets.md",
+         ".studio/spec/hyperframes-final.md", ".studio/spec/hyperframes-research.md",
+         ".studio/spec/hyperframes-remotion.md")
 
 
 def read(path):

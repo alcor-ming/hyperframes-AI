@@ -25,7 +25,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
         self.project = self.variant / "project"
         self.plan = self.variant / "ANIMATION_PLAN.md"
         self.plan.write_text(
-            '---\n{"status":"approved","revision":1,"script_revision":1,"research_revision":1}\n---\n'
+            '---\n{"plan_format":"3.5.2","status":"approved","revision":1,"script_revision":1,"research_revision":1}\n---\n'
             '## S01\n### I01\n**来源：** SCRIPT.md#P001\n```screen\n先明确用户的问题\n```\n', encoding="utf-8")
         self.script = CLI.input_path(self.variant, "SCRIPT.md")
         self.script.write_text('---\n{"revision":1,"approval":"approved"}\n---\n'
@@ -119,7 +119,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
 
     def test_screen_plan_empty_ready_scene_is_missing_without_writes(self):
         self.plan.write_text(
-            '---\n{"status":"approved","revision":1,"script_revision":1,"research_revision":1}\n---\n'
+            '---\n{"plan_format":"3.5.2","status":"approved","revision":1,"script_revision":1,"research_revision":1}\n---\n'
             '## S01\n'
             '### I01\n**来源：** SCRIPT.md#P001\n```screen\n先明确用户的问题\n```\n', encoding="utf-8")
         self.sampled['samples'][0]['texts'] = []

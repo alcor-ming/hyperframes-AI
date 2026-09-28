@@ -1,5 +1,5 @@
 ---
-{"status":"draft","revision":1,"template":"__TEMPLATE__","ratio":"__RATIO__","script_revision":__SCRIPT_REVISION__,"research_revision":__RESEARCH_REVISION__,"timing_source":"estimated","subject_position":__SUBJECT_POSITION__}
+{"status":"draft","revision":1,"plan_format":"3.5.2","template":"__TEMPLATE__","ratio":"__RATIO__","script_revision":__SCRIPT_REVISION__,"research_revision":__RESEARCH_REVISION__,"timing_source":"estimated","subject_position":__SUBJECT_POSITION__}
 ---
 
 # Animation Plan
@@ -20,24 +20,23 @@
 
 ## S01
 
+<一句场景概括>
+
 **A/B 编排与延续：** <A 与 B 各是什么；A → B → A 或 A → B；B 接管时 A 隐藏或虚化；跨场返回时延续自哪个 Scene>
 
 **延续信息：** <返回 A 时列出前场已定义的信息 ID，例如 I01；不重复 screen 正文，无延续则省略>
 
-**这一场发生了什么：** <可见变化与所在层：背景、主体、强调、文字、字幕>
+```card C1 · P001
+preset: F01
+area: left
+title: <卡片标题> @<口播词>
+- <条目> @<口播词>
+```
 
-### I01
-
-**来源：** <SCRIPT.md#P001 或 Research 精确位置>
-
-**理解目标：** <观众应理解的对象、关系或结论>
-
-**揭示 cue 与阅读边界：** <实际词或 cue；需要稳定阅读的状态>
-
-**所属画面：** <A 或 B 文字组；第 4 层>
+### I01 · SCRIPT.md#P001
 
 ```screen
-<实际换行的上屏正文，不照搬口播>
+<卡片之外的独立上屏正文，实际换行，不照搬口播>
 ```
 
 ### 素材与声音
@@ -48,13 +47,11 @@
 
 ### 事件序列与例外
 
-每个事件写 cue、layer（2/3/4）与 change。cue 用词或 {token,nth,within,edge}，由正式对齐解析，不另建手填秒数真源。字幕、背景漂移、待机/说话起伏及持续镜头运动的中间过程不计。
+| cue | 层 | 目标 | 变化 |
+|---|---|---|---|
+| <口播词或词#第几次> | 4 | I01 | 揭示文字 |
 
-```rhythm
-{"events":[],"exceptions":[]}
-```
-
-按实际事件填写 events。刻意停顿逐处填写 exceptions 的 start_cue、end_cue、kind="pause" 与 reason；真人出镜区间用 kind="talking_head"。声明不代表批准，停顿随本版方向确认批准。无文字的纯媒体 Scene 可省略信息小节；每个信息 ID 只定义一次。
+只写积木块之外的事件。目标可为空，此时标未验证；有目标时只匹配该目标或子元素。例外另起行：`| 例外 | 起始 cue | 结束 cue | pause 或 talking_head | 原因 |`。声明不代表批准，停顿随本版方向确认批准。字幕、背景漂移、待机/说话起伏及持续镜头运动的中间过程不计。
 
 ## 声音导出
 
@@ -64,11 +61,13 @@
 {"sfx":[]}
 ```
 
-## 自检
+<!-- 模板说明，不保留通过的自检清单：
 
 - 每场 A/B 编排与第 2–4 层可见事件明确，相邻有效事件间隔不超过 2 秒，不“铺开再等”。
 - A 文字不照搬口播，B 素材有来源或 Brief，事实边界清楚。
 - 第 4 层阅读保护期间，第 2、3 层继续产生事件；刻意停顿写明区间和原因，talking_head 真人区间单独声明。
+卡片文字中的 @ 与 [ 必须转义；SVG 写在 cue 后的方括号中，只接受闭包内图标引用或 custom:文件.svg。exit 可写退场 cue。无卡片、独立文字、素材或声音时省略对应块。信息 ID 全片唯一，延续信息只引用 ID。screen 默认 A、第 4 层，例外才写所属画面。Plan 只记录未通过项与例外。
+-->
 
 ## 唯一参考 Scene 与方向批准
 
@@ -86,4 +85,4 @@
 
 **本次局部变更：** <变更和影响范围>
 
-派工 brief 直接传全片方向与对应 Scene 一节；治理与接受见 `.studio/workflow.md`，表达合同见 `.studio/spec/visual-design.md`。
+派工只传 Plan 路径、Scene ID、负责范围与写入边界；治理与接受见 `.studio/workflow.md`，表达合同见 `.studio/spec/visual-design.md`。

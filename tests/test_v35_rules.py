@@ -47,9 +47,11 @@ class V35RulesTests(unittest.TestCase):
             self.assertIn(token, design)
         plan = read(".studio/templates/ANIMATION_PLAN.template.md")
         for token in ("全片方向", "B 素材", "声音导出", "A/B 编排", "事件序列",
-                      "start_cue", "end_cue", "nth", "```sound"):
+                      "起始 cue", "结束 cue", "词#第几次", "```sound"):
             self.assertIn(token, plan)
         spec = read(".studio/spec/hyperframes.md")
+        spec += read(".studio/spec/runtime-interfaces.md")
+        spec += read(".studio/spec/hyperframes-assets.md")
         for token in ("data-hf-layer", "`background`", "`stage`", "`overlay`", "`text`",
                       "`captions`", "两种模式共用五层", "cue_not_found", "cue_ambiguous", "cue_unaligned",
                       "HarnessFigures.load(lock)", "renderAt(t)", "character.json",

@@ -48,7 +48,8 @@ except ModuleNotFoundError:  # Loading this file by path from repository tests.
         verify_installation,
     )
 
-from visual_plan import VisualPlanError, plan_scene_rows, scene_projection, layout_projection, reference_projection, validate_dependencies, source_changes, serve
+from visual_plan import VisualPlanError, PLAN_FORMAT, plan_scene_rows, validate_plan_cards, scene_projection, layout_projection, reference_projection, validate_dependencies, source_changes, serve
+import icon_sets
 import work_requests
 import studio_preview
 import visual_diagnostics
@@ -363,7 +364,7 @@ def appearance_options(root: Path, args: argparse.Namespace) -> dict[str, Any]:
 def command_appearance_resolve(root: Path, args: argparse.Namespace) -> None:
     service = account_service(root)
     account = service.get("account", args.account) if args.account else {}
-    print(json.dumps(appearance.resolve(root, account, appearance_options(root, args)), ensure_ascii=False, indent=2))
+    print_result(root, args, appearance.resolve(root, account, appearance_options(root, args)))
 
 
 def command_appearance_update(root: Path, args: argparse.Namespace) -> None:
@@ -422,7 +423,7 @@ def plan_metadata(path: Path, state: dict[str, Any]) -> dict[str, Any]:
         inputs[name] = {"path": state.get("shared_inputs", {}).get(name, f"variants/{state['id']}/{name}"),
                         "revision": read_frontmatter(target).get("revision")}
     work = path.parent.parent
-    return {"work": read_frontmatter(work / 'WORK.md')['id'], "variant": state["id"],
+    return {"plan_format": PLAN_FORMAT, "work": read_frontmatter(work / 'WORK.md')['id'], "variant": state["id"],
             "revision": state.get("plan_revision", 1), "inputs": inputs,
             **{key: state.get(key) for key in ("template", "profile", "subject_position")},
             "script_revision": inputs["SCRIPT.md"]["revision"], "research_revision": inputs["RESEARCH.md"]["revision"],
@@ -434,7 +435,7 @@ def plan_metadata(path: Path, state: dict[str, Any]) -> dict[str, Any]:
 
 def plan_metadata_body(body: str, metadata: dict[str, Any]) -> str:
     body = re.sub(r'<!-- plan-metadata:start -->.*?<!-- plan-metadata:end -->\s*', '', body, flags=re.S).lstrip('\r\n')
-    keys = ('work', 'variant', 'revision', 'inputs', 'ratio', 'fps', 'theme', 'background', 'motion', 'mode', 'captions', 'audio', 'alignment')
+    keys = ('plan_format', 'work', 'variant', 'revision', 'inputs', 'ratio', 'fps', 'theme', 'background', 'motion', 'mode', 'captions', 'audio', 'alignment')
     rows = ['<!-- plan-metadata:start -->', '| CLI 元信息 | 当前值 |', '|---|---|']
     rows += [f"| {key} | {json.dumps(metadata.get(key), ensure_ascii=False).replace('|', '&#124;')} |" for key in keys]
     return '\n'.join([*rows, '<!-- plan-metadata:end -->', '', body])
@@ -1061,7 +1062,7 @@ def command_list(root: Path, args: argparse.Namespace) -> None:
     if args.tree:
         print("\n".join(tree_lines(root, rows)))
     else:
-        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        print_result(root, args, rows)
 
 
 def display_name(root: Path, row: dict[str, Any]) -> str:
@@ -1387,7 +1388,30 @@ def command_status(root: Path, args: argparse.Namespace) -> None:
         "variants": [path.name for path in variant_paths(work)],
         "message": "尚未创建制作版本" if not variant_paths(work) else None,
     }
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    print_result(root, args, output)
+
+
+def print_result(root: Path, args: argparse.Namespace, result, *, report=False) -> None:
+    """Keep machine output exact; persist large human output outside Work content."""
+    encoded = json.dumps(result, ensure_ascii=False, indent=2)
+    if getattr(args, 'json', False) or (not report and len(encoded) <= 2000):
+        print(encoded)
+        return
+    path = runtime_root(root) / 'reports' / f'{args.command}-{uuid.uuid4().hex}.json'
+    write_json(path, result)
+
+    def brief(value, depth=0):
+        if isinstance(value, list):
+            return {'count': len(value), 'first': [brief(item, depth + 1) for item in value[:3]]}
+        if isinstance(value, dict):
+            if depth >= 2:
+                return {key: item for key, item in value.items()
+                        if key in {'kind', 'reason', 'scene', 'time', 'start', 'end', 'target', 'ref', 'component_ref', 'path'}}
+            return {key: brief(item, depth + 1) for key, item in value.items()
+                    if key not in {'samples', 'timeline', 'input_sha256', 'snapshot_sha256'}}
+        return value[:240] + '...' if isinstance(value, str) and len(value) > 240 else value
+
+    print(json.dumps({'summary': brief(result), 'report_path': str(path)}, ensure_ascii=False, indent=2))
 
 
 def command_component_validate(root: Path, args: argparse.Namespace) -> None:
@@ -1399,7 +1423,64 @@ def command_component_validate(root: Path, args: argparse.Namespace) -> None:
     else:
         source, acceptance = asset_store.resolve_component(root, args.component)
     release = validate_component_release(source, allow_unapproved=args.candidate or acceptance is not None)
-    print(json.dumps({key: release.get(key) for key in ("component_ref", "ratio", "profile", "subtemplate", "package_sha256", "files")}, ensure_ascii=False, indent=2))
+    print_result(root, args, {key: release.get(key) for key in ("component_ref", "ratio", "profile", "subtemplate", "package_sha256", "files")})
+
+
+def command_component_interface(root: Path, args: argparse.Namespace) -> None:
+    source, acceptance = (Path(args.component), None) if args.candidate else asset_store.resolve_component(root, args.component)
+    if not source.is_absolute():
+        source = root / source
+    release = validate_component_release(source, allow_unapproved=args.candidate or acceptance is not None)
+    metadata = release['metadata']
+    keys = ('communication_goal', 'usage', 'example', 'ratio', 'compatibility', 'layers',
+            'slots', 'parameters', 'duration_range', 'motion_recipe', 'customization')
+    card = {'component_ref': release['component_ref'], 'package_sha256': release['package_sha256'],
+            'interface': {key: metadata[key] for key in keys if key in metadata}}
+    card['interface'].setdefault('layers', 'not declared; verify the selected package before use')
+    if release.get('fixture'):
+        card['interface']['example'] = release['fixture']
+    for key in ('usage', 'example'):
+        name = metadata.get(key)
+        if isinstance(name, str):
+            path = (source / name).resolve()
+            if path.is_relative_to(source.resolve()) and path.is_file():
+                card['interface'][key] = path.read_text(encoding='utf-8')
+    print_result(root, args, card)
+
+
+def command_icons(root: Path, args: argparse.Namespace) -> None:
+    if args.icon_command == 'import':
+        result = icon_sets.import_lucide(Path(args.package), Path(args.source), asset_version=args.asset_version)
+    elif args.icon_command == 'search':
+        inventory = asset_store.discover_components(root, kind='icon-set')
+        packages = [asset_store.resolve_component(root, item['component_ref'])[0]
+                    for item in inventory['assets'] if item['available']]
+        if not packages:
+            raise HarnessError('Icon set not installed; use icons import, component pack and component accept')
+        result = icon_sets.search_icons(packages, args.query)
+    else:
+        if args.project:
+            project = asset_store.authoring_project(root, Path(args.project))
+        else:
+            if not args.work_override or not args.variant_override:
+                raise HarnessError('Icon use requires explicit --work/--variant or --project')
+            work, _ = selected_work(root, args)
+            require_workflow(work, 'hyperframes_video')
+            variant, _ = selected_variant(root, work, args)
+            project = variant / 'project'
+        result = icon_sets.use_icon(icon_sets.project_packages(project), args.reference,
+                                    project, args.output)
+    print_result(root, args, result)
+
+
+def validate_project_cards(project: Path, plan_text: str, closure, scene_ids=None) -> None:
+    if not any(row['cards'] for sid, row in plan_scene_rows(plan_text).items()
+               if scene_ids is None or sid in scene_ids):
+        return
+    cues = project / 'runtime/cues.json'
+    refs = [item['ref'] for item in icon_sets.search_icons(icon_sets.project_packages(project))]
+    validate_plan_cards(plan_text, read_json(cues) if cues.is_file() else None,
+                        project=project, closure=closure, icon_refs=refs, scene_ids=scene_ids)
 
 
 def command_component_store(root: Path, args: argparse.Namespace) -> None:
@@ -1427,7 +1508,7 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
             result = {**result, "discovery_sync": {"synchronized": not discovery["errors"], "errors": discovery["errors"]}}
         except (ComponentError, OSError, ValueError) as exc:
             result = {**result, "discovery_sync": {"synchronized": False, "error": str(exc)}}
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print_result(root, args, result)
 
 
 def command_component_install(root: Path, args: argparse.Namespace) -> None:
@@ -1466,20 +1547,20 @@ def command_component_install(root: Path, args: argparse.Namespace) -> None:
     result.update({"component_ref": f"{component_id}@v{version}", "project": str(project)})
     if not args.project:
         result.update({"work": work.name, "variant": variant.name})
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print_result(root, args, result)
 
 
 def command_component_verify(root: Path, args: argparse.Namespace) -> None:
     if args.project:
         project = asset_store.authoring_project(root, Path(args.project))
-        print(json.dumps(verify_installation(project, component_ref=args.component_ref), ensure_ascii=False, indent=2))
+        print_result(root, args, verify_installation(project, component_ref=args.component_ref))
         return
     work, _ = selected_work(root, args)
     require_workflow(work, "hyperframes_video")
     variant, _ = selected_variant(root, work, args)
     result = verify_installation(variant / "project", component_ref=args.component_ref)
     result.update({"work": work.name, "variant": variant.name})
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print_result(root, args, result)
 
 
 def command_variant_add(root: Path, args: argparse.Namespace) -> None:
@@ -1938,7 +2019,9 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     visual = purpose == "plan" or studio_draft or bool(state.get("accepted_visual_plan"))
     scenes = reference_projection(plan_text) if reference else layout_projection(project, plan_text, args.scene) if layout else scene_projection(project, plan_text, args.scene if scene else None) if visual else None
     if not reference and visual:
-        validate_dependencies(project, layout=layout)
+        closure = validate_dependencies(project, layout=layout)
+        if not layout:
+            validate_project_cards(project, plan_text, closure, args.scene if scene else None)
     draft_digest = file_sha256(draft) if draft else None
     source_digest = hashlib.sha256().hexdigest() if reference else snapshot_digest(project, kind)
     plan_digest = file_sha256(variant / "ANIMATION_PLAN.md") if visual else None
@@ -2350,6 +2433,7 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     contents = {name: input_path(documents, name).read_text(encoding='utf-8-sig') for name in PREVIEW_DOCUMENTS}
     scenes = scene_projection(project, contents['ANIMATION_PLAN.md'], sample_scenes)
     dependencies = validate_dependencies(project)
+    validate_project_cards(project, contents['ANIMATION_PLAN.md'], dependencies, sample_scenes)
     inventory = visual_diagnostics.static_inventory(project, dependencies)
     exceptions = []
     if args.exceptions:
@@ -2402,6 +2486,12 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     if diagnostic_lock:
         report['explainer'] = visual_diagnostics.explainer_diagnostics(
             project, dependencies, diagnostic_lock, contents['ANIMATION_PLAN.md'])
+    try:
+        report['icons'] = {'findings': icon_sets.audit_icons(
+            [item for sample in sampled['samples'] for item in sample.get('icons', [])],
+            icon_sets.project_packages(project)), 'unverified': []}
+    except ComponentError as error:
+        report['icons'] = {'findings': [], 'unverified': [{'reason': 'icon_closure_invalid', 'detail': str(error)}]}
     if target != 'current':
         for name, frozen in contents.items():
             current_path = input_path(variant, name)
@@ -2409,7 +2499,7 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
                 report['cross_version_differences'].append(name)
     if before != after:
         report['unverified'].append({'reason': 'inputs_changed_during_diagnosis'})
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print_result(root, args, report, report=True)
 
 
 def command_preview_diff(root: Path, args: argparse.Namespace) -> None:
@@ -2475,7 +2565,7 @@ def command_preview_diff(root: Path, args: argparse.Namespace) -> None:
         feedback = read_json(feedback_path) if feedback_path.exists() else {"entries": []}
         feedback["entries"].append({**result, "recorded_at": now()})
         write_json(feedback_path, feedback)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print_result(root, args, result)
 
 
 def measured_process(command: list[str], evidence: Path | None, operation: str, **kwargs: Any) -> subprocess.CompletedProcess:
@@ -3292,6 +3382,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     component = commands.add_parser("component", help="Validate and install immutable Component Releases")
     component_commands = component.add_subparsers(dest="component_command", required=True)
+    interface = component_commands.add_parser('interface', help='Read the selected asset interface without implementation source')
+    interface.add_argument('component')
+    interface.add_argument('--candidate', action='store_true')
+    interface.set_defaults(handler=command_component_interface)
     sfx = component_commands.add_parser("import-sfx", help="Import local seed SFX into an editable AssetSource; never accept")
     sfx.add_argument("--from", dest="package", required=True)
     sfx.add_argument("--source", required=True)
@@ -3309,7 +3403,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.set_defaults(handler=command_component_store)
     component_list = component_commands.add_parser("list", help="Discover packages from their metadata, not a Harness allowlist")
     component_list.add_argument("--query", default="")
-    component_list.add_argument("--kind", choices=("component", "module", "media", "audio", "character", "theme", "background", "motion", "scene-source", "recipe"))
+    component_list.add_argument("--kind", choices=("component", "module", "media", "audio", "character", "theme", "background", "motion", "icon-set", "scene-source", "recipe"))
     component_list.add_argument("--audit", action="store_true", help="Read-only discovery metadata and file audit")
     component_list.add_argument("--ratio")
     component_list.add_argument("--tag")
@@ -3317,6 +3411,20 @@ def build_parser() -> argparse.ArgumentParser:
     component_list.add_argument("--rebuild", action="store_true", help="Rebuild the derived discovery cache")
     component_list.add_argument("--research-root", type=Path, help="Include explicitly registered reference documents")
     component_list.set_defaults(handler=command_component_store)
+    icons = commands.add_parser('icons', help='Local versioned icon sets; no online provider')
+    icon_commands = icons.add_subparsers(dest='icon_command', required=True)
+    icon_import = icon_commands.add_parser('import', help='Import a local Lucide package into editable source; never accept')
+    icon_import.add_argument('--from', dest='package', required=True)
+    icon_import.add_argument('--source', required=True)
+    icon_import.add_argument('--asset-version', type=int, default=1)
+    icon_search = icon_commands.add_parser('search')
+    icon_search.add_argument('query', nargs='?', default='')
+    icon_use = icon_commands.add_parser('use', help='Copy from an installed, frozen icon set into the project')
+    icon_use.add_argument('reference')
+    icon_use.add_argument('--project')
+    icon_use.add_argument('--output', required=True)
+    for command in (icon_import, icon_search, icon_use):
+        command.set_defaults(handler=command_icons)
     component_accept = component_commands.add_parser("accept", help="Accept an exact locally reviewed asset version")
     component_accept.add_argument("component_ref")
     component_accept.add_argument("--sha256", required=True)
@@ -3437,6 +3545,14 @@ def build_parser() -> argparse.ArgumentParser:
     reopen = commands.add_parser("reopen")
     reopen.add_argument("work_id")
     reopen.set_defaults(handler=command_reopen)
+    def json_option(command):
+        command.add_argument('--json', action='store_true', default=argparse.SUPPRESS,
+                             help='Print the complete JSON result instead of a summary')
+        for action in command._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                for child in action.choices.values():
+                    json_option(child)
+    json_option(parser)
     return parser
 
 

@@ -17,7 +17,7 @@ class V34RulesTests(unittest.TestCase):
         self.assertIn("work component list --query", workflow)
         self.assertIn("WSL 开发任务或 Windows", workflow)
         design = (ROOT / ".studio/spec/visual-design.md").read_text(encoding="utf-8")
-        for rule in ("文字与 SVG/icon 互补", "普通附属图形由制作者完成",
+        for rule in ("文字与 SVG/icon 互补", "普通图标一律从本地图标集按精确版本取用",
                      "保留原声、Anchor 与源对齐", "宿主唯一时间线",
                      "阅读期间保持第 4 层稳定", "按用途查库"):
             self.assertIn(rule, design)
@@ -26,6 +26,9 @@ class V34RulesTests(unittest.TestCase):
 
     def test_tool_contract_names_real_operations_and_safety_boundaries(self):
         spec = (ROOT / ".studio/spec/hyperframes.md").read_text(encoding="utf-8")
+        spec += (ROOT / ".studio/spec/hyperframes-assets.md").read_text(encoding="utf-8")
+        spec += (ROOT / ".studio/spec/hyperframes-research.md").read_text(encoding="utf-8")
+        spec += (ROOT / ".studio/spec/runtime-interfaces.md").read_text(encoding="utf-8")
         for entry in ("appearance rebind", "--apply", "--upgrade-runtime", "appearance recover",
                       "--research-root", "--rebuild", "--revision", "--sha256",
                       "await HarnessAppearance.load()", "dispose()", "MP3", "ffprobe/ffmpeg"):

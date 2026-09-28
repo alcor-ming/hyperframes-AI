@@ -10,37 +10,134 @@ export const defaults = {step: 0.5, width: 960, timeout_ms: 5000};
 export function inspectRhythmFrame() {
   const observed = element => {
     const win = element.ownerDocument.defaultView, rect = element.getBoundingClientRect();
-    let visible = element.isConnected && rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 &&
+    const style = win.getComputedStyle(element);
+    const stroke = element instanceof win.SVGGeometryElement && style.stroke !== 'none' ? parseFloat(style.strokeWidth) || 0 : 0;
+    let visible = element.isConnected && rect.width + stroke > 0 && rect.height + stroke > 0 && rect.right + stroke > 0 && rect.bottom + stroke > 0 &&
       rect.left < win.innerWidth && rect.top < win.innerHeight;
     for (let parent = element; parent; parent = parent.parentElement) {
       const style = win.getComputedStyle(parent);
       if (style.display === 'none' || style.visibility !== 'visible' || +style.opacity < 0.02 ||
           [...style.filter.matchAll(/blur\(([\d.]+)px\)/g)].some(match => +match[1] > 0)) visible = false;
     }
-    visible &&= [.2, .5, .8].some(x => [.2, .5, .8].some(y => {
-      const top = element.ownerDocument.elementsFromPoint(rect.left + rect.width * x, rect.top + rect.height * y)[0];
+    const points = [.2, .5, .8].flatMap(x => [.2, .5, .8].map(y => ({x: rect.left + rect.width * x, y: rect.top + rect.height * y})));
+    if (element instanceof win.SVGGeometryElement && element.getScreenCTM()) {
+      const length = element.getTotalLength();
+      for (const fraction of length > 0 ? [.2, .5, .8] : []) {
+        const point = element.getPointAtLength(length * fraction);
+        points.push(new win.DOMPoint(point.x, point.y).matrixTransform(element.getScreenCTM()));
+      }
+    }
+    visible &&= points.some(point => {
+      const top = element.ownerDocument.elementsFromPoint(point.x, point.y)[0];
       return top && (top === element || top === element.getRootNode().host || element.contains(top) ||
         win.getComputedStyle(element).pointerEvents === 'none' && top.contains(element));
-    }));
+    });
     if (win.frameElement) visible &&= observed(win.frameElement).visible;
-    const style = win.getComputedStyle(element);
+    const transparent = color => color === 'transparent' || /rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(color);
+    const painted = node => {
+      const css = win.getComputedStyle(node);
+      if (node instanceof win.SVGElement) {
+        if (node.closest('defs,clipPath,mask,pattern,symbol') || css.display === 'none' || css.visibility !== 'visible' || +css.opacity < .02) return false;
+        if (!/^(path|line|polyline|polygon|rect|circle|ellipse|text|tspan|use|image)$/.test(node.localName)) return false;
+        return node.localName === 'image' || node.localName !== 'line' && css.fill !== 'none' && !transparent(css.fill) && +css.fillOpacity >= .02 ||
+          css.stroke !== 'none' && !transparent(css.stroke) && +css.strokeOpacity >= .02 && parseFloat(css.strokeWidth) > 0;
+      }
+      return /^(IMG|CANVAS|VIDEO|IFRAME|OBJECT|INPUT|BUTTON)$/.test(node.tagName.toUpperCase()) ||
+        [...node.childNodes].some(child => child.nodeType === 3 && child.textContent.trim()) ||
+        !transparent(css.backgroundColor) || css.backgroundImage !== 'none' || css.boxShadow !== 'none' ||
+        ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(css['border' + side + 'Width']) > 0 &&
+          !transparent(css['border' + side + 'Color']));
+    };
+    visible &&= [element, ...element.querySelectorAll('*')].some(painted);
     const images = [...element.querySelectorAll('img')];
     if (element.tagName === 'IMG') images.push(element);
-    return {visible, state_signature: JSON.stringify(images.map(image => image.currentSrc || image.src)),
-      signature: JSON.stringify([style.visibility, style.filter, style.opacity, style.transform,
+    return {visible, geometry: [rect.x, rect.y, rect.width, rect.height],
+      state_signature: JSON.stringify(images.map(image => image.currentSrc || image.src)),
+      signature: JSON.stringify([style.visibility, style.filter, Math.round(+style.opacity * 50),
+        ...[rect.x, rect.y, rect.width, rect.height].map(value => Math.round(value * 2)),
+        [...new win.DOMMatrix(style.transform === 'none' ? undefined : style.transform).toFloat64Array()]
+          .map(value => Math.round(value * 100) / 100),
+        style.color, style.backgroundColor, style.borderColor, style.fill, style.stroke,
+        style.fillOpacity, style.strokeOpacity, style.strokeWidth, style.strokeDasharray, style.strokeDashoffset,
+        element instanceof win.SVGElement ? ['d', 'points', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry']
+          .map(name => element.getAttribute(name)) : null,
         element.textContent, images.map(image => image.currentSrc || image.src)])};
   };
   const candidates = [];
+  const claimed = new Map();
+  const add = (event, id) => {
+    const target = event.target;
+    if (!target?.ownerDocument || target.closest('[data-hf-ambient], [data-hf-motion="idle"], [data-hf-motion="talk"]')) return;
+    const host = target.ownerDocument.defaultView.frameElement;
+    const layer = target.closest('[data-hf-layer]')?.dataset.hfLayer || host?.dataset.cardLayer;
+    if (!['stage', 'overlay', 'text'].includes(layer)) return;
+    const targets = [];
+    const address = [];
+    for (let el = target; el?.parentElement; el = el.parentElement)
+      address.unshift([...el.parentElement.children].indexOf(el));
+    const frames = [];
+    for (let frame = target.ownerDocument.defaultView.frameElement; frame;
+      frame = frame.ownerDocument.defaultView.frameElement) {
+      frames.unshift([...frame.ownerDocument.querySelectorAll('iframe,frame')].indexOf(frame));
+    }
+    const frameKey = frames.join('/') || 'host';
+    for (let el = target; el; el = el.parentElement || el.ownerDocument.defaultView.frameElement) {
+      for (const key of ['id', 'data-info-id', 'data-card-id', 'data-b-id']) {
+        const value = el.getAttribute(key);
+        if (value) targets.push(value);
+      }
+      const row = el.getAttribute('data-card-row');
+      const card = el.closest('[data-card-id], [data-info-id]');
+      if (row && card) targets.push(`${card.dataset.cardId || card.dataset.infoId}:${row}`);
+    }
+    candidates.push({id: `${location.href}#${frameKey}:${id}`, time: event.time, before: event.before, after: event.after,
+      duration: event.duration, kind: event.kind, targets: [...new Set(targets)], target_node: `${frameKey}:${address.join('.')}`,
+      unverified: event.unverified,
+      scene: event.scene || target.closest('[data-scene-id]')?.dataset.sceneId || null, layer, ...observed(target)});
+  };
   let sourceIndex = 0;
   for (const source of window.__hfRhythmSources || []) {
     const index = sourceIndex++;
     source().forEach((event, i) => {
-      const target = event.target, host = target.ownerDocument.defaultView.frameElement;
-      const layer = target.closest('[data-hf-layer]')?.dataset.hfLayer || host?.dataset.cardLayer;
-      if (!['stage', 'overlay', 'text'].includes(layer)) return;
-      candidates.push({id: `${location.href}#${index}:${i}`, time: event.time, before: event.before, after: event.after, duration: event.duration,
-        kind: event.kind, scene: event.scene || target.closest('[data-scene-id]')?.dataset.sceneId || null,
-        layer, ...observed(target)});
+      const times = claimed.get(event.target) || new Set();
+      if (times.has(event.time)) return;
+      times.add(event.time); claimed.set(event.target, times);
+      add(event, `helper:${index}:${i}`);
+    });
+  }
+  const root = document.querySelector('[data-composition-id]');
+  const timeline = window.__timelines?.[root?.dataset.compositionId];
+  if (timeline?.getChildren) {
+    const origin = timeline.globalTime(0), scale = timeline.globalTime(1) - origin;
+    timeline.getChildren(true, true, false).forEach((tween, i) => {
+      const time = (tween.globalTime(0) - origin) / scale;
+      const duration = Math.abs((tween.globalTime(tween.totalDuration()) - tween.globalTime(0)) / scale);
+      if (!Number.isFinite(time) || !Number.isFinite(duration)) return;
+      for (const [j, target] of (tween.targets?.() || []).entries()) {
+        if (!target?.ownerDocument || [...claimed.get(target) || []].some(at => Math.abs(at - time) < .00001)) continue;
+        const properties = Object.keys(tween.vars).filter(key => !['duration', 'delay', 'ease', 'parent',
+          'overwrite', 'immediateRender', 'lazy', 'repeat', 'repeatDelay', 'yoyo', 'onComplete', 'onUpdate', 'data'].includes(key));
+        if (!properties.length) continue;
+        const camera = target.closest('[data-hf-camera]') || ['pan', 'zoom', 'camera'].includes(target.dataset.hfMotion) ||
+          duration >= 2 && properties.every(key => ['x', 'y', 'xPercent', 'yPercent', 'scale', 'scaleX', 'scaleY'].includes(key));
+        if (tween.repeat() < 0 || tween.repeat() >= 1000) {
+          add({target, time, duration: 0, kind: 'tween', unverified: 'unbounded_repeated_motion'}, `tween:${i}:${j}`);
+          continue;
+        }
+        const firstDuration = camera ? Math.abs((tween.globalTime(tween.duration()) - tween.globalTime(0)) / scale) : duration;
+        add({target, time, duration: firstDuration, kind: camera ? 'camera_start' : duration ? 'tween' : 'set'}, `tween:${i}:${j}`);
+        if (camera && tween.yoyo() && tween.repeat() > 0 && tween.repeat() < 1000) {
+          for (let cycle = 1; cycle <= tween.repeat(); cycle++) {
+            const local = cycle * (tween.duration() + tween.repeatDelay());
+            const turn = (tween.globalTime(local) - origin) / scale;
+            add({target, time: turn, duration: firstDuration, kind: 'camera_turn'}, `tween:${i}:${j}:turn:${cycle}`);
+          }
+        }
+        if (camera && duration) add({target, time: time + duration, duration: 0,
+          before: time + duration - firstDuration / 2, kind: 'camera_end'}, `tween:${i}:${j}:end`);
+        if (!camera && duration) add({target, time: time + duration, duration: 0,
+          before: time + duration / 2, kind: 'tween_end'}, `tween:${i}:${j}:end`);
+      }
     });
   }
   return candidates;
@@ -74,7 +171,7 @@ export function frameResourcesReady(time) {
     });
 }
 
-function inspectFrame(scenes, time, projection = {}) {
+export async function inspectFrame(scenes, time, projection = {}) {
   const visible = element => {
     const rect = element.getBoundingClientRect();
     if (!rect.width || !rect.height || rect.bottom <= 0 || rect.right <= 0 ||
@@ -166,11 +263,41 @@ function inspectFrame(scenes, time, projection = {}) {
         clue: targets.length && targets.every(target => !(target instanceof Element)) ? 'non-DOM/possibly empty tween; not a verdict' : null});
     }
   }
-  return {texts, unverified: [...unverified], timeline};
+  const exposedIcon = element => {
+    if (!visible(element)) return false;
+    const rect = element.getBoundingClientRect();
+    return [.2, .5, .8].some(x => [.2, .5, .8].some(y => {
+      const top = document.elementFromPoint(rect.left + rect.width * x, rect.top + rect.height * y);
+      return top && (top === element || element.contains(top) ||
+        getComputedStyle(element).pointerEvents === 'none' && top.contains(element));
+    }));
+  };
+  const icons = [...document.querySelectorAll('svg')].filter(exposedIcon).map(element => {
+    const rect = element.getBoundingClientRect();
+    return {svg: element.outerHTML, width: rect.width, height: rect.height, target: selector(element),
+      schematic: !!element.closest('[data-hf-schematic]'),
+      card_slot: !!element.closest('[data-card-svg-slot], [data-card-slot="svg"]')};
+  });
+  for (const element of [...document.images].filter(exposedIcon)) {
+    const url = new URL(element.currentSrc || element.src, location.href);
+    if (url.origin !== location.origin || !url.pathname.toLowerCase().endsWith('.svg')) continue;
+    try {
+      const response = await fetch(url.href, {redirect: 'error'});
+      if (!response.ok) throw new Error('SVG resource unavailable');
+      const rect = element.getBoundingClientRect();
+      icons.push({svg: await response.text(), width: rect.width, height: rect.height, target: selector(element),
+        schematic: !!element.closest('[data-hf-schematic]'),
+        card_slot: !!element.closest('[data-card-svg-slot], [data-card-slot="svg"]')});
+    } catch { unverified.add('SVG image provenance could not be sampled: ' + selector(element)); }
+  }
+  const motion_unverified = [...document.querySelectorAll('canvas,video')].filter(visible)
+    .filter(element => ['stage', 'overlay', 'text'].includes(element.closest('[data-hf-layer]')?.dataset.hfLayer))
+    .map(element => ({reason: 'media_canvas_motion_unverified', target: selector(element), time}));
+  return {texts, unverified: [...unverified], timeline, icons, motion_unverified};
 }
 
 export async function inspectCardFrames(frame, scenes, time, remaining) {
-  const result = {ready: true, texts: [], unverified: [], timeline: []};
+  const result = {ready: true, texts: [], unverified: [], timeline: [], icons: [], motion_unverified: []};
   for (const child of frame.childFrames()) {
     const projection = await child.evaluate(scenes => {
       const host = window.frameElement;
@@ -206,9 +333,11 @@ export async function inspectCardFrames(frame, scenes, time, remaining) {
     }, remaining());
     const localTime = await child.evaluate(() => Number(window.frameElement.dataset.cardTime));
     await child.waitForFunction(frameResourcesReady, remaining(), localTime);
-    if (projection.layer === 'text' && projection.visible) {
+    if (projection.visible) {
       const info = await child.evaluate(inspectFrame, scenes, time, projection);
-      result.texts.push(...info.texts);
+      if (projection.layer === 'text') result.texts.push(...info.texts);
+      result.icons.push(...info.icons);
+      result.motion_unverified.push(...info.motion_unverified);
       result.unverified.push(...info.unverified);
       result.timeline.push(...info.timeline);
     }
@@ -280,7 +409,7 @@ export async function probe(input) {
       if (Date.now() >= deadline) throw new Error('Diagnostic time budget exceeded; browser closed before outer command timeout');
       const time = Math.round(Math.min(duration - 0.001, Math.max(0, requested)) * 1e6) / 1e6;
       if (samples.has(time)) return samples.get(time);
-      const value = {time, ready: false, texts: [], rhythm_candidates: [], unverified: []};
+      const value = {time, ready: false, texts: [], rhythm_candidates: [], icons: [], motion_unverified: [], unverified: []};
       if (samples.size >= 10000) throw new Error('Sampling budget exceeded (maximum 10000 samples)');
       samples.set(time, value);
       const sampleDeadline = Date.now() + parameters.timeout_ms;
@@ -320,6 +449,12 @@ export async function probe(input) {
           const info = await frame.evaluate(inspectFrame, input.scenes || [], time);
           const cards = await inspectCardFrames(frame, input.scenes || [], time, remaining);
           value.rhythm_candidates = await frame.evaluate(inspectRhythmFrame);
+          for (const candidate of value.rhythm_candidates) {
+            candidate.before = Math.min(duration - .001, Math.max(0, candidate.before ?? candidate.time - .001));
+            candidate.after = Math.min(duration - .001, candidate.after ?? candidate.time + (candidate.duration / 2 || .001));
+          }
+          value.icons = [...info.icons, ...cards.icons];
+          value.motion_unverified = [...info.motion_unverified, ...cards.motion_unverified];
           if (before !== navigation || !await iframe.evaluate(element => getComputedStyle(element).visibility === 'visible'))
             throw new Error('Studio frame reloaded during sampling');
           value.texts.push(...info.texts, ...cards.texts);

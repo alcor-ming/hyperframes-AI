@@ -170,7 +170,7 @@ def _validate_package(directory: Path, expected_ref: str | None = None) -> dict:
     report = validate_component_release(directory, expected_ref=expected_ref, allow_unapproved=True)
     kinds = {"component", "effect", "module", "media"}
     if (directory / "asset.json").is_file():
-        kinds |= {"theme", "background", "motion", "character"}
+        kinds |= {"theme", "background", "motion", "character", "icon-set"}
     if report["metadata"].get("asset_type", "component") not in kinds:
         raise ComponentError("Unsupported asset type for the Component contract")
     return report

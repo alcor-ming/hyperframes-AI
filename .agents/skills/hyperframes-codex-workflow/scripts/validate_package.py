@@ -28,6 +28,12 @@ REQUIRED_HARNESS = [
     ".studio/capabilities.yaml",
     ".studio/spec/creative.md",
     ".studio/spec/hyperframes.md",
+    ".studio/spec/hyperframes-final.md",
+    ".studio/spec/hyperframes-assets.md",
+    ".studio/spec/hyperframes-research.md",
+    ".studio/spec/hyperframes-remotion.md",
+    ".studio/spec/runtime-interfaces.md",
+    ".studio/icon_sets.py",
     ".studio/spec/privacy.md",
     ".studio/recipes/talking-head.md",
     ".studio/recipes/pure-hyperframes.md",
@@ -50,6 +56,8 @@ def rule_link_errors(repo: Path) -> list[str]:
     paths = ["AGENTS.md", ".studio/workflow.md", ".studio/spec/creative.md",
              ".studio/spec/visual-design.md", ".studio/spec/privacy.md",
              ".studio/templates/WINDOWS_AGENTS.md"]
+    paths += [str(path.relative_to(repo)) for path in (repo / '.studio/spec').glob('hyperframes*.md')]
+    paths += ['.studio/spec/runtime-interfaces.md']
     for relative in paths:
         path = repo / relative
         if not path.is_file():
