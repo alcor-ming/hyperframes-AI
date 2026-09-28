@@ -176,10 +176,12 @@ def rebind(root, work, variant, state, args, api):
         plan = api.read_frontmatter(variant / "ANIMATION_PLAN.md")
         plan.update(theme=new_state["theme"], mode=new_state["mode"], ratio=new_state["ratio"], profile=None,
                     status="draft", revision=new_state["plan_revision"])
+        plan.update(api.plan_metadata(variant, new_state))
         plan.pop("visual_plan", None)
         plan_lines = (variant / "ANIMATION_PLAN.md").read_bytes().splitlines(keepends=True)
         end = next(i for i, line in enumerate(plan_lines[1:], 1) if line.strip() == b"---")
         body = b"".join(plan_lines[end + 1:]).decode("utf-8")
+        body = api.plan_metadata_body(body, plan)
         newline = "\r\n" if plan_lines[0].endswith(b"\r\n") else "\n"
         contents = {"variant.yaml": json.dumps(new_state, ensure_ascii=False, indent=2) + "\n",
                     "ANIMATION_PLAN.md": "---" + newline + json.dumps(plan, ensure_ascii=False) + newline + "---" + newline + body}

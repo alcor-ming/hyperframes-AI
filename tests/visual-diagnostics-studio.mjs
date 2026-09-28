@@ -24,6 +24,7 @@ const cardPath = path.join(project, 'card/component.html');
 const cardSource = await fs.readFile(cardPath);
 await fs.chmod(cardPath, 0o444);
 await fs.copyFile(path.join(repo, '.studio/runtime/card-component.js'), path.join(project, 'card-component.js'));
+await fs.copyFile(path.join(repo, '.studio/runtime/figures.js'), path.join(project, 'figures.js'));
 await fs.copyFile(process.env.GSAP_FILE || path.join(HF_PACKAGE, '../gsap/dist/gsap.min.js'), path.join(project, 'gsap.js'));
 const videoFile = 'video' + path.extname(VIDEO_FIXTURE || 'video.webm');
 if (VIDEO_FIXTURE) await fs.copyFile(VIDEO_FIXTURE, path.join(project, videoFile));
@@ -71,22 +72,36 @@ window.__timelines={fixture:timeline};card.renderAt(0);
     video: '.to({}, {duration:2.5})',
     broken: '.to({}, {duration:4})',
     transition: '.to({}, {duration:4})',
+    rhythm: '.to({}, {duration:4})',
+    'transparent-overlay': '.to({}, {duration:4})',
+    'opaque-overlay': '.to({}, {duration:4})',
   }[mode] || (video ? '.to({}, {duration:2.5})' : '');
   await fs.writeFile(path.join(project, 'index.html'), `<!doctype html><html><head><meta charset="utf-8"><style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden}main{position:relative;width:960px;height:540px;background:rgb(250,250,250)}
 #block{position:absolute;width:250px;height:250px;left:100px;top:180px;background:#dd3155}#corner{position:absolute;right:0;top:0;width:5px;height:5px;background:#000}
 p{position:absolute;font:26px Arial;left:100px;top:30px}video{position:absolute;width:960px;height:540px;object-fit:cover}.hidden{opacity:0}
 </style></head><body><main data-composition-id="fixture" data-width="960" data-height="540" data-duration="${duration}"${mode === 'video-native' ? ' data-no-timeline="true"' : ''}>
-<section data-scene-id="S01" class="clip" data-start="0" data-duration="${mode === 'transition' ? 2 : duration}"><p data-info-id="I01">Visible text <span>continues here.</span></p><p class="hidden">Hidden text must not appear.</p><div id="block"></div><div id="corner"></div>
+<section data-scene-id="S01" class="clip" data-start="0" data-duration="${mode === 'transition' ? 2 : duration}"><p data-info-id="I01">Visible text <span>continues here.</span></p><p class="hidden">Hidden text must not appear.</p><div id="block" data-hf-layer="stage"></div><div id="corner" data-hf-layer="background"></div>
 <svg width="300" height="100" style="position:absolute;left:400px;top:100px"><text x="0" y="40">SVG evidence</text></svg></section>
 ${mode === 'transition' ? '<section class="clip" data-scene-id="S02" data-start="2" data-duration="2"><p>Visible text <span>continues here.</span></p><div style="position:absolute;width:250px;height:250px;left:100px;top:180px;background:#dd3155"></div><svg width="300" height="100" style="position:absolute;left:400px;top:100px"><text x="0" y="40">SVG evidence</text></svg></section>' : ''}
 ${video ? `<video src="${videoFile}" muted preload="auto" data-start="0" ${mediaTiming} data-track-index="1"></video>` : ''}
 ${mode === 'broken' ? '<img src="missing.png">' : ''}
-</main>${mode === 'video-native' ? '' : `<script src="gsap.js"></script><script>window.__timelines={fixture:gsap.timeline({paused:true})${actions}};</script>`}</body></html>`);
+${mode.endsWith('-overlay') ? `<div style="position:absolute;inset:0;z-index:20;background:${mode === 'opaque-overlay' ? 'white' : 'transparent'}"><span style="position:absolute;bottom:5px">Overlay footer</span></div>` : ''}
+</main>${mode === 'video-native' ? '' : `<script src="gsap.js"></script><script>window.__timelines={fixture:gsap.timeline({paused:true})${actions}};</script>`}
+${mode === 'rhythm' ? `<script src="figures.js"></script><script>window.ready=(async()=>{
+if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));
+const figures=await HarnessFigures.load({assets:[]},{cues:{find:value=>value}});
+for(let i=0;i<120&&(!document.querySelector('[data-hf-layer="stage"]')||!document.querySelector('[data-hf-layer="background"]'));i++)await new Promise(resolve=>requestAnimationFrame(resolve));
+const target=document.querySelector('[data-hf-layer="stage"]'),background=document.querySelector('[data-hf-layer="background"]');
+if(!target||!background)throw new Error('Rhythm fixture DOM missing '+document.body.innerHTML.slice(0,500));
+figures.image(target).point(.123,{duration:.04}).pan(1,{duration:2,x:100});
+figures.image(background).idle(0,{duration:4});
+window.__timelines.fixture.eventCallback('onUpdate',()=>figures.renderAt(window.__timelines.fixture.time()));
+await figures.renderAt(0);})();</script>` : ''}</body></html>`);
 }
 try {
   const url = `http://127.0.0.1:${port}/#project/fixture`;
-  for (const mode of ['static', 'short', 'slow', 'periodic', 'corner', 'noise', 'transition', 'broken', 'card', 'card-broken', 'card-unknown',
+  for (const mode of ['static', 'short', 'slow', 'periodic', 'corner', 'noise', 'transition', 'rhythm', 'transparent-overlay', 'opaque-overlay', 'broken', 'card', 'card-broken', 'card-unknown',
     ...(VIDEO_FIXTURE ? ['video', 'video-native', 'video-offset', 'video-loop', 'video-default-duration'] : [])]
     .filter(mode => !process.env.PROBE_MODES || process.env.PROBE_MODES.split(',').includes(mode))) {
     await source(mode);
@@ -125,8 +140,19 @@ try {
           'hidden/blurred A projection is not sampled while clear B text remains');
       } else if (!mode.startsWith('video')) {
         const text = report.samples.flatMap(item => item.texts).map(item => item.text).join(' ');
-        assert(text.includes('Visible text') && text.includes('SVG evidence'));
+        assert.equal(text.includes('Visible text'), mode !== 'opaque-overlay', 'Transparent containers do not hide painted text');
+        assert.equal(text.includes('SVG evidence'), mode !== 'opaque-overlay', 'Opaque covering content remains excluded');
+        if (mode.endsWith('-overlay')) assert(text.includes('Overlay footer'));
         assert(!text.includes('Hidden text'));
+        if (mode === 'rhythm') {
+          const before = report.samples.find(item => item.time === .122);
+          const after = report.samples.find(item => item.time === .143);
+          assert(before && after, 'probe samples a short helper event between fixed-grid times');
+          const candidate = sample => sample.rhythm_candidates.find(item => item.kind === 'point');
+          assert(candidate(after).visible);
+          assert.notEqual(candidate(before).signature, candidate(after).signature);
+          assert(report.samples.every(item => item.rhythm_candidates.every(event => event.layer === 'stage')));
+        }
       }
     }
     checks.push({mode, samples: report.samples.length});

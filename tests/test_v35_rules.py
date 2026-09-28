@@ -21,14 +21,15 @@ class V35RulesTests(unittest.TestCase):
                      ".studio/workflow.md", ".studio/spec/creative.md", "README.md"):
             with self.subTest(path=path):
                 text = read(path)
-                for token in ("text-led", "animation-led", "explainer", "卡片模式", "五层", "BGM/SFX"):
+                tokens = ("Plan", "visual-design.md") if path == ".studio/spec/creative.md" else ("card", "explainer")
+                for token in tokens:
                     self.assertIn(token, text)
-                if path != "README.md":
+                if path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
                     for token in ("Asset Brief", "一并授权", "提供方"):
                         self.assertIn(token, text)
                 self.assertNotIn("可保存到创作者平台草稿箱", text)
                 self.assertNotIn("才可用已登录浏览器保存草稿", text)
-        for path in ("AGENTS.md", ".studio/spec/privacy.md"):
+        for path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
             for boundary in ("不公开发布", "不购买额度", "不得读取 Cookie", "单独取得用户授权"):
                 self.assertIn(boundary, read(path))
         caps = read(".studio/capabilities.yaml")
@@ -39,20 +40,20 @@ class V35RulesTests(unittest.TestCase):
 
     def test_design_and_plan_preserve_explainer_contract(self):
         design = read(".studio/spec/visual-design.md")
-        for token in ("## 有声动态图解（explainer）", "## 叙事模式（卡片模式）",
+        for token in ("`card`", "`explainer`",
                       "任一通道", "A1 只约束第 4 层", "第 5 层口播原文不受 A1",
                       "镜像回收", "系列声音签名", "同帧可见事件", "ducking",
-                      "不设固定数量或间隔配额", "未试听", "Plan 检查与 Q1"):
+                      "不设固定数量或间隔配额", "未试听", "Plan 检查", "Q1"):
             self.assertIn(token, design)
         plan = read(".studio/templates/ANIMATION_PLAN.template.md")
-        for token in ("全片方向", "系列角色与生图清单", "声音层", "主载体", "事件与层",
-                      "start_cue", "end_cue", "gain", "nth", "卡片模式不默认新增"):
+        for token in ("全片方向", "B 素材", "声音导出", "A/B 编排", "事件序列",
+                      "start_cue", "end_cue", "nth", "```sound"):
             self.assertIn(token, plan)
         spec = read(".studio/spec/hyperframes.md")
         for token in ("data-hf-layer", "`background`", "`stage`", "`overlay`", "`text`",
-                      "`captions`", "后续迁移", "cue_not_found", "cue_ambiguous", "cue_unaligned",
+                      "`captions`", "两种模式共用五层", "cue_not_found", "cue_ambiguous", "cue_unaligned",
                       "HarnessFigures.load(lock)", "renderAt(t)", "character.json",
-                      "captions_lock_mismatch", "sound_asset_outside_closure", "不重算 hash",
+                      "captions_lock_mismatch", "sound_asset_outside_closure", "精确 ref/hash",
                       "已批准 Plan 中恰好一个", "不回退读取可变的 sound.json",
                       'data-audio-role="voice"', 'data-character-ref="<id@vN>"',
                       "其余 audio 必须来自 media 闭包"):
@@ -66,6 +67,9 @@ class V35RulesTests(unittest.TestCase):
         files = [".studio/runtime/" + name for name in
                  ("appearance.js", "scene-binding.js", "cues.js", "captions.js", "figures.js")]
         files += [".studio/explainer.py", ".studio/sfx_import.py"]
+        files += ["AGENTS.md", ".studio/workflow.md", ".studio/spec/visual-design.md",
+                  ".studio/templates/WINDOWS_AGENTS.md", ".studio/templates/ANIMATION_PLAN.template.md",
+                  ".studio/templates/RESEARCH.template.md"]
         validator = read(".agents/skills/hyperframes-codex-workflow/scripts/validate_package.py")
         with tempfile.TemporaryDirectory() as directory:
             stage = Path(directory)

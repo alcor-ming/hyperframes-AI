@@ -18,39 +18,116 @@ def normalize(text):
 
 
 def plan_information(text):
-    rows, headers, headings = {}, [], []
-    screen_starts = set()
-    for match in markdown_structure_lines(text):
-        line = match[0]
-        if re.fullmatch(r'```screen\s*', line):
-            screen_starts.add(match.start())
-        heading = re.match(r'^#{1,6}\s+(.+)$', line)
-        if heading:
-            headings.append((match.start(), match.end(), heading[1]))
-        if not line.lstrip().startswith('|'):
-            continue
-        cells = [cell.strip().strip('`') for cell in re.split(r'(?<!\\)\|', line.strip().strip('|'))]
-        if '实际表达' in cells:
-            headers = cells
-        elif headers and len(cells) == len(headers) and re.match(r'^I\d+\b', cells[0]):
-            identity = re.match(r'^I\d+', cells[0])[0]
-            rows[identity] = dict(zip(headers, cells))
-    for index, heading in enumerate(headings):
-        identity = re.match(r'`?(I\d+)\b', heading[2])
-        if not identity:
-            continue
-        end = headings[index + 1][0] if index + 1 < len(headings) else len(text)
-        block = text[heading[1]:end]
-        screen = next((item for item in re.finditer(r'^```screen[^\S\n]*\n(.*?)^```[^\S\n]*$', block, re.M | re.S)
-                       if heading[1] + item.start() in screen_starts), None)
-        if screen:
-            source = re.search(r'^\s*(?:-\s*)?(?:\*\*)?来源\s*[:：](?:\*\*)?\s*(.+)$', block, re.M)
-            rows[identity[1]] = {'实际表达': screen[1].rstrip('\n'),
-                                 '信息 ID / 来源': source[1].strip() if source else heading[2]}
     scenes = plan_scene_rows(text)
-    mapping = {sid: re.findall(r'\bI\d+\b', row.get('使用信息 ID', row.get('信息 ID', '')))
-               for sid, row in scenes.items()}
-    return rows, mapping
+    return ({identity: value for row in scenes.values() for identity, value in row['screens'].items()},
+            {sid: list(row['screens']) for sid, row in scenes.items()})
+
+
+def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
+    """Locate gaps in observed layer 2-4 events, never issue an acceptance verdict."""
+    from explainer import find_cue
+    events, findings, unverified, declared = [], [], [], []
+    samples = sorted(samples, key=lambda item: item['time'])
+    candidates = {}
+    for sample in samples:
+        if not sample.get('ready'):
+            unverified.append({'reason': 'rhythm_sample_unavailable', 'time': sample['time']})
+            continue
+        for candidate in sample.get('rhythm_candidates', []):
+            candidates.setdefault(candidate['id'], []).append((sample['time'], candidate))
+    allowed = {'text_reveal', 'b_enter', 'a_return', 'enter', 'exit', 'bounce', 'squash', 'point', 'state',
+               'pan_start', 'pan_end', 'zoom_start', 'zoom_end'}
+    for observations in candidates.values():
+        candidate = observations[0][1]
+        at, duration = candidate['time'], candidate['duration']
+        if candidate['kind'] not in allowed or candidate['layer'] not in {'stage', 'overlay', 'text'}:
+            continue
+        before = next((value for time, value in observations
+                       if abs(time - candidate.get('before', max(0, at - .001))) < .00001), None)
+        after = next((value for time, value in observations
+                      if abs(time - candidate.get('after', at + (duration / 2 if duration > 0 else .001))) < .00001), None)
+        if not before or not after:
+            unverified.append({'reason': 'rhythm_event_not_sampled', 'time': at, 'kind': candidate['kind']})
+            continue
+        key = 'state_signature' if candidate['kind'] == 'state' else 'signature'
+        changed = before.get(key) != after.get(key)
+        opening = at == 0 and candidate['kind'] in {'text_reveal', 'b_enter', 'enter'} and after['visible']
+        if (changed and (before['visible'] or after['visible'])) or opening:
+            events.append({key: candidate[key] for key in ('id', 'time', 'kind', 'layer', 'scene')})
+    # Visible text content is a layer-specific observation, not a pixel/tween count.
+    previous = None
+    for sample in samples:
+        if not sample.get('ready'):
+            previous = None
+            continue
+        text = sorted((item.get('scene') or '', item.get('selector') or '', item['text'])
+                      for item in sample.get('texts', []) if item.get('layer') == 'text')
+        if previous is not None and text != previous[1]:
+            events.append({'time': sample['time'], 'kind': 'observed_text_change', 'layer': 'text',
+                           'scene': None, 'sample_window': [previous[0], sample['time']]})
+        previous = (sample['time'], text)
+    bounds = {scene['id']: (scene['start'], scene['start'] + scene['duration']) for scene in scenes}
+    for sid, row in (plan_scene_rows(plan) if plan else {}).items():
+        if sid not in bounds:
+            continue
+        screens, scheduled = row.get('screens', {}), {}
+        for event in row.get('events', []):
+            if event.get('layer') != 4:
+                continue
+            identities = re.findall(r'\bI[0-9]+\b', str(event.get('info', '')) + ' ' + str(event.get('change', '')))
+            try:
+                at = find_cue(cues, event['cue'])
+                scheduled.update((identity, at) for identity in identities if identity in screens)
+            except (ValueError, TypeError, KeyError):
+                pass
+        if not scheduled:
+            unverified.append({'reason': 'lay_out_and_wait_requires_information_cue_visibility_mapping', 'scene': sid})
+        for sample in samples:
+            if not sample.get('ready') or not bounds[sid][0] <= sample['time'] < bounds[sid][1]:
+                continue
+            visible_text = normalize(''.join(item['text'] for item in sample.get('texts', [])
+                                            if item.get('scene') == sid and item.get('layer') == 'text'))
+            early = [identity for identity, at in scheduled.items() if at - sample['time'] > 2
+                     and normalize(screens[identity]['实际表达'])
+                     and normalize(screens[identity]['实际表达']) in visible_text]
+            if len(early) > len(screens) / 2:
+                findings.append({'kind': 'suspected_lay_out_and_wait', 'scene': sid, 'time': sample['time'],
+                                 'information_ids': early, 'planned_cues': {key: scheduled[key] for key in early}})
+                break
+        for item in row.get('exceptions', []):
+            try:
+                if item.get('kind') not in {'pause', 'talking_head'} or not isinstance(item.get('reason'), str) or not item['reason'].strip():
+                    raise ValueError('Exception requires pause/talking_head kind and reason')
+                start, end = (find_cue(cues, item[key]) for key in ('start_cue', 'end_cue'))
+                if not bounds[sid][0] <= start < end <= bounds[sid][1]:
+                    raise ValueError('Exception is outside its Scene')
+                if item['kind'] == 'talking_head' and mode != 'talking_head':
+                    raise ValueError('真人 interval requires talking_head mode')
+                declared.append({**item, 'scene': sid, 'start': start, 'end': end,
+                                 'status': 'declared_not_verified', 'approval': 'not_inferred'})
+            except (ValueError, TypeError, KeyError) as error:
+                unverified.append({'reason': 'rhythm_exception_unresolved', 'scene': sid, 'detail': str(error)})
+    spans = []
+    for start, end in sorted(bounds.values()):
+        if spans and start <= spans[-1][1]:
+            spans[-1][1] = max(end, spans[-1][1])
+        else:
+            spans.append([start, end])
+    for start, end in spans:
+        if not any(sample.get('ready') and start <= sample['time'] < end for sample in samples):
+            unverified.append({'reason': 'rhythm_interval_not_sampled', 'start': start, 'end': end})
+            continue
+        points = sorted({start, end, *(event['time'] for event in events if start <= event['time'] <= end),
+                         *(point for item in declared for point in (item['start'], item['end']) if start <= point <= end)})
+        for left, right in zip(points, points[1:]):
+            if right - left <= 2 or any(item['start'] <= left and right <= item['end'] for item in declared):
+                continue
+            findings.append({'kind': 'rhythm_gap', 'start': left, 'end': right, 'duration': right - left,
+                             'scenes': [sid for sid, (a, b) in bounds.items() if a < right and b > left],
+                             'basis': 'observed_events_only', 'coverage': 'unverified_custom_motion', 'verdict': None})
+    unverified.append({'reason': 'untracked_layer_motion_media_canvas_and_between_samples_require_review'})
+    return {'events': sorted(events, key=lambda item: item['time']), 'findings': findings,
+            'declared_exceptions': declared, 'unverified': unverified, 'advisory_only': True}
 
 
 def source_sections(script, research, information):
@@ -182,10 +259,6 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
                 valid = valid and allowed.get(ref) == path.resolve()
             if not valid:
                 findings.append({"kind": "sound_asset_outside_closure", "file": name, "ref": ref, "src": src})
-    for scene, row in (plan_scene_rows(plan) if plan and lock["mode"] == "explainer" else {}).items():
-        for field in ("主载体", "事件与层"):
-            if not row.get(field, "").strip():
-                findings.append({"kind": "explainer_plan_missing", "scene": scene, "field": field})
     unverified.append({"reason": "dynamic_hosts_and_refs_require_browser_review"})
     return {"findings": findings, "unverified": unverified}
 

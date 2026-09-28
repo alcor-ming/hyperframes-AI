@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import sys
 
 
@@ -31,6 +32,8 @@ REQUIRED_HARNESS = [
     ".studio/recipes/talking-head.md",
     ".studio/recipes/pure-hyperframes.md",
     ".studio/templates/RESEARCH.template.md",
+    ".studio/templates/ANIMATION_PLAN.template.md",
+    ".studio/templates/WINDOWS_AGENTS.md",
     ".studio/runtime/appearance.js",
     ".studio/runtime/scene-binding.js",
     ".studio/runtime/cues.js",
@@ -41,6 +44,27 @@ REQUIRED_HARNESS = [
 ]
 
 
+def rule_link_errors(repo: Path) -> list[str]:
+    """Windows template links resolve as deployed AGENTS.md, not in templates/."""
+    errors = []
+    paths = ["AGENTS.md", ".studio/workflow.md", ".studio/spec/creative.md",
+             ".studio/spec/visual-design.md", ".studio/spec/privacy.md",
+             ".studio/templates/WINDOWS_AGENTS.md"]
+    for relative in paths:
+        path = repo / relative
+        if not path.is_file():
+            continue
+        base = repo if relative.endswith("WINDOWS_AGENTS.md") else path.parent
+        for target in re.findall(r"\]\(([^)]+)\)", path.read_text(encoding="utf-8")):
+            target = target.strip("<>").split("#", 1)[0]
+            if not target or "://" in target:
+                continue
+            resolved = (base / target).resolve()
+            if not resolved.is_relative_to(repo.resolve()) or not resolved.is_file():
+                errors.append(f"invalid rule link: {relative}: {target}")
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     for relative in REQUIRED_PACKAGE:
@@ -49,6 +73,7 @@ def main() -> int:
     for relative in REQUIRED_HARNESS:
         if not (REPO / relative).is_file():
             errors.append(f"missing harness file: {relative}")
+    errors.extend(rule_link_errors(REPO))
 
     for path in sorted(ROOT.rglob("*.json")):
         try:

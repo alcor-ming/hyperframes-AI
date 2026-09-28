@@ -23,9 +23,13 @@ class V343RulesTests(unittest.TestCase):
                 text = read(name)
                 for obsolete in ("默认不生成", "不默认调用图片", "不生成则写无", "不强制配图"):
                     self.assertNotIn(obsolete, text)
-                for required in ("逐 Scene", "零图", "方向", "Asset Brief",
-                                 "一并授权", "未列用途或明显超量", "不冒充", "提供方"):
-                    self.assertIn(required, text)
+                for obsolete in ("全片零图", "逐 Scene 评估图片", "旧 Plan 表格格式继续有效"):
+                    self.assertNotIn(obsolete, text)
+                if name in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
+                    for required in ("Asset Brief", "一并授权", "未列用途或明显超量", "提供方"):
+                        self.assertIn(required, text)
+                else:
+                    self.assertNotIn("一并授权", text)
 
     def test_plan_blocks_and_checks_carry_complete_information(self):
         plan = read(".studio/templates/ANIMATION_PLAN.template.md")
@@ -33,24 +37,22 @@ class V343RulesTests(unittest.TestCase):
                               .replace("__RESEARCH_REVISION__", "1")
                               .replace("__SUBJECT_POSITION__", "null"))
         self.assertNotIn("profile", metadata)
-        for text in ("### I01", "```screen", "图片/界面/库资产取舍", "旧 Plan 表格格式继续有效",
-                     "Plan 检查结论", "| Scene | A/B | 信息 ID |"):
+        for text in ("### I01", "```screen", "## S01", "B 素材", "## 自检", "| Scene | 一句话摘要 |"):
             self.assertIn(text, plan)
         self.assertNotIn("| 实际表达 |", plan)
         design = read(".studio/spec/visual-design.md")
-        for text in ("承担定义、对象、关系和结论", "只剩标签", "不等于压短",
+        for text in ("任一通道", "必要条件、数值、单位、比较对象与归属",
                      "## Plan 检查", "Q1", "Three.js / Remotion", "优先复用", "长正文留 DOM/SVG"):
             self.assertIn(text, design)
         self.assertNotIn("反 PPT", design)
 
     def test_dispatch_follows_plan_and_discovery_precedes_dispatch(self):
         workflow = read(".studio/workflow.md")
-        for text in ("Plan 阶段", "查包、场景源与配方", "原样转达", "不附加比 Plan 更严",
-                     "完整上屏正文", "回报准确冲突", "检查结论"):
+        for text in ("Plan 阶段", "查包、场景源与配方", "原样转交", "不附加比 Plan 更严",
+                     "完整上屏正文", "回报准确冲突", "短自检单"):
             self.assertIn(text, workflow)
         router = read(ROUTER)
-        for text in ("During Plan", "complete Plan information blocks verbatim",
-                     "stricter prohibitions", "report conflicts", "Plan and Draft"):
+        for text in ("| Plan |", "| Draft |", "visual-design.md", "hyperframes.md"):
             self.assertIn(text, router)
 
     def test_retired_routing_leaves_legacy_profiles_and_podcast_intact(self):

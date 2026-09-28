@@ -9,9 +9,21 @@ from unittest.mock import patch
 
 from test_work_cli import WORK_CLI
 from visual_plan import scene_projection, layout_projection, reference_projection, validate_dependencies, VisualPlanError
+from visual_plan import plan_scene_rows
 
 
 class VisualPlanTest(unittest.TestCase):
+    def test_scene_local_parser_rejects_old_and_invalid_information(self):
+        plan = '## S04B\n### I01\n**来源：** SCRIPT.md#P001\n```screen\n## not a Scene\ntext\n```\n## S05\n**延续信息：** I01\n'
+        rows = plan_scene_rows(plan)
+        self.assertEqual(['S04B', 'S05'], list(rows))
+        self.assertEqual(rows['S04B']['screens'], rows['S05']['screens'])
+        for bad in ('| Scene | Intent |\n| S01 | old |', plan + '## S04B\n',
+                    plan + '## S06\n### I01\n```screen\nDuplicate\n```\n',
+                    '## S01\n```screen\nUnclosed', '## S01\n**延续信息：** I99'):
+            with self.subTest(bad=bad), self.assertRaises(VisualPlanError):
+                plan_scene_rows(bad)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -25,9 +37,9 @@ class VisualPlanTest(unittest.TestCase):
         self.project = self.variant / "project"
         self.update("RESEARCH.md", status="ready")
         plan = self.variant / "ANIMATION_PLAN.md"
+        machine_body = WORK_CLI.document_body(plan).split('# Animation Plan', 1)[0]
         plan.write_text("---\n" + json.dumps(WORK_CLI.read_frontmatter(plan)) + "\n---\n\n"
-                        "| Scene | Anchor | Intent |\n| --- | --- | --- |\n"
-                        "| S01 | P001 | Complete conditions remain visible. |\n")
+                        + machine_body + "## S01\nP001: Complete conditions remain visible.\n")
         (self.project / "compositions").mkdir(exist_ok=True)
         (self.project / "index.html").write_text('<div id="S01" data-start="0" data-duration="4" data-composition-src="compositions/S01.html"></div>')
         (self.project / "compositions" / "S01.html").write_text('<p>Complete conditions remain visible.</p>')
@@ -173,7 +185,7 @@ class VisualPlanTest(unittest.TestCase):
         state["template"] = "talking_head"
         WORK_CLI.write_variant(self.variant, state)
         plan = self.variant / "ANIMATION_PLAN.md"
-        plan.write_text(plan.read_text() + "\n| S02 | P002 |\n")
+        plan.write_text(plan.read_text() + "\n## S02\nP002\n")
         self.run_cli("preview", "register", "--purpose", "plan", "--scope", "scene", "--scene", "S01",
                      "--media-readiness", "planned_placeholders")
         WORK_CLI.checked_preview(self.variant, "plan-v001")
@@ -186,7 +198,7 @@ class VisualPlanTest(unittest.TestCase):
 
     def test_existing_letter_suffix_scenes_are_preserved_in_all_projections(self):
         ids = ["S01", "S04", "S04B", "S04C"]
-        plan = "| Scene | Intent |\n| --- | --- |\n" + "\n".join(f"| {sid} | Accepted layout |" for sid in ids)
+        plan = "\n".join(f"## {sid}\nAccepted layout\n" for sid in ids)
         html = '<main data-width="1920" data-height="1080">' + "".join(
             f'<section data-scene-id="{sid}" data-start="{i * 4}" data-duration="4"></section>'
             for i, sid in enumerate(ids)) + '</main>'
@@ -237,7 +249,7 @@ class VisualPlanTest(unittest.TestCase):
     def test_one_gap_sample_can_cover_explicit_matching_scenes(self):
         self.layout_sample()
         with (self.variant / "ANIMATION_PLAN.md").open("a") as stream:
-            stream.write("\n| S02 | P001 | Same information structure as S01 |\n")
+            stream.write("\n## S02\nP001 Same information structure as S01\n")
         self.run_cli("preview", "register", "--purpose", "plan", "--kind", "layout",
                      "--sample-dir", "layout", "--scene", "S01", "--scene", "S02")
         self.run_cli("preview", "accept", "plan-v001")
@@ -393,7 +405,7 @@ class VisualPlanTest(unittest.TestCase):
     def test_draft_expands_layout_baseline_but_requires_real_dependencies(self):
         self.layout_sample()
         with (self.variant / "ANIMATION_PLAN.md").open("a") as stream:
-            stream.write("\n| S02 | P001 |\n")
+            stream.write("\n## S02\nP001\n")
         self.register_layout()
         self.run_cli("preview", "accept", "plan-v001")
         with (self.project / "index.html").open("a") as stream:
@@ -421,7 +433,7 @@ class VisualPlanTest(unittest.TestCase):
         with (self.project / "index.html").open("a") as stream:
             stream.write('<div id="S02" data-start="4" data-duration="4" data-composition-src="compositions/S02.html"></div>')
         with (self.variant / "ANIMATION_PLAN.md").open("a") as stream:
-            stream.write("\n| S02 | P001 |\n")
+            stream.write("\n## S02\nP001\n")
         untouched = self.project / "compositions" / "S02.html"
         untouched.write_text("<p>Unchanged explanation.</p>")
         self.run_cli("preview", "register", "--purpose", "plan")
@@ -480,7 +492,7 @@ class VisualPlanTest(unittest.TestCase):
         scenes = scene_projection(self.project, plan)
         self.assertEqual(2, scenes[0]["reading"])
         with self.assertRaisesRegex(VisualPlanError, "match exactly"):
-            scene_projection(self.project, plan + "\n| S02 | P002 |\n")
+            scene_projection(self.project, plan + "\n## S02\nP002\n")
         self.assertEqual(["compositions/S01.html", "index.html"], validate_dependencies(self.project))
         (self.project / "compositions" / "S01.html").write_text('<script src="https://example.com/live.js"></script>')
         with self.assertRaisesRegex(VisualPlanError, "Non-local"):
@@ -492,7 +504,7 @@ class VisualPlanTest(unittest.TestCase):
     def test_local_research_revision_reuses_plan_but_not_draft_acceptance(self):
         # Technical fixture: no live research, media or production Work.
         plan = self.variant / "ANIMATION_PLAN.md"
-        plan.write_text(plan.read_text() + "\n| S02 | P002 |\n")
+        plan.write_text(plan.read_text() + "\n## S02\nP002\n")
         index = self.project / "index.html"
         index.write_text(index.read_text() + '<div id="S02" data-start="4" data-duration="4" data-composition-src="compositions/S02.html"></div>')
         scene = self.project / "compositions" / "S02.html"
@@ -510,10 +522,14 @@ class VisualPlanTest(unittest.TestCase):
         with self.assertRaisesRegex(WORK_CLI.HarnessError, "without an increased revision"):
             self.run_cli(*args)
         self.update("RESEARCH.md", revision=2)
-        self.update("ANIMATION_PLAN.md", revision=2, research_revision=2)
-        state = WORK_CLI.read_json(self.variant / "variant.yaml")
-        state["plan_revision"] = 2
-        WORK_CLI.write_variant(self.variant, state)
+        self.run_cli("plan", "refresh")
+        updated = WORK_CLI.read_frontmatter(plan)
+        self.assertEqual(2, updated["research_revision"])
+        self.assertEqual(2, updated["inputs"]["RESEARCH.md"]["revision"])
+        self.assertIn('<!-- plan-metadata:start -->', plan.read_text())
+        stable = plan.read_bytes()
+        self.run_cli("plan", "refresh")
+        self.assertEqual(stable, plan.read_bytes())
         movie = self.root / "draft.mp4"
         movie.write_bytes(b"test-only")
         with self.assertRaisesRegex(WORK_CLI.HarnessError, "scoped --compatible"):
@@ -595,7 +611,7 @@ class VisualPlanTest(unittest.TestCase):
     def test_layout_compatibility_uses_full_draft_scope_and_ignores_scene_index_narration(self):
         self.layout_sample()
         plan = self.variant / "ANIMATION_PLAN.md"
-        plan.write_text(plan.read_text() + "\n| S02 | P002 |\n")
+        plan.write_text(plan.read_text() + "\n## S02\nP002\n")
         self.register_layout()
         self.run_cli("preview", "accept", "plan-v001")
         index = self.project / "index.html"

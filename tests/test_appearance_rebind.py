@@ -47,6 +47,12 @@ class AppearanceRebindTest(unittest.TestCase):
         self.assertEqual("rebound", result["status"])
         after = cli.read_json(self.variant / "variant.yaml")
         self.assertEqual("main", after["id"])
+        metadata = cli.read_frontmatter(self.variant / 'ANIMATION_PLAN.md')
+        self.assertEqual(after['appearance_lock']['selection']['background'], metadata['background'])
+        self.assertEqual(after['appearance_lock']['sha256'], metadata['appearance_lock_sha256'])
+        self.assertEqual(after['plan_revision'], metadata['revision'])
+        self.assertEqual(before['ANIMATION_PLAN.md'].decode().split('## 全片方向', 1)[1],
+                         (self.variant / 'ANIMATION_PLAN.md').read_text().split('## 全片方向', 1)[1])
         for field in ("accepted_visual_plan", "accepted_preview", "accepted_plan_revision", "accepted_script_revision", "current_final"):
             self.assertIsNone(after[field])
         self.assertEqual("final.mp4", after["appearance_history"][-1]["current_final"])

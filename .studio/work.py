@@ -48,7 +48,7 @@ except ModuleNotFoundError:  # Loading this file by path from repository tests.
         verify_installation,
     )
 
-from visual_plan import VisualPlanError, scene_projection, layout_projection, reference_projection, validate_dependencies, source_changes, serve
+from visual_plan import VisualPlanError, plan_scene_rows, scene_projection, layout_projection, reference_projection, validate_dependencies, source_changes, serve
 import work_requests
 import studio_preview
 import visual_diagnostics
@@ -277,6 +277,7 @@ def command_explainer_build(root: Path, args: argparse.Namespace) -> None:
         plan_path = input_path(variant, "ANIMATION_PLAN.md")
         if read_frontmatter(plan_path).get("status") != "approved":
             raise HarnessError("ANIMATION_PLAN.md must be approved before sound build")
+        plan_scene_rows(plan_path.read_text(encoding="utf-8"))
         blocks = re.findall(r"^```sound[ \t]*\n(.*?)^```[ \t]*$", document_body(plan_path), re.M | re.S)
         sound_path = storage.scoped_path(project, "sound.json")
         if len(blocks) != 1:
@@ -411,15 +412,65 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
             "batch": args.batch, "revision": 1}
 
 
+def plan_metadata(path: Path, state: dict[str, Any]) -> dict[str, Any]:
+    """CLI-owned identity and frozen settings; missing inputs remain explicit nulls."""
+    lock = state.get("appearance_lock") or {}
+    selection = lock.get("selection", {})
+    inputs = {}
+    for name in ("SCRIPT.md", "RESEARCH.md"):
+        target = input_path(path, name)
+        inputs[name] = {"path": state.get("shared_inputs", {}).get(name, f"variants/{state['id']}/{name}"),
+                        "revision": read_frontmatter(target).get("revision")}
+    work = path.parent.parent
+    return {"work": read_frontmatter(work / 'WORK.md')['id'], "variant": state["id"],
+            "revision": state.get("plan_revision", 1), "inputs": inputs,
+            **{key: state.get(key) for key in ("template", "profile", "subject_position")},
+            "script_revision": inputs["SCRIPT.md"]["revision"], "research_revision": inputs["RESEARCH.md"]["revision"],
+            **{key: lock.get(key, state.get(key)) for key in ("ratio", "fps", "mode")},
+            **{key: selection.get(key, state.get(key)) for key in ("theme", "background", "motion", "captions")},
+            "appearance_lock_sha256": lock.get("sha256"), "audio": state.get("audio"),
+            "alignment": state.get("alignment")}
+
+
+def plan_metadata_body(body: str, metadata: dict[str, Any]) -> str:
+    body = re.sub(r'<!-- plan-metadata:start -->.*?<!-- plan-metadata:end -->\s*', '', body, flags=re.S).lstrip('\r\n')
+    keys = ('work', 'variant', 'revision', 'inputs', 'ratio', 'fps', 'theme', 'background', 'motion', 'mode', 'captions', 'audio', 'alignment')
+    rows = ['<!-- plan-metadata:start -->', '| CLI 元信息 | 当前值 |', '|---|---|']
+    rows += [f"| {key} | {json.dumps(metadata.get(key), ensure_ascii=False).replace('|', '&#124;')} |" for key in keys]
+    return '\n'.join([*rows, '<!-- plan-metadata:end -->', '', body])
+
+
+def command_plan_refresh(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
+    variant, state = selected_variant(root, work, args)
+    plan = variant / "ANIMATION_PLAN.md"
+    plan_scene_rows(plan.read_text(encoding="utf-8"))
+    original = read_frontmatter(plan)
+    metadata = plan_metadata(variant, state)
+    revisions = (state.get("plan_revision", 1), original.get("revision", 1),
+                 metadata["script_revision"], metadata["research_revision"])
+    if any(type(value) is not int or value < 1 for value in revisions):
+        raise HarnessError("Plan and input revisions must be positive integers")
+    changed = any(original.get(key) != value for key, value in metadata.items() if key != "revision")
+    revision = max(state.get("plan_revision", 1), original.get("revision", 1)) + int(changed)
+    state.update(plan_revision=revision, script_revision=metadata["script_revision"])
+    metadata = {**original, **metadata, "revision": revision}
+    # Frozen acceptance stays as the comparison baseline, not approval of new inputs.
+    if changed:
+        state.update(accepted_preview=None, current_final=None)
+    atomic_write(plan, "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n"
+                 + plan_metadata_body(document_body(plan), metadata))
+    write_variant(variant, state)
+    print(json.dumps({"work": work.name, "variant": state["id"], "revision": revision,
+                      "changed": changed}, ensure_ascii=False))
+
+
 def adopt_variant(path: Path, settings: dict[str, Any], *, shared: bool = False, branch: str | None = None) -> None:
     state = read_json(path / "variant.yaml")
     state.update({key: value for key, value in settings.items() if value is not None})
     if settings.get("theme"):
         state["profile"] = None
-        plan = path / "ANIMATION_PLAN.md"
-        metadata = read_frontmatter(plan)
-        metadata.update(theme=settings["theme"], mode=settings["mode"], ratio=settings["ratio"], profile=None)
-        atomic_write(plan, "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n" + document_body(plan))
     work = path.parent.parent
     if shared:
         refs = {}
@@ -435,6 +486,10 @@ def adopt_variant(path: Path, settings: dict[str, Any], *, shared: bool = False,
         state["content_branch"] = {"source_variant": branch, "input_sha256": {
             name: file_sha256(path / name) for name in ("SCRIPT.md", "RESEARCH.md")}}
     write_variant(path, state)
+    plan = path / "ANIMATION_PLAN.md"
+    if plan.is_file():
+        metadata = {**read_frontmatter(plan), **plan_metadata(path, state)}
+        atomic_write(plan, "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n" + plan_metadata_body(document_body(plan), metadata))
 
 
 def create_adopted_variant(root: Path, work: Path, variant_id: str, settings: dict[str, Any], *,
@@ -834,6 +889,8 @@ def create_video_variant(
         path / "ANIMATION_PLAN.md",
         template_text(root, "ANIMATION_PLAN.template.md", values),
     )
+    metadata = {**read_frontmatter(path / "ANIMATION_PLAN.md"), **plan_metadata(path, read_json(path / "variant.yaml"))}
+    atomic_write(path / "ANIMATION_PLAN.md", "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n" + plan_metadata_body(document_body(path / "ANIMATION_PLAN.md"), metadata))
     return path
 
 
@@ -1386,6 +1443,7 @@ def command_component_install(root: Path, args: argparse.Namespace) -> None:
             assert_preview_ready(variant, state, purpose="plan", kind="reference")
         elif plan.get("status") != "approved":
             raise HarnessError("ANIMATION_PLAN.md must be approved before Component installation")
+        plan_scene_rows(plan_path.read_text(encoding="utf-8"))
         if not animation_plan_contains_component_ref(plan_path, args.component_ref):
             raise HarnessError(f"ANIMATION_PLAN.md does not approve Component {args.component_ref}")
         project = variant / "project"
@@ -1781,6 +1839,17 @@ def preview_input_hashes(directory: Path) -> dict[str, str]:
 def document_content(path: Path, ignored: tuple[str, ...] = ()) -> tuple[dict[str, Any], str]:
     metadata = read_frontmatter(path)
     return {key: value for key, value in metadata.items() if key not in ignored}, document_body(path)
+
+
+def plan_intent(path: Path) -> tuple[dict[str, Any], str]:
+    metadata, body = document_content(path, ("status", "visual_plan", "revision", "script_revision", "research_revision"))
+    if "inputs" in metadata:
+        if not isinstance(metadata["inputs"], dict) or any(not isinstance(item, dict) for item in metadata["inputs"].values()):
+            raise HarnessError("Plan inputs must map document names to metadata objects")
+        metadata["inputs"] = {name: {key: value for key, value in item.items() if key != "revision"}
+                              for name, item in metadata["inputs"].items()}
+    body = re.sub(r'<!-- plan-metadata:start -->.*?<!-- plan-metadata:end -->\s*', '', body, flags=re.S)
+    return metadata, body.strip()
 
 
 def same_preview_inputs(preview: Path, variant: Path) -> bool:
@@ -2319,6 +2388,10 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
               'work': work.name, 'variant': variant.name, 'target': target, **before,
               'parameters': {**parameters, 'minimum': args.minimum, 'similarity': args.similarity},
               'd1': text, 'timeline': sampled.get('timeline', []),
+              'rhythm': visual_diagnostics.rhythm_diagnostics(sampled['samples'], scenes,
+                  plan=contents['ANIMATION_PLAN.md'],
+                  cues=read_json(project / 'runtime/cues.json') if (project / 'runtime/cues.json').is_file() else None,
+                  mode=diagnostic_lock.get('mode')),
               'samples': sampled['samples'], 'viewport': sampled.get('viewport'),
               'unverified': sampled.get('unverified', []) + [
                   {'reason': 'finite_sampling_not_full_playback_or_quality_acceptance'},
@@ -2365,8 +2438,7 @@ def command_preview_diff(root: Path, args: argparse.Namespace) -> None:
         if "input_sha256" not in metadata:
             raise HarnessError("Legacy preview has no frozen inputs for compatibility")
         assert_preview_ready(variant, state)
-        ignored = ("status", "visual_plan", "revision", "script_revision", "research_revision")
-        if document_content(preview / "ANIMATION_PLAN.md", ignored) != document_content(variant / "ANIMATION_PLAN.md", ignored):
+        if plan_intent(preview / "ANIMATION_PLAN.md") != plan_intent(variant / "ANIMATION_PLAN.md"):
             raise HarnessError("Animation Plan intent changed; confirm the affected Plan instead of --compatible")
         if script_text(preview / "SCRIPT.md", anchors=True) != script_text(input_path(variant, "SCRIPT.md"), anchors=True):
             raise HarnessError("Narration changed; confirm the affected Plan instead of --compatible")
@@ -3165,6 +3237,9 @@ def build_parser() -> argparse.ArgumentParser:
     use.add_argument("work_id")
     use.set_defaults(handler=command_use)
     commands.add_parser("status").set_defaults(handler=command_status)
+    plan = commands.add_parser("plan")
+    plan_commands = plan.add_subparsers(dest="plan_command", required=True)
+    plan_commands.add_parser("refresh", help="Refresh CLI metadata without approving changed content").set_defaults(handler=command_plan_refresh)
 
     script = commands.add_parser("script")
     script_commands = script.add_subparsers(dest="script_command", required=True)
@@ -3400,7 +3475,7 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
                     and not os.environ.get("HYPERFRAMES_AI_ASSET_REVIEW_ROOT")
                     or args.command == "request" and args.request_command not in {"freeze", "export", "feedback"}):
                 raise HarnessError("Review forbids production acceptance, installation and lifecycle promotion")
-        if (args.command in {"archive", "reopen", "park", "resume"}
+        if (args.command in {"archive", "reopen", "park", "resume", "plan"}
                 or args.command == "preview" and args.preview_command == "render"):
             ensure_roots(target_root)
             with naming_lock(target_root):

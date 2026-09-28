@@ -13,12 +13,13 @@ class V34RulesTests(unittest.TestCase):
             with self.subTest(name=name):
                 text = (ROOT / name).read_text(encoding="utf-8")
                 self.assertIn("visual-design.md", text)
-                self.assertIn("work component list --query", text)
-                self.assertIn("Windows", text)
+        workflow = (ROOT / ".studio/workflow.md").read_text(encoding="utf-8")
+        self.assertIn("work component list --query", workflow)
+        self.assertIn("WSL 开发任务或 Windows", workflow)
         design = (ROOT / ".studio/spec/visual-design.md").read_text(encoding="utf-8")
-        for rule in ("文字与 SVG/icon 互补", "不逐图审批", "不设图标数量",
-                     "不能为了加图损伤已批准内容", "宿主唯一时间线",
-                     "语义揭示与停留期活动独立检查", "不是 WSL 随工具包交付"):
+        for rule in ("文字与 SVG/icon 互补", "普通附属图形由制作者完成",
+                     "保留原声、Anchor 与源对齐", "宿主唯一时间线",
+                     "阅读期间保持第 4 层稳定", "按用途查库"):
             self.assertIn(rule, design)
         self.assertNotIn("必要时才少量辅助运动", design)
         self.assertNotIn("连续完全静止不超过2秒", design)
@@ -35,7 +36,7 @@ class V34RulesTests(unittest.TestCase):
         self.assertNotIn("字体由宿主管理", spec)
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("既有 Variant 外观更新入口、", readme)
-        self.assertIn("图形内容仍由 Windows 制作", readme)
+        self.assertIn("组件也可纳入 WSL 开发计划", readme)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,46 @@ import {pathToFileURL} from 'node:url';
 
 export const defaults = {step: 0.5, width: 960, timeout_ms: 5000};
 
+// Helper intent is only a candidate: the Python report also requires a visible state change.
+export function inspectRhythmFrame() {
+  const observed = element => {
+    const win = element.ownerDocument.defaultView, rect = element.getBoundingClientRect();
+    let visible = element.isConnected && rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 &&
+      rect.left < win.innerWidth && rect.top < win.innerHeight;
+    for (let parent = element; parent; parent = parent.parentElement) {
+      const style = win.getComputedStyle(parent);
+      if (style.display === 'none' || style.visibility !== 'visible' || +style.opacity < 0.02 ||
+          [...style.filter.matchAll(/blur\(([\d.]+)px\)/g)].some(match => +match[1] > 0)) visible = false;
+    }
+    visible &&= [.2, .5, .8].some(x => [.2, .5, .8].some(y => {
+      const top = element.ownerDocument.elementsFromPoint(rect.left + rect.width * x, rect.top + rect.height * y)[0];
+      return top && (top === element || top === element.getRootNode().host || element.contains(top) ||
+        win.getComputedStyle(element).pointerEvents === 'none' && top.contains(element));
+    }));
+    if (win.frameElement) visible &&= observed(win.frameElement).visible;
+    const style = win.getComputedStyle(element);
+    const images = [...element.querySelectorAll('img')];
+    if (element.tagName === 'IMG') images.push(element);
+    return {visible, state_signature: JSON.stringify(images.map(image => image.currentSrc || image.src)),
+      signature: JSON.stringify([style.visibility, style.filter, style.opacity, style.transform,
+        element.textContent, images.map(image => image.currentSrc || image.src)])};
+  };
+  const candidates = [];
+  let sourceIndex = 0;
+  for (const source of window.__hfRhythmSources || []) {
+    const index = sourceIndex++;
+    source().forEach((event, i) => {
+      const target = event.target, host = target.ownerDocument.defaultView.frameElement;
+      const layer = target.closest('[data-hf-layer]')?.dataset.hfLayer || host?.dataset.cardLayer;
+      if (!['stage', 'overlay', 'text'].includes(layer)) return;
+      candidates.push({id: `${location.href}#${index}:${i}`, time: event.time, before: event.before, after: event.after, duration: event.duration,
+        kind: event.kind, scene: event.scene || target.closest('[data-scene-id]')?.dataset.sceneId || null,
+        layer, ...observed(target)});
+    });
+  }
+  return candidates;
+}
+
 export function frameResourcesReady(time) {
   if (document.readyState !== 'complete' || document.fonts.status !== 'loaded') return false;
   return [...document.images].every(image => image.complete && image.naturalWidth > 0) &&
@@ -57,12 +97,22 @@ function inspectFrame(scenes, time, projection = {}) {
     return parts.join(' > ');
   };
   const texts = [], unverified = new Set();
+  const transparent = color => color === 'transparent' || /rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(color);
+  const painted = element => {
+    const style = getComputedStyle(element);
+    // Hit testing includes empty transparent full-frame layers, unlike actual paint.
+    return element instanceof SVGElement || /^(IMG|VIDEO|CANVAS|IFRAME|OBJECT|INPUT|BUTTON)$/.test(element.tagName) ||
+      [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim()) ||
+      !transparent(style.backgroundColor) || style.backgroundImage !== 'none' || style.boxShadow !== 'none' ||
+      style.backdropFilter && style.backdropFilter !== 'none' ||
+      ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(style['border' + side + 'Width']) > 0 &&
+        !transparent(style['border' + side + 'Color']));
+  };
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const node = walker.currentNode, element = node.parentElement;
     if (!node.textContent.trim() || !element || element.closest('script,style,noscript') || !visible(element)) continue;
     const style = getComputedStyle(element);
-    const transparent = color => color === 'transparent' || /rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(color);
     if (element instanceof SVGElement ? (style.fill === 'none' || transparent(style.fill) || +style.fillOpacity === 0) &&
       (style.stroke === 'none' || transparent(style.stroke) || +style.strokeOpacity === 0)
       : transparent(style.webkitTextFillColor || style.color)) continue;
@@ -71,7 +121,8 @@ function inspectFrame(scenes, time, projection = {}) {
     const exposed = rects.some(rect => {
       if (!rect.width || !rect.height) return false;
       return [0.2, 0.5, 0.8].some(fraction => {
-        const top = document.elementsFromPoint(rect.left + rect.width * fraction, rect.top + rect.height / 2).find(visible);
+        const top = document.elementsFromPoint(rect.left + rect.width * fraction, rect.top + rect.height / 2)
+          .find(candidate => visible(candidate) && (candidate === element || candidate.contains(element) || painted(candidate)));
         return top && (top === element || element.contains(top) ||
           getComputedStyle(element).pointerEvents === 'none' && top.contains(element));
       });
@@ -229,7 +280,7 @@ export async function probe(input) {
       if (Date.now() >= deadline) throw new Error('Diagnostic time budget exceeded; browser closed before outer command timeout');
       const time = Math.round(Math.min(duration - 0.001, Math.max(0, requested)) * 1e6) / 1e6;
       if (samples.has(time)) return samples.get(time);
-      const value = {time, ready: false, texts: [], unverified: []};
+      const value = {time, ready: false, texts: [], rhythm_candidates: [], unverified: []};
       if (samples.size >= 10000) throw new Error('Sampling budget exceeded (maximum 10000 samples)');
       samples.set(time, value);
       const sampleDeadline = Date.now() + parameters.timeout_ms;
@@ -268,6 +319,7 @@ export async function probe(input) {
           }, box)) throw new Error('Studio controls obscure the composition viewport');
           const info = await frame.evaluate(inspectFrame, input.scenes || [], time);
           const cards = await inspectCardFrames(frame, input.scenes || [], time, remaining);
+          value.rhythm_candidates = await frame.evaluate(inspectRhythmFrame);
           if (before !== navigation || !await iframe.evaluate(element => getComputedStyle(element).visibility === 'visible'))
             throw new Error('Studio frame reloaded during sampling');
           value.texts.push(...info.texts, ...cards.texts);
@@ -286,6 +338,12 @@ export async function probe(input) {
     for (let time = parameters.step; time < duration; time += parameters.step) times.add(time);
     for (const scene of input.scenes || []) if (scene.start >= 0 && scene.start < duration) times.add(scene.start);
     for (const time of [...times].sort((a, b) => a - b)) await sample(time);
+    // Sample exact helper boundaries, including short actions lost by the baseline grid.
+    for (const value of [...samples.values()]) for (const event of value.rhythm_candidates) {
+      if (event.time < 0 || event.time >= duration) continue;
+      await sample(event.before ?? Math.max(0, event.time - 0.001));
+      await sample(event.after ?? event.time + (event.duration > 0 ? event.duration / 2 : 0.001));
+    }
     result.samples = [...samples.values()].sort((a, b) => a.time - b.time);
     result.timeline = [...new Map(result.timeline.map(value => [JSON.stringify(value), value])).values()];
     result.unverified = [...new Set(result.unverified)];

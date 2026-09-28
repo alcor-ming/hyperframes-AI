@@ -86,7 +86,7 @@ class ExplainerCliTests(unittest.TestCase):
             "usage": {"role": "auxiliary", "required": True}}, acceptance=accepted)
         (project / "index.html").write_text("<html><body></body></html>")
         sound = {"bgm": None, "sfx": [{"ref": "tone@v1", "cue": "B", "event": "reveal", "tier": "light", "gain": 0.6}]}
-        (variant / "ANIMATION_PLAN.md").write_text('---\n{"status":"approved"}\n---\n```sound\n' + json.dumps(sound) + '\n```\n')
+        (variant / "ANIMATION_PLAN.md").write_text('---\n{"status":"approved"}\n---\n## S01\nSound event\n## 声音导出\n```sound\n' + json.dumps(sound) + '\n```\n')
         self.invoke("--work", identity, "--variant", "main", "sound", "build")
         self.assertIn('data-start="0.9"', (project / "index.html").read_text())
         self.assertEqual(sound, json.loads((project / "sound.json").read_text()))
@@ -104,7 +104,7 @@ class ExplainerCliTests(unittest.TestCase):
         self.assertEqual(config_before, (project / "project-config.json").read_bytes())
         plan_path = variant / "ANIMATION_PLAN.md"
         plan_before = plan_path.read_text()
-        plan_path.write_text('---\n{"status":"approved"}\n---\nNo approved sound table.\n')
+        plan_path.write_text('---\n{"status":"approved"}\n---\n## S01\nNo approved sound table.\n')
         with self.assertRaisesRegex(cli.HarnessError, "one sound JSON block"):
             self.invoke("--work", identity, "--variant", "main", "sound", "build")
         plan_path.write_text(plan_before)

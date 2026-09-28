@@ -77,9 +77,12 @@ try {
         return {duration,visible,overflow};
       });
       const filename = `${family}-${ratio}.png`;
+      // Match the host seek test: scaled iframe paint follows synchronous DOM seek.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const png = await page.screenshot({path:path.join(output,filename)});
       await page.evaluate(duration => {component.renderAt(0);component.renderAt(duration * 0.92 / scale);}, result.duration);
-      assert(png.equals(await page.screenshot()), `${family}/${ratio} seek changed pixels`);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert(png.equals(await page.screenshot({path:path.join(output,`${family}-${ratio}-repeat.png`)})), `${family}/${ratio} seek changed pixels`);
       shots.push({family,png:png.toString('base64')});
       results.push({family,ratio,...result});
       assert(result.visible.length, `${family}/${ratio} has no visible text`);

@@ -50,19 +50,77 @@ def markdown_structure_lines(text):
 
 
 def plan_scene_rows(plan_text):
-    rows = {}
-    headers = []
+    """Parse Scene-local design only; overview tables are never design authority."""
+    rows, information = {}, {}
+    screen_count = 0
     for match in markdown_structure_lines(plan_text):
-        line = match[0]
-        if not line.strip().startswith("|"):
+        if re.fullmatch(r' {0,3}(?:`{3,}|~{3,})screen\s*', match[0]):
+            screen_count += 1
+        cells = {cell.strip() for cell in match[0].strip().strip('|').split('|')}
+        if match[0].lstrip().startswith('|') and cells.intersection({'实际表达', '使用信息 ID', '信息 ID', '原 Scene ID'}):
+            raise VisualPlanError('Animation Plan 格式不支持: legacy design tables')
+    headings = [m for m in markdown_structure_lines(plan_text) if re.match(r'^## ', m[0])]
+    for index, heading in enumerate(headings):
+        identity = re.fullmatch(r'## (S[0-9]+[A-Z]*)(?:\s+.*)?', heading[0])
+        if not identity:
             continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if cells[0] in {"Scene", "原 Scene ID"}:
-            headers = cells
-        elif headers and SCENE_ID.fullmatch(cells[0]):
-            rows.setdefault(cells[0], {}).update(dict(zip(headers, cells)))
+        sid = identity[1]
+        if sid in rows:
+            raise VisualPlanError(f"Duplicate Plan Scene ID: {sid}")
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(plan_text)
+        body = plan_text[heading.end():end]
+        row = {'Scene': sid, 'body': body, 'screens': {}, 'events': [], 'exceptions': []}
+        current, fence, collected = None, None, []
+        for line in body.splitlines():
+            marker = re.fullmatch(r' {0,3}(`{3,}|~{3,})(.*)', line)
+            if fence:
+                if marker and marker[1][0] == fence[0][0] and len(marker[1]) >= len(fence[0]) and not marker[2].strip():
+                    kind = fence[1]
+                    if kind == 'screen':
+                        if not current or current in information:
+                            raise VisualPlanError(f"{sid}: screen needs a unique ### I<number> heading")
+                        value = {'实际表达': '\n'.join(collected), '信息 ID / 来源': source}
+                        information[current] = value
+                        row['screens'][current] = value
+                    elif kind == 'rhythm':
+                        try:
+                            data = json.loads('\n'.join(collected))
+                            if not isinstance(data, dict) or any(not isinstance(data.get(k, []), list) or any(not isinstance(v, dict) for v in data.get(k, [])) for k in ('events', 'exceptions')):
+                                raise ValueError('events/exceptions must be lists of objects')
+                        except ValueError as error:
+                            raise VisualPlanError(f'{sid}: invalid rhythm JSON: {error}') from error
+                        for key in ('events', 'exceptions'):
+                            row[key].extend(data.get(key, []))
+                    fence, collected = None, []
+                else:
+                    collected.append(line)
+                continue
+            if marker:
+                fence = (marker[1], marker[2].strip())
+                continue
+            info = re.fullmatch(r'### (I[0-9]+)(?:\s+.*)?', line)
+            if line.startswith('### '):
+                current = info[1] if info else None
+                source = current or ''
+            origin = re.match(r'\*\*来源[:：]\*\*\s*(.*)', line)
+            if origin and current:
+                source = origin[1]
+        if fence:
+            raise VisualPlanError(f'{sid}: unclosed {fence[1]} fence')
+        row['信息 ID'] = ', '.join(row['screens'])
+        rows[sid] = row
     if not rows:
-        raise VisualPlanError("Animation Plan needs a Scene table")
+        raise VisualPlanError("Animation Plan 格式不支持: expected Scene sections (## S01) with embedded screen blocks")
+    if screen_count != len(information):
+        raise VisualPlanError('Animation Plan 格式不支持: screen blocks must belong to a Scene section')
+    for sid, row in rows.items():
+        refs = [m[1] for line in markdown_structure_lines(row['body'])
+                if (m := re.fullmatch(r'\*\*延续信息[:：]\*\*\s*(.*)', line[0]))]
+        for identity in re.findall(r'\bI[0-9]+\b', ' '.join(refs)):
+            if identity not in information:
+                raise VisualPlanError(f'{sid}: unknown continuation information ID {identity}')
+            row['screens'][identity] = information[identity]
+        row['信息 ID'] = ', '.join(row['screens'])
     return rows
 
 
@@ -71,7 +129,7 @@ def reference_projection(plan_text):
 
 
 def scene_projection(project, plan_text, scene_ids=None):
-    """Timing comes from executable HTML; intent comes from the existing Plan table."""
+    """Timing comes from executable HTML; intent comes from Scene sections."""
     rows = plan_scene_rows(plan_text)
     if scene_ids is not None:
         if len(scene_ids) != 1 or scene_ids[0] not in rows:
@@ -93,7 +151,7 @@ def scene_projection(project, plan_text, scene_ids=None):
                        "intent": rows.get(scene_id, {}), "source": attrs.get("data-composition-src", "index.html")})
     ids = [s["id"] for s in scenes]
     if not rows or set(ids) != set(rows) or len(ids) != len(set(ids)):
-        raise VisualPlanError("Plan Scene table and index.html timed Scene IDs must match exactly")
+        raise VisualPlanError("Plan Scene sections and index.html timed Scene IDs must match exactly")
     return sorted(scenes, key=lambda scene: scene["start"])
 
 

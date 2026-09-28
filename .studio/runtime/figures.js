@@ -37,15 +37,15 @@
       return value;
     };
     function create(el, character) {
-      if (!(el instanceof Element)) throw new Error("invalid_figure_element");
-      const image = el instanceof HTMLImageElement ? el : character ? el.appendChild(document.createElement("img")) : null;
+      if (!el || el.nodeType !== 1 || !el.ownerDocument) throw new Error("invalid_figure_element");
+      const image = el.tagName === "IMG" ? el : character ? el.appendChild(el.ownerDocument.createElement("img")) : null;
       const original = { transform: el.style.transform, opacity: el.style.opacity, transformOrigin: el.style.transformOrigin };
       const imageOriginal = image ? { src: image.getAttribute("src"), style: image.getAttribute("style") } : null;
       const baseTransform = getComputedStyle(el).transform, baseOpacity = Number(getComputedStyle(el).opacity);
       const fragments = []; let disposed = false;
-      function add(cue, duration, fn) {
+      function add(cue, duration, fn, kind, sampleFraction = .5) {
         if (!Number.isFinite(duration) || duration < 0) throw new Error("invalid_figure_duration");
-        fragments.push({ start: time(cue), duration, fn });
+        fragments.push({ start: time(cue), duration, fn, kind, sampleFraction });
         fragments.sort((a, b) => a.start - b.start);
         return api;
       }
@@ -64,12 +64,12 @@
           if (kind === "idle") state.y += amplitude * Math.sin(p * Math.PI * 2 * cycles);
           if (kind === "bounce") state.y -= amplitude * Math.abs(Math.sin(p * Math.PI * cycles));
           if (kind === "squash") { const s = 1 + (scale - 1) * Math.sin(p * Math.PI); state.sx *= s; state.sy /= s; }
-        });
+        }, kind, kind === "bounce" && cycles > 0 ? Math.min(.5, .5 / cycles) : .5);
       }
       const api = {
         state(cue, id) {
           if (!character?.states[id]) throw new Error("figure_state_missing");
-          return add(cue, 0, (local, value) => { if (local >= 0) value.state = id; });
+          return add(cue, 0, (local, value) => { if (local >= 0) value.state = id; }, "state");
         },
         talk(intervals = cues?.data.speech_intervals) {
           if (!Array.isArray(intervals) || intervals.some(i => !Array.isArray(i) || i.length !== 2 || !i.every(Number.isFinite) || i[0] < 0 || i[1] <= i[0])) throw new Error("invalid_talk_intervals");
@@ -96,11 +96,28 @@
         },
         dispose() {
           if (disposed) return; disposed = true; bindings.delete(api);
+          global.__hfRhythmSources.delete(rhythm);
           Object.assign(el.style, original);
           if (image && image !== el) image.remove();
           else if (image) for (const [key, value] of Object.entries(imageOriginal)) value === null ? image.removeAttribute(key) : image.setAttribute(key, value);
         },
       };
+      const rhythm = () => fragments.filter(fragment => fragment.kind && fragment.kind !== "idle")
+        .flatMap(fragment => {
+          const value = { x: 0, y: 0, sx: 1, sy: 1, angle: 0, opacity: 1, state: character?.default_state };
+          fragment.fn(fragment.duration * fragment.sampleFraction, value);
+          // ponytail: local perceptibility hints; rendered visibility still needs browser evidence.
+          const meaningful = fragment.kind === "state" || Math.abs(value.x) >= .5 || Math.abs(value.y) >= .5 ||
+            Math.abs(value.sx - 1) >= .005 || Math.abs(value.sy - 1) >= .005 || Math.abs(value.angle) >= .5 || Math.abs(value.opacity - 1) >= .02;
+          if (!meaningful) return [];
+          return ["pan", "zoom"].includes(fragment.kind) ? [
+            { time: fragment.start, duration: fragment.duration, kind: fragment.kind + "_start", target: el },
+            { time: fragment.start + fragment.duration, before: fragment.start + fragment.duration / 2,
+              duration: 0, kind: fragment.kind + "_end", target: el },
+          ] : [{ time: fragment.start, duration: fragment.duration,
+            after: fragment.start + (fragment.duration ? fragment.duration * fragment.sampleFraction : .001), kind: fragment.kind, target: el }];
+        });
+      (global.__hfRhythmSources ??= new Set()).add(rhythm);
       for (const kind of ["enter", "exit", "idle", "bounce", "squash", "pan", "zoom", "point"]) api[kind] = (cue, options) => motion(kind, cue, options);
       bindings.add(api); return api;
     }

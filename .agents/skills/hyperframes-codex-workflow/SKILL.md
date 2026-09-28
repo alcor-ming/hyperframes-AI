@@ -1,45 +1,25 @@
 ---
 name: hyperframes-codex-workflow
-description: Route the current HyperFrames Work to the current stage and its necessary contracts; do not duplicate the production workflow.
+description: Route the current HyperFrames Work to its stage and load only the necessary contracts.
 ---
 
 # HyperFrames Work Router
 
-Environment and authority: root `AGENTS.md`. Stage order and acceptance: `.studio/workflow.md`.
-
 ## Locate
 
-In Windows use the production root's `work.cmd`; in development do not read production Current or configuration. Foreground creation uses `work current`, then `work list` if unset; never guess. Background jobs always bind the Work explicitly; Work-level preparation can use `work --work <id> status`, while Variant production also binds `--variant <id>`. Neither touches Current.
+Environment and authority: root `AGENTS.md`. Windows uses this root's `work.cmd`; development never reads production Current or configuration. Foreground creation locates `work current`, then `work list` if unset. Background jobs explicitly bind `--work <id>` and, for production, `--variant <id>`.
 
-Read `WORK.md`; read `variant.yaml` only when a Variant is selected. For `podcast_quote_image`, keep its existing creation and selection contract, and load only `planner_skill` before article selection or `copy_skill` afterward and the current machine artifacts. Do not load video Plan, Recipe or theme rules for that branch.
+Read `WORK.md`, then the selected `variant.yaml`; resolve Script/Research through `shared_inputs`. Use the selected Variant's frozen mode (`card` or `explainer`) and appearance. Resume its actual stage in `.studio/workflow.md`.
 
-For video, resolve Script/Research through `shared_inputs` when present; new Works use `shared/`, while old Variant-local sources remain compatible. Mode defaults to `text-led`, without a default Profile. Use the Variant's frozen account/theme settings rather than rereading changed service defaults.
-
-Before creating a video object, first distinguish discussion/research from making something, then locate an explicitly continued Work/Variant, a needed independent Variant of the same content goal, or a temporary experiment. Continue an existing matching Variant; create a new production Work only for a new content goal, and keep an ordinary fix in the current Variant. A request to test one Scene inside an already specified production Work stays there; an independent comparison that must leave the original untouched uses an isolated experiment. Do not infer purpose from keywords, source URL, media, missing Final, or Current. Search only the current object and relevant named/title/account candidates. If purpose materially changes the organization and is still ambiguous, ask one short question before creating; otherwise state whether you are continuing, adding a Variant, experimenting, or creating production work without adding an approval gate.
-
-New video Works explicitly pass `--purpose standard|ip|test`: `standard` and `ip` are production, `test` is an experiment. Production Work creation needs a valid Series, but may omit the account and create no Variant while preparing shared content; missing an account never implies an experiment. An explicit account target can create Work and Variant together with `--account <id> --variant-id <id>`. Every new production Variant still needs a registered account and freezes its configuration; experiments do not bind an account and may snapshot its settings as a reference. Accounts belong to Variants, not Work; several equal Variants can share one account. Keep `podcast_quote_image` creation and routing unchanged.
-
-Video Work-level preparation, list/status and switching do not require a Variant. For production commands use the explicit Variant, a valid Current belonging to that Work, or the sole candidate. Otherwise return candidates, never prefer main, creation order or an account. Zero Variants cannot produce, preview or Finalize. New Variants use shared sources unless `--from <id>` explicitly branches; never inherit main implicitly. `required_variants` is the explicit delivery set, not a primary-version marker; an empty set or zero Variants never means complete. Preserve old IDs, frozen settings and accepted/Final history.
-
-The narrow exception to creating Work only for new content is an explicitly requested successor of an archived production Work for the same episode. Use the supported successor entry with exact source Work, Variant, accepted version and new account, not reopen or bare-number reuse. Keep the source read-only and its exact ID meaning unchanged; the new entity keeps the episode number without consuming another one or inheriting acceptance. Series-number lookup selects the current entity, history shows the chain. Ordinary revisions and account adaptation remain in an active Work.
-
-Keep experiments until specifically asked to delete them. Before deletion, check active Studio/request and real production path dependencies; do not cascade into production or shared assets. Copy or freeze any adopted result inside the production Work first, and treat `source_work` as lineage rather than a live dependency or production acceptance.
+For `podcast_quote_image`, retain its creation and selection contract: load `planner_skill` before article selection, `copy_skill` afterward and current machine artifacts; do not load video Plan, Recipe or theme rules.
 
 ## Stage Loading
 
-For `hyperframes_video`, resume the actual stage in `.studio/workflow.md`; reuse sufficient existing inputs.
-
 | Stage | Load only as needed |
 |---|---|
-| Content preparation | `SCRIPT.md`, source/alignment evidence, relevant `RESEARCH.md` entries; `.studio/spec/creative.md` for source ownership or revisions |
-| Whole-film design | `ANIMATION_PLAN.md`, selected Research, applicable `.studio/recipes/` structural difference, selected visual theme data, `.studio/spec/visual-design.md` |
-| Studio production and acceptance | Current Plan and affected source entries; `.studio/spec/hyperframes.md`; `.studio/spec/visual-design.md` for production defaults and actual Draft review |
-| Final delivery | Accepted version and its provenance; `.studio/spec/hyperframes.md` Final QA; actual CLI help for the installed Finalize entry |
-
-User-facing inputs are independent narrative mode, visual theme, background and ratio, with optional motion slots. Theme never chooses or restricts narrative mode, background, layout or cue timing. Use frozen appearance_lock and its local closure when present; otherwise preserve legacy snapshots. Do not require Profile, Template or Subtemplate selection as additional entry steps. Legacy Profile data is optional compatibility material, not an orchestration Skill. The three modes are `text-led`, `animation-led` (card modes), and `explainer`. Recommend `explainer` for `purpose=ip`; keep `text-led` as the default. Explainer requires the five layers (background/stage/overlay/text/captions, with captions omitted when disabled); card migration is deferred. Use characters + images for narration and diagrams for mechanisms. Generated images are normal explainer materials under the same Asset Brief authorization. Load its whole-film direction, visible events, character/image list and sound layer from Plan. Captions default on only in explainer; card modes have no captions and do not add BGM/SFX by default.
-
-Load `.studio/spec/visual-design.md` directly in both Plan and Draft stages. Load asset contracts only for selected assets, deployment/request guidance only for an actual tool defect, and packaging Skills only when packaging is requested. `PACKAGE.md` is not a video prerequisite. Legacy Profile files stay available for old Works, outside default routing; video copywriting follows `dbs` / `verbatim`, not a default hook/script-flow chain. Do not preload profiles, examples, migrations, Draft history or unrelated Skills.
-
-During Plan, query `work component list --query <purpose>` (Windows: `work.cmd`) for packages, scene sources and recipes before choosing reuse, derivation or Work-local creation. Text-led work considers card assets first. Scene sources and recipes are non-installable derivation references. Evaluate images, real interfaces and library sources for every Scene, with a reason; disclose a zero-image film at direction confirmation together with information units and the Plan-check conclusion.
-
-Scene dispatch relays the complete Plan information blocks verbatim, without truncation or stricter prohibitions such as "no additional explanation"; report conflicts when infeasible. Include the visual-design section `图文互补与辅助图形`, selected exact references, acquisition instructions and local usage/examples, not a discovery task or full inventory. Ordinary auxiliary graphics remain the maker's responsibility. Create unmatched content in Windows Work-local or editable AssetSource. Discovery and cache refresh preserve frozen Work dependencies; explicit adoption follows `.studio/spec/hyperframes.md`.
+| Create, switch, accept, Finalize, archive | Root `AGENTS.md`; `.studio/workflow.md` governance and actual CLI help |
+| Content preparation | Script, relevant Research and source/alignment evidence; `.studio/spec/creative.md` |
+| Plan | Current Plan, selected Research, `.studio/spec/visual-design.md`, applicable `.studio/recipes/` structural difference and selected asset data |
+| Draft | Current Plan and affected sources, `.studio/spec/visual-design.md`, `.studio/spec/hyperframes.md` implementation and QA |
+| Final delivery | Accepted version and provenance; `.studio/workflow.md` Final delivery; actual CLI help |
+| Podcast images | Selected planner/copy Skill; `.studio/workflow.md` podcast branch and `.studio/spec/creative.md` podcast contracts |

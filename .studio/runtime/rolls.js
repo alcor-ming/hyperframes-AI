@@ -50,12 +50,20 @@
       });
       if (read.some(id => !itemIds.has(id))) throw new TypeError("Continuation items are missing");
       const offset = source ? source.offset + source.end - source.start - source.ranges.reduce((sum, range) => sum + range.to - range.from, 0) : 0;
-      const plan = { start, end, offset, groups, ranges, items, renderAt: scene.a.renderAt, continuation };
+      const plan = { id: scene.id, start, end, offset, groups, ranges, items, renderAt: scene.a.renderAt, continuation };
       ids.set(scene.id, plan);
       return plan;
     });
     if (plans.some((scene, i) => i && plans[i - 1].end > scene.start)) throw new TypeError("Roll scenes must be ordered without overlap");
     let disposed = false;
+    const rhythm = () => plans.flatMap(scene => [
+      ...scene.items.map(item => ({ time: item.at, duration: 0, kind: "text_reveal", scene: scene.id, target: item.target })),
+      ...scene.ranges.flatMap(range => [
+        ...range.targets.map(target => ({ time: range.from, duration: 0, kind: "b_enter", scene: scene.id, target })),
+        ...scene.groups.map(target => ({ time: range.to, duration: 0, kind: "a_return", scene: scene.id, target })),
+      ]),
+    ]);
+    (global.__hfRhythmSources ??= new Set()).add(rhythm);
     const show = (el, visible, blur = false) => {
       el.style.visibility = visible ? "visible" : "hidden";
       el.style.filter = blur ? "blur(8px)" : saved.get(el).filter;
@@ -79,6 +87,7 @@
       dispose() {
         if (disposed) return;
         disposed = true;
+        global.__hfRhythmSources.delete(rhythm);
         for (const [el, style] of saved) Object.assign(el.style, style);
       },
     };

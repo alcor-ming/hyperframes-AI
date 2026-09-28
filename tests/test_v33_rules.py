@@ -44,14 +44,14 @@ class ProductionRulesTests(unittest.TestCase):
         design = read(".studio/spec/visual-design.md")
         for requirement in (
             "最小完整语义单元", "实际起点", "不等说完整句",
-            "不得挤动旧文字", "切出返回", "顺序推进", "同场叠层",
-            "不新增必读正文", "seek", "回拖", "语义揭示与停留期活动独立检查",
+            "不得挤动旧文字", "A → B → A", "A → B", "隐藏或虚化",
+            "不新增内容", "seek", "回拖", "事件间隔不超过 2 秒",
         ):
             with self.subTest(requirement=requirement):
                 self.assertIn(requirement, design)
         plan = read(".studio/templates/ANIMATION_PLAN.template.md")
-        self.assertIn("累积终态", plan)
-        self.assertIn("场景策略与状态", plan)
+        self.assertIn("延续信息", plan)
+        self.assertIn("A/B 编排与延续", plan)
 
     def test_video_boundary_does_not_change_podcast_routing(self):
         workflow = read(".studio/workflow.md")
@@ -77,7 +77,7 @@ class ProductionRulesTests(unittest.TestCase):
                 if "--variant-id " in line:
                     self.assertIn("--account ", line)
         self.assertIn("shared_inputs", read(ROUTER))
-        self.assertIn("text-led", read(ROUTER))
+        self.assertIn("card", read(ROUTER))
 
 
 if __name__ == "__main__":

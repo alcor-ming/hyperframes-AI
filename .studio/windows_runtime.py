@@ -162,6 +162,8 @@ def environment(root: Path, config: dict | None = None) -> dict[str, str]:
         "HYPERFRAMES_NO_TELEMETRY": "1", "DO_NOT_TRACK": "1",
     })
     env["PATH"] = os.pathsep.join([str(root / "runtime/node"), str(root / "runtime/ffmpeg/bin"), env.get("PATH", "")])
+    # Every Node child uses this physical root, not a caller's preload from another installation.
+    env["NODE_OPTIONS"] = "--require " + json.dumps(str(root / ".studio/windows_node.cjs"), ensure_ascii=False)
     env["FFMPEG_PATH"] = env["HYPERFRAMES_FFMPEG_PATH"]
     env["FFPROBE_PATH"] = env["HYPERFRAMES_FFPROBE_PATH"]
     env["IMAGEIO_FFMPEG_EXE"] = env["FFMPEG_PATH"]

@@ -26,9 +26,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
         self.plan = self.variant / "ANIMATION_PLAN.md"
         self.plan.write_text(
             '---\n{"status":"approved","revision":1,"script_revision":1,"research_revision":1}\n---\n'
-            '| 原 Scene ID | 使用信息 ID |\n|---|---|\n| S01 | I01 |\n'
-            '| 信息 ID / 来源 | 实际表达 |\n|---|---|\n'
-            '| I01 · SCRIPT.md#P001 | 先明确用户的问题 |\n', encoding="utf-8")
+            '## S01\n### I01\n**来源：** SCRIPT.md#P001\n```screen\n先明确用户的问题\n```\n', encoding="utf-8")
         self.script = CLI.input_path(self.variant, "SCRIPT.md")
         self.script.write_text('---\n{"revision":1,"approval":"approved"}\n---\n'
                                '<!-- P001 -->\n' + COPY + '\n', encoding="utf-8")
@@ -122,7 +120,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
     def test_screen_plan_empty_ready_scene_is_missing_without_writes(self):
         self.plan.write_text(
             '---\n{"status":"approved","revision":1,"script_revision":1,"research_revision":1}\n---\n'
-            '| Scene | 信息 ID |\n|---|---|\n| S01 | I01 |\n'
+            '## S01\n'
             '### I01\n**来源：** SCRIPT.md#P001\n```screen\n先明确用户的问题\n```\n', encoding="utf-8")
         self.sampled['samples'][0]['texts'] = []
         before = self.files()
@@ -162,8 +160,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
 
     def test_scene_plan_uses_frozen_inputs_and_excludes_other_scene_information(self):
         self.plan.write_text(self.plan.read_text(encoding="utf-8")
-                             .replace('| S01 | I01 |', '| S01 | I01 |\n| S02 | I01 I02 |')
-                             + '| I02 · SCRIPT.md#P001 | 其他场景的完整结论 |\n', encoding="utf-8")
+                             + '## S02\n**延续信息：** I01\n### I02\n**来源：** SCRIPT.md#P001\n```screen\n其他场景的完整结论\n```\n', encoding="utf-8")
         frozen, _ = self.freeze("--purpose", "plan", "--scope", "scene", "--scene", "S01")
         for name in CLI.PREVIEW_DOCUMENTS:
             path = CLI.input_path(self.variant, name)
@@ -184,7 +181,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
                 self.assertEqual('先明确用户的问题', report['d1']['findings'][0]['planned'])
                 self.assertFalse(any(hit.get('scene') == 'S02' or hit.get('info') == 'I02'
                                      for hit in report['d1']['unverified']))
-                self.assertEqual([{'scene': 'S02', 'information_ids': ['I01', 'I02'],
+                self.assertEqual([{'scene': 'S02', 'information_ids': ['I02', 'I01'],
                                    'reason': 'outside_reference_scope'}], report['d1']['out_of_scope'])
                 self.assertEqual(['S01'], [scene['id'] for scene in self.probe.call_args.args[0]['scenes']])
 

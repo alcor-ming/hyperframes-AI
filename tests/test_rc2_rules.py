@@ -15,10 +15,12 @@ class RC2RulesTests(unittest.TestCase):
         template = (ROOT / ".studio/templates/ANIMATION_PLAN.template.md").read_text(encoding="utf-8")
         plan = template.replace("`<保留原 Scene ID>`", "S01")
         self.assertEqual(["S01"], list(plan_scene_rows(plan)))
-        self.assertIn("## 3. 上屏信息块", template)
+        self.assertIn("## S01", template)
         self.assertEqual(1, template.count("```screen\n"))
-        self.assertIn("## 4. Scene 节拍表", template)
-        self.assertIn("不在 Scene 节拍表重抄", template)
+        self.assertNotIn("Scene 节拍表", template)
+        scene = template.split("## S01", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("```screen", scene)
+        self.assertIn("### 事件序列与例外", scene)
 
     def test_video_edit_preserves_research_ownership_and_reading_stability(self):
         creative = (ROOT / ".studio/spec/creative.md").read_text(encoding="utf-8")

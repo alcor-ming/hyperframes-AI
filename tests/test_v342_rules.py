@@ -16,11 +16,11 @@ class V342RulesTests(unittest.TestCase):
         design = read(".studio/spec/visual-design.md")
         for rule in (
             "拆行、拆卡、逐句揭示或少量换词", "最小必要范围", "例外不覆盖周边说明",
-            "不等于必须换词", "verbatim", "未识别的图片文字不默认通过",
-            "数值、单位、比较对象与归属", "目标观看尺寸下可感知",
-            "开场、场内及跨 Scene 交接", "隐藏或离屏动作、空 tween",
-            "存在 `<video>` 也不自动通过", "不按动作数量/频率打分",
-            "具体例外区间，不新增审批", "不删必要文字、不保留整画面等待",
+            "不等于必须换词", "verbatim", "真实素材原生文字按证据用途核验",
+            "数值、单位、比较对象与归属", "手机等效尺寸",
+            "开场、Scene 内与跨 Scene 交接", "隐藏或离屏动作、空 tween",
+            "持续镜头运动的中间过程不计为事件", "第 2–4 层",
+            "逐处写明原因与区间", "由第 2、3 层继续产生事件",
         ):
             with self.subTest(rule=rule):
                 self.assertIn(rule, design)
@@ -37,7 +37,7 @@ class V342RulesTests(unittest.TestCase):
                     self.assertNotIn(obsolete, content)
                 if path != ".studio/spec/visual-design.md":
                     self.assertIn("visual-design.md", content)
-                    self.assertIn("阅读区域稳定", content)
+                    self.assertIn("阅读", content)
                     self.assertNotIn("拆行、拆卡、逐句揭示或少量换词", content)
                     self.assertNotIn("提炼说明", content)
                     self.assertNotIn("相似度证明", content)
@@ -50,7 +50,7 @@ class V342RulesTests(unittest.TestCase):
         for rule in (
             "来源与实际可见文字", "准确 Studio Draft 中连续观看", "可读性和声画含义",
             "不阻止保存、打开与继续修复 Draft", "QA 通过和接受就绪声明",
-            "preview diagnose <target>", "上屏文字照搬定位（D1）", "整画面静止定位（D2）",
+            "preview diagnose <target>", "上屏文字照搬定位（D1）", "按层节奏定位",
             "范围内未覆盖部分标未验证", "不报告工具 PASS", "不导出或编码视频",
             "不写 Plan、接受状态或 Final", "不以 tween 数量或像素变化代替观看判断",
         ):

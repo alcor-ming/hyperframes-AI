@@ -17,14 +17,11 @@ SOURCE = '系统首先读取用户提供的原始材料然后提取关键事实�
 
 
 def plan(expression=SOURCE, info='I01'):
-    return f'''| 原 Scene ID | 使用信息 ID |
-| --- | --- |
-| S01 | {info} |
+    return '## S01\n' + information('I01', expression)
 
-| 信息 ID / 来源 | 实际表达 | 视觉职责 |
-| --- | --- | --- |
-| I01 · P001 | {expression} | 定义 |
-'''
+
+def information(identity, expression):
+    return f'\n### {identity}\n**来源：** {identity} · P001\n```screen\n{expression}\n```\n'
 
 
 def samples(*parts, info='I01'):
@@ -76,7 +73,7 @@ class ExplainerDiagnosticsTests(unittest.TestCase):
             self.assertIn('captions_lock_mismatch', kinds)
             self.assertIn('sound_asset_outside_closure', kinds)
             self.assertIn('character_asset_outside_closure', kinds)
-            self.assertEqual(2, kinds.count('explainer_plan_missing'))
+            self.assertNotIn('explainer_plan_missing', kinds)
             self.assertEqual([], explainer_diagnostics(project, ['index.html'], {'mode': 'text-led'})['findings'])
             (project / 'index.html').write_text(''.join(f'<div data-hf-layer="{layer}"></div>'
                 for layer in ('background', 'stage', 'overlay', 'text'))
@@ -121,15 +118,14 @@ class VisualTextTests(unittest.TestCase):
                 self.assertEqual(1, report['observed_groups'])
 
     def test_reference_scope_skips_outside_text_and_shared_information(self):
-        document = plan('完整定义').replace('| S01 | I01 |', '| S01 | I01 |\n| S02 | I01 I02 |')
-        document += '| I02 · P001 | 其他场景的完整结论 | 结论 |\n'
+        document = plan('完整定义') + '\n## S02\n**延续信息：** I01\n' + information('I02', '其他场景的完整结论')
         states = samples('完整定义')
         states[0]['texts'].append({'scene': 'S02', 'info': 'I02', 'text': '其他', 'selector': '#outside'})
         report = self.diagnose(states, plan=document, scene_ids=['S01'])
         self.assertEqual([], report['findings'])
         self.assertEqual(1, report['observed_groups'])
         self.assertFalse(any(hit.get('info') or hit.get('scene') for hit in report['unverified']))
-        self.assertEqual([{'scene': 'S02', 'information_ids': ['I01', 'I02'],
+        self.assertEqual([{'scene': 'S02', 'information_ids': ['I02', 'I01'],
                            'reason': 'outside_reference_scope'}], report['out_of_scope'])
 
     def test_copy_split_cards_and_distributed_rewording(self):
@@ -147,7 +143,7 @@ class VisualTextTests(unittest.TestCase):
 
     def test_short_cards_with_shared_source_anchor_aggregate(self):
         expression = plan(SOURCE[:16], info='I01 I02 I03')
-        expression += f'| I02 · P001 | {SOURCE[16:32]} | 解释 |\n| I03 · P001 | {SOURCE[32:]} | 解释 |\n'
+        expression += information('I02', SOURCE[16:32]) + information('I03', SOURCE[32:])
         states = samples(SOURCE[:16], SOURCE[16:32], SOURCE[32:])
         for index, sample in enumerate(states):
             sample['texts'][0]['info'] = f'I0{index + 1}'
@@ -172,7 +168,7 @@ class VisualTextTests(unittest.TestCase):
     def test_plan_difference_and_missing_mapping_are_advisory(self):
         report = self.diagnose(samples(SOURCE), plan=plan('读取材料，保留条件，提炼表达'))
         self.assertIn('plan_implementation_difference', [hit['kind'] for hit in report['findings']])
-        ambiguous = plan(info='I01 I02') + f'| I02 · P001 | {SOURCE} | 定义 |\n'
+        ambiguous = plan(info='I01 I02') + information('I02', SOURCE)
         report = self.diagnose(samples(SOURCE, info=''), plan=ambiguous)
         self.assertIn('semantic_mapping_requires_review', [entry['reason'] for entry in report['unverified']])
         self.assertIn('suspected_copy', [hit['kind'] for hit in report['findings']])
@@ -188,9 +184,7 @@ class VisualTextTests(unittest.TestCase):
         self.assertEqual('不低于-1.5%且≤20kg', normalize('不低于 -1.5%，且 ≤ 20 kg。'))
 
     def test_screen_blocks_keep_line_breaks_sources_and_information_boundaries(self):
-        document = '''| Scene | 信息 ID |
-| --- | --- |
-| S01 | I01 I02 I03 |
+        document = '''## S01
 
 ### I01
 **来源：** SCRIPT.md#P001
@@ -202,7 +196,7 @@ class VisualTextTests(unittest.TestCase):
 ```
 
 ### I02
-来源：RESEARCH.md#R001
+**来源：** RESEARCH.md#R001
 尚无上屏正文。
 ````markdown
 ### I97
@@ -212,7 +206,7 @@ class VisualTextTests(unittest.TestCase):
 ````
 
 ### I03
-来源：RESEARCH.md#R002
+**来源：** RESEARCH.md#R002
 ```screen
 完整结论
 | Scene | 信息 ID |
@@ -233,16 +227,15 @@ class VisualTextTests(unittest.TestCase):
         self.assertEqual('SCRIPT.md#P001', information['I01']['信息 ID / 来源'])
         self.assertNotIn('I02', information)
         self.assertEqual('完整结论\n| Scene | 信息 ID |\n| --- | --- |\n| S99 | I99 |', information['I03']['实际表达'])
-        self.assertEqual({'S01': ['I01', 'I02', 'I03']}, mapping)
+        self.assertEqual({'S01': ['I01', 'I03']}, mapping)
         report = self.diagnose(samples('给模型厂商和工具服务商\n制定统一协议'), plan=document)
-        self.assertIn({'scene': 'S01', 'info': 'I02', 'source': '', 'reason': 'plan_information_undefined'},
-                      report['unverified'])
+        self.assertFalse(any(item.get('info') == 'I02' for item in report['unverified']))
 
-    def test_missing_truncated_difference_and_uncovered_in_both_plan_formats(self):
+    def test_missing_truncated_difference_uncovered_and_old_format_rejected(self):
         expected = '统一协议让模型厂商与工具服务商交换完整消息'
-        overview = '| Scene | 信息 ID |\n| --- | --- |\n| S01 | I01 |\n| S02 | I01 |\n'
-        formats = [overview + f'| 信息 ID / 来源 | 实际表达 |\n| --- | --- |\n| I01 · P001 | {expected} |\n',
-                   overview + f'### I01\n来源：SCRIPT.md#P001\n```screen\n{expected}\n```\n']
+        with self.assertRaisesRegex(VisualPlanError, '格式不支持'):
+            plan_information('| Scene | 信息 ID |\n| --- | --- |\n| S01 | I01 |\n')
+        formats = [plan(expected) + '\n## S02\n**延续信息：** I01\n']
         timeline = [{'id': 'S01', 'start': 0, 'duration': 2}, {'id': 'S02', 'start': 2, 'duration': 2}]
         for document in formats:
             for actual, kind in [('统一协议', 'plan_information_truncated'),
@@ -270,7 +263,7 @@ class VisualTextTests(unittest.TestCase):
         self.assertEqual(['plan_information_missing'], [hit['kind'] for hit in report['findings']])
 
     def test_partly_unready_scene_keeps_unobserved_information_unverified(self):
-        document = plan('完整定义和结论', info='I01 I02') + '| I02 · P001 | 另一个完整结论 | 定义 |\n'
+        document = plan('完整定义和结论', info='I01 I02') + information('I02', '另一个完整结论')
         timeline = [{'id': 'S01', 'start': 0, 'duration': 2}]
         states = samples('定义') + [{'time': 1, 'ready': False, 'texts': []}]
         report = self.diagnose(states, plan=document, scenes=timeline)
@@ -286,12 +279,12 @@ class VisualTextTests(unittest.TestCase):
         # Synthetic mirror of a native reference Scene: seven blocks, split nodes, shared words, no data-info-id.
         blocks = {'I15': 'ALPHA', 'I16': '共同规则，使两端连通', 'I17': 'R = Rule\n规则', 'I18': '约定\n逐条执行',
                   'I19': 'ALPHA 甲端\n请求方', 'I20': 'ALPHA 乙端\n提供方', 'I21': '经 ALPHA 连接'}
-        document = '| Scene | 信息 ID |\n| --- | --- |\n| S06 | ' + ' '.join(blocks) + ' |\n'
+        document = '## S06\n'
         narration = {'I15': 'ALPHA 是这一段的主题。', 'I16': '它是一套共同规则，它使两端连通。', 'I17': 'R 就是 Rule，也就是规则。',
                      'I18': '可以把它想成一份约定，大家逐条执行。', 'I19': '一边是 ALPHA 甲端，也就是请求方；',
                      'I20': '另一边是 ALPHA 乙端，也就是提供方；', 'I21': '两端经 ALPHA 连接。'}
         # Each block cites its own anchor, as the native Plan does.
-        document += ''.join(f'\n### {info}\n来源：SCRIPT.md#P0{60 + int(info[1:])}\n```screen\n{text}\n```\n'
+        document += ''.join(f'\n### {info}\n**来源：** SCRIPT.md#P0{60 + int(info[1:])}\n```screen\n{text}\n```\n'
                             for info, text in blocks.items())
         script = ''.join(f'<!-- P0{60 + int(info[1:])} -->\n{text}\n' for info, text in narration.items())
         # Role lines are sampled before names to prove comparison follows Plan order, not DOM/reveal order.
