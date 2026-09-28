@@ -67,6 +67,8 @@ title: <卡片标题> @<口播词>
 - A 文字不照搬口播，B 素材有来源或 Brief，事实边界清楚。
 - 第 4 层阅读保护期间，第 2、3 层继续产生事件；刻意停顿写明区间和原因，talking_head 真人区间单独声明。
 卡片文字中的 @ 与 [ 必须转义；SVG 写在 cue 后的方括号中，只接受闭包内图标引用或 custom:文件.svg。exit 可写退场 cue。无卡片、独立文字、素材或声音时省略对应块。信息 ID 全片唯一，延续信息只引用 ID。screen 默认 A、第 4 层，例外才写所属画面。Plan 只记录未通过项与例外。
+
+F04 每条后可用缩进 `indexKey: 文字 @cue`，F06 用 `key: 文字 @cue [SVG]`；F07 使用 `input`、`inputLabel`、`outputLabel`，均为文字 @cue，输入与输出标签可带端点 SVG，inputLabel 不带图。F03/F05/F08 可用 `figure: custom:文件.svg @cue`；`emphasis: cue` 可对已揭示内容强调。F05/F06/F07 不接条目正文 SVG，F06 的图放 key。区域仅 full/left/right/top/bottom 或安全区内正像素尺寸。详细槽位见 `.studio/spec/card-kit.md`；条数与实际文字溢出均须通过 `cards build`，不手改生成块。
 -->
 
 ## 唯一参考 Scene 与方向批准

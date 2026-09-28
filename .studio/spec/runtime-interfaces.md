@@ -61,6 +61,26 @@ const motion = HarnessAppearance.bindMotion(titleElement, appearance, 'reveal', 
 motion.seek(at);
 ```
 
+## card-kit.js
+
+用途：F01-F08 已设计卡片的内容插槽与确定性动作；画幅：16:9、9:16；占层：卡面/SVG 2、文字 4。参数：`mount({stage,text,card,ratio,cues,start,end,appearance,resolveSVG})`；返回 `items/renderAt/retime/rhythm/dispose`。使用已安装 `card-kit@v1`，不从开发源码或设计源加载。详细槽位、溢出与安全边界见 [接口卡](card-kit.md)。
+
+```js
+const card = await HarnessCardKit.mount({stage, text, card: planCard, ratio: '16:9',
+  cues, start: 0, end: 10, appearance, resolveSVG});
+card.renderAt(3);
+```
+
+## card-project.js
+
+用途：`cards build` 生成的 Plan 挂载与宿主 seek 接线；画幅：16:9、9:16；占层：2、4。参数：生成块中的冻结 Plan 数据，不手改；`scene(id)` 提供 A 组，`setRolls(scenes)` 接受宿主的 B 编排并自动绑定 `rolls.js`，`renderAt(t)` 使用全片秒数。编辑通过 `cards edit` 或 `cards studio` 写回 Plan，生成块被手改时拒绝覆盖。
+
+```js
+await HarnessCardProject.ready;
+await HarnessCardProject.setRolls([{id: 'S01', startCue: '开始', endCue: '结束',
+  b: [{startCue: '演示', endCue: '回来', retreat: 'blur', media: bHost}]}]);
+```
+
 ## scene-binding.js
 
 用途：接宿主 hf-seek，统一生命周期；画幅：16:9、9:16；占层：无。参数：`bindScene({start,duration,timeline?,renderAt,ready?,dispose?})`，renderAt 收到 Scene 本地时间；`bindExplainer({duration,captions,background,figures,ready,renderAt})` 收到全片时间；返回 `ready/seek/dispose`。
@@ -92,7 +112,7 @@ work --work <id> --variant <id> sound build
 
 用途：取用冻结图标集中的精确图标；画幅：16:9、9:16；占层：随语义内容通常 2/3，卡片 SVG 槽按组件合同。参数：图标精确引用 `lucide:<name>@<version>`、工程内 SVG 目标路径、主题 color/stroke token。取用保留 data-icon 来源与路径几何，使用 currentColor；不联网，不手绘替代标准图标。自制示意使用 `custom:` 引用并纳入闭包。
 
-需要继承宿主主题时将取用的 SVG 内联到语义节点，保留来源标记；独立 `<img>` 文档不能继承宿主 CSS 变量。Plan 简写如 `lucide:plug` 只在冻结闭包内恰有一个版本时有效，多版本必须显式指定。当前阶段只解析 `card` 块，不生成 F01–F08 挂载代码。
+需要继承宿主主题时将取用的 SVG 内联到语义节点，保留来源标记；独立 `<img>` 文档不能继承宿主 CSS 变量。Plan 简写如 `lucide:plug` 只在冻结闭包内恰有一个版本时有效，多版本必须显式指定。`cards build` 从 Plan 生成 F01-F08 挂载代码并实测容量。
 
 ```card C1 · P001
 preset: F01

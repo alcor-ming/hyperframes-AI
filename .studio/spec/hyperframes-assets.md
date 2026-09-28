@@ -1,5 +1,7 @@
 ## 按需资产接线
 
+F01-F08 使用 `card-kit@v1`，插槽与接线见 [Card Kit 接口卡](card-kit.md)。`component card-kit-source <新源目录>` 只导出自有源码，之后沿用 pack/validate/accept/install。Plan 是内容真源；`cards build` 生成挂载并用冻结字体实测容量，`cards studio` 在官方 Studio 旁提供回写 Plan 的卡片编辑器。不手改生成块，不把设计源批准当作正式资产接纳。
+
 使用 `work component interface <id@vN>` 读取选中资产的接口卡（用途、画幅、层、槽/参数及声明的用例），不读实现源码；可编辑候选用 `--candidate <路径>`。普通图标用 `work icons search <名称或别名>` 获取精确引用。缺库时从本机包运行 `work icons import --from <lucide-static 包根> --source <可编辑源目录>`，再按既有 pack / accept / install 流程处理；导入不自动接纳。安装到目标工程后，`work --work <id> --variant <id> icons use lucide:plug@1.45.0 --output icons/plug.svg` 取用闭包内 SVG，不联网、不改路径，保留来源标记及主题颜色/线宽。Plan 引用同一精确版本，SVG 随工程快照冻结。
 
 通过现有 `component` 能力从已配置的外部资产来源检索，以资产元数据和接纳记录为准，身份冲突不静默覆盖。按 Scene 关系、真实文字及可选说明、素材形态、画幅、可用时间和状态变化核对适配；名字相近或能换标题不算适配。模块 / 媒体读匹配的 `asset.json` 与声明的用法 / 样例，组件读 `COMPONENT.md`、必要 `cases/**/CASE.md` 和边界 Fixture，Case 不扩大公共合同。已适配或能通过合同内组合 / 参数解决的能力直接复用，不重做审批样段。语义简报、精确版本、Binding 与必要差异保留在 Plan 对应 Scene 一节，不新建数据库。

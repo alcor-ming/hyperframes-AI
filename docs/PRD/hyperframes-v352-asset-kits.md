@@ -2,7 +2,7 @@
 
 日期：2026-09-28
 
-状态：阶段一已实现并提交（`025bbd3`，Plan 格式版本 `3.5.2`），开发任务 `hyperframes-v352-plan-rhythm-icons` 的 WSL 验证为 verified；未部署，Windows 原生（第 6 节第 13 项）与生产验收未完成。阶段二已确认 `card-family-svg-slots-source@v3` 的 F01–F08 及新增整幅，设计验收完成，逐款结果见第 5.1 节。阶段三、四未开始，方向已定（第 3 节）；图解积木延后到后续版本；资产库整理细节仍待讨论（第 8 节）。阶段二的 SVG 槽设计要求见 [F01–F08 SVG 槽设计要求](./hyperframes-v352-card-svg-slot-brief.md)。
+状态：阶段一已实现并提交（`025bbd3`，Plan 格式版本 `3.5.2`），开发任务 `hyperframes-v352-plan-rhythm-icons` 的 WSL 验证为 verified；未部署，Windows 原生（第 6 节第 13 项）与生产验收未完成。阶段二已确认 `card-family-svg-slots-source@v3` 的 F01–F08 及新增整幅，设计验收完成，逐款结果见第 5.1 节。阶段三已启动实现，任务 `hyperframes-v352-card-kits`；Windows 原生与用户观看验收待执行，未部署、未提交。阶段四未开始，方向已定（第 3 节）；图解积木延后到后续版本；资产库整理细节仍待讨论（第 8 节）。阶段二的 SVG 槽设计要求见 [F01–F08 SVG 槽设计要求](./hyperframes-v352-card-svg-slot-brief.md)。
 
 版本归属：承接 [v3.5.1 卡片模式合并、模型侧规则与产物重构](./hyperframes-v351-card-templates.md)，基线为 v3.5.1 提交后的 `afac365`。本文合并了同日的两份草案："v3.5.2 本地图标库、节奏闭环与 Plan / token 减负"与"资产库重构：积木为主的四层结构"。
 
@@ -226,7 +226,7 @@ exit: 下一场
 |---|---|---|---|---|
 | 一 | Plan 格式与读取代码（事件表、`screen` 信息块、`card` 块解析）、读取与写入减负（第 4.7–4.9 节）、节奏事件自动提取与 Draft 前闭环（第 4.5–4.6 节）、图标集导入 / 检索 / 取用 / 检查（第 4.2–4.3 节） | WSL | 无 | 已提交 `025bbd3`；WSL verified；Windows 原生未验证 |
 | 二 | F01–F08 的 SVG 槽视觉设计稿，用户选定 | Windows 设计；WSL 修复复核 | 可与阶段一并行 | 已确认 `card-family-svg-slots-source@v3`，含新增整幅；任务二设计验收完成（第 5.1 节） |
-| 三 | 卡片积木实现与入库：插槽合同、五层、Theme 映射、口播 cue、节奏与 A/B、动作补全、接口卡、AssetStore 接纳（第 4.4 节） | WSL 或 Windows（A3） | 阶段一的 `card` 块解析；阶段二定稿 | 未开始 |
+| 三 | 卡片积木实现与入库：插槽合同、五层、Theme 映射、口播 cue、节奏与 A/B、动作补全、接口卡、AssetStore 接纳（第 4.4 节） | WSL 或 Windows（A3） | 阶段一的 `card` 块解析；阶段二定稿 | WSL 候选实现完成，验证结果以开发任务记录为准；不等于生产接纳；见第 5.2 节 |
 | 四 | 资产库整理：单一目录与生成式索引、开发仓组件合并、降为参考样例、状态体系与导航文本替代（第 4.1、4.11 节） | WSL 与 Windows | 第 8 节相关问题定稿 | 未开始 |
 
 阶段一可以单独成为一个 Trellis 任务；阶段三、四按执行方与依赖另行拆分。部署统一在各阶段验收后另行授权。
@@ -253,6 +253,19 @@ exit: 下一场
 v3 本地交付为开发仓 `output/card-svg-slots-v352-r3/`，不是生产资产库登记。WSL Chromium 离线回归 1,920 组，其中原区域 1,536 组与 v2 状态数据完全一致、新增 full 384 组通过；96 组槽位实测及两画幅共 16 组反向 seek 通过。2026-09-28 用户“确认并提交git”，确认 v3 及新增整幅，任务二设计验收完成；上表八款选择统一延续至 v3，无暂缓款。原生 Studio 不在本阶段验收范围。详细证据见本地源 `QA.md`；批准文件由 `APPROVED-FILES.json` 固定。设计源、字体、图标和截图不进入开发 Git；本次只提交产品决策与批准摘要，不部署、不推送、不开始阶段三。
 
 本次批准清单包含 31 个文件，`APPROVED-FILES.json` 的 SHA-256 为 `1f7b71c5258ce34f2fbdbcb8c0f420f9ddfb5b85244fb0cde585e55759ccac11`。确认时仅更新 manifest、README 与 QA 中的批准状态，渲染代码、样式、图标、槽位实测和测试结果仍与已验证候选一致。
+
+### 5.2 阶段三实现约定
+
+2026-09-28 用户授权“启动任务三实现”。采用既有 `module` 资产合同，新增 `card-kit@v1` 可编辑源导出，仍经 pack / validate / 精确 hash accept / install；不自动接纳、不覆盖设计源或旧包。源只含自有运行时、CSS 与接口卡，不带设计预览页、字体或第三方图标。
+
+- Plan 沿用 `plan_format: 3.5.2`。F04 每行后缩进 `indexKey: 文字 @cue`；F06 用 `key: 文字 @cue [SVG]`，图标属于键列而非值正文。F07 的 `input`、`inputLabel`、`outputLabel` 使用同一文字/cue写法；input 与 outputLabel 可带端点图标，inputLabel 不带图。缺省专有文字不生成示例文案或假编号。
+- F03/F05/F08 的 `figure: custom:文件.svg @cue` 接受无内嵌文字的自制示意；F05/F06/F07 不接受逐行正文图标，note 不接受图标。`emphasis: cue` 为可选强调，指向当时最新揭示条目；不重复写入手工事件表。支持的专有文字进入 D1、闭包与节奏对照。
+- 区域为 full/left/right/top/bottom；像素尺寸锚定 72,72，必须在画幅安全区内。条数检查之后仍使用冻结 Theme 字体做真实浏览器布局测量，超限拒绝写入工程，不缩字、不截断。
+- `cards build` 从 Plan 更新命名生成块，重复生成稳定；保护块外手写代码，块内手改明确拒绝。删除卡片移除该生成块及其拥有的依赖声明，不删除素材文件。Plan、cue 或生成块变化会使预览前的一致性检查失败，要求重建。
+- `cards studio` 使用官方 Studio 旁的本地卡片编辑器回写 Plan，再生成并刷新；这是明确的卡片内容编辑入口，不拦截官方 Studio 的任意源码修改。保存使用准确 Plan hash，校验失败或并发变化不覆盖输入；保存取消旧方向批准与接受状态，不增加自动批准。
+- 卡片复用现有 cues / appearance / scene-binding / rolls。`HarnessCardProject.setRolls` 接入宿主已有 B 素材编排，生成器不猜测散文 A/B 描述；卡片内容仍只取 Plan。独立 composition 的本地时间与全片 cue 时间显式换算。
+
+代码接口与使用入口见 [Card Kit 合同](../../.studio/spec/card-kit.md)。隔离 AssetStore 接纳仅为实现验证，不是正式库入库。Windows 原生验收 17、用户观看验收 18 和部署仍需按各自权限执行；不导出视频。
 
 ## 6. 验收
 
@@ -307,6 +320,6 @@ v3 本地交付为开发仓 `output/card-svg-slots-v352-r3/`，不是生产资�
 - 导航文本的替代：README、配方与大型索引改为由包元数据生成，或降为人工参考。
 - 存储清理规则：候选、批次工作区、根目录请求 JSON 与开发仓重复 vendor 文件的归档方式；只整理新机制拥有的内容。
 - IconPark：盘点归层初稿列有 Lucide 与 IconPark 两个图标集；本计划首个图标集为 Lucide，IconPark 是否作为第二个图标集、现有 24 个单图标包如何处理。
-- F01–F08 各预设专有槽在 `card` 块中的写法（随视觉设计定稿）。
+- F01–F08 专有槽写法已在阶段三实现中落定，见第 5.2 节；不再作为阶段四前置讨论项。
 - 开发仓 20 个卡片家族在 F01–F08 之后的处置顺序。
 - 以实际使用频率作为去留依据时，需要单独授权只读统计 Work。

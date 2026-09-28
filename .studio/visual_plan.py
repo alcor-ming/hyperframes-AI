@@ -56,28 +56,93 @@ def parse_card(header, lines):
     if not match:
         raise VisualPlanError('card requires card <ID> · <source anchor>')
     card = {'id': match[1], 'source': plan_source(match[2]), 'lines': []}
+    latest = None
     for line in lines:
         if not line.strip():
             continue
         if line.startswith('- '):
             card['lines'].append(card_content(line[2:], card['id']))
+            latest = card['lines'][-1]
             continue
+        if line[:1].isspace():
+            key, separator, value = line.strip().partition(':')
+            if not separator or key not in {'key', 'indexKey'} or latest is None or key in latest:
+                raise VisualPlanError(f"{card['id']}: invalid or duplicate per-line card field {key}")
+            latest[key] = card_content(value.strip(), card['id'])
+            continue
+        latest = None
         key, separator, value = line.partition(':')
         value = value.strip()
-        if not separator or key not in {'preset', 'area', 'title', 'note', 'exit'} or key in card or not value:
+        if not separator or key not in {'preset', 'area', 'title', 'note', 'exit', 'emphasis', 'input', 'inputLabel', 'outputLabel', 'figure'} or key in card or not value:
             raise VisualPlanError(f"{card['id']}: invalid or duplicate card field {key}")
-        card[key] = card_content(value, card['id']) if key in {'title', 'note'} else plan_cue(value) if key == 'exit' else value
+        if key == 'figure':
+            figure = re.fullmatch(r'(custom:.+\.svg)\s+@(.+)', value)
+            if not figure:
+                raise VisualPlanError(f"{card['id']}: figure requires custom:path.svg @cue")
+            card[key] = {'svg': figure[1], 'cue': plan_cue(figure[2])}
+        else:
+            card[key] = card_content(value, card['id']) if key in {'title', 'note', 'input', 'inputLabel', 'outputLabel'} else plan_cue(value) if key in {'exit', 'emphasis'} else value
     if not re.fullmatch(r'F0[1-8]', card.get('preset', '')):
         raise VisualPlanError(f"{card['id']}: preset must be F01-F08")
-    if not re.fullmatch(r'(?:[A-Za-z][A-Za-z0-9_-]*|[1-9][0-9]*(?:px)?\s*[x×]\s*[1-9][0-9]*(?:px)?)', card.get('area', '')):
+    if not re.fullmatch(r'(?:full|left|right|top|bottom|[1-9][0-9]*(?:px)?\s*[x×]\s*[1-9][0-9]*(?:px)?)', card.get('area', '')):
         raise VisualPlanError(f"{card['id']}: area requires a region name or positive pixel dimensions")
-    if not any(card.get(key) for key in ('title', 'lines', 'note')):
+    for slot in ('input', 'inputLabel', 'outputLabel', 'figure'):
+        if slot in card and card['preset'] not in ({'F03', 'F05', 'F08'} if slot == 'figure' else {'F07'}):
+            raise VisualPlanError(f"{card['id']}: {card['preset']} does not support {slot}")
+    for item in card['lines']:
+        for slot, preset in (('key', 'F06'), ('indexKey', 'F04')):
+            if slot in item and card['preset'] != preset:
+                raise VisualPlanError(f"{card['id']}: {card['preset']} does not support {slot}")
+    for slot, item in card_rows(card):
+        if item.get('svg') and (slot in {'note', 'inputLabel'} or str(slot).endswith(':indexKey')
+                                or isinstance(slot, int) and card['preset'] in {'F05', 'F06', 'F07'}):
+            raise VisualPlanError(f"{card['id']}: {card['preset']} does not support SVG in {slot}")
+    if not any(card.get(key) for key in ('title', 'lines', 'note', 'input')):
         raise VisualPlanError(f"{card['id']}: card needs text")
     return card
 
 
 def card_rows(card):
-    return ([('title', card['title'])] if 'title' in card else []) + list(enumerate(card['lines'], 1)) + ([('note', card['note'])] if 'note' in card else [])
+    rows = [(key, card[key]) for key in ('inputLabel', 'input', 'outputLabel', 'title') if key in card]
+    for number, item in enumerate(card['lines'], 1):
+        rows.extend((f'{number}:{key}', item[key]) for key in ('indexKey', 'key') if key in item)
+        rows.append((number, item))
+    return rows + ([('note', card['note'])] if 'note' in card else [])
+
+
+def validate_card_layout(card, ratio):
+    """Approved allocation and count limits; real text overflow is checked in-browser."""
+    if ratio not in {'16:9', '9:16'}:
+        raise VisualPlanError('Card ratio must be 16:9 or 9:16')
+    width, height = (1920, 1080) if ratio == '16:9' else (1080, 1920)
+    area = card['area']
+    x = y = 72
+    w, h = width - 144, height - 144
+    if area in {'left', 'right'}:
+        w = (width - 192) // 2
+        if area == 'right':
+            x = width // 2 + 24
+    elif area in {'top', 'bottom'}:
+        h = (height - 192) // 2
+        if area == 'bottom':
+            y = height // 2 + 24
+    elif area != 'full':
+        match = re.fullmatch(r'([1-9][0-9]*)(?:px)?\s*[x×]\s*([1-9][0-9]*)(?:px)?', area)
+        if not match:
+            raise VisualPlanError(f"{card['id']}: invalid area")
+        w, h = map(int, match.groups())
+        if w > width - 144 or h > height - 144:
+            raise VisualPlanError(f"{card['id']}: pixel area exceeds safe frame")
+    limit = 6
+    if h < 500:
+        limit = 2
+    elif w < 600 or card['preset'] in {'F05', 'F07'} or 'figure' in card:
+        limit = 4
+    elif card['preset'] in {'F04', 'F06'} and h < 900:
+        limit = 4
+    if len(card['lines']) > limit:
+        raise VisualPlanError(f"{card['id']}: card overflow: {len(card['lines'])} lines exceeds capacity {limit}")
+    return {'x': x, 'y': y, 'width': w, 'height': h, 'max_lines': limit}
 
 
 def validate_plan_cards(plan_text, cues, *, project, closure, icon_refs=(), scene_ids=None):
@@ -91,7 +156,9 @@ def validate_plan_cards(plan_text, cues, *, project, closure, icon_refs=(), scen
             continue
         for card in row['cards'].values():
             values = [value for _, value in card_rows(card)]
-            for value in values + ([{'cue': card['exit']}] if 'exit' in card else []):
+            values += [card['figure']] if 'figure' in card else []
+            values += [{'cue': card[key]} for key in ('exit', 'emphasis') if key in card]
+            for value in values:
                 try:
                     find_cue(cues, value['cue'])
                 except (ValueError, TypeError, KeyError) as error:
@@ -103,6 +170,12 @@ def validate_plan_cards(plan_text, cues, *, project, closure, icon_refs=(), scen
                     path = (project / svg[7:]).resolve()
                     if not path.is_relative_to(project) or path not in paths or not path.is_file():
                         raise VisualPlanError(f"{card['id']}: SVG reference outside snapshot closure: {svg}")
+                    from icon_sets import validate_svg_reference
+                    from component_harness import ComponentError
+                    try:
+                        validate_svg_reference(svg, project)
+                    except ComponentError as error:
+                        raise VisualPlanError(f"{card['id']}: unsafe SVG: {error}") from error
                 elif svg not in icon_refs and ('@' in svg or len([ref for ref in icon_refs if ref.rsplit('@', 1)[0] == svg]) != 1):
                     raise VisualPlanError(f"{card['id']}: SVG icon reference outside snapshot closure: {svg}")
     return rows
@@ -187,6 +260,10 @@ def plan_scene_rows(plan_text):
                         information[identity] = row['screens'][identity] = value
                         for number, item in card_rows(card):
                             row['events'].append({'cue': item['cue'], 'layer': 4, 'target': f'{identity}:{number}', 'change': 'text_reveal', 'card': identity, 'row': number, 'info': identity, 'derived': True})
+                        if 'figure' in card:
+                            row['events'].append({'cue': card['figure']['cue'], 'layer': 2, 'target': f'{identity}:figure', 'change': 'figure_reveal', 'card': identity, 'derived': True})
+                        if 'emphasis' in card:
+                            row['events'].append({'cue': card['emphasis'], 'layer': 2, 'target': identity, 'change': 'emphasis', 'card': identity, 'derived': True})
                         if 'exit' in card:
                             row['events'].append({'cue': card['exit'], 'layer': 2, 'target': identity, 'change': 'exit', 'card': identity, 'derived': True})
                     elif kind == 'rhythm':

@@ -50,6 +50,8 @@ except ModuleNotFoundError:  # Loading this file by path from repository tests.
 
 from visual_plan import VisualPlanError, PLAN_FORMAT, plan_scene_rows, validate_plan_cards, scene_projection, layout_projection, reference_projection, validate_dependencies, source_changes, serve
 import icon_sets
+import card_build
+import card_kit_assets
 import work_requests
 import studio_preview
 import visual_diagnostics
@@ -1474,6 +1476,7 @@ def command_icons(root: Path, args: argparse.Namespace) -> None:
 
 
 def validate_project_cards(project: Path, plan_text: str, closure, scene_ids=None) -> None:
+    card_build.verify_generated(project, plan_text, scene_ids)
     if not any(row['cards'] for sid, row in plan_scene_rows(plan_text).items()
                if scene_ids is None or sid in scene_ids):
         return
@@ -1481,6 +1484,82 @@ def validate_project_cards(project: Path, plan_text: str, closure, scene_ids=Non
     refs = [item['ref'] for item in icon_sets.search_icons(icon_sets.project_packages(project))]
     validate_plan_cards(plan_text, read_json(cues) if cues.is_file() else None,
                         project=project, closure=closure, icon_refs=refs, scene_ids=scene_ids)
+
+
+def command_card_source(root: Path, args: argparse.Namespace) -> None:
+    print_result(root, args, card_kit_assets.export_card_kit(root, Path(args.target)))
+
+
+def command_cards(root: Path, args: argparse.Namespace) -> None:
+    from component_harness import package_write_lock
+    variant = None
+    if args.project:
+        project = asset_store.authoring_project(root, Path(args.project))
+        if not args.plan:
+            raise HarnessError('Standalone cards require --plan within the registered AssetSource')
+        plan_path = Path(args.plan).expanduser().absolute()
+        # Reuse authoring ownership checks; a Plan path cannot redirect writes to a Work.
+        asset_store.authoring_project(root, plan_path.parent)
+        storage.scoped_path(plan_path.parent, plan_path.name)
+    else:
+        if not args.work_override or not args.variant_override or args.plan:
+            raise HarnessError('Cards require explicit --work/--variant, or --project/--plan')
+        work, _ = selected_work(root, args)
+        require_workflow(work, 'hyperframes_video')
+        variant, _ = selected_variant(root, work, args)
+        project = variant / 'project'
+        plan_path = storage.scoped_path(variant, 'ANIMATION_PLAN.md')
+
+    def update(payload=None):
+        with package_write_lock(work_requests.safe(project.parent, '.runtime/component-install.lock')):
+            plan_bytes = plan_path.read_bytes()
+            plan = plan_bytes.decode('utf-8')
+            plan_scene_rows(plan)
+            frontmatter = re.match(r'\A---\s*\n(.*?)\n---(?:\n|$)', plan, re.S)
+            metadata = json.loads(frontmatter[1])
+            state_bytes = (variant / 'variant.yaml').read_bytes() if variant else None
+            state = json.loads(state_bytes) if state_bytes is not None else None
+            lock = state.get('appearance_lock') if state else read_json(project / 'appearance-lock.json')
+            if not lock or lock.get('mode') not in appearance.MODES:
+                raise HarnessError('Card build requires frozen appearance')
+            appearance.verify(project, lock, check_mounts=False)
+            extra = {}
+            if payload is not None:
+                if payload.get('plan_sha256') != card_build.digest(plan.encode()):
+                    raise VisualPlanError('Plan changed; reload before saving')
+                plan = card_build.replace_card(plan, payload.get('card'), payload.get('body'))
+                revision = metadata.get('revision', 1)
+                if type(revision) is not int or revision < 1:
+                    raise VisualPlanError('Plan revision must be a positive integer')
+                metadata.update(status='draft', revision=revision + 1)
+                plan = '---\n' + json.dumps(metadata, ensure_ascii=False, indent=2) + '\n---\n' + plan[frontmatter.end():]
+                extra[plan_path] = plan.encode()
+                if state is not None:
+                    state.update(plan_revision=metadata['revision'], accepted_preview=None, current_final=None)
+                    extra[variant / 'variant.yaml'] = (json.dumps(state, ensure_ascii=False, indent=2) + '\n').encode()
+            elif metadata.get('status') != 'approved':
+                raise HarnessError('ANIMATION_PLAN.md must be approved before cards build')
+            expected = {plan_path: plan_bytes}
+            if variant:
+                expected[variant / 'variant.yaml'] = state_bytes
+            return card_build.build(project, plan, root, lock['ratio'], browser=args.browser,
+                                    extra_files=extra, expected_before=expected)
+
+    if args.cards_command == 'studio':
+        import card_editor
+        # This is the editable source, not preview open's immutable accepted snapshot.
+        update()
+        cli = runtime_path(args.hyperframes_cli, 'HYPERFRAMES_CLI')
+        session = studio_preview.start(cli, project, no_open=True)
+        try:
+            card_editor.serve(plan_path, project, session['studioUrl'], update, port=args.port)
+        finally:
+            studio_preview.stop(cli, project, session['port'])
+    elif args.cards_command == 'edit':
+        print_result(root, args, update({'card': args.card, 'body': Path(args.body_file).read_text(encoding='utf-8'),
+                                       'plan_sha256': args.plan_sha256}))
+    else:
+        print_result(root, args, update())
 
 
 def command_component_store(root: Path, args: argparse.Namespace) -> None:
@@ -3335,6 +3414,22 @@ def build_parser() -> argparse.ArgumentParser:
     plan_commands = plan.add_subparsers(dest="plan_command", required=True)
     plan_commands.add_parser("refresh", help="Refresh CLI metadata without approving changed content").set_defaults(handler=command_plan_refresh)
 
+    cards = commands.add_parser('cards', help='Build and edit Plan-owned cards from the installed card kit')
+    card_commands = cards.add_subparsers(dest='cards_command', required=True)
+    for name in ('build', 'edit', 'studio'):
+        command = card_commands.add_parser(name)
+        command.add_argument('--project', help='Editable sample inside a registered AssetSource')
+        command.add_argument('--plan', help='Standalone sample Plan path')
+        command.add_argument('--browser', help='Chromium executable for mandatory capacity measurement')
+        if name == 'edit':
+            command.add_argument('--card', required=True)
+            command.add_argument('--body-file', required=True)
+            command.add_argument('--plan-sha256', required=True)
+        if name == 'studio':
+            command.add_argument('--hyperframes-cli')
+            command.add_argument('--port', type=int, default=0, help='Local card editor port')
+        command.set_defaults(handler=command_cards)
+
     script = commands.add_parser("script")
     script_commands = script.add_subparsers(dest="script_command", required=True)
     script_output = script_commands.add_parser("text", help="Narration for reading, counts, TTS or alignment")
@@ -3386,6 +3481,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     component = commands.add_parser("component", help="Validate and install immutable Component Releases")
     component_commands = component.add_subparsers(dest="component_command", required=True)
+    card_source = component_commands.add_parser('card-kit-source', help='Export an editable card-kit source; never accept')
+    card_source.add_argument('target')
+    card_source.set_defaults(handler=command_card_source)
     interface = component_commands.add_parser('interface', help='Read the selected asset interface without implementation source')
     interface.add_argument('component')
     interface.add_argument('--candidate', action='store_true')
