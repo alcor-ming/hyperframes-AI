@@ -81,6 +81,8 @@ class V352CliTests(unittest.TestCase):
         self.assertEqual(full, json.loads(path.read_text()))
         self.assertLess(len(json.dumps(summary)), len(json.dumps(full)))
 
+    @unittest.skipUnless((fixture.REPO / '.studio/components/script-draft-core/16x9/v2').is_dir(),
+                         'Source-checkout-only: legacy component fixtures are excluded from releases')
     def test_existing_component_interface_has_parameters_layers_and_example(self):
         source = fixture.REPO / '.studio/components/script-draft-core/16x9/v2'
         card = json.loads(call(self, 'component', 'interface', str(source), '--candidate', '--json'))['interface']
@@ -100,10 +102,13 @@ class V352DiagnosticSummaryTests(unittest.TestCase):
 
     def test_diagnosis_summary_saves_complete_report_without_changing_plan(self):
         self.update_frontmatter(self.plan, plan_format="3.5.2")
+        self.sampled['samples'][0]['unverified'] = ['SVG image provenance could not be sampled: #unavailable']
         before = self.plan.read_bytes()
         arguments = ("--work", self.work_id, "--variant", "main", "preview", "diagnose", "current",
                      "--hyperframes-cli", str(self.cli), "--browser", str(self.root / "unused-browser"))
         full = json.loads(call(self, *arguments, "--json"))
+        self.assertEqual([{'reason': 'icon_provenance_unverified', 'time': 0, 'target': '#unavailable'}],
+                         full['icons']['unverified'])
         summary = json.loads(call(self, *arguments))
         report = json.loads(Path(summary["report_path"]).read_text())
         for key in ("status", "target", "d1", "rhythm", "icons", "samples"):

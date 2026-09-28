@@ -83,6 +83,57 @@ class IconSetTest(unittest.TestCase):
         with self.assertRaisesRegex(COMPONENT.ComponentError, "links"):
             ICONS.import_lucide(self.npm, self.root / "linked")
 
+    def test_search_metadata_keeps_literal_operator_tags(self):
+        symbols = ['->', '->|', '<', '<-', '<-|', '<>', '>', '{', '|->', '|<-', '}']
+        (self.npm / 'icon-metadata.json').write_text(json.dumps({
+            'test-shape': {'aliases': symbols, 'tags': symbols}}))
+        packages = self.install()
+        for symbol in symbols:
+            with self.subTest(symbol=symbol):
+                row = ICONS.search_icons(packages, symbol)[0]
+                self.assertEqual(symbols, row['aliases'])
+                self.assertEqual(symbols, row['tags'])
+
+    def test_search_metadata_still_rejects_executable_payloads(self):
+        ICONS.import_lucide(self.npm, self.source)
+        metadata = json.loads((self.source / 'asset.json').read_text())
+        declaration = json.loads((self.source / 'icons.json').read_text())
+        for field in ('aliases', 'tags'):
+            for payload in ('<script>alert(1)</script>', 'javascript:alert(1)',
+                            'url(https://example.invalid/payload)', 'expression(alert(1))',
+                            '{alert(1)}', 'x;alert(1)', '${alert(1)}'):
+                with self.subTest(field=field, payload=payload):
+                    declaration['icons'][0][field] = [payload]
+                    with self.assertRaisesRegex(COMPONENT.ComponentError, 'Executable expressions'):
+                        ASSET.validate_declaration(declaration, metadata, self.source)
+                declaration['icons'][0][field] = []
+        for symbol in ('<-', '->', '{', '}'):
+            with self.subTest(parameter=symbol), self.assertRaisesRegex(COMPONENT.ComponentError, 'Executable expressions'):
+                ASSET.validate_parameter(symbol, {'type': 'string', 'default': symbol})
+
+    def test_editor_ids_do_not_change_icon_geometry(self):
+        packages = self.install()
+        ICONS.use_icon(packages, 'lucide:test-shape@1.45.0', self.project, 'assets/test.svg')
+        root = ET.fromstring((self.project / 'assets/test.svg').read_text())
+        root.set('data-hf-id', 'studio-root')
+        path = next(iter(root))
+        path.set('data-hf-id', 'studio-path')
+        record = {'svg': ET.tostring(root, encoding='unicode'), 'target': '#original'}
+        self.assertEqual([], ICONS.audit_icons([record], packages))
+        for node, attribute, changed in ((path, 'd', 'M2 2 L3 4'),
+                                         (path, 'transform', 'translate(1 0)'),
+                                         (root, 'transform', 'scale(2)'),
+                                         (path, 'data-hf-id-other', 'not-editor-metadata')):
+            original = node.get(attribute)
+            node.set(attribute, changed)
+            with self.subTest(attribute=attribute):
+                issue = ICONS.audit_icons([{'svg': ET.tostring(root, encoding='unicode')}], packages)
+                self.assertEqual('icon_source_mismatch', issue[0]['code'])
+            if original is None:
+                del node.attrib[attribute]
+            else:
+                node.set(attribute, original)
+
     def test_missing_outside_and_audit_exemptions(self):
         with self.assertRaisesRegex(COMPONENT.ComponentError, "not installed"):
             ICONS.validate_svg_reference("lucide:test-shape@1.45.0", self.project)

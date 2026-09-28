@@ -2486,12 +2486,16 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     if diagnostic_lock:
         report['explainer'] = visual_diagnostics.explainer_diagnostics(
             project, dependencies, diagnostic_lock, contents['ANIMATION_PLAN.md'])
+    icon_unverified = [{'reason': 'icon_provenance_unverified', 'time': sample['time'],
+                        'target': message.removeprefix('SVG image provenance could not be sampled: ')}
+                       for sample in sampled['samples'] for message in sample.get('unverified', [])
+                       if isinstance(message, str) and message.startswith('SVG image provenance could not be sampled: ')]
     try:
         report['icons'] = {'findings': icon_sets.audit_icons(
             [item for sample in sampled['samples'] for item in sample.get('icons', [])],
-            icon_sets.project_packages(project)), 'unverified': []}
+            icon_sets.project_packages(project)), 'unverified': icon_unverified}
     except ComponentError as error:
-        report['icons'] = {'findings': [], 'unverified': [{'reason': 'icon_closure_invalid', 'detail': str(error)}]}
+        report['icons'] = {'findings': [], 'unverified': icon_unverified + [{'reason': 'icon_closure_invalid', 'detail': str(error)}]}
     if target != 'current':
         for name, frozen in contents.items():
             current_path = input_path(variant, name)

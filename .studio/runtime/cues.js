@@ -35,7 +35,7 @@
     } };
   }
   async function load(url = "runtime/cues.json") {
-    const target = new URL(url, location.href);
+    const target = new URL(url, document.baseURI);
     if (target.origin !== location.origin) throw new Error("cues_require_local_url");
     const response = await fetch(target, { redirect: "error" });
     if (!response.ok) throw new Error("cues_not_found");

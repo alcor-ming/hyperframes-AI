@@ -279,13 +279,21 @@ export async function inspectFrame(scenes, time, projection = {}) {
       card_slot: !!element.closest('[data-card-svg-slot], [data-card-slot="svg"]')};
   });
   for (const element of [...document.images].filter(exposedIcon)) {
-    const url = new URL(element.currentSrc || element.src, location.href);
-    if (url.origin !== location.origin || !url.pathname.toLowerCase().endsWith('.svg')) continue;
     try {
+      const url = new URL(element.currentSrc || element.src, document.baseURI);
+      const inlineSvg = /^data:image\/svg\+xml(?:[;,])/i.test(url.href);
+      if (!inlineSvg && !url.pathname.toLowerCase().endsWith('.svg')) continue;
+      if (!inlineSvg && (!['http:', 'https:'].includes(url.protocol) || url.origin !== location.origin))
+        throw new Error('SVG resource is not same-origin');
       const response = await fetch(url.href, {redirect: 'error'});
       if (!response.ok) throw new Error('SVG resource unavailable');
+      const svg = await response.text();
+      const documentSvg = new DOMParser().parseFromString(svg, 'image/svg+xml');
+      if (documentSvg.querySelector('parsererror') || documentSvg.documentElement.localName !== 'svg' ||
+          documentSvg.documentElement.namespaceURI !== 'http://www.w3.org/2000/svg')
+        throw new Error('SVG resource is invalid');
       const rect = element.getBoundingClientRect();
-      icons.push({svg: await response.text(), width: rect.width, height: rect.height, target: selector(element),
+      icons.push({svg, width: rect.width, height: rect.height, target: selector(element),
         schematic: !!element.closest('[data-hf-schematic]'),
         card_slot: !!element.closest('[data-card-svg-slot], [data-card-slot="svg"]')});
     } catch { unverified.add('SVG image provenance could not be sampled: ' + selector(element)); }

@@ -197,7 +197,8 @@ def _geometry(root):
     ignored = {"data-icon", "data-icon-sha256", "style", "class", "id", "width", "height", "stroke", "stroke-width", "color", "aria-hidden", "role"}
     def shape(node, is_root=False):
         return (node.tag.removeprefix("{http://www.w3.org/2000/svg}"),
-                sorted((key, value) for key, value in node.attrib.items() if not is_root or key not in ignored),
+                sorted((key, value) for key, value in node.attrib.items()
+                       if key != "data-hf-id" and (not is_root or key not in ignored)),
                 (node.text or "").strip(), [shape(child) for child in node])
     return shape(root, True)
 

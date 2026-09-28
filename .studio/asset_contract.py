@@ -185,6 +185,9 @@ def validate_declaration(payload, metadata, directory, *, check_defaults=False):
             for child in value:
                 inspect(child, (*path, "[]"))
         elif isinstance(value, str):
+            if (kind == "icon-set" and path in {("icons", "[]", "aliases", "[]"), ("icons", "[]", "tags", "[]")}
+                    and re.fullmatch(r'[<>|{}=-]+', value)):
+                return
             if re.search(r"[<>;{}]|url\s*\(|expression\s*\(|javascript:", value, re.I):
                 raise COMPONENT.ComponentError("Executable expressions are not permitted in declarations")
         elif value is not None and type(value) not in {bool, int, float}:
