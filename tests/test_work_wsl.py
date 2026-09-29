@@ -32,13 +32,14 @@ class WorkWslTest(unittest.TestCase):
     def test_paths_and_unicode_arguments_preserved(self):
         command = work_wsl.command(self.root, ["new", "中文 title", "A/B test", "--appearance-file", "notes / source.json"])
         self.assertEqual(command[:4], ["cmd.exe", "/d", "/s", "/c"])
-        self.assertIn('"中文 title"', command[4])
-        self.assertIn('"A/B test"', command[4])
-        self.assertIn('"D:\\production root\\notes \\ source.json"', command[4])
+        self.assertEqual(command[4:6], ['call', 'D:\\production root\\work.cmd'])
+        self.assertIn('中文 title', command)
+        self.assertIn('A/B test', command)
+        self.assertIn('D:\\production root\\notes \\ source.json', command)
         equals = work_wsl.command(self.root, ["--appearance-file=D:\\production root\\notes \\ source.json"])
-        self.assertIn('"--appearance-file=D:\\production root\\notes \\ source.json"', equals[4])
+        self.assertIn('--appearance-file=D:\\production root\\notes \\ source.json', equals)
         exported = work_wsl.command(self.root, ['component', 'math-kit-source', 'sources/math-kit'])
-        self.assertIn('"D:\\production root\\sources\\math-kit"', exported[4])
+        self.assertIn('D:\\production root\\sources\\math-kit', exported)
 
     def test_external_traversal_symlink_and_metacharacters_rejected(self):
         (self.root / "escape").symlink_to(self.base, target_is_directory=True)
@@ -58,6 +59,7 @@ class WorkWslTest(unittest.TestCase):
 
     def test_run_inherits_streams_and_propagates_status(self):
         with mock.patch.object(work_wsl, "__file__", str(self.root / ".studio/work_wsl.py")), \
+                mock.patch.object(work_wsl.shutil, 'which', return_value='cmd.exe'), \
                 mock.patch.object(work_wsl.subprocess, "run", return_value=subprocess.CompletedProcess([], 17)) as run:
             self.assertEqual(work_wsl.main(["status"]), 17)
         self.assertEqual(run.call_args.kwargs, {"cwd": self.root})
@@ -67,6 +69,15 @@ class WorkWslTest(unittest.TestCase):
             self.assertEqual(work_wsl.main(["new", "bad&input"]), 2)
             run.assert_not_called()
             self.assertIn("metacharacter", error.getvalue())
+
+    def test_missing_windows_path_uses_cmd_without_changing_environment(self):
+        with mock.patch.object(work_wsl, '__file__', str(self.root / '.studio/work_wsl.py')), \
+                mock.patch.object(work_wsl.shutil, 'which', return_value=None), \
+                mock.patch.object(Path, 'is_file', return_value=True), \
+                mock.patch.object(work_wsl.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+            self.assertEqual(work_wsl.main(['math', 'build', '--help']), 0)
+        self.assertEqual('/mnt/c/Windows/System32/cmd.exe', run.call_args.args[0][0])
+        self.assertEqual({'cwd': self.root}, run.call_args.kwargs)
 
 
 if __name__ == "__main__":

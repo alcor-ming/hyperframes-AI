@@ -1,6 +1,7 @@
 """WSL argv adapter for the same physical root's Windows launcher."""
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -94,14 +95,17 @@ def command(root, arguments):
         previous = option if not separator else None
     if any(any(c in arg for c in '\"%!?^&|<>\r\n\x00') for arg in result):
         raise ValueError("Unsafe Windows command path")
-    # cmd /s requires one outer quote pair around the quoted executable and argv.
-    return ["cmd.exe", "/d", "/s", "/c", '"' + " ".join('"' + arg + '"' for arg in result) + '"']
+    # WSL interop quotes each argv element; prequoting a command string escapes it twice.
+    return ["cmd.exe", "/d", "/s", "/c", "call", *result]
 
 
 def main(arguments=None):
     try:
         root = Path(__file__).resolve().parent.parent
-        return subprocess.run(command(root, sys.argv[1:] if arguments is None else arguments), cwd=root).returncode
+        argv = command(root, sys.argv[1:] if arguments is None else arguments)
+        if not shutil.which(argv[0]) and Path('/mnt/c/Windows/System32/cmd.exe').is_file():
+            argv[0] = '/mnt/c/Windows/System32/cmd.exe'
+        return subprocess.run(argv, cwd=root).returncode
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"work-wsl: {error}", file=sys.stderr)
         return 2
