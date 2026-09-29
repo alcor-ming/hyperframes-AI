@@ -68,21 +68,24 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
         raise AppearanceError("Unknown appearance selection override")
     check_mode(account.get("mode"), "Account")
     check_mode(overrides.get("mode"), "Appearance selection")
-    selected = {**account, **overrides}
-    mode = selected.get("mode", "card")
+    mode = {**account, **overrides}.get("mode", "card")
+    # Showcase binds no appearance by default: account looks are not inherited, only explicit picks are frozen.
+    inherited = {key: value for key, value in account.items() if key not in ("theme", "background", "motion", "overrides")} if mode == "showcase" else account
+    selected = {**inherited, **overrides}
     if mode == "showcase":
         if overrides.get("submodule") not in SHOWCASE_SUBMODULES:
             raise AppearanceError("showcase requires an explicit submodule: pdoom or science")
     elif "submodule" in selected:
         raise AppearanceError("submodule is only supported by showcase")
-    selections = {kind: _reference(selected.get(kind), kind) for kind in ("theme", "background")}
-    motion = account.get("motion", {})
+    selections = {kind: None if mode == "showcase" and selected.get(kind) is None else _reference(selected.get(kind), kind)
+                  for kind in ("theme", "background")}
+    motion = inherited.get("motion", {})
     explicit_motion = overrides.get("motion", {})
     if not isinstance(motion, dict) or not isinstance(explicit_motion, dict) or (set(motion) | set(explicit_motion)) - set(SLOTS):
         raise AppearanceError("Unknown motion slot")
     motion = {**motion, **explicit_motion}
     selections["motion"] = {}
-    refs = [selections["theme"], selections["background"]]
+    refs = [value for value in (selections["theme"], selections["background"]) if value]
     for slot in SLOTS:
         value = motion.get(slot)
         if value is not None:
@@ -123,7 +126,7 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
     if type(fps) is not int or not 1 <= fps <= 240 or type(seed) is not int:
         raise AppearanceError("fps must be an integer in 1..240 and seed an integer")
     closure = resolve_asset_closure(root, refs)
-    parameter_layers = [("account", account.get("overrides", {})), ("explicit", overrides.get("parameters", {}))]
+    parameter_layers = [("account", inherited.get("overrides", {})), ("explicit", overrides.get("parameters", {}))]
     values, sources = _resolve_parameters(closure, selections, ratio, parameter_layers, mode)
     frozen = []
     for item in closure:
@@ -133,7 +136,7 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
     lock = {"schema_version": version, "resolver_version": 1, "contract_version": version,
             "hash_algorithm": "sha256-canonical-json-utf8-v1", "account": {"id": account.get("id"), "revision": account.get("revision"), "sha256": digest(account)},
             "selection": selections, "assets": frozen, "mode": mode, "ratio": ratio, "width": width, "height": height, "fps": fps, "seed": seed, "time_unit": "seconds",
-            "overrides": {"account": deepcopy(account.get("overrides", {})), "explicit": deepcopy(overrides.get("parameters", {}))}, "parameters": values, "sources": sources}
+            "overrides": {"account": deepcopy(inherited.get("overrides", {})), "explicit": deepcopy(overrides.get("parameters", {}))}, "parameters": values, "sources": sources}
     if mode == "showcase":
         lock["submodule"] = overrides["submodule"]
     lock["sha256"] = digest(lock)
@@ -154,9 +157,13 @@ def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="card
             raise AppearanceError("Unknown motion override slot")
         if any(not isinstance(params, dict) for params in layer.get("motion", {}).values()):
             raise AppearanceError("Motion parameter overrides must be objects")
+    for _, layer in parameter_layers:
+        if any(selections[kind] is None and layer.get(kind) for kind in ("theme", "background")):
+            raise AppearanceError("Cannot override an unselected theme or background")
     values, sources = {"motion": {}}, {"motion": {}}
     theme_tokens = {}
-    for role, reference in (("theme", selections["theme"]), ("background", selections["background"]), *((slot, value["asset"]) for slot, value in selections["motion"].items() if value)):
+    roles = [(kind, selections[kind]) for kind in ("theme", "background") if selections[kind]]
+    for role, reference in (*roles, *((slot, value["asset"]) for slot, value in selections["motion"].items() if value)):
         item = by_ref[reference["ref"]]
         metadata = item["metadata"]
         ratios = metadata.get("compatibility", {}).get("ratios")
@@ -243,7 +250,7 @@ def _check_lock(lock: dict) -> None:
         raise AppearanceError("Invalid frozen appearance selections")
     if type(selection.get("captions", False)) is not bool or selection.get("captions", False) and lock["mode"] not in MODES:
         raise AppearanceError("Invalid frozen captions selection")
-    references = [(selection[kind], kind) for kind in ("theme", "background")]
+    references = [(selection[kind], kind) for kind in ("theme", "background") if selection[kind] is not None or lock["mode"] != "showcase"]
     for value in selection["motion"].values():
         if value is not None:
             if not isinstance(value, dict) or set(value) != {"asset", "entry"} or not isinstance(value["entry"], str) or not value["entry"]:
@@ -282,7 +289,7 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
     closure = resolve_asset_closure(root, references)
     if lock["schema_version"] != _closure_version(closure):
         raise AppearanceError("Appearance lock capability differs from asset closure")
-    selected = {lock["selection"][kind]["ref"] for kind in ("theme", "background")}
+    selected = {lock["selection"][kind]["ref"] for kind in ("theme", "background") if lock["selection"][kind]}
     selected.update(value["asset"]["ref"] for value in lock["selection"]["motion"].values() if value)
     for item in closure:
         binding = {"schema_version": 3, "component_ref": item["ref"]}
@@ -302,7 +309,7 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
             shutil.copyfile(Path(__file__).parent / "runtime" / name, runtime)
     verify(project, lock)
     declared = set(config.get("snapshot_dependencies", []))
-    declared.update(("appearance-lock.json", "runtime/appearance.js", "COMPONENT_LOCK.json"))
+    declared.update(("appearance-lock.json", "runtime/appearance.js", *(("COMPONENT_LOCK.json",) if lock["assets"] else ())))
     declared.update(f"runtime/{name}" for name in runtime_names)
     for item in lock["assets"]:
         identity, version = parse_component_ref(item["ref"])
@@ -319,6 +326,9 @@ def verify(project: Path, lock: dict, *, check_mounts: bool = True) -> dict:
     disk = safe(project, "appearance-lock.json")
     if not disk.is_file() or digest(json.loads(disk.read_text(encoding="utf-8"))) != digest(lock):
         raise AppearanceError("Frozen appearance lock differs from Variant")
+    if not lock["assets"] and not (project / "COMPONENT_LOCK.json").is_file():
+        # A showcase that selected no appearance assets has no closure to install.
+        return {"components": []}
     report = verify_installation(project, check_mounts=check_mounts)
     installed = json.loads((project / "COMPONENT_LOCK.json").read_text(encoding="utf-8"))
     records = {item["component_ref"]: item for item in installed["components"]}

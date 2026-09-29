@@ -126,6 +126,19 @@ class AppearanceRebindTest(unittest.TestCase):
         with self.assertRaisesRegex(appearance.AppearanceError, "Stop"):
             self.invoke("--work", self.work_id, "--variant", "main", "appearance", "rebind", "--background", "white@v1", "--apply")
 
+    def test_v361_runtime_requires_explicit_upgrade(self):
+        runtime = self.variant / "project/runtime/appearance.js"
+        runtime.write_text("v3.6.1 frozen runtime fixture")
+        before = self.contents()
+        file_sha256 = cli.file_sha256
+        old_hash = "77cf4869f89604a42b1e7cfa3f09fda7c4b5ad4d593f7a6aece18a3e02f29abe"
+        with patch.object(cli, "file_sha256", side_effect=lambda path: old_hash if Path(path) == runtime else file_sha256(path)):
+            with self.assertRaisesRegex(appearance.AppearanceError, "upgrade-runtime"):
+                self.update("--apply")
+            self.assertEqual(before, self.contents())
+            self.assertTrue(self.update("--apply", "--upgrade-runtime")["runtime_upgrade"])
+        self.assertEqual((Path(appearance.__file__).parent / "runtime/appearance.js").read_bytes(), runtime.read_bytes())
+
     def test_explicit_target_required_and_known_runtime_upgrade(self):
         preview = self.update("--ratio", "9:16")
         self.assertEqual(1080, preview["changes"]["width"]["after"])

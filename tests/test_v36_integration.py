@@ -49,6 +49,23 @@ class V36IntegrationTest(unittest.TestCase):
         self.assertEqual(cli.read_json(sibling / "variant.yaml")["appearance_lock"]["submodule"], "science")
         self.assertEqual(cli.read_frontmatter(sibling / "ANIMATION_PLAN.md")["submodule"], "science")
 
+    def test_showcase_test_work_needs_no_appearance_assets(self):
+        identity = self.invoke("new", "Free", "--workflow", "hyperframes_video", "--purpose", "test",
+                               "--mode", "showcase", "--submodule", "science")
+        work, _ = cli.locate_work(self.root, identity)
+        variant = cli.variant_paths(work)[0]
+        lock = cli.read_json(variant / "variant.yaml")["appearance_lock"]
+        self.assertEqual((lock["selection"]["theme"], lock["selection"]["background"], lock["assets"]), (None, None, []))
+        appearance.verify(variant / "project", lock, check_mounts=False)
+        plan = cli.read_frontmatter(variant / "ANIMATION_PLAN.md")
+        self.assertEqual((plan["theme"], plan["background"], plan["submodule"]), (None, None, "science"))
+        self.invoke("--work", identity, "--variant", variant.name, "appearance", "rebind", "--background", self.green["ref"], "--apply")
+        rebound = cli.read_json(variant / "variant.yaml")["appearance_lock"]
+        self.assertEqual(rebound["selection"]["background"], self.green)
+        self.assertIsNone(rebound["selection"]["theme"])
+        with self.assertRaisesRegex(cli.HarnessError, "explainer requires"):
+            self.invoke("new", "Plain", "--workflow", "hyperframes_video", "--purpose", "test", "--mode", "explainer")
+
     def test_math_series_freezes_spec_and_enforces_lyrics(self):
         service = cli.account_service(self.root)
         service.put("series", "fixture", {"name": "Math", "mode": "explainer", "spec": "math-rap"})

@@ -93,7 +93,7 @@ Draft 与 Final 生命周期：
 
 ## v3.3 候选边界
 
-系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。候选提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series`，但可无账号、零 Variant 先准备共享内容；明确账号时用 `--account <id> --variant-id <id>` 一步创建 Work 与版本，新生产 Variant 仍须已登记账号，可另指定 `--batch`、`--theme`、`--mode card|explainer|showcase` 与 `--ratio`，showcase 必须同时指定 `--submodule pdoom|science`；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。无显式、账号或系列模式时默认 `card`，不再默认填 Profile。系列身份/版本/规格、账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；`purpose=ip` 推荐 `explainer`，但不改默认值。播客新建与三位序号规则不变。
+系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。候选提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series`，但可无账号、零 Variant 先准备共享内容；明确账号时用 `--account <id> --variant-id <id>` 一步创建 Work 与版本，新生产 Variant 仍须已登记账号，可另指定 `--batch`、`--theme`、`--mode card|explainer|showcase` 与 `--ratio`，showcase 必须同时指定 `--submodule pdoom|science`，Theme/Background/Motion 可选且不继承账号外观；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。无显式、账号或系列模式时默认 `card`，不再默认填 Profile。系列身份/版本/规格、账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；`purpose=ip` 推荐 `explainer`，但不改默认值。播客新建与三位序号规则不变。
 
 静态外观支持 schema 2 Theme/Background/Motion 资产，沿用 `component pack/import/accept`，不另建主题库。新账号以 `{ref,kind,package_sha256}` 保存 theme/background，motion 槽位可显式设 null。`appearance resolve --account <id> --appearance-file <json>` 只读展示最终选择；`new`/`variant add` 同样接受 `--appearance-file`、独立 `--background <id@vN>`、`--fps` 和 `--seed`。锁与真实 vendor 一起冻结并纳入 preview，不依赖源库在线。字段及参数结构见 [资产合同](.studio/spec/hyperframes.md)。候选能力不等于已部署；选择 UI、真实 Paper 拆分和 Windows 原生换配效果不由这些合同证明。
 

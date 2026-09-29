@@ -1,6 +1,6 @@
 # Showcase
 
-仅 Opus 5.5 制作，Codex 不接制作。创建时显式选择并冻结 `pdoom` 或 `science`，只决定加载 [pdoom](showcase-pdoom.md) / [science](showcase-science.md) 哪份参考，不改变硬约束。16:9 为主、9:16 为辅，不使用 4:3。
+仅 Opus 5.5 制作，Codex 不接制作。创建时显式选择并冻结 `pdoom` 或 `science`，只决定加载 [pdoom](showcase-pdoom.md) / [science](showcase-science.md) 哪份参考，不改变硬约束。16:9 为主、9:16 为辅，不使用 4:3。创建只需 `--mode showcase --submodule pdoom|science`：Theme、Background、Motion 均不强制绑定，也不继承账号外观；未显式选择的项在外观锁中记为 `null`，画面由作者在工程内自由决定。确需复用已接纳资产时再用 `--theme` / `--background` / `--appearance-file` 显式选择或 `appearance rebind` 追加。
 
 采用 `SHOWCASE_PLAN.template.md`：概念、子模块、逐 Scene 要点、素材与声音、未验证项、作者模型审计元信息。Scene ID 与 CLI 元信息沿用现有合同。
 

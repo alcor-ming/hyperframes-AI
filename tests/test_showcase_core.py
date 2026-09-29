@@ -54,6 +54,35 @@ class ShowcaseCoreTest(unittest.TestCase):
             with self.assertRaises(appearance.AppearanceError):
                 appearance._check_lock(damaged)
 
+    def test_showcase_binds_no_appearance_unless_explicit(self):
+        lock = appearance.resolve(self.root, self.account, {"mode": "showcase", "submodule": "pdoom"})
+        appearance._check_lock(lock)
+        self.assertEqual((lock["selection"]["theme"], lock["selection"]["background"]), (None, None))
+        self.assertEqual(set(lock["selection"]["motion"].values()), {None})
+        self.assertEqual(lock["overrides"]["account"], {})
+        self.assertEqual(lock["account"]["sha256"], appearance.digest(self.account))
+        with mock.patch("asset_store.resolve_asset_closure", return_value=[]) as closure:
+            free = appearance.resolve(self.root, {}, {"mode": "showcase", "submodule": "science"})
+        closure.assert_called_once_with(self.root, [])
+        appearance._check_lock(free)
+        chosen = appearance.resolve(self.root, self.account, {"mode": "showcase", "submodule": "pdoom",
+                                                              "theme": self.ref("theme"), "parameters": {"theme": {"tokens.surface.amount": 3}}})
+        appearance._check_lock(chosen)
+        self.assertEqual(chosen["selection"]["theme"], self.ref("theme"))
+        self.assertIsNone(chosen["selection"]["background"])
+        self.assertEqual(chosen["parameters"]["theme"]["tokens.surface.amount"], 3)
+        with self.assertRaisesRegex(appearance.AppearanceError, "unselected"):
+            appearance.resolve(self.root, {}, {"mode": "showcase", "submodule": "pdoom",
+                                               "parameters": {"background": {"color": "#000"}}})
+        for mode in ("card", "explainer"):
+            with self.subTest(mode=mode), self.assertRaises(appearance.AppearanceError):
+                appearance.resolve(self.root, self.account, {"mode": mode, "theme": None})
+        damaged = {**lock, "mode": "explainer"}
+        damaged.pop("submodule")
+        damaged["sha256"] = appearance.digest({key: value for key, value in damaged.items() if key != "sha256"})
+        with self.assertRaises(appearance.AppearanceError):
+            appearance._check_lock(damaged)
+
     def test_showcase_skips_layers_but_keeps_asset_closure(self):
         (self.root / "index.html").write_text('<main data-composition-id="root"></main>', encoding="utf-8")
         (self.root / "scene.html").write_text('<div data-composition-id="scene"></div>', encoding="utf-8")

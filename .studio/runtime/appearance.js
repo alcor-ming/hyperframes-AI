@@ -57,7 +57,11 @@
       } else if (metadata.contract_version !== 1) throw new Error("Unsupported appearance capability");
       return value;
     }
-    for (const kind of ["theme", "background"]) result[kind] = await payload(kind, lock.selection[kind]);
+    // Only showcase may leave Theme/Background unselected (null); the host then owns those looks.
+    for (const kind of ["theme", "background"]) {
+      if (lock.selection[kind] === null && lock.mode !== "showcase") throw new Error(`Appearance requires a ${kind}`);
+      result[kind] = lock.selection[kind] === null ? null : await payload(kind, lock.selection[kind]);
+    }
     for (const [slot, selection] of Object.entries(lock.selection.motion)) {
       if (selection !== null) {
         result.motion[slot] = await payload("motion", selection.asset);
@@ -68,7 +72,7 @@
         if (capability >= 2) for (const group of [motion.slots, motion.reduced_motion]) if (group?.emphasis && typeof group.emphasis.color_token === "string") emphasisColor(group.emphasis, result);
       }
     }
-    const fonts = resolved(result.theme, lock.parameters.theme).fonts || [];
+    const fonts = result.theme ? resolved(result.theme, lock.parameters.theme).fonts || [] : [];
     if (!Array.isArray(fonts)) throw new Error("Theme fonts must be an array");
     const state = { faces: [], families: new Map(), declaration: JSON.stringify(fonts), disposed: false, reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches };
     const instance = ++fontInstance;
@@ -129,10 +133,10 @@
   function apply(stage, appearance) {
     if (!isElement(stage)) throw new TypeError("Appearance requires a stage element");
     const { lock } = appearance;
-    const theme = resolved(appearance.theme, lock.parameters.theme);
-    const background = resolved(appearance.background, lock.parameters.background);
-    const color = ["transparent", "module"].includes(background.renderer) ? "transparent" : background.parameters.color;
-    if (!["solid", "transparent", "module"].includes(background.renderer) || background.renderer === "module" && !["card", "explainer", "showcase"].includes(lock.mode) || !CSS.supports("color", color)) throw new Error("Unsupported Background");
+    const theme = appearance.theme ? resolved(appearance.theme, lock.parameters.theme) : { tokens: {} };
+    const background = appearance.background && resolved(appearance.background, lock.parameters.background);
+    const color = !background ? null : ["transparent", "module"].includes(background.renderer) ? "transparent" : background.parameters.color;
+    if (background && (!["solid", "transparent", "module"].includes(background.renderer) || background.renderer === "module" && !["card", "explainer", "showcase"].includes(lock.mode) || !CSS.supports("color", color))) throw new Error("Unsupported Background");
     const fonts = preparedFonts.get(appearance);
     if (fonts ? fonts.disposed || fonts.declaration !== JSON.stringify(theme.fonts || []) : (theme.fonts || []).length) {
       throw new Error("Theme fonts must be prepared by load() and not disposed or changed");
@@ -153,8 +157,9 @@
     tokens(theme.tokens);
     for (const name of [...stage.style]) if (name.startsWith("--appearance-")) stage.style.removeProperty(name);
     for (const [name, value] of variables) stage.style.setProperty(name, value);
-    stage.style.backgroundColor = color;
+    if (color !== null) stage.style.backgroundColor = color;
     // Explicit opt-in selectors prevent the adapter from redesigning a Scene.
+    if (!appearance.theme) return appearance;
     for (const element of stage.querySelectorAll("[data-appearance-text]")) element.style.color = "var(--appearance-colors-text)";
     for (const element of stage.querySelectorAll("[data-appearance-card]")) element.style.backgroundColor = "var(--appearance-surface-color)";
     return appearance;
@@ -238,6 +243,7 @@
     }
   }
   function emphasisColor(preset, appearance) {
+    if (!appearance.theme) throw new Error("Motion requires a frozen Theme color");
     let color = resolved(appearance.theme, appearance.lock.parameters.theme).tokens;
     for (const part of preset.color_token.split(".")) color = color && Object.hasOwn(color, part) ? color[part] : undefined;
     if (typeof color !== "string" || !CSS.supports("color", color) || /\b(var|env|currentcolor|inherit|initial|unset|revert|light-dark)\b/i.test(color)) throw new Error("Motion requires a frozen Theme color");
@@ -536,6 +542,7 @@
   }
   async function mountBackground(stage, appearance, cues) {
     if (!isElement(stage)) throw new TypeError("Background requires an element");
+    if (!appearance.background) return { renderAt() {}, dispose() {} };
     const payload = resolved(appearance.background, appearance.lock.parameters.background);
     if (payload.renderer !== "module") {
       stage.style.backgroundColor = payload.renderer === "transparent" ? "transparent" : payload.parameters.color;

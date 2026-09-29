@@ -402,7 +402,7 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
             raise HarnessError("Variant mode must match its series")
     series_binding = ({"series_binding": {key: series_settings.get(key) for key in ("id", "revision", "mode", "spec")}}
                       if series_settings.get("mode") or series_settings.get("spec") else {})
-    if appearance.is_asset_appearance({**account, **explicit}):
+    if appearance.is_asset_appearance({**account, **explicit}) or explicit.get("mode", account.get("mode")) == "showcase":
         lock = appearance.resolve(root, account, explicit)
         if series_settings.get("spec") == "math-rap" and (lock["mode"] != "explainer" or not lock["selection"].get("captions")):
             raise HarnessError("math-rap requires explainer with lyric captions enabled")
@@ -412,8 +412,8 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
                 "account_settings": account, "batch": args.batch, "revision": 1, **series_binding}
     if set(explicit) - {"theme", "mode", "ratio"}:
         raise HarnessError("Appearance parameters require exact Theme and Background assets")
-    if explicit.get("mode", account.get("mode")) in {"explainer", "showcase"}:
-        raise HarnessError("explainer/showcase requires exact Theme and Background assets")
+    if explicit.get("mode", account.get("mode")) == "explainer":
+        raise HarnessError("explainer requires exact Theme and Background assets")
     settings = {key: explicit.get(key, account.get(key)) for key in ("theme", "mode", "ratio")}
     settings["mode"] = settings["mode"] or "card"
     if settings["ratio"] == "source":
@@ -544,7 +544,7 @@ def command_review_package(root: Path, args: argparse.Namespace) -> None:
 def adopt_variant(path: Path, settings: dict[str, Any], *, shared: bool = False, branch: str | None = None) -> None:
     state = read_json(path / "variant.yaml")
     state.update({key: value for key, value in settings.items() if value is not None})
-    if settings.get("theme"):
+    if settings.get("theme") or settings.get("appearance_lock"):
         state["profile"] = None
     work = path.parent.parent
     if settings.get("mode") == "showcase":

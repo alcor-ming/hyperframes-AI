@@ -15,7 +15,8 @@ KNOWN_RUNTIMES = {"b6b0a69411f48d9f777a7e8fdf342a89e866b51d7d734d760b431ee952490
                   "deb8ea501f19f0b5ebaf5c7a2b126f700127fc739e0a497b928cb82ddc620676",
                   "e80354186ac34db5d94a79febf4d1f4d84763f142f2b72465ff7150a0c35ff9b",
                   "51c9496479b3111f876a412cbf7133be7b7e203e517ea6d00390e92f8a622d9b",
-                  "afd9b56dfc6340605385f11383d9e97d9ffd7e96e4e800d5a10daebe00891d81"}
+                  "afd9b56dfc6340605385f11383d9e97d9ffd7e96e4e800d5a10daebe00891d81",
+                  "77cf4869f89604a42b1e7cfa3f09fda7c4b5ad4d593f7a6aece18a3e02f29abe"}
 FILES = ("ANIMATION_PLAN.md", "variant.yaml")
 KNOWN_CUE_RUNTIMES = {"c5b93f0bec6b8b675d59a9fc5cc4bd14492f86144245ae907b9cae25c05b9be8"}
 
