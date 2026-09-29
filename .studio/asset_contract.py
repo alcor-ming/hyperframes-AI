@@ -38,6 +38,15 @@ KINDS = {"module", "media", "theme", "background", "motion", "character", "icon-
 DECLARATIVE = {"theme", "background", "motion", "character", "icon-set"}
 
 
+ASSET_LAYERS = {"building-block", "scene-template", "content", "reference"}
+
+
+def validate_asset_layer(value):
+    if not isinstance(value, str) or value not in ASSET_LAYERS:
+        raise COMPONENT.ComponentError("asset_layer must be building-block, scene-template, content or reference")
+    return value
+
+
 def asset_requires_runtime(metadata):
     return metadata.get("kind", metadata.get("asset_type")) not in DECLARATIVE | {"media"}
 
@@ -300,7 +309,7 @@ def _motion2(payload):
 def _schema2(directory, metadata):
     _fields(metadata, {"schema_version", "id", "version", "kind", "entry", "contract_version", "parameters",
                       "compatibility", "dependencies", "asset_dependencies", "runtime", "usage", "example", "license",
-                      "files", "description", "source_url", "rights", "purpose", "tags", "hit_offset", "hit_offset_estimated"},
+                      "files", "description", "source_url", "rights", "purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer"},
             {"contract_version", "parameters", "compatibility"}, "schema 2 manifest")
     if "hit_offset" in metadata and (type(metadata["hit_offset"]) not in {int, float} or not math.isfinite(metadata["hit_offset"]) or metadata["hit_offset"] < 0):
         raise COMPONENT.ComponentError("hit_offset must be finite nonnegative seconds")
@@ -487,6 +496,8 @@ def _check_audio(path):
 def _inputs(directory):
     _relative(directory, "asset.json")
     metadata = COMPONENT._read_json(directory / "asset.json")
+    if "asset_layer" in metadata:
+        validate_asset_layer(metadata["asset_layer"])
     asset_id, version, kind = (metadata.get(key) for key in ("id", "version", "kind"))
     if (type(metadata.get("schema_version")) is not int or metadata.get("schema_version") not in {1, 2}
             or not isinstance(asset_id, str) or not ID.fullmatch(asset_id)

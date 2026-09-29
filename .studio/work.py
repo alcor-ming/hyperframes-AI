@@ -1408,7 +1408,8 @@ def print_result(root: Path, args: argparse.Namespace, result, *, report=False) 
         if isinstance(value, dict):
             if depth >= 2:
                 return {key: item for key, item in value.items()
-                        if key in {'kind', 'reason', 'scene', 'time', 'start', 'end', 'target', 'ref', 'component_ref', 'path'}}
+                        if key in {'kind', 'reason', 'scene', 'time', 'start', 'end', 'target', 'ref', 'component_ref', 'path',
+                                   'asset_layer', 'lifecycle', 'recommendation', 'available', 'purpose', 'communication_goal', 'use'}}
             return {key: brief(item, depth + 1) for key, item in value.items()
                     if key not in {'samples', 'timeline', 'input_sha256', 'snapshot_sha256'}}
         return value[:240] + '...' if isinstance(value, str) and len(value) > 240 else value
@@ -1568,7 +1569,8 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
         result = asset_store.configure_asset_store(root, Path(args.path)) if args.path else {"asset_root": str(asset_store.asset_store_root(root))}
     elif action == "list":
         result = asset_store.discover_components(root, args.query, kind=args.kind, ratio=args.ratio, tag=args.tag,
-            recommendation=args.recommendation, rebuild=args.rebuild, research_root=args.research_root, audit=args.audit)
+            recommendation=args.recommendation, rebuild=args.rebuild, research_root=args.research_root, audit=args.audit,
+            asset_layer=args.asset_layer, include_references=args.include_references)
     else:
         store = asset_store.asset_store_root(root)
         from component_harness import package_write_lock
@@ -1587,6 +1589,22 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
             result = {**result, "discovery_sync": {"synchronized": not discovery["errors"], "errors": discovery["errors"]}}
         except (ComponentError, OSError, ValueError) as exc:
             result = {**result, "discovery_sync": {"synchronized": False, "error": str(exc)}}
+    print_result(root, args, result)
+
+
+def command_asset_maintenance(root: Path, args: argparse.Namespace) -> None:
+    import asset_maintenance as maintenance
+    if args.maintenance_action == 'apply':
+        plan = read_json(maintenance.absolute(args.plan))
+        operation = maintenance.migrate_apply if args.component_command == 'migrate' else maintenance.archive_apply
+        result = operation(plan)
+    else:
+        if args.component_command == 'migrate':
+            classifications = read_json(Path(args.classification)) if args.classification else {}
+            plan = maintenance.migrate_plan(args.source, args.target, classifications)
+        else:
+            plan = maintenance.archive_plan(args.target, args.item)
+        result = maintenance.save_plan(args.output, plan)
     print_result(root, args, result)
 
 
@@ -3510,9 +3528,26 @@ def build_parser() -> argparse.ArgumentParser:
     component_list.add_argument("--ratio")
     component_list.add_argument("--tag")
     component_list.add_argument("--recommendation", choices=("recommended", "historical", "pending"))
+    component_list.add_argument('--asset-layer', choices=('building-block', 'scene-template', 'content', 'reference', 'unclassified'))
+    component_list.add_argument('--include-references', action='store_true', help='Include non-installable reference examples')
     component_list.add_argument("--rebuild", action="store_true", help="Rebuild the derived discovery cache")
     component_list.add_argument("--research-root", type=Path, help="Include explicitly registered reference documents")
     component_list.set_defaults(handler=command_component_store)
+    for name in ('migrate', 'archive'):
+        maintenance = component_commands.add_parser(name, help='Explicit asset maintenance; no default production target')
+        operations = maintenance.add_subparsers(dest='maintenance_action', required=True)
+        preview = operations.add_parser('plan')
+        preview.add_argument('--to', dest='target', required=True)
+        preview.add_argument('--output', required=True)
+        if name == 'migrate':
+            preview.add_argument('--from', dest='source', required=True)
+            preview.add_argument('--classification', help='Exact ref to asset_layer/recommendation selection JSON')
+        else:
+            preview.add_argument('--item', action='append', required=True, help='Owned path relative to the explicit store')
+        preview.set_defaults(handler=command_asset_maintenance)
+        apply = operations.add_parser('apply')
+        apply.add_argument('--plan', required=True)
+        apply.set_defaults(handler=command_asset_maintenance)
     icons = commands.add_parser('icons', help='Local versioned icon sets; no online provider')
     icon_commands = icons.add_subparsers(dest='icon_command', required=True)
     icon_import = icon_commands.add_parser('import', help='Import a local Lucide package into editable source; never accept')

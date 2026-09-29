@@ -4,6 +4,8 @@
 
 ## 快速开始
 
+资产选型使用 `work component list` 的生成式目录，可按 `--asset-layer` 筛选；参考样例默认隐藏且不可新安装，显式查看用 `--include-references`。`component migrate plan|apply` 合并明确指定的资产目录，`component archive plan|apply` 保存非破坏性归档快照；不自动接纳、不删除旧包、不修改已有 Work。接口与边界见 [.studio/spec/hyperframes-assets.md](.studio/spec/hyperframes-assets.md)。
+
 视频支持 `card` 卡片模式与 `explainer` 有声动态图解，均使用 16:9 / 9:16 五层宿主：背景、主体、强调转场、独立文字、口播字幕。`--captions on|off` 为 Variant 开关，card 默认关闭、explainer 默认开启。A/B-roll 管主画面时间切换，Plan 按 Scene 维护编排、内嵌上屏文字、素材、声音 cue 与节奏事件。声音层对两种模式开放；Finalize 渲染最终 MP4，不含平台工作流。
 
 Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话并下达任务即可。`work.cmd` 是 Agent 按需调用的命令行工具，不是需要双击打开的聊天窗口；根入口不创建或依赖 Harness session，不选择候选或 Review 根。下文 Bash 命令是相同 CLI 的 WSL 写法。正式 Work 由 Windows 写入；WSL 开发和回测使用冻结请求与隔离副本。

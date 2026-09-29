@@ -38,7 +38,7 @@ class DiscoveryTest(unittest.TestCase):
         (directory / "invalid.md").unlink()
         (directory / "reuse-index.json").write_text('{"accepted_scenes":["ignored"]}')
         for kind, query in (("scene-source", "relationships"), ("recipe", "Layered")):
-            row, = STORE.discover_components(self.harness, query, kind=kind)["assets"]
+            row, = STORE.discover_components(self.harness, query, kind=kind, include_references=True)["assets"]
             self.assertEqual(kind, row["asset_type"])
             self.assertFalse(row["available"])
             self.assertFalse(row["installable"])
@@ -105,7 +105,7 @@ class DiscoveryTest(unittest.TestCase):
         import windows_runtime
         import subprocess
         directory, metadata = self.reference_source()
-        args = work.build_parser().parse_args(["component", "list", "--kind", "scene-source", "--query", "cards", "--audit"])
+        args = work.build_parser().parse_args(["component", "list", "--kind", "scene-source", "--query", "cards", "--include-references", "--audit"])
         self.assertTrue(args.audit)
         output = io.StringIO()
         with redirect_stdout(output), patch.object(STORE, "_atomic_json", side_effect=AssertionError("CLI audit must not write")):

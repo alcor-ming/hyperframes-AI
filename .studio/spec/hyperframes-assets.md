@@ -1,5 +1,24 @@
 ## 按需资产接线
 
+### 统一资产目录
+
+`asset_layer` 为 building-block（通用积木）、scene-template（场景模板）、content（内容素材）、reference（参考样例），独立于技术 kind 与画面五层。新资产在元数据声明；冻结旧包通过 `selection.json` 补充，不改包或 hash。缺分类组件显示 unclassified，不按名称猜测；media 与声明式外观/图标默认 content。`lifecycle` 为 source/candidate/accepted；推荐、历史、待补是独立选型标记，不替代接纳事实。
+
+`component list --asset-layer <分类>` 筛选；参考样例默认隐藏，用 `--include-references` 或 `--asset-layer reference` 显式查看。参考样例不能新安装，包括路径和依赖入口；已有 Work 冻结副本仍可离线校验。`.catalog-index.json` 与 `.discovery-cache.json` 是可重建派生文件，不是版本/接纳真源。README 与配方保留人工说明，不另维护平行资产总表。
+
+AssetStore 的 `sources/` 是托管可编辑源，packages/candidates/acceptances 保持原结构。未迁移的外部源与 legacy 根继续发现；仅完整迁移核对后由 `catalog-migration.json` 退役对应根，原文件保留，不自动改生产配置。维护命令不使用默认生产根：
+
+```sh
+work component migrate plan --from <绝对资产目录> --to <绝对目标库> --classification <分类JSON> --output <库外绝对计划路径>
+work component migrate apply --plan <计划路径>
+work component archive plan --to <绝对库> --item candidates/example/v1 --output <库外绝对计划路径>
+work component archive apply --plan <计划路径>
+```
+
+分类 JSON 以精确引用为键，例如 `{"example@v1":{"asset_layer":"reference","recommendation":"historical"}}`。已接纳包保留原接纳记录与字节；旧批准标签不自动变成接纳。相同身份/hash 可重放，不同内容拒绝覆盖。分类不明/不支持对象列为 pending，apply 拒绝；输入改变须重新生成计划，多个外部源分别迁移。candidate.json 的目标 path/review 随迁移更新，原 provenance 保留。
+
+归档是带逐文件 hash 清单的非破坏性快照：原目录保留，`reclaimed_bytes` 为 0，不自动回收磁盘，避免破坏外部 Studio 的使用。仅接受完整且未改 review 的工具候选，或 workspaces/<名称> 中含 `{"owner":"hyperframes.asset-maintenance/v1","active":false}` 的 `.asset-workspace.json`。未知目录、Work、已安装 vendor 与已接纳包拒绝。物理清理需另行定义占用检测与授权。本版不新增 IconPark；24 个单图标包按明确映射保留 historical，20 个旧卡片家族按已确认归层填写分类表，未知列 pending，不自动重写视觉。真实迁移、归档和 Windows 验收另行执行。
+
 F01-F08 使用 `card-kit@v1`，插槽与接线见 [Card Kit 接口卡](card-kit.md)。`component card-kit-source <新源目录>` 只导出自有源码，之后沿用 pack/validate/accept/install。Plan 是内容真源；`cards build` 生成挂载并用冻结字体实测容量，`cards studio` 在官方 Studio 旁提供回写 Plan 的卡片编辑器。不手改生成块，不把设计源批准当作正式资产接纳。
 
 使用 `work component interface <id@vN>` 读取选中资产的接口卡（用途、画幅、层、槽/参数及声明的用例），不读实现源码；可编辑候选用 `--candidate <路径>`。普通图标用 `work icons search <名称或别名>` 获取精确引用。缺库时从本机包运行 `work icons import --from <lucide-static 包根> --source <可编辑源目录>`，再按既有 pack / accept / install 流程处理；导入不自动接纳。安装到目标工程后，`work --work <id> --variant <id> icons use lucide:plug@1.45.0 --output icons/plug.svg` 取用闭包内 SVG，不联网、不改路径，保留来源标记及主题颜色/线宽。Plan 引用同一精确版本，SVG 随工程快照冻结。
