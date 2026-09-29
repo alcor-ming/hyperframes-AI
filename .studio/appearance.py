@@ -141,7 +141,7 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
 
 
 def _closure_version(closure):
-    return 2 if any(item["kind"] == "motion" and item["metadata"].get("contract_version") == 2 for item in closure) else 1
+    return max((item["metadata"].get("contract_version", 1) for item in closure if item["kind"] == "motion"), default=1)
 
 
 def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="card"):
@@ -168,7 +168,7 @@ def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="card
         if role in SLOTS:
             if selections["motion"][role]["entry"] not in payload.get("slots", {}):
                 raise AppearanceError("Unknown motion preset entry")
-            if metadata.get("contract_version") == 2 and selections["motion"][role]["entry"] != role:
+            if metadata.get("contract_version") in (2, 3) and selections["motion"][role]["entry"] != role:
                 raise AppearanceError("Motion preset entry must match its selected slot")
             layers = [(name, layer.get("motion", {}).get(role, {})) for name, layer in parameter_layers]
             effective, origin = _parameters(metadata, layers)
@@ -189,9 +189,11 @@ def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="card
         validate_declaration(payload, metadata, Path(item["path"]))
         if role == "theme":
             theme_tokens = payload["tokens"]
-        if role in SLOTS and metadata.get("contract_version") == 2:
+        if role in SLOTS and metadata.get("contract_version") in (2, 3):
             for group in ("slots", "reduced_motion"):
-                token = payload[group]["emphasis"]["color_token"]
+                token = payload[group]["emphasis"].get("color_token")
+                if token is None:
+                    continue
                 color = theme_tokens
                 for part in token.split("."):
                     color = color.get(part) if isinstance(color, dict) else None
@@ -209,7 +211,7 @@ def _check_lock(lock: dict) -> None:
     required = {"schema_version", "resolver_version", "contract_version", "hash_algorithm", "account", "selection", "assets", "mode", "ratio", "width", "height", "fps", "seed", "time_unit", "overrides", "parameters", "sources", "sha256"}
     if isinstance(lock, dict) and lock.get("mode") == "showcase":
         required.add("submodule")
-    if not isinstance(lock, dict) or set(lock) != required or any(type(lock[key]) is not int for key in ("schema_version", "resolver_version", "contract_version")) or lock["resolver_version"] != 1 or lock["schema_version"] not in (1, 2) or lock["contract_version"] != lock["schema_version"] or digest({key: value for key, value in lock.items() if key != "sha256"}) != lock.get("sha256"):
+    if not isinstance(lock, dict) or set(lock) != required or any(type(lock[key]) is not int for key in ("schema_version", "resolver_version", "contract_version")) or lock["resolver_version"] != 1 or lock["schema_version"] not in (1, 2, 3) or lock["contract_version"] != lock["schema_version"] or digest({key: value for key, value in lock.items() if key != "sha256"}) != lock.get("sha256"):
         raise AppearanceError("Appearance lock schema or hash mismatch")
     if lock["mode"] == "showcase" and lock["submodule"] not in SHOWCASE_SUBMODULES:
         raise AppearanceError("Invalid frozen showcase submodule")
@@ -263,7 +265,7 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
     _check_lock(lock)
     runtime_names = ["appearance.js"]
     if lock["mode"] in MODES:
-        runtime_names += ["cues.js", "captions.js", "figures.js", "scene-binding.js", "rolls.js", "card-component.js"]
+        runtime_names += ["cues.js", "captions.js", "figures.js", "scene-binding.js", "rolls.js", "card-component.js", "broll.js"]
     for name in runtime_names:
         runtime = safe(project, f"runtime/{name}")
         source = Path(__file__).parent / "runtime" / name

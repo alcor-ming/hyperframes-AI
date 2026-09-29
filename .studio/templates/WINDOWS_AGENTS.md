@@ -8,7 +8,7 @@
 
 WSL 与 Windows 均可编写组件，WSL 开发计划可以包含组件编辑。Windows 在 Work-local 或登记 AssetSource 制作 Scene、GSAP、Three.js、shader、SVG、模型与内容脚本；工具、宿主、合同、依赖和安装器缺陷交 WSL 冻结最小复现。按会话工作目录区分：WSL 开发仓会话不修改生产 Work、Current、Binding、接受状态或 Final，生产根会话按下段执行。
 
-Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取根 `CLAUDE.md`，仅 Opus 5.5 制作 showcase，或只读审查数学等系列。生产 CLI 只通过同根 `work-wsl.sh` 调用 `work.cmd`；授权 Work 的文稿、Plan 与工程源可直接编辑，Current、Binding、接受状态与配置仍由 CLI 管理。作品、Draft、Final 留在唯一生产根；不在 WSL 另起 Studio 或渲染器，画面证据使用 CLI 截图与诊断。同一 Work/Variant 同时只允许一个执行者。
+Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取根 `CLAUDE.md`，按任务类型制作 showcase、在 `asset-library/sources` 创作库资产，或独占制作已批准的非数学 explainer 1–2 个主镜头；card 单片、数学与未列出的系列只读。card 和数学单片只复用冻结库资产，不调用 Opus。库候选由 CLI pack，接纳仍由用户执行；主镜头遵守完整 explainer 规则，不享受 showcase 豁免。生产 CLI 只通过同根 `work-wsl.sh` 调用 `work.cmd`；准确授权 Work 的工程源可直接编辑，Current、Binding、接受状态与配置仍由 CLI 管理。作品、Draft、Final 留在唯一生产根；不在 WSL 另起 Studio 或渲染器，画面证据使用 CLI 截图与诊断。同一 Work/Variant 同时只允许一个执行者。
 
 安装工具、runtime、受管理规则、已接纳 AssetStore、vendor 与 Accepted Snapshot 只读；变更在可编辑源完成，复用时冻结新版本。更新保留用户 Skill 与未知文件，停止相关进程后使用安装器及恢复机制；不热换运行中的工具。Review 使用独立根配置、WorkStore、AssetStore 与必要 source-copy。
 

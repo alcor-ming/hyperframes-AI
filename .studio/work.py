@@ -1515,7 +1515,7 @@ def command_component_interface(root: Path, args: argparse.Namespace) -> None:
     release = validate_component_release(source, allow_unapproved=args.candidate or acceptance is not None)
     metadata = release['metadata']
     keys = ('communication_goal', 'usage', 'example', 'ratio', 'compatibility', 'layers',
-            'slots', 'parameters', 'duration_range', 'motion_recipe', 'customization')
+            'slots', 'parameters', 'duration_range', 'motion_recipe', 'customization', 'broll')
     card = {'component_ref': release['component_ref'], 'package_sha256': release['package_sha256'],
             'interface': {key: metadata[key] for key in keys if key in metadata}}
     card['interface'].setdefault('layers', 'not declared; verify the selected package before use')
@@ -1696,7 +1696,7 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
     elif action == "list":
         result = asset_store.discover_components(root, args.query, kind=args.kind, ratio=args.ratio, tag=args.tag,
             recommendation=args.recommendation, rebuild=args.rebuild, research_root=args.research_root, audit=args.audit,
-            asset_layer=args.asset_layer, include_references=args.include_references)
+            asset_layer=args.asset_layer, include_references=args.include_references, broll_role=args.broll_role)
     else:
         store = asset_store.asset_store_root(root)
         from component_harness import package_write_lock
@@ -3688,6 +3688,7 @@ def build_parser() -> argparse.ArgumentParser:
     component_list.add_argument("--audit", action="store_true", help="Read-only discovery metadata and file audit")
     component_list.add_argument("--ratio")
     component_list.add_argument("--tag")
+    component_list.add_argument("--broll-role", choices=("hook", "concept", "transition"))
     component_list.add_argument("--recommendation", choices=("recommended", "historical", "pending"))
     component_list.add_argument('--asset-layer', choices=('building-block', 'scene-template', 'content', 'reference', 'unclassified'))
     component_list.add_argument('--include-references', action='store_true', help='Include non-installable reference examples')

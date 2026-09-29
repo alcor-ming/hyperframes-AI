@@ -37,7 +37,8 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
         for candidate in sample.get('rhythm_candidates', []):
             candidates.setdefault(candidate['id'], []).append((sample['time'], candidate))
     allowed = {'text_reveal', 'b_enter', 'a_return', 'enter', 'exit', 'bounce', 'squash', 'point', 'state',
-               'pan_start', 'pan_end', 'zoom_start', 'zoom_end', 'camera_start', 'camera_end', 'camera_turn', 'tween', 'tween_end', 'set'}
+               'pan_start', 'pan_end', 'zoom_start', 'zoom_end', 'camera_start', 'camera_end', 'camera_turn', 'tween', 'tween_end', 'set',
+               'motion_reveal', 'motion_emphasis', 'motion_exit', 'motion_transition', 'broll_moment'}
     for observations in candidates.values():
         candidate = observations[0][1]
         if candidate.get('unverified'):

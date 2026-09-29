@@ -420,10 +420,12 @@ def _retired_roots(store):
 
 def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
                         recommendation=None, rebuild=False, research_root=None, audit=False,
-                        config=None, asset_layer=None, include_references=False) -> dict:
+                        config=None, asset_layer=None, include_references=False, broll_role=None) -> dict:
     from asset_contract import validate_asset_layer
     if asset_layer is not None and asset_layer != "unclassified":
         validate_asset_layer(asset_layer)
+    if broll_role is not None and broll_role not in ("hook", "concept", "transition"):
+        raise ComponentError("Invalid broll role filter")
     def declared_ratios(metadata):
         compatibility = metadata.get("compatibility", {})
         return compatibility.get("ratios", []) if isinstance(compatibility, dict) else []
@@ -510,7 +512,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                                    "ratios": declared_ratios(metadata),
                                    "communication_goal": metadata.get("description", ""),
                                    "verification": "metadata-only; source is not accepted"})
-                    assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer") if key in metadata})
+                    assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
                     continue
                 metadata = read(metadata_path)
                 if metadata_path.name == "asset.json":
@@ -547,7 +549,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                                "information_shapes": metadata.get("information_shapes", []),
                                "anti_use_cases": metadata.get("anti_use_cases", []), "acceptance": acceptance,
                                "verification": "metadata-only; verified on use"})
-                assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer") if key in metadata})
+                assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
                 if str(metadata.get("entry", "")).lower().endswith(".mp3"):
                     assets[-1]["media_type"] = "audio"
             except (ComponentError, OSError, ValueError, KeyError, TypeError) as error:
@@ -611,6 +613,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
               and (include_references or asset_layer == "reference" or asset["asset_layer"] != "reference")
               and (not ratio or ratio in asset["ratios"] or ratio == "unknown" and not asset["ratios"])
               and (not tag or tag in asset.get("tags", []))
+              and (not broll_role or isinstance(asset.get("broll"), dict) and asset["broll"].get("role") == broll_role)
               and (not recommendation or asset["recommendation"] == recommendation)]
     assets.sort(key=lambda asset: (not asset["available"], {"recommended": 0, "pending": 1, "historical": 2}[asset["recommendation"]], asset["component_ref"]))
     if cache_path and fresh != cache:

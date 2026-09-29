@@ -10,6 +10,8 @@
 
 模式另有 `showcase`，仅 Opus 5.5 制作，Codex 不接；创建时显式冻结 `pdoom` / `science` 子模块，见 [showcase.md](spec/showcase.md)。WSL 开发仓与 Claude 生产根会话按根规则区分；生产根通过 `work-wsl.sh` 调用已部署 Windows CLI，文稿和工程源仍可在授权 Work 内直接编辑，不另起 Studio 或渲染器。`explainer` 可采用系列规格 `math-rap`，创建 Variant 时冻结规格与系列版本；数学图解替代 D14 角色/生图要求，歌词字幕保持开启，见 [math-rap.md](spec/math-rap.md)。
 
+card 和数学单片只复用已冻结库资产，不调用 Opus；card 的风格 Motion / B-roll 可选、无配额。非数学 explainer 可在 Plan 列出 1–2 个 Opus 主镜头和 Asset Brief；方向批准后，Codex 停止该 Work/Variant 的写入，生产根 Claude 会话按根 `CLAUDE.md` 独占制作指定 Scene，交回后 Codex 续接。主镜头遵守完整 explainer 检查，不自动批准 Plan/Draft，不直接入通用库；接受后再另行提炼。交接不改变 Current 或接受记录，不新增交接 CLI。
+
 实验采用结果先复制或冻结到目标 Work；来源关系不等于接受。保留稳定 Scene/Anchor ID、正式声音、已有成果和冻结历史。更换主题、叙事结构或确认观点属于方向变化，只确认受影响部分。
 
 ## 1. 内容准备

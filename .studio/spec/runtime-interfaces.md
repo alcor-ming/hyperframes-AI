@@ -142,7 +142,22 @@ area: left
 title: 连接规则 @协议 [lucide:plug@1.45.0]
 ```
 
-## 详细合同
+## broll.js
+
+用途：为冻结 B-roll 镜头校验插槽并映射时间；画幅：16:9、9:16（以资产声明为准）；占层：第 2 层 stage 与独立第 4 层 text；参数：冻结 manifest、appearance、slots、params、语义 startCue/endCue 与 cues。
+
+```js
+const shot = await HarnessBroll.mount(metadata, options, build);
+shot.renderAt(globalTime);
+shot.moments();
+shot.dispose();
+```
+
+冻结 module 的入口为 `mount({stage,text?,appearance,slots,params,startCue,endCue,cues})`，返回 `renderAt(t)` / `moments()` / `dispose()`。stage 为第 2 层 B media，text 为独立第 4 层 B 文字组；宿主按全片秒数调用，既有 HarnessRolls 决定 B 区间和 A 的冻结/恢复。时长越界、类型/容量不符、外部 URL 与闭包外媒体明确失败，不把插槽写进 Binding。
+
+`runtime/broll.js` 的 `HarnessBroll.mount(metadata,options,build)` 可复用严格输入检查、Theme/冻结字体容量、stretch/hold-end 时间映射与运行时事件注册。build 返回 time-pure renderAt、带实际 target 的默认相对秒数 events、文字 labels 与 dispose。`moments()` 返回 `{key_moments:[全片秒数],sfx_cues:[{time,purpose}]}`；关键时刻来自实际注册事件，manifest 描述不直接计数。dispose 注销自身事件并释放节点；完整取用示例和 schema 见 [broll-assets.md](broll-assets.md)。
+
+## 详细接线
 
 A/B 接线使用冻结到工程的 `runtime/rolls.js`：`HarnessRolls.mount({cues, scenes})` 返回 `renderAt(t)` / `dispose()`，由宿主按时间求值。每个 Scene 提供 `id/startCue/endCue`、`a:{text, decorations?, items:[{id,cue,element}], renderAt?}` 与 `b:[{startCue,endCue,retreat:"hide"|"blur",media,text?}]`。A text 与 B text 属于第 4 层，decorations 与 media 属于第 2 层；跨 Scene 使用 `continuation:{from,readItems}`。B 期间 A 的本地动作时间暂停，返回与直接 seek 均恢复同一状态；退出时释放实例。卡片组件声明占用层，不自带根背景或字幕宿主。
 

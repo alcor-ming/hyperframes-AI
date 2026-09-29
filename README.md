@@ -97,6 +97,10 @@ Draft 与 Final 生命周期：
 
 静态外观支持 schema 2 Theme/Background/Motion 资产，沿用 `component pack/import/accept`，不另建主题库。新账号以 `{ref,kind,package_sha256}` 保存 theme/background，motion 槽位可显式设 null。`appearance resolve --account <id> --appearance-file <json>` 只读展示最终选择；`new`/`variant add` 同样接受 `--appearance-file`、独立 `--background <id@vN>`、`--fps` 和 `--seed`。锁与真实 vendor 一起冻结并纳入 preview，不依赖源库在线。字段及参数结构见 [资产合同](.studio/spec/hyperframes.md)。候选能力不等于已部署；选择 UI、真实 Paper 拆分和 Windows 原生换配效果不由这些合同证明。
 
+Motion v3 增加风格入退场、一次性强调与转场、back-out/spring 及 cue 相位 hold_fps；允许不同槽混用 v2/v3，新 lock 采用最高能力版本，旧冻结 Work 不自动升级。完整账号外观指定 Theme/Background/Motion；跨账号风格叠加省略 theme，保留各自账号 Theme。B-roll module 可通过 `component list --broll-role hook|concept|transition --tag <style>` 查询，接口卡显示完整挂载示例和插槽；Scene 手动接既有 A/B 编排，Binding schema 不变。合同与生产源自检见 [镜头创作指南](.studio/spec/broll-assets.md)。
+
+card 与数学单片只复用冻结库资产，不调用 Opus；card 镜头可选、无配额。生产根 Claude 可创作库源/pack 候选（用户接纳），或在方向批准后独占制作非数学 explainer 的 1–2 个指定主镜头，再交回 Codex；主镜头不享受 showcase 豁免。首次库制作、主镜头交接工具化和真实生产内容验收不随开发或工具部署自动执行。
+
 所有新视频 Work 默认把 Script/Research 放在 `shared/`，各 Variant 通过 `shared_inputs` 引用同一源，Plan/工程/接受/Final 各自独立。`variant add --from <variant-id>` 显式创建内容分支，不是仅为了新增账号而必需；旧 Variant 内文稿仍按原位置读取。创建隔离测试可用 `work new "联动测试" --workflow hyperframes_video --purpose test --batch <batch-id>`，只进行 Studio 验证，不导出视频。
 
 RC2 视频 Work 的全局 ID 与系列号独立递增且不封顶于 999；`name` 与 `series move <id>` 不改 ID/目录，旧系列号保留为查询别名。`list --tree`、`find --series <id> --number <n> [--account <id>]`、`account get <id>` 和可重建的 WorkStore `浏览目录.md` 用于定位。旧视频 Work 的一次性改名只经 `migrate dry-run --output <map.json>` 审阅映射，再由 `migrate apply --mapping <map.json>` 显式执行；缺用途或含糊标题可用 `--purpose-overrides` / `--title-overrides` JSON 映射重做 dry-run。若一项被阻断，可用重复的 `--only <old-id>` 生成安全子集映射；同系列须按旧 ID 顺序迁移。映射文件必须新建于 WorkStore 外。迁移只在 WSL 合成 WorkStore 验证，尚未对生产 WorkStore dry-run/apply；工具部署状态以目标根的部署收据为准。

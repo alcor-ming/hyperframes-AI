@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "contract_version": 1,
+  "id": "synthetic-broll",
+  "version": 1,
+  "kind": "module",
+  "asset_layer": "building-block",
+  "entry": "main.js",
+  "dependencies": ["asset.json"],
+  "usage": "USAGE.md",
+  "description": "Synthetic, appearance-driven B-roll shot fixture (dev-repo only; no production assets).",
+  "tags": ["style:synthetic"],
+  "compatibility": {"ratios": ["9:16", "16:9"]},
+  "parameters": {},
+  "broll": {
+    "role": "concept",
+    "takeover": "inline",
+    "duration": {"min": 2, "max": 6, "default": 3},
+    "timing": "stretch",
+    "key_moments": [0, 0.75, 1.5, 2.25],
+    "sfx_cues": [
+      {"time": 0, "purpose": "shot enter"},
+      {"time": 1.5, "purpose": "bar emphasis"}
+    ],
+    "slots": {
+      "title": {"type": "text", "layer": "text", "max_chars": 12},
+      "value": {"type": "number", "layer": "text", "max_chars": 8}
+    },
+    "params": {},
+    "carries_info": true,
+    "caption_safe_zone": {"9:16": [0, 0.84, 1, 0.16], "16:9": [0, 0.84, 1, 0.16]},
+    "usage": "// Load runtime/appearance.js, runtime/rolls.js and runtime/broll.js first.\nimport {mount} from './vendor/components/synthetic-broll/v1/main.js';\nconst appearance = await HarnessAppearance.load();\nconst cues = {find: key => ({sceneStart:0, shotStart:1, shotEnd:4, sceneEnd:5})[key]};\nconst shot = await mount({stage, text, appearance, slots:{title:'Broll signal', value:42}, params:{}, startCue:'shotStart', endCue:'shotEnd', cues});\nconst rolls = HarnessRolls.mount({cues, scenes:[{id:'broll', startCue:'sceneStart', endCue:'sceneEnd', a:{text:aText, items:[{id:'a1', element:aItem, cue:'sceneStart'}]}, b:[{startCue:'shotStart', endCue:'shotEnd', retreat:'hide', media:stage, text}]}]});\nasync function renderAt(t) {shot.renderAt(t); await rolls.renderAt(t);}\nawait renderAt(2.5);\nconst {key_moments, sfx_cues} = shot.moments();\nfunction dispose() {shot.dispose(); rolls.dispose(); appearance.dispose();}",
+    "examples": [
+      "await mount({stage, text, appearance, slots: {title: 'Broll signal', value: 42}, params: {}, startCue: 1, endCue: 4, cues});",
+      "Sample projects: tests/broll-browser.mjs builds isolated frozen projects and outputs their paths for two Themes, both ratios and both timing modes."
+    ]
+  }
+}

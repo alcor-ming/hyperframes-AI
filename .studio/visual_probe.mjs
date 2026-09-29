@@ -58,6 +58,7 @@ export function inspectRhythmFrame() {
         [...new win.DOMMatrix(style.transform === 'none' ? undefined : style.transform).toFloat64Array()]
           .map(value => Math.round(value * 100) / 100),
         style.color, style.backgroundColor, style.borderColor, style.fill, style.stroke,
+        style.clipPath, style.boxShadow, style.outlineColor, style.outlineWidth, style.outlineStyle,
         style.fillOpacity, style.strokeOpacity, style.strokeWidth, style.strokeDasharray, style.strokeDashoffset,
         element instanceof win.SVGElement ? ['d', 'points', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry']
           .map(name => element.getAttribute(name)) : null,
@@ -65,6 +66,7 @@ export function inspectRhythmFrame() {
   };
   const candidates = [];
   const claimed = new Map();
+  const registered = new Map();
   const add = (event, id) => {
     const target = event.target;
     if (!target?.ownerDocument || target.closest('[data-hf-ambient], [data-hf-motion="idle"], [data-hf-motion="talk"]')) return;
@@ -100,7 +102,9 @@ export function inspectRhythmFrame() {
     const index = sourceIndex++;
     source().forEach((event, i) => {
       const times = claimed.get(event.target) || new Set();
-      if (times.has(event.time)) return;
+      const kinds = registered.get(event.target) || new Set(), key = `${event.time}:${event.kind}`;
+      if (kinds.has(key)) return;
+      kinds.add(key); registered.set(event.target, kinds);
       times.add(event.time); claimed.set(event.target, times);
       add(event, `helper:${index}:${i}`);
     });

@@ -95,6 +95,24 @@ function dispose() { for (const motion of motions) motion.dispose(); appearance.
 
 源侧可运行示例及截图检查为 `tests/motion-browser.mjs`，使用隔离资产/工程的真实 pack/resolve/materialize/load/apply/bind/seek 链路，不接触生产 Work、不导出视频；覆盖常规/reduced 的 16:9、4:3、9:16，不代表任意内容自动适配或 Windows 原生 Studio/音频/Final 已接受。
 
+### Motion v3 与混合闭包
+
+Motion v3 使用 manifest `contract_version:3` / entry `capability_version:3`，四槽和 reduced_motion 均必填，保留 v2 effect 和严格字段校验。各槽可混用 v2/v3 包；appearance lock schema/contract 是闭包中最高 Motion 版本，resolver 仍为 1，新宿主按各 entry 自身能力校验，旧宿主拒绝新 lock。冻结旧 Work 不自动升级；准确目标的升级仍须显式 rebind/upgrade-runtime。
+
+新增 reveal 为 pop / stamp / wipe / glitch-in；emphasis 为 pulse / shake / wobble / glow；exit 为 pop-out / wipe-out / glitch-out；transition 为 wipe / push / glitch-cut。公共字段 effect/duration/easing；入退场仍必填 opacity_from/to，reveal 可选 hide_before。pop、pop-out 支持 x/y/scale，stamp 另支持 rotate（度）；glitch-in/out、shake 支持 x/y，pulse 支持 scale，wobble 支持 rotate；glow 必填冻结 Theme 的 color_token，可选 blur。wipe、wipe-out、push 可选 direction（left/right/up/down）。不属于该 effect 的字段拒绝；effect/color_token 不可作为参数覆盖。
+
+v3 的缓动增加 back-out 与固定采样 spring；normal 可选整数 hold_fps（1..240），以 cue 为相位原点只量化中间帧，cue 与结束状态精确，不能移动 endCue/overlap。新 emphasis 为一次性动作，不需要 restoreCue，结束恢复采样的基础样式；focus-restore 保持原合同。新入退场 reduced 使用 fade/fade-out，强调时长 0，转场 cut，不使用 hold_fps 或过冲缓动。每个 effect 仅拥有实际使用的属性，争抢拒绝，不自动包装层。
+
+新版 v2/v3 Motion 绑定在 `__hfRhythmSources` 注册带 target/cue 的 `motion_<slot>` 候选，dispose 注销；探针只计目标可见且状态实际变化的事件，不把 WAAPI 的存在当作通过。
+
+账号外观可完整指定 Theme/Background/Motion；跨账号的风格叠加只指定 background/motion、省略 theme。后者保留账号 Theme，前者覆盖，沿用当前解析合并规则，不新增资产 kind。
+
+### 动效 B-roll module
+
+可选 `broll` 块及挂载示例见 [创作合同](broll-assets.md)。pack/validate 校验角色、时长、timing、插槽/参数、各画幅安全区与完整 usage/examples；无 broll 的 module 不变。`component list --broll-role hook|concept|transition` 与 `--tag` 组合筛选，`component interface` 展示完整 broll。插槽由 Scene 源码传入，不改变 Binding schema 3、不新增 Plan 解析字段。
+
+镜头导出 mount，按全片秒数 renderAt，返回实际 moments 与 dispose；stage/text 分别挂第 2/4 层并交给既有 HarnessRolls。可复用新工程冻结的 `runtime/broll.js` 做输入、字体容量、闭包路径和时间映射校验，module 自身资源仍走正常离线闭包。开发合成样例与双 Theme/双画幅/两种 timing 的真实管道检查见 `tests/broll-browser.mjs`，不携带生产库资产。
+
 优先复用能独立解释一个含义的语义视觉对象及其内部联动，由 Work-local Scene 安排本期叙事和媒体。已有 helper 保留，只有真实独立变化或复用需求才抽取，不强制图形/动作/布局工厂拆分。组件可由 WSL 或 Windows 开发，空间舞台可内聚保存相机、遮挡和光照。布局适配须实测可读性，不以模块数量或双画幅完成率验收。
 
 合同范围内的新资产通过自身元数据发现；新增合同能力须升级工具，不靠标题或 kind 改名绕过校验。官方 Registry 的 block / snippet 只在明确选中后导入候选，完成本项目接线与接纳才可使用，不向上游发送私有文案或缺口。Work 用既有 vendor / Binding / Lock 固定副本与依赖；不读 WSL 活跃源码、不链接 `latest`，同身份版本不同内容拒绝覆盖。没有匹配实现时记录 `custom:<slug>` 并在可编辑源实现，不覆盖冻结 vendor；仅工具或宿主缺口交 WSL。现有已实现资产合同之外的能力，不冒用 Component 合同。

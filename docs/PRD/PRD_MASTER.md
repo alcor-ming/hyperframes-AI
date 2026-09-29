@@ -6,6 +6,8 @@
 
 日期：2026-09-22
 
+v3.6.1 增量见 [Opus 动效 B-roll 与 Motion v3](./hyperframes-v361-motion-broll.md)（Motion v3、混合版本闭包、B-roll 插槽与节奏合同已实现并完成 WSL 隔离验证）与 [资产库镜头创作指南](./hyperframes-v361-broll-asset-authoring.md)（已定稿为管理包指南及需求单）。用户已授权部署到统一 Windows 根，实际结果见本次部署收据；生产内容验收与首批库制作不在本任务内。
+
 v3.4.3 增量见 [信息承载、选择性配图与流程更新](./hyperframes-v343-text-imagery.md)：完整上屏信息单元、逐 Scene 配图取舍、Plan 阶段查库与检查、D1 反向核对、场景源/配方发现及只读漏登审计。WSL 实施与隔离回归已完成；未部署，Windows 原生与生产未验证，不包含生产 Work 修正或 Windows 资产补登记。
 
 v3.4.2 基线见 [上屏提炼与持续视觉变化](./hyperframes-v342-visual-outcomes.md)：A1/B1/Q1 与 D1/D2 保留，Plan 信息格式、检查路由与默认配图策略由 v3.4.3 更新（未部署，Windows 原生与生产未验证）。
