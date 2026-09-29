@@ -51,6 +51,7 @@ except ModuleNotFoundError:  # Loading this file by path from repository tests.
 from visual_plan import VisualPlanError, PLAN_FORMAT, plan_scene_rows, validate_plan_cards, scene_projection, layout_projection, reference_projection, validate_dependencies, source_changes, serve
 import icon_sets
 import card_build
+import math_build
 import card_kit_assets
 import work_requests
 import studio_preview
@@ -1555,6 +1556,7 @@ def command_icons(root: Path, args: argparse.Namespace) -> None:
 
 
 def validate_project_cards(project: Path, plan_text: str, closure, scene_ids=None) -> None:
+    math_build.verify_generated(project, plan_text, scene_ids, closure=closure)
     card_build.verify_generated(project, plan_text, scene_ids)
     if not any(row['cards'] for sid, row in plan_scene_rows(plan_text).items()
                if scene_ids is None or sid in scene_ids):
@@ -1567,6 +1569,52 @@ def validate_project_cards(project: Path, plan_text: str, closure, scene_ids=Non
 
 def command_card_source(root: Path, args: argparse.Namespace) -> None:
     print_result(root, args, card_kit_assets.export_card_kit(root, Path(args.target)))
+
+
+def command_math_source(root: Path, args: argparse.Namespace) -> None:
+    from math_kit_assets import export_math_kit
+    print_result(root, args, export_math_kit(root, Path(args.target)))
+
+
+def command_math(root: Path, args: argparse.Namespace) -> None:
+    from component_harness import package_write_lock
+    variant = None
+    if args.project:
+        project = asset_store.authoring_project(root, Path(args.project))
+        if not args.plan:
+            raise HarnessError('Standalone math requires --plan within the registered AssetSource')
+        plan_path = Path(args.plan).expanduser().absolute()
+        asset_store.authoring_project(root, plan_path.parent)
+        storage.scoped_path(plan_path.parent, plan_path.name)
+    else:
+        if not args.work_override or not args.variant_override or args.plan:
+            raise HarnessError('Math requires explicit --work/--variant, or --project/--plan')
+        work, _ = selected_work(root, args)
+        require_workflow(work, 'hyperframes_video')
+        variant, _ = selected_variant(root, work, args)
+        project = variant / 'project'
+        plan_path = storage.scoped_path(variant, 'ANIMATION_PLAN.md')
+    with package_write_lock(work_requests.safe(project.parent, '.runtime/component-install.lock')):
+        plan_bytes = plan_path.read_bytes()
+        plan = plan_bytes.decode('utf-8')
+        plan_scene_rows(plan)
+        metadata = read_frontmatter(plan_path)
+        if metadata.get('status') != 'approved':
+            raise HarnessError('ANIMATION_PLAN.md must be approved before math build')
+        state_bytes = (variant / 'variant.yaml').read_bytes() if variant else None
+        state = json.loads(state_bytes) if state_bytes is not None else metadata
+        lock = state.get('appearance_lock') if variant else read_json(project / 'appearance-lock.json')
+        if (not lock or lock.get('mode') != 'explainer'
+                or state.get('series_binding', {}).get('spec') != 'math-rap'
+                or metadata.get('series_binding') != state.get('series_binding')):
+            raise HarnessError('Math build requires frozen explainer/math-rap series binding')
+        appearance.verify(project, lock, check_mounts=False)
+        expected = {plan_path: plan_bytes}
+        if variant:
+            expected[variant / 'variant.yaml'] = state_bytes
+        result = math_build.build(project, plan, root, lock['ratio'], browser=args.browser,
+                                  expected_before=expected)
+    print_result(root, args, result)
 
 
 def command_cards(root: Path, args: argparse.Namespace) -> None:
@@ -3522,6 +3570,14 @@ def build_parser() -> argparse.ArgumentParser:
     plan_commands.add_parser("refresh", help="Refresh CLI metadata without approving changed content").set_defaults(handler=command_plan_refresh)
     plan_commands.add_parser("check", help="Report mode-aware engineering and mathematical Plan findings").set_defaults(handler=command_plan_check)
 
+    math_command = commands.add_parser('math', help='Build Plan-owned mathematical diagrams')
+    math_commands = math_command.add_subparsers(dest='math_command', required=True)
+    math_builder = math_commands.add_parser('build')
+    math_builder.add_argument('--project', help='Editable sample inside a registered AssetSource')
+    math_builder.add_argument('--plan', help='Standalone sample Plan path')
+    math_builder.add_argument('--browser', help='Chromium executable for glyph and geometry checks')
+    math_builder.set_defaults(handler=command_math)
+
     cards = commands.add_parser('cards', help='Build and edit Plan-owned cards from the installed card kit')
     card_commands = cards.add_subparsers(dest='cards_command', required=True)
     for name in ('build', 'edit', 'studio'):
@@ -3604,6 +3660,9 @@ def build_parser() -> argparse.ArgumentParser:
     card_source = component_commands.add_parser('card-kit-source', help='Export an editable card-kit source; never accept')
     card_source.add_argument('target')
     card_source.set_defaults(handler=command_card_source)
+    math_source = component_commands.add_parser('math-kit-source', help='Export editable math-kit source; never accept')
+    math_source.add_argument('target')
+    math_source.set_defaults(handler=command_math_source)
     interface = component_commands.add_parser('interface', help='Read the selected asset interface without implementation source')
     interface.add_argument('component')
     interface.add_argument('--candidate', action='store_true')

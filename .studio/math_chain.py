@@ -77,34 +77,42 @@ def _contract(value, scene):
     return value
 
 
-def parse_plan(text):
+def parse_scene_blocks(text, language, *, required=True):
     from visual_plan import markdown_structure_lines
     headings = [m for m in markdown_structure_lines(text) if re.match(r'^## ', m[0])]
-    result = {}
+    result, seen = {}, set()
     for index, heading in enumerate(headings):
         match = re.fullmatch(r'## (S[0-9]+[A-Z]*)(?:\s+.*)?', heading[0])
         if not match:
             continue
         scene = match[1]
+        if scene in seen:
+            raise ValueError(f'{scene}: duplicate_scene')
+        seen.add(scene)
         end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
         blocks, fence, lines = [], None, []
         for line in text[heading.end():end].splitlines():
             marker = re.fullmatch(r' {0,3}(`{3,}|~{3,})(.*)', line)
             if fence:
                 if marker and marker[1][0] == fence[0][0] and len(marker[1]) >= len(fence[0]) and not marker[2].strip():
-                    if fence[1] == 'math-plan':
+                    if fence[1] == language:
                         blocks.append(json.loads('\n'.join(lines)))
                     fence = None
                 else:
                     lines.append(line)
             elif marker:
                 fence, lines = (marker[1], marker[2].strip()), []
-        if scene in result or len(blocks) != 1 or fence and fence[1] == 'math-plan':
-            raise ValueError(f'{scene}: expected_one_math_plan')
-        result[scene] = _contract(blocks[0], scene)
-    if not result:
-        raise ValueError('missing_math_plan')
+        if len(blocks) > 1 or required and not blocks or fence and fence[1] == language:
+            raise ValueError(f'{scene}: expected_one_{language.replace("-", "_")}')
+        if blocks:
+            result[scene] = blocks[0]
+    if required and not result:
+        raise ValueError('missing_' + language.replace('-', '_'))
     return result
+
+
+def parse_plan(text):
+    return {scene: _contract(value, scene) for scene, value in parse_scene_blocks(text, 'math-plan').items()}
 
 
 def plan_findings(text, cues, duration):

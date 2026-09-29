@@ -37,6 +37,8 @@ class WorkWslTest(unittest.TestCase):
         self.assertIn('"D:\\production root\\notes \\ source.json"', command[4])
         equals = work_wsl.command(self.root, ["--appearance-file=D:\\production root\\notes \\ source.json"])
         self.assertIn('"--appearance-file=D:\\production root\\notes \\ source.json"', equals[4])
+        exported = work_wsl.command(self.root, ['component', 'math-kit-source', 'sources/math-kit'])
+        self.assertIn('"D:\\production root\\sources\\math-kit"', exported[4])
 
     def test_external_traversal_symlink_and_metacharacters_rejected(self):
         (self.root / "escape").symlink_to(self.base, target_is_directory=True)
@@ -49,7 +51,8 @@ class WorkWslTest(unittest.TestCase):
         for arguments in (["--to=C:\\outside"], ["--mapping=../outside.json"], ["--align=C:\\outside"],
                           ["--appearance-file", "..\\outside.json"], ["C:relative"], ["root", "set", "../outside"],
                           ["component", "install", "asset@v1", "--binding-file", "escape/binding.json"],
-                          ["--binding-file=C:\\outside.json"], ["component", "pack", "--json", "escape/source"]):
+                          ["--binding-file=C:\\outside.json"], ["component", "pack", "--json", "escape/source"],
+                          ['component', 'math-kit-source', 'escape/source']):
             with self.subTest(arguments=arguments), self.assertRaises(ValueError):
                 work_wsl.command(self.root, arguments)
 

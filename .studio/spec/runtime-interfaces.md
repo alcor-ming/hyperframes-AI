@@ -83,6 +83,26 @@ await HarnessCardProject.setRolls([{id: 'S01', startCue: '开始', endCue: '结�
   b: [{startCue: '演示', endCue: '回来', retreat: 'blur', media: bHost}]}]);
 ```
 
+## math-kit.js
+
+用途：固定槽位公式与首批数学图解；画幅：16:9、9:16；占层：图形 2、文字 4。参数：`mount({stage,text,math,intent,cues,ratio,start,end,appearance,fontURL})`；返回 `items/renderAt/retime/rhythm/dispose`。从已安装的 `math-kit@v1` 加载，字体须通过真实字形检查，不回退系统字体，见 [接口卡](math-kit.md)。
+
+```js
+const diagram = await HarnessMathKit.mount({stage, text, math, intent, cues,
+  ratio: '16:9', start: 0, end: 10, appearance, fontURL});
+diagram.renderAt(3);
+```
+
+## math-project.js
+
+用途：`math build` 的 Plan 挂载与宿主 seek 接线；画幅：16:9、9:16；占层：2、4。参数：`math-plan` 的 cue 与 `math` 的布局生成的冻结数据，不手写挂载、不另建播放循环。`scene(id)` 提供 A 组，`setRolls(scenes)` 接受 B 编排，`renderAt(t)` 使用全片时间；修改生成块或丢失闭包依赖时预览校验拒绝。
+
+```js
+await HarnessMathProject.ready;
+await HarnessMathProject.renderAt(3);
+const aGroup = await HarnessMathProject.scene('S01');
+```
+
 ## scene-binding.js
 
 用途：接宿主 hf-seek，统一生命周期；画幅：16:9、9:16；占层：无。参数：`bindScene({start,duration,timeline?,renderAt,ready?,dispose?})`，renderAt 收到 Scene 本地时间；`bindExplainer({duration,captions,background,figures,ready,renderAt})` 收到全片时间；返回 `ready/seek/dispose`。

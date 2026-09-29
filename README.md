@@ -8,7 +8,7 @@
 
 视频支持 `card` 卡片模式与 `explainer` 有声动态图解，均使用 16:9 / 9:16 五层宿主：背景、主体、强调转场、独立文字、口播字幕。`--captions on|off` 为 Variant 开关，card 默认关闭、explainer 默认开启。A/B-roll 管主画面时间切换，Plan 按 Scene 维护编排、内嵌上屏文字、素材、声音 cue 与节奏事件。声音层对两种模式开放；Finalize 渲染最终 MP4，不含平台工作流。
 
-另有 `showcase` 模式，仅 Opus 5.5 制作，Codex 不接制作；创建时显式冻结 `pdoom` / `science` 子模块，使用精简 Plan 与接受后提炼模板。不强制 explainer 正向方向、D14、Q1 或 Draft 前节奏闭环，事实、授权、seek 与离线闭包等硬约束不变，见 [showcase 合同](.studio/spec/showcase.md)。`explainer` 系列可声明 `spec=math-rap`，以数学图解替代角色/生图、字幕显示歌词；Research 记录原片与声音来源，不新增账号或声音来源拦截，见 [数学系列合同](.studio/spec/math-rap.md)。数学积木另行开发，不包含在本轮链路交付中。
+另有 `showcase` 模式，仅 Opus 5.5 制作，Codex 不接制作；创建时显式冻结 `pdoom` / `science` 子模块，使用精简 Plan 与接受后提炼模板。不强制 explainer 正向方向、D14、Q1 或 Draft 前节奏闭环，事实、授权、seek 与离线闭包等硬约束不变，见 [showcase 合同](.studio/spec/showcase.md)。`explainer` 系列可声明 `spec=math-rap`，以数学图解替代角色/生图、字幕显示歌词；Research 记录原片与声音来源，不新增账号或声音来源拦截，见 [数学系列合同](.studio/spec/math-rap.md)。
 
 数学链路复用 `cues build --alignment <文件>` 的歌词逐字对齐，不对未对齐字插值。正式声音已有且 cue 已建立后，使用 `./work --work <id> --variant <id> beats build --audio <Work相对音频路径> --beats-per-bar <每小节拍数> --first-downbeat <零基拍点索引>`；锁定上游提取拍点，拍号和首个强拍须人工明确，弱起不猜测，生成的网格绑定音频摘要。`plan check` 报告数学职责、符号一致性和收尾空档，不替代观看或接受。
 
@@ -74,6 +74,8 @@ Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话�
 Studio 对 current 的修改同步原文案真源或暂停对应再生成，旧 MP4 / QA 不继续代表新源码。登记版本的独立审阅副本文件只读，不支持 Studio 保存；打开时先校验，副本变化则新建目录并保留旧副本，不放宽诊断完整性检查。`reference` Plan 没有虚构的可播放工程，直接审阅其资产引用。
 
 F01-F08 卡片使用 Plan `card` 块作为唯一内容源。安装已接纳的 `card-kit@v1` 后运行 `./work --work <id> --variant <id> cards build --browser <Chromium路径>`，先实测容量再更新生成挂载，保留其他手写内容。`cards studio` 提供官方 Studio 旁的 Plan 回写编辑器；保存使方向批准和旧接受失效，不拦截原生 Studio 的任意源码编辑。导出源、槽位及 A/B 接线见 [卡片接口卡](.studio/spec/card-kit.md)。
+
+数学首批积木使用同 Scene 的 `math-plan` 定义单元与 cue，`math` 块只定义对应布局和冻结字体。安装已接纳的 `math-kit@v1` 后运行 `./work --work <id> --variant <id> math build --browser <Chromium路径>`；构建检查真实字形、系统字体回退和文本容量，再更新受保护挂载。接口、九种积木、导出与闭包约定见 [数学积木接口卡](.studio/spec/math-kit.md)。开发仓只做隔离验证，Windows 原生和部署后带声效果验收另报。
 
 对已打开的准确目标运行 `./work --work <id> --variant <id> preview diagnose <current或Plan/Draft-ID>`，支持 executable 登记（`plan-vNNN` / `draft-vNNN`），拒绝静态 `reference` 和 `layout`。只读输出上屏照搬、Plan 信息缺失/截短、其他实现偏离和静止疑点，不作 QA 通过判断。Plan 支持新 `screen` 信息块与旧表格格式。登记 Plan/Draft 使用同版冻结的 Script、Research、Plan 与工程，当前文稿的跨版本差异另列；输入在诊断期间变化则报告过期。单 Scene Plan 参考沿用登记的 `sample_scenes`，其他 Scene 列入 `d1.out_of_scope`（不在本参考范围），不报缺失或未验证。文字按 `data-info-id` 或与唯一信息块的精确文本匹配归属；无法唯一归属时按元素列为待核验，相关信息不报缺失。多信息 Scene 可在信息块容器上标注可选的 `data-info-id`。参数及明确引用例外见 `preview diagnose --help`。范围内未采样状态、无法确认 ready 的媒体/子画面及图片内文字保留未验证，仍需按 [Draft QA](.studio/spec/hyperframes.md#draft-qa) 连续观看；诊断不导出视频或修改接受状态。
 

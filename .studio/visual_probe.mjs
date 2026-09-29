@@ -82,7 +82,7 @@ export function inspectRhythmFrame() {
     }
     const frameKey = frames.join('/') || 'host';
     for (let el = target; el; el = el.parentElement || el.ownerDocument.defaultView.frameElement) {
-      for (const key of ['id', 'data-info-id', 'data-card-id', 'data-b-id']) {
+      for (const key of ['id', 'data-info-id', 'data-card-id', 'data-b-id', 'data-hf-math-id']) {
         const value = el.getAttribute(key);
         if (value) targets.push(value);
       }

@@ -308,7 +308,17 @@ def plan_scene_rows(plan_text):
                 raise VisualPlanError(f'{sid}: unknown continuation information ID {identity}')
             row['screens'][identity] = information[identity]
         row['信息 ID'] = ', '.join(row['screens'])
-    if json.loads(metadata[1]).get('series_binding', {}).get('spec') == 'math-rap':
+    from math_kit import parse_plan as parse_math_kit
+    try:
+        math_blocks = parse_math_kit(plan_text)
+    except ValueError as error:
+        raise VisualPlanError(str(error)) from error
+    is_math = json.loads(metadata[1]).get('series_binding', {}).get('spec') == 'math-rap'
+    if math_blocks and not is_math:
+        raise VisualPlanError('math blocks require math-rap series binding')
+    for sid, block in math_blocks.items():
+        rows[sid]['math'] = block
+    if is_math:
         from math_chain import parse_plan
         try:
             contracts = parse_plan(plan_text)
@@ -316,11 +326,13 @@ def plan_scene_rows(plan_text):
             raise VisualPlanError(str(error)) from error
         for sid, contract in contracts.items():
             rows[sid]['math_plan'] = contract
+            kinds = {item['id']: item['kind'] for item in math_blocks.get(sid, {}).get('items', [])}
             for event in contract['cues']:
                 for action in ('reveal', 'remove'):
-                    rows[sid]['events'].extend({'cue': event['cue'], 'layer': 2, 'target': target,
-                                               'change': 'math_' + action, 'derived': True}
-                                              for target in event[action])
+                    for target in event[action]:
+                        layers = ([4] if kinds[target] in ('formula', 'equals') else [2, 4]) if target in kinds else [2]
+                        rows[sid]['events'].extend({'cue': event['cue'], 'layer': layer, 'target': target,
+                                                   'change': 'math_' + action, 'derived': True} for layer in layers)
     return rows
 
 
