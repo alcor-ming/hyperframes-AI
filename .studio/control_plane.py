@@ -21,7 +21,7 @@ class AccountService:
         if not isinstance(data.get("name"), str) or not data["name"].strip():
             raise self.api.HarnessError("Configuration requires a name")
         allowed = {"account": {"name", "theme", "background", "motion", "overrides", "fps", "seed", "ratio", "mode", "captions", "style", "delivery"},
-                   "series": {"name", "route", "accounts", "ip"},
+                   "series": {"name", "route", "accounts", "ip", "mode", "spec"},
                    "theme": {"name", "ratios", "modes", "tokens"}}[kind]
         if set(data) - allowed:
             raise self.api.HarnessError("Unsupported configuration fields")
@@ -31,6 +31,10 @@ class AccountService:
         if kind == "account":
             self.appearance(data)
         if kind == "series":
+            from appearance import check_mode
+            check_mode(data.get("mode"), "Series")
+            if "spec" in data and (data["spec"] != "math-rap" or data.get("mode") != "explainer"):
+                raise self.api.HarnessError("math-rap requires an explainer series")
             if not isinstance(data.get("accounts", []), list):
                 raise self.api.HarnessError("Series accounts must be a list")
             for account in data.get("accounts", []):

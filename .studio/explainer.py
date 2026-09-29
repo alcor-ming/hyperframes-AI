@@ -83,6 +83,16 @@ def build_cues(text, alignment_bytes):
 
 def find_cue(cues, query):
     query = {"token": query} if isinstance(query, str) else query
+    if isinstance(query, dict) and ({'bar', 'beat'} & query.keys()):
+        if set(query) != {'bar', 'beat'}:
+            raise ExplainerError('invalid_beat_query')
+        if 'beat_grid' not in cues:
+            raise ExplainerError('missing_beat_grid')
+        from math_chain import find_beat
+        try:
+            return find_beat(cues['beat_grid'], query['bar'], query['beat'])
+        except ValueError as exc:
+            raise ExplainerError(str(exc)) from exc
     if (not isinstance(query, dict) or set(query) - {"token", "nth", "within", "edge"}
             or not isinstance(query.get("token"), str) or not query["token"]):
         raise ExplainerError("Invalid cue query")
@@ -122,6 +132,12 @@ def validate_cues(data):
     if (not isinstance(data, dict) or data.get("schema_version") != 1
             or not isinstance(data.get("text"), str) or not isinstance(data.get("characters"), list)):
         raise ExplainerError("invalid_cues")
+    if 'beat_grid' in data:
+        from math_chain import validate_beat_grid
+        try:
+            validate_beat_grid(data['beat_grid'])
+        except ValueError as exc:
+            raise ExplainerError(str(exc)) from exc
     previous = 0
     for char in data["characters"]:
         if (not isinstance(char, dict) or not isinstance(char.get("char"), str) or len(char["char"]) != 1

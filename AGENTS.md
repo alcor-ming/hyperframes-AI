@@ -4,11 +4,13 @@
 
 - 本仓库管理 Harness 规则、模板、Skill 路由、CLI、宿主、依赖与安装器，开发真源为 `/home/jym/workspace/hyperframes+AI`。
 - WSL 与 Windows 均可编写组件，WSL 开发计划可以包含组件编辑；Windows 在 Work-local 或已登记 AssetSource 制作 Scene、GSAP、Three.js、shader、SVG、模型与内容脚本，不因复杂或可复用而交回 WSL。
-- 安装包、已接纳 AssetStore、冻结 vendor 与 Accepted Snapshot 不原地覆盖；变更在可编辑源完成，复用时冻结新版本。WSL 不修改生产 Work、Current、Binding、接受状态或 Final；工具复现只在冻结最小私有副本中调试。
+- 安装包、已接纳 AssetStore、冻结 vendor 与 Accepted Snapshot 不原地覆盖；变更在可编辑源完成，复用时冻结新版本。WSL 开发仓会话不修改生产 Work、Current、Binding、接受状态或 Final；工具复现只在冻结最小私有副本中调试。
 - 生产 WorkStore 为 `D:\\AI\\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`），作品文案、媒体、工程、Draft、Final 与运行状态不得进入开发仓或公开 Git。开发任务不读取生产 Current、Work、资产或默认配置。
 - `podcast_quote_image` 的 URL 获取只调用外部 `trendradar-media` v2.0；仅采用校验成功并复制进当前 Work 的媒体，不引用其七天后过期的运行目录，也不在本仓库实现下载后端。
 
-视频模式为 `card` 与 `explainer`，默认 `card`，`purpose=ip` 推荐 `explainer`。五层、A/B-roll、字幕与声音层见 [.studio/spec/visual-design.md](.studio/spec/visual-design.md)，生产 Finalize 渲染出最终 MP4。
+视频模式为 `card`、`explainer` 与 `showcase`，默认 `card`，`purpose=ip` 推荐 `explainer`。Codex 不接 `showcase` 制作，仅 Opus 5.5 制作；创建时显式选择并冻结 `pdoom` / `science` 子模块。五层、A/B-roll、字幕与声音层见 [.studio/spec/visual-design.md](.studio/spec/visual-design.md)，showcase 的豁免与硬约束见 [.studio/spec/showcase.md](.studio/spec/showcase.md)。生产 Finalize 渲染出最终 MP4。
+
+按会话工作目录区分 WSL 职责：`/home/jym/workspace/hyperframes+AI` 是开发仓；Claude Code 在 `/mnt/d/AI/AI+hyperframes` 的会话是生产执行者，读取根 `CLAUDE.md`。生产 CLI 只经同根 `work-wsl.sh` 调用 Windows `work.cmd`；可直接编辑当前授权 Work 的文稿、Plan 与工程源，不手改 Current、Binding、接受记录或工具配置。作品与输出留在唯一生产根，不另起 WSL Studio 或渲染器；画面证据使用 CLI 截图与诊断。数学等系列只读审查不授予制作或修改权。
 
 ## 授权边界
 

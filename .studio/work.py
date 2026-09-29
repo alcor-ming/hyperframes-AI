@@ -348,7 +348,7 @@ def command_config(root: Path, args: argparse.Namespace) -> None:
 def appearance_options(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     path = getattr(args, "appearance_file", None)
     explicit = read_json(Path(path)) if path else {}
-    for key in ("theme", "background", "mode", "ratio", "fps", "seed"):
+    for key in ("theme", "background", "mode", "submodule", "ratio", "fps", "seed"):
         value = getattr(args, key, None)
         if value is not None:
             if key == "background" or key == "theme" and "@v" in value:
@@ -375,13 +375,15 @@ def command_appearance_update(root: Path, args: argparse.Namespace) -> None:
 
 def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = None) -> dict[str, Any]:
     service = account_service(root)
+    series_settings = {}
     purpose = read_frontmatter(work / "WORK.md").get("purpose", "standard") if work else args.purpose or "standard"
     account = service.get("account", args.account) if args.account else {}
     if (getattr(args, "workflow", None) == "hyperframes_video" or work and work_workflow(work) == "hyperframes_video"):
         appearance.check_mode(account.get("mode"), "Account")
         series = read_frontmatter(work / "WORK.md").get("series") if work else getattr(args, "series", None)
         if series and series != "test":
-            appearance.check_mode(service.get("series", series).get("mode"), "Series")
+            series_settings = service.get("series", series)
+            appearance.check_mode(series_settings.get("mode"), "Series")
     if (getattr(args, "workflow", None) == "hyperframes_video" or work and work_workflow(work) == "hyperframes_video") and purpose != "test" and not account:
         raise HarnessError("Production Variant requires --account; configure AccountService first")
     if purpose == "test" and account:
@@ -393,16 +395,24 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
         if any(read_json(path / "variant.yaml").get("batch") == batch for path in variant_paths(work)):
             raise HarnessError("A batch already has a Variant; revise that Variant")
     explicit = appearance_options(root, args)
+    if series_settings.get("mode"):
+        explicit.setdefault("mode", series_settings["mode"])
+        if explicit["mode"] != series_settings["mode"]:
+            raise HarnessError("Variant mode must match its series")
+    series_binding = ({"series_binding": {key: series_settings.get(key) for key in ("id", "revision", "mode", "spec")}}
+                      if series_settings.get("mode") or series_settings.get("spec") else {})
     if appearance.is_asset_appearance({**account, **explicit}):
         lock = appearance.resolve(root, account, explicit)
+        if series_settings.get("spec") == "math-rap" and (lock["mode"] != "explainer" or not lock["selection"].get("captions")):
+            raise HarnessError("math-rap requires explainer with lyric captions enabled")
         return {"theme": lock["selection"]["theme"], "background": lock["selection"]["background"],
                 "motion": lock["selection"]["motion"], "mode": lock["mode"], "ratio": lock["ratio"],
                 "appearance_lock": lock, "account": args.account, "account_revision": account.get("revision"),
-                "account_settings": account, "batch": args.batch, "revision": 1}
+                "account_settings": account, "batch": args.batch, "revision": 1, **series_binding}
     if set(explicit) - {"theme", "mode", "ratio"}:
         raise HarnessError("Appearance parameters require exact Theme and Background assets")
-    if explicit.get("mode", account.get("mode")) == "explainer":
-        raise HarnessError("explainer requires exact Theme and Background assets")
+    if explicit.get("mode", account.get("mode")) in {"explainer", "showcase"}:
+        raise HarnessError("explainer/showcase requires exact Theme and Background assets")
     settings = {key: explicit.get(key, account.get(key)) for key in ("theme", "mode", "ratio")}
     settings["mode"] = settings["mode"] or "card"
     if settings["ratio"] == "source":
@@ -412,7 +422,7 @@ def adopted_settings(root: Path, args: argparse.Namespace, work: Path | None = N
     theme = service.appearance(settings)
     return {**settings, "account": args.account, "account_revision": account.get("revision"),
             "account_settings": account, "theme_revision": theme.get("revision"), "theme_settings": theme,
-            "batch": args.batch, "revision": 1}
+            "batch": args.batch, "revision": 1, **series_binding}
 
 
 def plan_metadata(path: Path, state: dict[str, Any]) -> dict[str, Any]:
@@ -432,7 +442,9 @@ def plan_metadata(path: Path, state: dict[str, Any]) -> dict[str, Any]:
             **{key: lock.get(key, state.get(key)) for key in ("ratio", "fps", "mode")},
             **{key: selection.get(key, state.get(key)) for key in ("theme", "background", "motion", "captions")},
             "appearance_lock_sha256": lock.get("sha256"), "audio": state.get("audio"),
-            "alignment": state.get("alignment")}
+            "alignment": state.get("alignment"),
+            **({"submodule": lock["submodule"]} if "submodule" in lock else {}),
+            **({"series_binding": state["series_binding"]} if "series_binding" in state else {})}
 
 
 def plan_metadata_body(body: str, metadata: dict[str, Any]) -> str:
@@ -469,12 +481,77 @@ def command_plan_refresh(root: Path, args: argparse.Namespace) -> None:
                       "changed": changed}, ensure_ascii=False))
 
 
+def command_plan_check(root: Path, args: argparse.Namespace) -> None:
+    import math_chain
+    import seek_check
+    work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
+    variant, state = selected_variant(root, work, args)
+    project = variant / "project"
+    text = (variant / "ANIMATION_PLAN.md").read_text(encoding="utf-8")
+    plan_scene_rows(text)
+    dependencies = validate_dependencies(project)
+    findings = seek_check.findings(project, dependencies)
+    diagnostic = visual_diagnostics.explainer_diagnostics(project, dependencies, state.get("appearance_lock"), text)
+    findings.extend(diagnostic["findings"])
+    if state.get("series_binding", {}).get("spec") == "math-rap":
+        cues = explainer.validate_cues(read_json(project / "runtime/cues.json"))
+        scenes = scene_projection(project, text)
+        try:
+            findings.extend(math_chain.plan_findings(text, cues, max(s["start"] + s["duration"] for s in scenes)))
+        except ValueError as error:
+            raise HarnessError(str(error)) from error
+    print_result(root, args, {"status": "diagnostic_only", "findings": findings, "unverified": diagnostic["unverified"]})
+
+
+def command_beats_build(root: Path, args: argparse.Namespace) -> None:
+    import math_audio
+    if not args.work_override or not args.variant_override:
+        raise HarnessError("Beat extraction requires explicit --work and --variant")
+    work, _ = selected_work(root, args)
+    require_workflow(work, "hyperframes_video")
+    variant, state = selected_variant(root, work, args)
+    with naming_lock(root):
+        audio = storage.scoped_path(work, args.audio)
+        if not audio.is_file() or audio.stat().st_nlink != 1:
+            raise HarnessError("Formal audio must be an unlinked Work-local file")
+        path = storage.scoped_path(variant, "project/runtime/cues.json")
+        cues = explainer.validate_cues(read_json(path))
+        cli = runtime_path(args.hyperframes_cli, "HYPERFRAMES_CLI")
+        try:
+            grid = math_audio.extract(audio, cli, args.beats_per_bar, args.first_downbeat)
+        except (ValueError, KeyError, OSError, subprocess.TimeoutExpired) as error:
+            raise HarnessError(str(error)) from error
+        cues["beat_grid"] = grid
+        write_json(path, explainer.validate_cues(cues))
+    print_result(root, args, {"path": str(path), "audio_sha256": grid["audio_sha256"], "beats": len(grid["times"])})
+
+
+def command_review_package(root: Path, args: argparse.Namespace) -> None:
+    import review_bundle
+    if not args.work_override or not args.variant_override:
+        raise HarnessError("Review package requires explicit --work and --variant")
+    work, _ = selected_work(root, args, allow_archive=True)
+    require_workflow(work, "hyperframes_video")
+    variant, _ = selected_variant(root, work, args)
+    declaration = read_json(storage.scoped_path(work, args.manifest))
+    with naming_lock(root):
+        result = review_bundle.build(configured_work_root(root) or root, work, variant, args.review_id, declaration)
+    print_result(root, args, {"path": str(result)})
+
+
 def adopt_variant(path: Path, settings: dict[str, Any], *, shared: bool = False, branch: str | None = None) -> None:
     state = read_json(path / "variant.yaml")
     state.update({key: value for key, value in settings.items() if value is not None})
     if settings.get("theme"):
         state["profile"] = None
     work = path.parent.parent
+    if settings.get("mode") == "showcase":
+        plan = path / "ANIMATION_PLAN.md"
+        original = read_frontmatter(plan)
+        body = (Path(__file__).parent / "templates/SHOWCASE_PLAN.template.md").read_text(encoding="utf-8").split("\n---", 1)[1].lstrip("\r\n")
+        original["author_model"] = None
+        atomic_write(plan, "---\n" + json.dumps(original, ensure_ascii=False) + "\n---\n" + body)
     if shared:
         refs = {}
         for name in ("SCRIPT.md", "RESEARCH.md"):
@@ -1023,7 +1100,8 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
                 (staging / "shared").mkdir()
                 (staging / "variants").mkdir()
                 atomic_write(staging / "shared" / "SCRIPT.md", template_text(root, "SCRIPT.template.md", {}))
-                atomic_write(staging / "shared" / "RESEARCH.md", template_text(root, "RESEARCH.template.md", {"SCRIPT_REVISION": "1"}))
+                research_template = "MATH_RESEARCH.template.md" if series and series != "test" and series_settings.get("spec") == "math-rap" else "RESEARCH.template.md"
+                atomic_write(staging / "shared" / "RESEARCH.md", template_text(root, research_template, {"SCRIPT_REVISION": "1"}))
                 if args.purpose == "test":
                     settings["batch"] = args.batch or variant_id
                 if create_initial_variant:
@@ -2184,7 +2262,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             "plan_sha256": plan_digest,
             "adopted_settings": {key: state.get(key) for key in (
                 "template", "profile", "theme", "theme_revision", "theme_settings", "mode", "ratio", "subject_position", "account", "account_revision", "account_settings", "batch",
-                "background", "motion", "appearance_lock")},
+                "background", "motion", "appearance_lock", "series_binding")},
         }
         if input_hashes is not None:
             metadata["input_sha256"] = input_hashes
@@ -2583,6 +2661,16 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     if diagnostic_lock:
         report['explainer'] = visual_diagnostics.explainer_diagnostics(
             project, dependencies, diagnostic_lock, contents['ANIMATION_PLAN.md'])
+    import seek_check
+    report['engineering'] = {'findings': seek_check.findings(project, dependencies)}
+    if read_frontmatter(input_path(documents, 'ANIMATION_PLAN.md')).get('series_binding', {}).get('spec') == 'math-rap':
+        import math_chain
+        try:
+            report['math'] = {'findings': math_chain.plan_findings(contents['ANIMATION_PLAN.md'],
+                explainer.validate_cues(read_json(project / 'runtime/cues.json')),
+                max(s['start'] + s['duration'] for s in scenes))}
+        except ValueError as error:
+            raise HarnessError(str(error)) from error
     icon_unverified = [{'reason': 'icon_provenance_unverified', 'time': sample['time'],
                         'target': message.removeprefix('SVG image provenance could not be sampled: ')}
                        for sample in sampled['samples'] for message in sample.get('unverified', [])
@@ -3288,6 +3376,7 @@ def add_variant_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fps", type=int)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--mode", choices=appearance.MODES)
+    parser.add_argument("--submodule", choices=("pdoom", "science"), help="Required at showcase creation; frozen thereafter")
     parser.add_argument("--captions", choices=("on", "off"), help="Variant captions frozen in the appearance lock")
     parser.add_argument("--template", choices=sorted(TEMPLATES))
     parser.add_argument("--profile", choices=sorted(PROFILES))
@@ -3431,6 +3520,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan = commands.add_parser("plan")
     plan_commands = plan.add_subparsers(dest="plan_command", required=True)
     plan_commands.add_parser("refresh", help="Refresh CLI metadata without approving changed content").set_defaults(handler=command_plan_refresh)
+    plan_commands.add_parser("check", help="Report mode-aware engineering and mathematical Plan findings").set_defaults(handler=command_plan_check)
 
     cards = commands.add_parser('cards', help='Build and edit Plan-owned cards from the installed card kit')
     card_commands = cards.add_subparsers(dest='cards_command', required=True)
@@ -3460,11 +3550,23 @@ def build_parser() -> argparse.ArgumentParser:
             build.add_argument("--alignment", required=True)
         build.set_defaults(handler=command_explainer_build)
 
+    beats = commands.add_parser("beats", help="Extract the formal audio beat grid with pinned upstream tools")
+    beat_build = beats.add_subparsers(dest="beats_command", required=True).add_parser("build")
+    beat_build.add_argument("--audio", required=True, help="Formal audio path relative to this Work")
+    beat_build.add_argument("--beats-per-bar", type=int, required=True)
+    beat_build.add_argument("--first-downbeat", type=int, required=True, help="Zero-based index of the first downbeat; preceding beats are pickup")
+    beat_build.add_argument("--hyperframes-cli")
+    beat_build.set_defaults(handler=command_beats_build)
+
     review = commands.add_parser("review", help="Create an isolated Harness test WorkStore")
     reviews = review.add_subparsers(dest="review_command", required=True)
     review_init = reviews.add_parser("init")
     review_init.add_argument("review_id")
     review_init.set_defaults(handler=command_review_init)
+    review_package = reviews.add_parser("package", help="Copy declared Work-local evidence into a read-only Review package")
+    review_package.add_argument("review_id")
+    review_package.add_argument("--manifest", required=True, help="Work-relative review declaration JSON")
+    review_package.set_defaults(handler=command_review_package)
 
     request = commands.add_parser("request", help="Freeze private input, deliver and review exact candidates")
     requests = request.add_subparsers(dest="request_command", required=True)

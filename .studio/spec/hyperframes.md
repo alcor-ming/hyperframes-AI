@@ -35,7 +35,7 @@
 
 ### 五层与运行时
 
-模式为 `card` 与 `explainer`，默认 `card`，均使用 16:9 / 9:16。`--captions on|off` 在 `appearance_lock.selection.captions` 冻结布尔开关：card 默认关闭，explainer 默认开启。
+模式为 `card`、`explainer` 与 `showcase`，默认 `card`；explainer / showcase 使用 16:9 / 9:16。`--captions on|off` 在 `appearance_lock.selection.captions` 冻结布尔开关：card 默认关闭，explainer 默认开启。showcase 的子模块与创作豁免见 [showcase.md](showcase.md)，五层仅为可选参考，不新建渲染器。
 
 两种模式共用五层宿主，叙事职责见 `visual-design.md`：
 
@@ -52,6 +52,8 @@
 运行时用法按需读 [runtime-interfaces.md](runtime-interfaces.md)，资产接线按需读 [hyperframes-assets.md](hyperframes-assets.md)。只使用已安装合同；按接口卡取用，不读取组件与助手源码，派生时才读源码。
 
 ## Draft QA
+
+showcase 不要求 explainer 分层/角色检查、Q1 或节奏诊断必经闭环；下文表现形式要求不适用，但 CDN、闭包外资产及 `onUpdate` 状态等硬约束继续检查。`math-rap` 覆盖角色/生图要求，仍保留歌词字幕与数学关系核对，见 [math-rap.md](math-rap.md)。诊断和代码证据不代替用户观看。
 
 explainer 的 `preview diagnose` 另报告 `explainer_layer_missing`、`captions_lock_mismatch` 与 `sound_asset_outside_closure`，闭包检查覆盖音轨和 character。口播 audio 显式标注 `data-audio-role="voice"` 才豁免声音资产检查，其余 audio 必须来自 media 闭包，不能把 BGM/SFX 标为 voice 绕过校验。角色 DOM 标注 `data-character-ref="<id@vN>"` 辅助静态 diagnose 核对 character 闭包。均为静态疑点；第 5 层口播字幕不按第 4 层 A1 判为照搬。Plan/Q1 还需人工核验每场可见事件、角色与图片风格、遮挡和有声观看，技术报告不代替接受。
 

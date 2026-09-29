@@ -1,7 +1,16 @@
 (function (global) {
   "use strict";
+  function validateBeatGrid(grid) {
+    const keys = ["schema_version", "audio_sha256", "beats_per_bar", "first_downbeat", "times"];
+    if (!grid || typeof grid !== "object" || Object.keys(grid).length !== keys.length || keys.some(k => !(k in grid))
+        || grid.schema_version !== 1 || typeof grid.audio_sha256 !== "string" || !/^[a-fA-F0-9]{64}$/.test(grid.audio_sha256)
+        || !Number.isSafeInteger(grid.beats_per_bar) || grid.beats_per_bar < 1
+        || !Array.isArray(grid.times) || !grid.times.length || grid.times.some((t, i) => !Number.isFinite(t) || t < 0 || i > 0 && t <= grid.times[i - 1])
+        || !Number.isSafeInteger(grid.first_downbeat) || grid.first_downbeat < 0 || grid.first_downbeat >= grid.times.length) throw new Error("invalid_beat_grid");
+  }
   function from(data) {
     if (data?.schema_version !== 1 || !Array.isArray(data.characters) || typeof data.text !== "string") throw new Error("invalid_cues");
+    if ("beat_grid" in data) validateBeatGrid(data.beat_grid);
     let previous = 0;
     for (const c of data.characters) {
       if (typeof c.char !== "string" || Array.from(c.char).length !== 1 || typeof c.aligned !== "boolean") throw new Error("invalid_cues");
@@ -15,6 +24,16 @@
         || interval.length !== 2 || !interval.every(Number.isFinite) || interval[0] < 0 || interval[1] <= interval[0]))) throw new Error("invalid_cues");
     return { data, find(token, options = {}) {
       if (token && typeof token === "object") { options = token; token = options.token; }
+      if ("bar" in options || "beat" in options) {
+        if (token !== undefined || Object.keys(options).length !== 2 || !("bar" in options) || !("beat" in options)) throw new Error("invalid_beat_query");
+        if (!("beat_grid" in data)) throw new Error("missing_beat_grid");
+        const grid = data.beat_grid, { bar, beat } = options;
+        validateBeatGrid(grid);
+        if (!Number.isSafeInteger(bar) || bar < 1 || !Number.isSafeInteger(beat) || beat < 1 || beat > grid.beats_per_bar) throw new Error("invalid_beat_query");
+        const index = grid.first_downbeat + (bar - 1) * grid.beats_per_bar + beat - 1;
+        if (index >= grid.times.length) throw new Error("beat_not_found");
+        return grid.times[index];
+      }
       const { nth, within, edge = "start" } = options;
       if (Object.keys(options).some(key => !["token", "nth", "within", "edge"].includes(key)) || typeof token !== "string" || !token || !["start", "end"].includes(edge)
           || nth !== undefined && (!Number.isInteger(nth) || nth < 1)

@@ -6,6 +6,8 @@
 
 用途：正式对齐的语义时间查询；画幅：16:9、9:16；占层：无。参数：`load(url?)` 或 `from(data)`；`find(token,{nth,within,edge})`。`load` 默认按 `document.baseURI` 解析 `runtime/cues.json`，只允许页面同源且不跟随重定向。返回 `data/find`，不创建播放时钟。
 
+已生成节拍网格时支持 `find({bar, beat})`：小节和拍从 1 编号；拍号和首个强拍必须明确，弱起不计入第一小节，缺网格或越界时报错。不要将小节/拍查询与词 cue 的 nth/edge 混用。
+
 ```js
 const cues = await HarnessCues.load();
 const at = cues.find('主机', {nth: 1, edge: 'start'});

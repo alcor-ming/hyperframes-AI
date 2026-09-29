@@ -8,6 +8,8 @@
 
 账号属于 Variant；Work 级 Script/Research 由各 Variant 共享，各 Variant 独立维护 Plan、工程与接受结果。显式内容分支按 CLI 定位。新视频显式指定 `--purpose standard|ip|test`，生产用途指定系列；账号与制作版本可以稍后确定。独立输入为叙事模式、视觉主题、背景、画幅和可选 Motion；默认 `card`，IP 推荐 `explainer`。Theme 负责字体、语义色与表面，不决定模式、布局或 cue；Variant 使用冻结外观。
 
+模式另有 `showcase`，仅 Opus 5.5 制作，Codex 不接；创建时显式冻结 `pdoom` / `science` 子模块，见 [showcase.md](spec/showcase.md)。WSL 开发仓与 Claude 生产根会话按根规则区分；生产根通过 `work-wsl.sh` 调用已部署 Windows CLI，文稿和工程源仍可在授权 Work 内直接编辑，不另起 Studio 或渲染器。`explainer` 可采用系列规格 `math-rap`，创建 Variant 时冻结规格与系列版本；数学图解替代 D14 角色/生图要求，歌词字幕保持开启，见 [math-rap.md](spec/math-rap.md)。
+
 实验采用结果先复制或冻结到目标 Work；来源关系不等于接受。保留稳定 Scene/Anchor ID、正式声音、已有成果和冻结历史。更换主题、叙事结构或确认观点属于方向变化，只确认受影响部分。
 
 ## 1. 内容准备
@@ -20,6 +22,8 @@ Research 按段落或 Anchor 记录事实与来源、B-roll 候选（可定位�
 
 ## 2. 整片设计
 
+本节默认表达合同适用于 card / explainer。showcase 使用 `SHOWCASE_PLAN.template.md` 的概念、逐 Scene 要点、素材与声音、未验证项和作者审计元信息，不要求 explainer 正向方向、D14、五层或事件表；保留准确 Plan revision 的用户确认，不将形式豁免扩大为接受豁免。
+
 Plan 阶段按用途运行 `work component list --query <用途>` 查包、场景源与配方，再选择复用、派生或自制。场景源与配方只作派生参考。组件可在 WSL 开发任务或 Windows 可编辑源编写；生产内容制作保持根规则边界。
 
 按 [创作指南](spec/visual-design.md) 写全片方向与逐 Scene 一节：一句概括、A/B 编排、`card` 块、独立文字的 `screen` 块与 `cue | 层 | 目标 | 变化` 事件表；素材与声音仅在有内容时出现。积木 cue 不重复写入事件表。概览只作索引。元信息及 `plan_format` 由 CLI 生成，旧格式不自动转换；正式声音与字词对齐是时间依据，不另抄精确秒表。拟生成素材列用途、数量、风格与 Asset Brief，权限只见根规则。
@@ -29,6 +33,8 @@ Plan 阶段按用途运行 `work component list --query <用途>` 查包、场�
 派工只传 Plan 路径、Scene ID、负责范围与写入边界，由执行者按引用读取同版全片方向和对应 Scene，不重复复制正文；不附加比 Plan 更严的禁止项，不可行时回报准确冲突。对应对象只加载已选资产接口卡与必要合同，不再派发全库研究。主模型负责内容结果。模型不产出模板之外的设计说明或自写检查脚本；检查使用 CLI 与诊断，Work 与工程中确需的文件不受影响。
 
 ## 3. Studio 制作与验收
+
+showcase 保留 ready、seek、离线闭包和授权等硬约束，以及准确 full Draft 的用户接受；不适用下文 Q1 活力自检或 Draft 前节奏诊断必经闭环。`preview diagnose` 可用且只报告，不强制处理节奏疑点。math-rap 仍按 explainer 流程核对实际歌词、数学关系与收尾事件。
 
 方向确认后扩成全片 Draft。占位到素材齐备是同一阶段的准备度变化：用稳定 ID 补齐媒体，只重定时受影响范围，保持全部 Scene、A/B、动作与阅读安排。最终接受前正式声音与必需效果齐备。
 
@@ -45,6 +51,8 @@ Plan 阶段按用途运行 `work component list --query <用途>` 查包、场�
 编码 QA 检查规格、原音时长、全量解码、代表帧及必要听音；首次跨引擎输出核对构图、中文边缘、字体、颜色、透明合成与声音。失败保留复现及旧 Final。软归档独立于接受与交付，保留文件及依赖。
 
 ## 复用与交接
+
+showcase 接受后使用 `SHOWCASE_REFINEMENT.template.md` 记录积木、动作配方或规则、内容资产和仅属于本片四类。只提炼最小模块/接口/配方，不向其他线交整页代码；新可编辑 AssetSource 不引用 Work 路径，沿用 pack / validate / accept。规则提案交开发仓，开发会话不读取生产 Work。
 
 同对象、同依赖的有效检查沿用；变化仅检查受影响 Scene 和必要衔接，共享宿主或时间线变化按依赖扩大。Studio 内容检查、编码 QA 和归档完整性各自报告。
 

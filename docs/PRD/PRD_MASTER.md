@@ -83,6 +83,7 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 
 ## PRD 索引
 
+- [v3.6 showcase 模式、技术提炼与数学系列正式链路](./hyperframes-v36-showcase-math.md)：showcase 与 math-chain 开发实现已落地，自动化验收见 Trellis；math-kit 未启动，未部署，Windows 原生与生产效果待验。
 - [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：已批准并由 WSL 采用的归档同号继任及取消 main 特权；保留完整设计与合成验收，不包含真实生产对象清单。实现、测试和部署结果分别报告。
 
 - [HyperFrames RC2 执行方案](./hyperframes-rc2-execution-plan.md)：仅限视频的创建分流、系列编号、旧 Work 名称/身份迁移、可读导航、账号版本、临时实验及文字节奏；WSL 实现已完成，生产数据迁移仍需单独授权。

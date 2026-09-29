@@ -104,7 +104,7 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
             try:
                 query = {'token': event['cue']} if isinstance(event['cue'], str) else event['cue']
                 start = find_cue(cues, query)
-                end = find_cue(cues, {**query, 'edge': 'end'}) if isinstance(query, dict) else start
+                end = find_cue(cues, {**query, 'edge': 'end'}) if isinstance(query, dict) and 'token' in query else start
                 if not target:
                     unverified.append({**location, 'reason': 'rhythm_declaration_target_missing'})
                 elif not any(hit['layer'] == {2: 'stage', 3: 'overlay', 4: 'text'}.get(event['layer'])
@@ -241,7 +241,7 @@ def static_inventory(project, dependencies):
 
 def explainer_diagnostics(project, dependencies, lock, plan=""):
     """Static five-layer hints supplement D1; they are never visual acceptance."""
-    if not lock or lock.get("mode") not in ("card", "explainer"):
+    if not lock or lock.get("mode") not in ("card", "explainer", "showcase"):
         return {"findings": [], "unverified": []}
     from visual_plan import Composition
     from explainer import installed_assets
@@ -254,7 +254,7 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
             nodes[name] = Composition((project / name).read_text(encoding="utf-8-sig")).nodes
     root = nodes.get("index.html", [])
     layers = [attrs.get("data-hf-layer") for _, attrs in root]
-    expected = {"background", "stage", "overlay", "text"}
+    expected = {"background", "stage", "overlay", "text"} if lock["mode"] != "showcase" else set()
     for layer in sorted(expected - set(layers)):
         findings.append({"kind": "explainer_layer_missing", "file": "index.html", "layer": layer})
     captions = [(name, attrs) for name, entries in nodes.items() for _, attrs in entries
@@ -271,7 +271,7 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
             except (ComponentError, ValueError, OSError) as exc:
                 findings.append({"kind": "card_component_invalid", "file": name, "detail": str(exc)})
             continue
-        if any("data-composition-id" in attrs for _, attrs in entries):
+        if lock["mode"] != "showcase" and any("data-composition-id" in attrs for _, attrs in entries):
             local = {attrs.get("data-hf-layer") for _, attrs in entries}
             for layer in sorted({"stage", "overlay", "text"} - local):
                 findings.append({"kind": "explainer_layer_missing", "file": name, "layer": layer})

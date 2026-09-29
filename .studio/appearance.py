@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 
 SLOTS = ("reveal", "emphasis", "exit", "transition")
-MODES = ("card", "explainer")
+MODES = ("card", "explainer", "showcase")
+SHOWCASE_SUBMODULES = ("pdoom", "science")
 LEGACY_MODES = ("text-led", "animation-led")
 RATIOS = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080), "4:3": (1440, 1080), "3:4": (1080, 1440), "4:5": (1080, 1350)}
 
@@ -20,7 +21,7 @@ def check_mode(mode, source="Settings"):
     if mode in LEGACY_MODES:
         raise AppearanceError(f"{source} uses retired mode {mode}; update settings to card first")
     if mode is not None and mode not in MODES:
-        raise AppearanceError("Unknown narrative mode; choose card or explainer")
+        raise AppearanceError("Unknown narrative mode; choose card, explainer or showcase")
 
 
 def digest(value: dict) -> str:
@@ -62,12 +63,18 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
     from asset_store import resolve_asset_closure
     from component_harness import parse_component_ref
     overrides = {} if overrides is None else overrides
-    allowed = {"theme", "background", "motion", "mode", "ratio", "width", "height", "fps", "seed", "parameters", "captions"}
+    allowed = {"theme", "background", "motion", "mode", "submodule", "ratio", "width", "height", "fps", "seed", "parameters", "captions"}
     if not isinstance(overrides, dict) or set(overrides) - allowed:
         raise AppearanceError("Unknown appearance selection override")
     check_mode(account.get("mode"), "Account")
     check_mode(overrides.get("mode"), "Appearance selection")
     selected = {**account, **overrides}
+    mode = selected.get("mode", "card")
+    if mode == "showcase":
+        if overrides.get("submodule") not in SHOWCASE_SUBMODULES:
+            raise AppearanceError("showcase requires an explicit submodule: pdoom or science")
+    elif "submodule" in selected:
+        raise AppearanceError("submodule is only supported by showcase")
     selections = {kind: _reference(selected.get(kind), kind) for kind in ("theme", "background")}
     motion = account.get("motion", {})
     explicit_motion = overrides.get("motion", {})
@@ -127,6 +134,8 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
             "hash_algorithm": "sha256-canonical-json-utf8-v1", "account": {"id": account.get("id"), "revision": account.get("revision"), "sha256": digest(account)},
             "selection": selections, "assets": frozen, "mode": mode, "ratio": ratio, "width": width, "height": height, "fps": fps, "seed": seed, "time_unit": "seconds",
             "overrides": {"account": deepcopy(account.get("overrides", {})), "explicit": deepcopy(overrides.get("parameters", {}))}, "parameters": values, "sources": sources}
+    if mode == "showcase":
+        lock["submodule"] = overrides["submodule"]
     lock["sha256"] = digest(lock)
     return lock
 
@@ -198,8 +207,12 @@ def _check_lock(lock: dict) -> None:
     from component_harness import parse_component_ref
     import re
     required = {"schema_version", "resolver_version", "contract_version", "hash_algorithm", "account", "selection", "assets", "mode", "ratio", "width", "height", "fps", "seed", "time_unit", "overrides", "parameters", "sources", "sha256"}
+    if isinstance(lock, dict) and lock.get("mode") == "showcase":
+        required.add("submodule")
     if not isinstance(lock, dict) or set(lock) != required or any(type(lock[key]) is not int for key in ("schema_version", "resolver_version", "contract_version")) or lock["resolver_version"] != 1 or lock["schema_version"] not in (1, 2) or lock["contract_version"] != lock["schema_version"] or digest({key: value for key, value in lock.items() if key != "sha256"}) != lock.get("sha256"):
         raise AppearanceError("Appearance lock schema or hash mismatch")
+    if lock["mode"] == "showcase" and lock["submodule"] not in SHOWCASE_SUBMODULES:
+        raise AppearanceError("Invalid frozen showcase submodule")
     if lock["hash_algorithm"] != "sha256-canonical-json-utf8-v1" or lock["time_unit"] != "seconds" or lock["mode"] not in (*MODES, *LEGACY_MODES):
         raise AppearanceError("Invalid frozen appearance contract")
     if not isinstance(lock["ratio"], str) or not re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*", lock["ratio"]):

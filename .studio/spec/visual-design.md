@@ -2,6 +2,8 @@
 
 Plan 与 Draft 共用本指南。来源与修订见 [creative.md](creative.md)，阶段治理见 [workflow.md](../workflow.md)，权限见根 [AGENTS.md](../../AGENTS.md)。默认模式为 `card`，`purpose=ip` 推荐 `explainer`；两者共用五层与 A/B-roll 合同。
 
+`showcase` 不适用本指南的正向方向、D14、五层/A/B 必选结构、卡片形式、Q1 活力自检与 Draft 前节奏闭环；只沿用硬约束，加载 [showcase.md](showcase.md) 及冻结子模块参考。`explainer` 的系列规格 `math-rap` 覆盖 D14：数学图解为主载体，不要求角色与生图，字幕显示歌词；详见 [math-rap.md](math-rap.md)。以下默认创作要求不覆盖这些明确例外。
+
 ## 全片方向
 
 先确定一句话概念、叙事弧与核心比喻，再安排前后呼应或镜像回收、背景情绪弧和系列声音签名。每场用一句话说明“这一场发生了什么”，让变化、对比、连接、转化或揭晓可见。关键关系可通过图解、动作、文字或声音中的任一通道让观众理解。

@@ -35,6 +35,8 @@
 
 `ANIMATION_PLAN.md` 以全片方向加逐 Scene 一节维护设计，元信息由 CLI 从 Variant 与 lock 生成；概览只作索引，每场的 `screen` 保留信息 ID、来源、理解目标与揭示 cue。声音使用 `sound` JSON 导出。采用 [创作指南](visual-design.md) 的 A/B-roll、五层与节奏合同，阅读区域稳定。
 
+`showcase` 改用精简 `SHOWCASE_PLAN.template.md`，不套用 explainer 正向方向、D14、Q1 与节奏必经闭环；硬约束见 [showcase.md](showcase.md)。`math-rap` 的 Research 使用 `MATH_RESEARCH.template.md` 登记原片、原作者、片段及声音来源，不新增账号或声音来源门禁；Plan 的数学职责、符号与歌词时间依据见 [math-rap.md](math-rap.md)。
+
 Scene 数量、顺序、目标、Hero State、Template、整体主题、文案结构或核心内容实质变化时更新 Plan revision，只重新确认受影响 Scene 及必要衔接。精确 timing、easing、换行、安全区、性能和不改变 Hero State 的布局修复无需新的方向确认；成果与稳定 ID 保留。工程不是另一份文案真源。
 
 生命周期见 [workflow.md](../workflow.md)，权限见根 [AGENTS.md](../../AGENTS.md)；实现与 QA 在 Draft 阶段加载 [hyperframes.md](hyperframes.md)。

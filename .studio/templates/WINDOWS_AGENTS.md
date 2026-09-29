@@ -2,11 +2,13 @@
 
 若根目录存在 `AGENTS.local.md`，同时读取其中本机提供方与用户规则。用户直接在 Codex App 打开本目录；Agent 使用本根 `work.cmd` 的绝对路径，运行同根 `runtime/` 与 `.studio/`，配置读取 `.studio/.runtime/local.json`。`work.cmd doctor` 查看实际身份与 Review 范围。
 
-视频模式为 `card` 与 `explainer`，默认 `card`，`purpose=ip` 推荐 `explainer`。五层、A/B-roll、字幕与声音层见 [.studio/spec/visual-design.md](.studio/spec/visual-design.md)，生产 Finalize 渲染出最终 MP4。
+视频模式为 `card`、`explainer` 与 `showcase`，默认 `card`，`purpose=ip` 推荐 `explainer`。Codex 不接 `showcase` 制作，仅 Opus 5.5 制作；创建时显式选择并冻结 `pdoom` / `science` 子模块。五层、A/B-roll、字幕与声音层见 [.studio/spec/visual-design.md](.studio/spec/visual-design.md)，showcase 见 [.studio/spec/showcase.md](.studio/spec/showcase.md)。生产 Finalize 渲染出最终 MP4。
 
 ## 工作边界
 
-WSL 与 Windows 均可编写组件，WSL 开发计划可以包含组件编辑。Windows 在 Work-local 或登记 AssetSource 制作 Scene、GSAP、Three.js、shader、SVG、模型与内容脚本；工具、宿主、合同、依赖和安装器缺陷交 WSL 冻结最小复现。WSL 不修改生产 Work、Current、Binding、接受状态或 Final。
+WSL 与 Windows 均可编写组件，WSL 开发计划可以包含组件编辑。Windows 在 Work-local 或登记 AssetSource 制作 Scene、GSAP、Three.js、shader、SVG、模型与内容脚本；工具、宿主、合同、依赖和安装器缺陷交 WSL 冻结最小复现。按会话工作目录区分：WSL 开发仓会话不修改生产 Work、Current、Binding、接受状态或 Final，生产根会话按下段执行。
+
+Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取根 `CLAUDE.md`，仅 Opus 5.5 制作 showcase，或只读审查数学等系列。生产 CLI 只通过同根 `work-wsl.sh` 调用 `work.cmd`；授权 Work 的文稿、Plan 与工程源可直接编辑，Current、Binding、接受状态与配置仍由 CLI 管理。作品、Draft、Final 留在唯一生产根；不在 WSL 另起 Studio 或渲染器，画面证据使用 CLI 截图与诊断。同一 Work/Variant 同时只允许一个执行者。
 
 安装工具、runtime、受管理规则、已接纳 AssetStore、vendor 与 Accepted Snapshot 只读；变更在可编辑源完成，复用时冻结新版本。更新保留用户 Skill 与未知文件，停止相关进程后使用安装器及恢复机制；不热换运行中的工具。Review 使用独立根配置、WorkStore、AssetStore 与必要 source-copy。
 

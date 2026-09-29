@@ -11,10 +11,12 @@ from component_harness import package_write_lock
 from work_requests import safe
 
 KNOWN_RUNTIMES = {"b6b0a69411f48d9f777a7e8fdf342a89e866b51d7d734d760b431ee9524908f0",
+                  "9c4519762a2c926f99b9baf473fa02fcdf978443c22b252965b87c1c7e0429af",
                   "deb8ea501f19f0b5ebaf5c7a2b126f700127fc739e0a497b928cb82ddc620676",
                   "e80354186ac34db5d94a79febf4d1f4d84763f142f2b72465ff7150a0c35ff9b",
                   "51c9496479b3111f876a412cbf7133be7b7e203e517ea6d00390e92f8a622d9b"}
 FILES = ("ANIMATION_PLAN.md", "variant.yaml")
+KNOWN_CUE_RUNTIMES = {"c5b93f0bec6b8b675d59a9fc5cc4bd14492f86144245ae907b9cae25c05b9be8"}
 
 
 def journal_path(variant):
@@ -82,6 +84,13 @@ def rebind(root, work, variant, state, args, api):
     current = state.get("appearance_lock")
     account = api.account_service(root).get("account", args.account) if args.account else state.get("account_settings", {})
     overrides = api.appearance_options(root, args)
+    if current and current.get("mode") != "showcase" and ("submodule" in overrides or overrides.get("mode", account.get("mode")) == "showcase"):
+        raise appearance.AppearanceError("Showcase mode requires a new Variant with an explicit submodule")
+    if current and current.get("mode") == "showcase":
+        if overrides.get("submodule", current["submodule"]) != current["submodule"] or overrides.get("mode", "showcase") != "showcase":
+            raise appearance.AppearanceError("Showcase submodule and mode are frozen; create a new Variant")
+        overrides["submodule"] = current["submodule"]
+        overrides.setdefault("mode", "showcase")
     effective_mode = overrides.get("mode", account.get("mode") if args.account else (current or {}).get("mode", account.get("mode")))
     if getattr(args, "captions", None) is not None:
         appearance.check_mode(effective_mode)
@@ -118,12 +127,18 @@ def rebind(root, work, variant, state, args, api):
         choices.update(overrides)
         overrides = choices
     lock = appearance.resolve(root, account, overrides)
+    if state.get("series_binding", {}).get("spec") == "math-rap" and (lock["mode"] != "explainer" or not lock["selection"].get("captions")):
+        raise appearance.AppearanceError("math-rap requires explainer with lyric captions enabled")
     project = safe(variant, "project")
-    runtime = safe(project, "runtime/appearance.js")
-    source = Path(appearance.__file__).parent / "runtime/appearance.js"
-    upgrade = runtime.exists() and runtime.read_bytes() != source.read_bytes()
-    if upgrade and api.file_sha256(runtime) not in KNOWN_RUNTIMES:
-        raise appearance.AppearanceError("Unknown or user-modified appearance runtime; refusing overwrite")
+    runtime_updates = {}
+    for name, known in (("appearance.js", KNOWN_RUNTIMES), ("cues.js", KNOWN_CUE_RUNTIMES)):
+        runtime = safe(project, "runtime/" + name)
+        source = Path(appearance.__file__).parent / "runtime" / name
+        if runtime.exists() and runtime.read_bytes() != source.read_bytes():
+            if api.file_sha256(runtime) not in known:
+                raise appearance.AppearanceError("Unknown or user-modified appearance runtime; refusing overwrite")
+            runtime_updates[name] = source
+    upgrade = bool(runtime_updates)
     if upgrade and not args.upgrade_runtime:
         raise appearance.AppearanceError("Known old runtime requires explicit --upgrade-runtime on this editable Variant")
     if current and project.exists():
@@ -154,8 +169,8 @@ def rebind(root, work, variant, state, args, api):
             shutil.copytree(project, candidate)
         else:
             candidate.mkdir()
-        if upgrade:
-            shutil.copyfile(source, candidate / "runtime/appearance.js")
+        for name, source in runtime_updates.items():
+            shutil.copyfile(source, candidate / "runtime" / name)
         appearance.materialize(root, candidate, lock)
         for name in FILES:
             shutil.copy2(variant / name, history / name)

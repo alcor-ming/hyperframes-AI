@@ -308,6 +308,19 @@ def plan_scene_rows(plan_text):
                 raise VisualPlanError(f'{sid}: unknown continuation information ID {identity}')
             row['screens'][identity] = information[identity]
         row['信息 ID'] = ', '.join(row['screens'])
+    if json.loads(metadata[1]).get('series_binding', {}).get('spec') == 'math-rap':
+        from math_chain import parse_plan
+        try:
+            contracts = parse_plan(plan_text)
+        except ValueError as error:
+            raise VisualPlanError(str(error)) from error
+        for sid, contract in contracts.items():
+            rows[sid]['math_plan'] = contract
+            for event in contract['cues']:
+                for action in ('reveal', 'remove'):
+                    rows[sid]['events'].extend({'cue': event['cue'], 'layer': 2, 'target': target,
+                                               'change': 'math_' + action, 'derived': True}
+                                              for target in event[action])
     return rows
 
 

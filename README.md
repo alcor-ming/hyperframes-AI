@@ -8,7 +8,13 @@
 
 视频支持 `card` 卡片模式与 `explainer` 有声动态图解，均使用 16:9 / 9:16 五层宿主：背景、主体、强调转场、独立文字、口播字幕。`--captions on|off` 为 Variant 开关，card 默认关闭、explainer 默认开启。A/B-roll 管主画面时间切换，Plan 按 Scene 维护编排、内嵌上屏文字、素材、声音 cue 与节奏事件。声音层对两种模式开放；Finalize 渲染最终 MP4，不含平台工作流。
 
-Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话并下达任务即可。`work.cmd` 是 Agent 按需调用的命令行工具，不是需要双击打开的聊天窗口；根入口不创建或依赖 Harness session，不选择候选或 Review 根。下文 Bash 命令是相同 CLI 的 WSL 写法。正式 Work 由 Windows 写入；WSL 开发和回测使用冻结请求与隔离副本。
+另有 `showcase` 模式，仅 Opus 5.5 制作，Codex 不接制作；创建时显式冻结 `pdoom` / `science` 子模块，使用精简 Plan 与接受后提炼模板。不强制 explainer 正向方向、D14、Q1 或 Draft 前节奏闭环，事实、授权、seek 与离线闭包等硬约束不变，见 [showcase 合同](.studio/spec/showcase.md)。`explainer` 系列可声明 `spec=math-rap`，以数学图解替代角色/生图、字幕显示歌词；Research 记录原片与声音来源，不新增账号或声音来源拦截，见 [数学系列合同](.studio/spec/math-rap.md)。数学积木另行开发，不包含在本轮链路交付中。
+
+数学链路复用 `cues build --alignment <文件>` 的歌词逐字对齐，不对未对齐字插值。正式声音已有且 cue 已建立后，使用 `./work --work <id> --variant <id> beats build --audio <Work相对音频路径> --beats-per-bar <每小节拍数> --first-downbeat <零基拍点索引>`；锁定上游提取拍点，拍号和首个强拍须人工明确，弱起不猜测，生成的网格绑定音频摘要。`plan check` 报告数学职责、符号一致性和收尾空档，不替代观看或接受。
+
+`./work --work <id> --variant <id> review package <审查ID> --manifest <Work相对JSON路径>` 将当前 Plan、字级时间/节拍和声明文件复制到 WorkStore 的 `review/<审查ID>`。声明格式为 `{"scenes":["variants/<版本>/project/scene.html"],"screenshots":[{"time":1.5,"path":"materials/frame.png"}],"contact_sheet":"materials/contact-sheet.png"}`；截图先通过官方 Studio/snapshot 取得，命令只复制，不导出视频、不扫描未声明素材。审查输出使用【图】【码】【未实现】证据、严重度表与推荐分镜表。
+
+Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话并下达任务即可。`work.cmd` 是 Agent 按需调用的命令行工具，不是需要双击打开的聊天窗口；根入口不创建或依赖 Harness session，不选择候选或 Review 根。下文 Bash 命令是相同 CLI 的 WSL 开发写法。WSL 开发和回测使用冻结请求与隔离副本；Claude Code 在生产根 `/mnt/d/AI/AI+hyperframes` 读取受管理 `CLAUDE.md`，通过 `./work-wsl.sh` 调用同根 Windows CLI。仅此生产会话可制作获授权 showcase，直接编辑授权 Work 的文稿与工程源；作品及输出留在生产根，不在 WSL 另起 Studio 或渲染器。数学等系列只读审查使用声明范围内的审查包。
 
 ```bash
 ./work root show
@@ -85,7 +91,7 @@ Draft 与 Final 生命周期：
 
 ## v3.3 候选边界
 
-系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。候选提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series`，但可无账号、零 Variant 先准备共享内容；明确账号时用 `--account <id> --variant-id <id>` 一步创建 Work 与版本，新生产 Variant 仍须已登记账号，可另指定 `--batch`、`--theme`、`--mode card|explainer` 与 `--ratio`；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。未指定模式时默认 `card`，不再默认填 Profile。账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；`purpose=ip` 推荐 `explainer`，但不改默认值。播客新建与三位序号规则不变。
+系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。候选提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series`，但可无账号、零 Variant 先准备共享内容；明确账号时用 `--account <id> --variant-id <id>` 一步创建 Work 与版本，新生产 Variant 仍须已登记账号，可另指定 `--batch`、`--theme`、`--mode card|explainer|showcase` 与 `--ratio`，showcase 必须同时指定 `--submodule pdoom|science`；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。无显式、账号或系列模式时默认 `card`，不再默认填 Profile。系列身份/版本/规格、账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；`purpose=ip` 推荐 `explainer`，但不改默认值。播客新建与三位序号规则不变。
 
 静态外观支持 schema 2 Theme/Background/Motion 资产，沿用 `component pack/import/accept`，不另建主题库。新账号以 `{ref,kind,package_sha256}` 保存 theme/background，motion 槽位可显式设 null。`appearance resolve --account <id> --appearance-file <json>` 只读展示最终选择；`new`/`variant add` 同样接受 `--appearance-file`、独立 `--background <id@vN>`、`--fps` 和 `--seed`。锁与真实 vendor 一起冻结并纳入 preview，不依赖源库在线。字段及参数结构见 [资产合同](.studio/spec/hyperframes.md)。候选能力不等于已部署；选择 UI、真实 Paper 拆分和 Windows 原生换配效果不由这些合同证明。
 

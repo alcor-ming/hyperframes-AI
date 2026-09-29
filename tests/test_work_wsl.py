@@ -1,0 +1,70 @@
+from contextlib import redirect_stderr
+import io
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest import mock
+
+import test_work_cli
+import work_wsl
+
+
+class WorkWslTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.base = Path(temporary.name)
+        self.root = self.base / "production root"
+        self.root.mkdir()
+        self.convert = mock.patch.object(work_wsl.subprocess, "check_output", side_effect=self.wslpath)
+        self.convert.start()
+        self.addCleanup(self.convert.stop)
+
+    def wslpath(self, args, **kwargs):
+        self.assertEqual(args[0], "wslpath")
+        self.assertTrue(kwargs["text"])
+        if args[1] == "-u":
+            return str(self.root / "notes / source.json") if args[2].startswith("D:") else str(self.base / "outside.json")
+        self.assertEqual(args[1], "-w")
+        return "D:\\production root\\" + Path(args[2]).relative_to(self.root).as_posix().replace("/", "\\")
+
+    def test_paths_and_unicode_arguments_preserved(self):
+        command = work_wsl.command(self.root, ["new", "中文 title", "A/B test", "--appearance-file", "notes / source.json"])
+        self.assertEqual(command[:4], ["cmd.exe", "/d", "/s", "/c"])
+        self.assertIn('"中文 title"', command[4])
+        self.assertIn('"A/B test"', command[4])
+        self.assertIn('"D:\\production root\\notes \\ source.json"', command[4])
+        equals = work_wsl.command(self.root, ["--appearance-file=D:\\production root\\notes \\ source.json"])
+        self.assertIn('"--appearance-file=D:\\production root\\notes \\ source.json"', equals[4])
+
+    def test_external_traversal_symlink_and_metacharacters_rejected(self):
+        (self.root / "escape").symlink_to(self.base, target_is_directory=True)
+        for value in (str(self.base / "outside.json"), "../outside.json", "escape/outside.json", "C:\\outside.json"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                work_wsl.command(self.root, ["--appearance-file", value])
+        for value in ('a&whoami', 'a|b', '%PATH%', 'a^b', '!PATH!', 'a"b', 'a>b', 'a<b', "a\nb", "a\rb", "a\x00b"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                work_wsl.command(self.root, ["new", value])
+        for arguments in (["--to=C:\\outside"], ["--mapping=../outside.json"], ["--align=C:\\outside"],
+                          ["--appearance-file", "..\\outside.json"], ["C:relative"], ["root", "set", "../outside"],
+                          ["component", "install", "asset@v1", "--binding-file", "escape/binding.json"],
+                          ["--binding-file=C:\\outside.json"], ["component", "pack", "--json", "escape/source"]):
+            with self.subTest(arguments=arguments), self.assertRaises(ValueError):
+                work_wsl.command(self.root, arguments)
+
+    def test_run_inherits_streams_and_propagates_status(self):
+        with mock.patch.object(work_wsl, "__file__", str(self.root / ".studio/work_wsl.py")), \
+                mock.patch.object(work_wsl.subprocess, "run", return_value=subprocess.CompletedProcess([], 17)) as run:
+            self.assertEqual(work_wsl.main(["status"]), 17)
+        self.assertEqual(run.call_args.kwargs, {"cwd": self.root})
+        self.assertEqual(run.call_args.args[0][:4], ["cmd.exe", "/d", "/s", "/c"])
+        with mock.patch.object(work_wsl, "__file__", str(self.root / ".studio/work_wsl.py")), \
+                mock.patch.object(work_wsl.subprocess, "run") as run, redirect_stderr(io.StringIO()) as error:
+            self.assertEqual(work_wsl.main(["new", "bad&input"]), 2)
+            run.assert_not_called()
+            self.assertIn("metacharacter", error.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()
