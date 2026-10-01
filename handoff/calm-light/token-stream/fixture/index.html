@@ -1,0 +1,29 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>token-stream · Calm light fixture</title>
+<style>body{margin:0;background:#dde2e4;color:#253337;font:14px system-ui}header{padding:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}select,input,button,textarea{font:inherit}#frame{position:relative;margin:0 auto;isolation:isolate}#stage,#text{position:absolute;inset:0}#text{pointer-events:none}#caption{position:absolute;inset:84% 0 0;background:#84929422;border-top:1px dashed #849294;color:#617277;display:grid;place-items:center;pointer-events:none}#error{white-space:pre-wrap;padding:8px;color:#a22}textarea{width:300px;height:64px}canvas{display:block}</style>
+<header><strong>token-stream</strong><select id="ratio"><option>16:9</option><option>9:16</option></select><select id="theme"><option>light</option><option>dark</option></select><select id="variant"><option>fill</option><option>overflow</option><option>generate</option></select><label>Reduced <input type="checkbox" id="reduced"></label><label>Duration <input id="duration" type="number" value="7" min="5" max="12" step=".1"></label><label>Seed <input id="seed" type="number" min="1" max="9999" value="1"></label><input id="time" type="range" min="0" max="7" value="0" step=".001"><output id="timeLabel">0</output><button id="remount">Apply parameters</button><textarea id="extra" aria-label="Extra parameters">{}</textarea><textarea id="slots" aria-label="Slots">{"input_label": "Your input", "box_label": "Window", "output_label": "Output", "counter": 200000}</textarea></header>
+<div id="frame"><div id="stage" data-hf-layer="stage"></div><div id="text" data-hf-layer="text"></div><div id="caption">Caption safe zone (bottom 16%)</div></div><pre id="error"></pre>
+<script src="./generated/appearance.js"></script><script src="./generated/broll.js"></script>
+<script type="module">
+import {mount} from '../main.js';
+const $=id=>document.getElementById(id), originalMatchMedia=window.matchMedia.bind(window);
+// Fixture switch emulates the OS setting; the module itself snapshots real matchMedia.
+window.matchMedia=query=>query==='(prefers-reduced-motion: reduce)'?{matches:$('reduced').checked}:originalMatchMedia(query);
+let shot,appearance,queue=Promise.resolve();
+window.seek=t=>{shot.renderAt(t);$('time').value=t;$('timeLabel').value=t.toFixed(3);};
+window.configure=(config={})=>{ queue=queue.catch(()=>{}).then(()=>configureNow(config)); return queue; };
+async function configureNow(config={}){
+ for(const key of ['ratio','theme','variant','duration','seed'])if(config[key]!==undefined)$(key).value=config[key];
+ if(config.reduced!==undefined)$('reduced').checked=config.reduced;
+ if(config.slots)$('slots').value=JSON.stringify(config.slots);if(config.extra)$('extra').value=JSON.stringify(config.extra);
+ shot?.dispose();appearance?.dispose();shot=undefined;$('error').textContent='';
+ const portrait=$('ratio').value==='9:16';$('frame').style.width=(portrait?540:960)+'px';$('frame').style.height=(portrait?960:540)+'px';
+ try{appearance=await HarnessAppearance.load('./generated/'+$('theme').value+'-'+$('ratio').value.replace(':','-')+'/');
+ shot=await mount({stage:$('stage'),text:$('text'),appearance,slots:JSON.parse($('slots').value),params:{mode:$('variant').value,seed:Number($('seed').value),...JSON.parse($('extra').value)},startCue:2,endCue:2+Number($('duration').value),cues:{}});
+ window.shot=shot;$('time').max=2+Number($('duration').value);seek(2);window.ready=true;return shot.moments();
+ }catch(e){window.ready=false;$('error').textContent=e.stack;throw e;}
+};
+$('time').oninput=()=>seek(Number($('time').value));$('remount').onclick=()=>configure().catch(()=>{});
+for(const id of ['ratio','theme','variant','reduced'])$(id).onchange=()=>configure().catch(()=>{});
+window.disposeShot=()=>{shot?.dispose();appearance?.dispose();};
+window.readyPromise=configure();window.readyPromise.catch(()=>{});
+</script></html>

@@ -1,0 +1,1 @@
+No browser screenshots are claimed in this commit. Run fixture/seek.test.mjs locally to generate both aspect ratios × both Themes × every runtime key moment. Browser execution in the cloud was restricted. These outputs are review evidence, not acceptance.
