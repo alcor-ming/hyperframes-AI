@@ -87,6 +87,20 @@ const message = `value ${fetch('./nested.json')}`;
         self.assertEqual(["data.json", "image.png", "index.html", "inline.png"],
                          validate_dependencies(self.root))
 
+    def test_card_sources_are_executable_snapshot_dependencies(self):
+        self.write("index.html", '<div data-card-source="vendor/card.html"></div>')
+        self.write("vendor/card.html", '<script src="card.js"></script>')
+        self.write("vendor/card.js", 'const card = true;')
+        self.assertEqual(["index.html", "vendor/card.html", "vendor/card.js"],
+                         validate_dependencies(self.root))
+        with self.assertRaisesRegex(VisualPlanError, "semantic placeholders"):
+            validate_dependencies(self.root, layout=True)
+        for source in ("missing.html", "../escape.html", "https://example.invalid/card.html",
+                       "data:text/html,card", "blob:card"):
+            with self.subTest(source=source), self.assertRaises(VisualPlanError):
+                self.write("index.html", f'<div data-card-source="{source}"></div>')
+                validate_dependencies(self.root)
+
     def test_css_imports_are_checked_outside_layout_and_ignore_content(self):
         self.write("style.css", '''@import "./base.css";
 /* url(missing-comment.png) */

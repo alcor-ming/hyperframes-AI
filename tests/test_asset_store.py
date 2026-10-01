@@ -287,7 +287,7 @@ class AssetStoreTest(unittest.TestCase):
         def command(*arguments, expected=0):
             output, errors = io.StringIO(), io.StringIO()
             with patch.dict(os.environ, environment), redirect_stdout(output), redirect_stderr(errors):
-                self.assertEqual(expected, WORK.main(["component", *arguments], root=self.harness), errors.getvalue())
+                self.assertEqual(expected, WORK.main(["--json", "component", *arguments], root=self.harness), errors.getvalue())
             return json.loads(output.getvalue()) if output.getvalue() else errors.getvalue()
 
         self.assertEqual(str(self.store), command("root")["asset_root"])

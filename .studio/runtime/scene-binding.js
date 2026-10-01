@@ -38,5 +38,12 @@
       },
     };
   }
-  global.HarnessScene = { bindScene };
+  function bindExplainer({ duration, captions, background, figures, ready, renderAt = () => {} }) {
+    const bindings = [background, figures, captions].filter(Boolean);
+    return bindScene({ start: 0, duration, ready,
+      async renderAt(t) { for (const binding of bindings) await binding.renderAt(t); await renderAt(t); },
+      dispose() { for (const binding of bindings) binding.dispose(); },
+    });
+  }
+  global.HarnessScene = { bindScene, bindExplainer };
 })(window);

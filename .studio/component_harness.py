@@ -33,7 +33,7 @@ REQUIRED_RELEASE_FILES = (
     "HASHES.json",
 )
 COMPONENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-COMPONENT_REF_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_.-]*(?:/(?:4x3|16x9))?)@v([1-9][0-9]*)$")
+COMPONENT_REF_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_.-]*(?:/(?:4x3|16x9|9x16))?)@v([1-9][0-9]*)$")
 SAFE_RELATIVE_RE = re.compile(r"^[^/]+(?:/[^/]+)*$")
 SURFACE_KINDS = {
     "icon_node": {"none", "icon"},
@@ -342,8 +342,8 @@ def validate_component_release(directory: Path, expected_ref: str | None = None,
         raise ComponentError("COMPONENT.md version must be a positive integer")
     ratio_contract = metadata.get("contract") == "component-contract-v2"
     ratio = metadata.get("ratio") if ratio_contract else None
-    if ratio_contract and ratio not in {"4x3", "16x9"}:
-        raise ComponentError("COMPONENT.md ratio must be 4x3 or 16x9")
+    if ratio_contract and ratio not in {"4x3", "16x9", "9x16"}:
+        raise ComponentError("COMPONENT.md ratio must be 4x3, 16x9 or 9x16")
     component_ref = f"{component_id}/{ratio}@v{version}" if ratio_contract else f"{component_id}@v{version}"
     if expected_ref is not None and component_ref != expected_ref:
         raise ComponentError(f"Expected {expected_ref}, found {component_ref}")
@@ -375,6 +375,12 @@ def validate_component_release(directory: Path, expected_ref: str | None = None,
         raise ComponentError("contract.schema.json component_ref does not match COMPONENT.md")
     if ratio_contract and schema.get("ratio") != ratio:
         raise ComponentError("contract.schema.json ratio does not match COMPONENT.md")
+    layers = metadata.get("layers")
+    if layers is not None:
+        if not isinstance(layers, list) or not layers or not all(isinstance(layer, str) for layer in layers) or len(set(layers)) != len(layers) or any(layer not in {"stage", "text"} for layer in layers):
+            raise ComponentError("Card Component layers must be stage and/or text")
+        if schema.get("layers") != layers:
+            raise ComponentError("Component layer declarations disagree")
     if not ratio_contract and (schema.get("profile") != metadata.get("profile") or schema.get("subtemplate") != metadata.get("subtemplate")):
         raise ComponentError("contract.schema.json profile/subtemplate does not match COMPONENT.md")
     required_schema, properties = _schema_slots(schema)
@@ -443,9 +449,14 @@ def validate_component_release(directory: Path, expected_ref: str | None = None,
     if ratio_contract:
         _, parser = _parse_html(directory / "component.html")
         root = next(node["attrs"] for node in parser.nodes if node["attrs"].get("data-composition-id") == component_id)
-        dimensions = ("1440", "1080") if ratio == "4x3" else ("1920", "1080")
+        dimensions = {"4x3": ("1440", "1080"), "16x9": ("1920", "1080"), "9x16": ("1080", "1920")}[ratio]
         if (root.get("data-width"), root.get("data-height")) != dimensions:
             raise ComponentError("component.html dimensions do not match the ratio contract")
+        if layers is not None and root.get("data-card-layers", "").split() != layers:
+            raise ComponentError("Component DOM layer declaration does not match the contract")
+        if layers is not None and any(node["attrs"].get("data-hf-layer") in {"background", "captions"}
+                                      for node in parser.nodes):
+            raise ComponentError("Card Component cannot own background or captions layers")
     return {
         "component_ref": component_ref,
         "component_id": component_id,
@@ -509,11 +520,11 @@ def _safe_relative(value: str, label: str) -> str:
 
 def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[str, Any]:
     kind = release["metadata"].get("asset_type")
-    if kind in {"theme", "background", "motion", "module", "media"} and isinstance(binding, dict) and binding.get("scope") == "dependency":
+    if kind in {"theme", "background", "motion", "module", "media", "character", "icon-set"} and isinstance(binding, dict) and binding.get("scope") == "dependency":
         if (binding != {"schema_version": 3, "component_ref": release["component_ref"], "scope": "dependency"}):
             raise ComponentError("Dependency Binding requires schema_version 3 and exact component_ref")
         return binding
-    if kind in {"theme", "background", "motion"}:
+    if kind in {"theme", "background", "motion", "icon-set"}:
         if (not isinstance(binding, dict) or binding.get("schema_version") != 3
                 or binding.get("component_ref") != release["component_ref"]
                 or set(binding) != {"schema_version", "component_ref", "usage"}
@@ -521,14 +532,15 @@ def validate_binding(binding: dict[str, Any], release: dict[str, Any]) -> dict[s
                 or binding["usage"]["required"] is not True):
             raise ComponentError("Appearance Binding requires exact ref and kind usage")
         return binding
-    if release["metadata"].get("asset_type") in {"module", "media"}:
+    if kind in {"module", "media", "character"}:
         if (not isinstance(binding, dict) or binding.get("schema_version") != 3
                 or binding.get("component_ref") != release["component_ref"]):
             raise ComponentError("Asset Binding requires schema_version 3 and exact component_ref")
         if not isinstance(binding.get("scene"), str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", binding["scene"]):
             raise ComponentError("Binding scene is invalid")
         usage = binding.get("usage")
-        if (not isinstance(usage, dict) or usage.get("role") not in {"subject", "evidence", "texture", "auxiliary"}
+        roles = {"character"} if kind == "character" else {"subject", "evidence", "texture", "auxiliary"}
+        if (not isinstance(usage, dict) or usage.get("role") not in roles
                 or not isinstance(usage.get("required"), bool)):
             raise ComponentError("Asset Binding usage requires role and boolean required")
         if set(usage) - {"role", "required", "fit", "focal_point"}:
@@ -1008,7 +1020,7 @@ def install_component(
             raise ComponentError("Candidate installation requires an isolated Review project")
     allow_unapproved = review_root is not None or acceptance is not None
     release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=allow_unapproved)
-    generic = release["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion"}
+    generic = release["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character", "icon-set"}
     if generic and acceptance is None:
         raise ComponentError("Asset installation requires exact asset acceptance")
     if acceptance is not None:
@@ -1113,12 +1125,12 @@ def validate_component_mounts(
     record: dict[str, Any],
 ) -> dict[str, Any]:
     index_path = Path(project) / "index.html"
-    if release["metadata"].get("asset_type") in {"theme", "background", "motion"}:
+    if release["metadata"].get("asset_type") in {"theme", "background", "motion", "icon-set"}:
         return {"mounts": []}
     if all(_read_json(Path(project) / item["path"]).get("scope") == "dependency"
            for item in _lock_bindings(record)):
         return {"mounts": []}
-    if release["metadata"].get("asset_type") in {"module", "media"}:
+    if release["metadata"].get("asset_type") in {"module", "media", "character"}:
         from visual_plan import VisualPlanError, validate_dependencies
         entry = f"{record['vendor_path']}/{release['metadata']['entry']}"
         try:
@@ -1136,12 +1148,13 @@ def validate_component_mounts(
         for node in parser.nodes
         if node["attrs"].get("data-component-ref") == release["component_ref"]
     ]
-    by_binding: dict[str, dict[str, str | None]] = {}
+    layers = release["metadata"].get("layers")
+    by_binding: dict[str, list[dict[str, str | None]]] = {}
     for attrs in mounts:
         binding_path = attrs.get("data-component-binding")
-        if not isinstance(binding_path, str) or binding_path in by_binding:
+        if not isinstance(binding_path, str) or not layers and binding_path in by_binding:
             raise ComponentError(f"Component mount has missing or duplicate binding: {binding_path}")
-        by_binding[binding_path] = attrs
+        by_binding.setdefault(binding_path, []).append(attrs)
     expected_bindings = _lock_bindings(record)
     if set(by_binding) != {item["path"] for item in expected_bindings}:
         raise ComponentError("Component mounts do not match locked bindings")
@@ -1149,29 +1162,35 @@ def validate_component_mounts(
     for binding_record in expected_bindings:
         binding_path = binding_record["path"]
         binding = _read_json(Path(project) / binding_path)
-        attrs = by_binding[binding_path]
-        if attrs.get("data-composition-id") != release["component_id"]:
-            raise ComponentError(f"Component mount composition id mismatch: {binding_path}")
-        if attrs.get("data-composition-src") != vendor_source:
-            raise ComponentError(f"Component mount source mismatch: {binding_path}")
-        try:
-            values = json.loads(attrs.get("data-variable-values") or "")
-        except json.JSONDecodeError as exc:
-            raise ComponentError(f"Component mount variables are invalid: {binding_path}") from exc
-        if values != _binding_variable_values(binding):
-            raise ComponentError(f"Component mount variables differ from Binding: {binding_path}")
-        expected_scalars = {
-            "data-start": binding["timing"]["offset"],
-            "data-width": binding["placement"]["width"],
-            "data-height": binding["placement"]["height"],
-        }
-        for attribute, expected in expected_scalars.items():
+        projections = by_binding[binding_path]
+        if layers and (len(projections) != len(layers) or {attrs.get("data-card-layer") for attrs in projections} != set(layers)):
+            raise ComponentError(f"Card mounts must match declared layers: {binding_path}")
+        for attrs in projections:
+            if layers and (attrs.get("data-hf-layer") != attrs.get("data-card-layer") or
+                           "data-composition-src" in attrs or "data-composition-id" in attrs):
+                raise ComponentError(f"Card mount must declare its host layer without an automatic composition: {binding_path}")
+            if attrs.get("data-card-id" if layers else "data-composition-id") != release["component_id"]:
+                raise ComponentError(f"Component mount composition id mismatch: {binding_path}")
+            if attrs.get("data-card-source" if layers else "data-composition-src") != vendor_source:
+                raise ComponentError(f"Component mount source mismatch: {binding_path}")
             try:
-                actual = float(attrs.get(attribute) or "")
-            except ValueError as exc:
-                raise ComponentError(f"Component mount {attribute} is invalid: {binding_path}") from exc
-            if actual != float(expected):
-                raise ComponentError(f"Component mount {attribute} differs from Binding: {binding_path}")
+                values = json.loads(attrs.get("data-variable-values") or "")
+            except json.JSONDecodeError as exc:
+                raise ComponentError(f"Component mount variables are invalid: {binding_path}") from exc
+            if values != _binding_variable_values(binding):
+                raise ComponentError(f"Component mount variables differ from Binding: {binding_path}")
+            expected_scalars = {
+                "data-start": binding["timing"]["offset"],
+                "data-width": binding["placement"]["width"],
+                "data-height": binding["placement"]["height"],
+            }
+            for attribute, expected in expected_scalars.items():
+                try:
+                    actual = float(attrs.get(attribute) or "")
+                except ValueError as exc:
+                    raise ComponentError(f"Component mount {attribute} is invalid: {binding_path}") from exc
+                if actual != float(expected):
+                    raise ComponentError(f"Component mount {attribute} differs from Binding: {binding_path}")
     return {"mounts": sorted(by_binding)}
 
 
@@ -1318,7 +1337,8 @@ def validate_snapshot_closure(source: Path, snapshot: Path) -> dict[str, Any]:
     return {"closed": True, "items": checked}
 
 
-def verify_installation(project: Path, *, public_root: Path | None = None, component_ref: str | None = None) -> dict[str, Any]:
+def verify_installation(project: Path, *, public_root: Path | None = None, component_ref: str | None = None,
+                        check_mounts: bool = True) -> dict[str, Any]:
     """Verify Work vendor, bindings, and lock records without repairing them."""
 
     project = Path(project)
@@ -1343,7 +1363,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
                                              allow_unapproved=review_root is not None or record.get("acceptance") is not None)
         kind = release["metadata"].get("asset_type")
         acceptance = record.get("acceptance")
-        if kind in {"module", "media", "theme", "background", "motion"}:
+        if kind in {"module", "media", "theme", "background", "motion", "character", "icon-set"}:
             if record.get("asset_kind") != kind or acceptance is None:
                 raise ComponentError("Asset lock requires matching kind and exact acceptance")
         if acceptance is not None:
@@ -1393,7 +1413,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         vendor_path = project / vendor_rel
         acceptance = record.get("acceptance")
         vendor = releases[ref]
-        generic = vendor["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion"}
+        generic = vendor["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character", "icon-set"}
         if public_root is not None and acceptance is None:
             public_path = Path(public_root) / ".studio" / "components" / component_id / f"v{version}"
             public = validate_component_release(public_path, expected_ref=ref)
@@ -1423,7 +1443,7 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         }
         if actual_files != expected_files:
             raise ComponentError(f"Installed file list mismatch: {ref}")
-        mounts = validate_component_mounts(project, vendor, record)
+        mounts = validate_component_mounts(project, vendor, record) if check_mounts else {"mounts": []}
         checked.append(
             {
                 "component_ref": ref,

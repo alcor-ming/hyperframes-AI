@@ -97,6 +97,19 @@ class AppearanceAssetTest(unittest.TestCase):
         self.assertEqual("module", report["metadata"]["kind"])
         self.assertIn("hyperframes", acceptance["runtime"]["versions"])
 
+    def test_module_background_closes_javascript_and_rejects_escape(self):
+        payload = {"renderer": "module", "entry": "main.mjs", "parameters": {
+            "moods": [{"cue": {"token": "hello", "nth": 1}, "tint": "#112233"}]}}
+        source = self.source("background", payload, dependencies=["main.mjs"])
+        (source / "main.mjs").write_text("import './helper.js'; export function create() {}")
+        (source / "helper.js").write_text("export const seed = 1;")
+        reference = self.accept(source)
+        _, report, _ = STORE.resolve_asset(self.harness, reference)
+        self.assertIn("helper.js", [item["path"] for item in report["files"]])
+        payload["entry"] = "../outside.js"
+        with self.assertRaises(COMPONENT.ComponentError):
+            STORE.pack_source(self.store, self.source("background", payload, dependencies=["main.mjs"]))
+
     def test_schema_rejects_cross_responsibility_fields_and_unsafe_declarations(self):
         bad = [("theme", {"tokens": {}, "modes": ["text-led"]}),
                ("theme", {"tokens": {"background": {"color": "red"}}}),

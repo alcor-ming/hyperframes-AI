@@ -25,7 +25,7 @@ class Rc2ControlTest(unittest.TestCase):
     def run_cli(self, *arguments, expected=0):
         output, error = io.StringIO(), io.StringIO()
         with redirect_stdout(output), redirect_stderr(error):
-            result = cli.main(list(arguments), root=self.root)
+            result = cli.main(['--json', *arguments], root=self.root)
         self.assertEqual(expected, result, error.getvalue())
         return output.getvalue().strip() or error.getvalue().strip()
 

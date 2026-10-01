@@ -50,7 +50,7 @@ class ControlPlaneTest(unittest.TestCase):
         self.assertEqual(cli.input_path(a, "RESEARCH.md"), cli.input_path(b, "RESEARCH.md"))
         self.assertNotEqual(a / "ANIMATION_PLAN.md", b / "ANIMATION_PLAN.md")
         self.assertFalse((b / "SCRIPT.md").exists())
-        self.put("account", "b", name="New B", theme="clean", ratio="16:9", mode="animation-led")
+        self.put("account", "b", name="New B", theme="clean", ratio="16:9", mode="card")
         self.assertEqual(1, cli.read_json(b / "variant.yaml")["account_revision"])
         self.run_cli("variant", "add", "duplicate", "--account", "b")
         self.assertEqual("b", cli.read_json(work / "variants/duplicate/variant.yaml")["account"])

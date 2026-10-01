@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sys
+import re
 import unittest
 
 
@@ -13,17 +14,21 @@ from visual_plan import plan_scene_rows
 class RC2RulesTests(unittest.TestCase):
     def test_two_plan_views_keep_one_scene_index_and_one_screen_copy(self):
         template = (ROOT / ".studio/templates/ANIMATION_PLAN.template.md").read_text(encoding="utf-8")
-        plan = template.replace("`<保留实际 ID>`", "S01").replace("`<真实变化或持续阅读状态>`", "01")
+        plan = re.sub(r'__[A-Z_]+__', 'null', template)
+        plan = re.sub(r'^\*\*延续信息：\*\*.*\n', '', plan, flags=re.M)
         self.assertEqual(["S01"], list(plan_scene_rows(plan)))
-        self.assertIn("## 3. 上屏信息表", template)
-        self.assertIn("## 4. Scene 节拍表", template)
-        self.assertIn("不在 Scene 节拍表重抄", template)
+        self.assertIn("## S01", template)
+        self.assertEqual(1, template.count("```screen\n"))
+        self.assertNotIn("Scene 节拍表", template)
+        scene = template.split("## S01", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("```screen", scene)
+        self.assertIn("### 事件序列与例外", scene)
 
-    def test_video_edit_does_not_force_research_rewrite_or_motion(self):
+    def test_video_edit_preserves_research_ownership_and_reading_stability(self):
         creative = (ROOT / ".studio/spec/creative.md").read_text(encoding="utf-8")
         design = (ROOT / ".studio/spec/visual-design.md").read_text(encoding="utf-8")
         self.assertIn("不为等义编辑回写第二份 Research 文案", creative)
-        self.assertIn("正常阅读可以静止", design)
+        self.assertIn("阅读区域保持稳定", design)
         self.assertIn("读完可移动、归组或退场", design)
 
 

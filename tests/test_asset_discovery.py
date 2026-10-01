@@ -13,6 +13,114 @@ class DiscoveryTest(unittest.TestCase):
     setUp = fixtures.AssetStoreTest.setUp
     accept = fixtures.AssetStoreTest.accept
 
+    def reference_source(self):
+        directory = self.root / "references"
+        directory.mkdir()
+        STORE.register_source(self.store, directory)
+        metadata = {"source_ref": "card-family-v1", "title": "Card family", "purpose": "Explain relationships",
+                    "tags": ["cards"], "workflow_role": "derive", "primary_category": "text",
+                    "classification_status": "approved", "limits": ["Not installable"], "entry": "index.html"}
+        (directory / "manifest.json").write_text(json.dumps(metadata))
+        (directory / "index.html").write_text("<main>fixture</main>")
+        return directory, metadata
+
+    def test_self_described_sources_recipes_and_install_boundary(self):
+        directory, metadata = self.reference_source()
+        recipe = {key: value for key, value in metadata.items() if key != "entry"}
+        recipe.update(source_ref="card-recipe", title="Layered sequence")
+        (directory / "recipe.md").write_text("---\n" + json.dumps(recipe) + "\n---\n# Recipe\n", encoding="utf-8-sig")
+        (directory / "unknown.md").write_text("# Undescribed recipe")
+        (directory / "notes.md").write_text("---\ntitle: Ordinary note\ntags: [notes]\n---\n# Note")
+        self.assertEqual([], STORE.discover_components(self.harness, audit=True)["audit"]["warnings"])
+        (directory / "invalid.md").write_text('---\n{"source_ref": broken}\n---\n')
+        warning, = STORE.discover_components(self.harness, audit=True)["audit"]["warnings"]
+        self.assertEqual("invalid_discovery_metadata", warning["code"])
+        (directory / "invalid.md").unlink()
+        (directory / "reuse-index.json").write_text('{"accepted_scenes":["ignored"]}')
+        for kind, query in (("scene-source", "relationships"), ("recipe", "Layered")):
+            row, = STORE.discover_components(self.harness, query, kind=kind, include_references=True)["assets"]
+            self.assertEqual(kind, row["asset_type"])
+            self.assertFalse(row["available"])
+            self.assertFalse(row["installable"])
+            self.assertTrue(row["reference_only"])
+            self.assertIn("derivation", row["use"])
+        self.accept()
+        metadata["source_ref"] = self.ref
+        (directory / "manifest.json").write_text(json.dumps(metadata))
+        selected, acceptance = STORE.resolve_component(self.harness, self.ref)
+        self.assertTrue(selected.is_relative_to(self.store / "packages"))
+        self.assertEqual(self.ref, acceptance["component_ref"])
+
+    def test_readonly_audit_incomplete_missing_and_unsafe_sources(self):
+        directory, metadata = self.reference_source()
+        for name, data in (("entry-only", {"entry": "index.html"}), ("ref-only", {"source_ref": "unfinished"}),
+                           ("unknown", {"files": ["index.html"]})):
+            child = directory / name
+            child.mkdir()
+            (child / "manifest.json").write_text(json.dumps(data))
+        child = directory / "accepted-undescribed"
+        child.mkdir()
+        (child / "ACCEPTANCE.json").write_text("{}")
+        (directory / "request.json").write_text('{"entry":"requested.html"}')
+        (directory / "repair.json").write_text('{"source_ref":"repair-only"}')
+        (directory / "index.html").unlink()
+        outside = self.root / "outside.html"
+        outside.write_text("private fixture")
+        for name, entry in (("traversal", "../../outside.html"), ("absolute", str(outside)), ("symlink", "linked.html")):
+            child = directory / name
+            child.mkdir()
+            (child / "manifest.json").write_text(json.dumps({**metadata, "entry": entry}))
+            if name == "symlink":
+                (child / entry).symlink_to(outside)
+        (directory / "linked.md").symlink_to(outside)
+        loop = directory / "loop"
+        loop.mkdir()
+        (loop / "manifest.json").symlink_to("manifest.json")
+        entry_loop = directory / "entry-loop"
+        entry_loop.mkdir()
+        (entry_loop / "manifest.json").write_text(json.dumps(metadata))
+        (entry_loop / "index.html").symlink_to("index.html")
+        self.accept()
+        before = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.root.rglob("*") if p.is_file()}
+        with patch.object(STORE, "_atomic_json", side_effect=AssertionError("Audit must not write")):
+            result = STORE.discover_components(self.harness, audit=True)
+        after = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.root.rglob("*") if p.is_file()}
+        self.assertEqual(before, after)
+        warnings = result["audit"]["warnings"]
+        codes = [item["code"] for item in warnings]
+        self.assertEqual(3, codes.count("missing_discovery_fields"))
+        self.assertEqual(6, codes.count("unsafe_reference_path"))
+        self.assertIn("missing_reference_file", codes)
+        self.assertIn("missing_selection_fields", codes)
+        self.assertFalse(any("request.json" in item["path"] or "repair.json" in item["path"] for item in warnings))
+        self.assertFalse(any(row.get("reference_only") for row in result["assets"]))
+        (self.store / "selection.json").write_text(json.dumps({self.ref: {"purpose": "Explain", "tags": ["text"]}}))
+        self.assertFalse(any(item["code"] == "missing_selection_fields"
+                            for item in STORE.discover_components(self.harness, audit=True)["audit"]["warnings"]))
+
+    def test_cli_and_doctor_audit(self):
+        from contextlib import redirect_stdout
+        import io
+        import work
+        import windows_runtime
+        import subprocess
+        directory, metadata = self.reference_source()
+        args = work.build_parser().parse_args(["component", "list", "--kind", "scene-source", "--query", "cards", "--include-references", "--audit"])
+        self.assertTrue(args.audit)
+        output = io.StringIO()
+        with redirect_stdout(output), patch.object(STORE, "_atomic_json", side_effect=AssertionError("CLI audit must not write")):
+            work.command_component_store(self.harness, args)
+        self.assertEqual("card-family-v1", json.loads(output.getvalue())["assets"][0]["source_ref"])
+        (self.harness / ".release.json").write_text('{"release":"fixture"}')
+        config = {"asset_root": str(self.store), "asset_source_roots": [str(directory)]}
+        env = {key: "fixture" for key in ("HYPERFRAMES_AI_CONFIG", "HYPERFRAMES_AI_ASSET_CONFIG", "TEMP", "HYPERFRAMES_NODE",
+               "HYPERFRAMES_CLI", "HYPERFRAMES_BROWSER_PATH", "FFMPEG_PATH", "FFPROBE_PATH")}
+        env.update(HYPERFRAMES_AI_RESOLVED_CONFIG=json.dumps(config), HYPERFRAMES_AI_REVIEW="0")
+        with patch.object(windows_runtime.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "", "")), \
+             patch.object(STORE, "_atomic_json", side_effect=AssertionError("Doctor audit must not write")):
+            result = windows_runtime.doctor(self.harness, env)
+        self.assertEqual({"warning_count": 0, "error_count": 0}, result["asset_audit"])
+
     def test_incremental_selection_missing_files_and_acceptance(self):
         self.accept()
         first = STORE.discover_components(self.harness)

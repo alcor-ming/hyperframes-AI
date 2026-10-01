@@ -6,6 +6,12 @@
 
 日期：2026-09-22
 
+v3.6.1 增量见 [Opus 动效 B-roll 与 Motion v3](./hyperframes-v361-motion-broll.md)（Motion v3、混合版本闭包、B-roll 插槽与节奏合同已实现并完成 WSL 隔离验证）与 [资产库镜头创作指南](./hyperframes-v361-broll-asset-authoring.md)（已定稿为管理包指南及需求单）。用户已授权部署到统一 Windows 根，实际结果见本次部署收据；生产内容验收与首批库制作不在本任务内。
+
+v3.4.3 增量见 [信息承载、选择性配图与流程更新](./hyperframes-v343-text-imagery.md)：完整上屏信息单元、逐 Scene 配图取舍、Plan 阶段查库与检查、D1 反向核对、场景源/配方发现及只读漏登审计。WSL 实施与隔离回归已完成；未部署，Windows 原生与生产未验证，不包含生产 Work 修正或 Windows 资产补登记。
+
+v3.4.2 基线见 [上屏提炼与持续视觉变化](./hyperframes-v342-visual-outcomes.md)：A1/B1/Q1 与 D1/D2 保留，Plan 信息格式、检查路由与默认配图策略由 v3.4.3 更新（未部署，Windows 原生与生产未验证）。
+
 当前增量合同见 [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：归档同号继任、零 Variant 内容准备与平级账号版本；覆盖 RC2 中必须先绑定账号及 main 优先的旧假设。[RC2 执行方案](./hyperframes-rc2-execution-plan.md) 与 v3.3 制作工程合同仍为其余既有基线。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作采用三项入口、四阶段、独立 Finalize 与软归档。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
 
 ## 当前路径
@@ -79,6 +85,7 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 
 ## PRD 索引
 
+- [v3.6 showcase 模式、技术提炼与数学系列正式链路](./hyperframes-v36-showcase-math.md)：showcase、math-chain 与 math-kit 开发源码已落地，自动化验收见各自 Trellis 任务；未部署，Windows 原生与生产效果待验。
 - [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：已批准并由 WSL 采用的归档同号继任及取消 main 特权；保留完整设计与合成验收，不包含真实生产对象清单。实现、测试和部署结果分别报告。
 
 - [HyperFrames RC2 执行方案](./hyperframes-rc2-execution-plan.md)：仅限视频的创建分流、系列编号、旧 Work 名称/身份迁移、可读导航、账号版本、临时实验及文字节奏；WSL 实现已完成，生产数据迁移仍需单独授权。

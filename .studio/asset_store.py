@@ -126,9 +126,13 @@ def _configured_sources(root: Path, store: Path) -> list[str]:
 
 def register_source(store: Path, directory: Path) -> dict:
     from windows_runtime import paths_overlap
-    directory = Path(directory).expanduser().resolve()
+    directory = Path(directory).expanduser().absolute()
+    managed = _target(store, "sources")
+    if directory.is_relative_to(store.resolve()):
+        _target(store, directory.relative_to(store.resolve()).as_posix())
+    directory = directory.resolve()
     _guard_source(directory)
-    protected = [store]
+    protected = [] if directory.is_relative_to(managed) else [store]
     if os.environ.get("HYPERFRAMES_AI_ROOT"):
         protected += _tool_paths(Path(os.environ["HYPERFRAMES_AI_ROOT"]))
     if os.environ.get("HYPERFRAMES_AI_HOME"):
@@ -146,15 +150,19 @@ def register_source(store: Path, directory: Path) -> dict:
 
 
 def authoring_project(root: Path, project: Path) -> Path:
-    project = project.expanduser().resolve()
     store = asset_store_root(root)
-    sources = _configured_sources(root, store)
+    managed = _target(store, "sources")
+    project = project.expanduser().absolute()
+    if project.is_relative_to(store):
+        _target(store, project.relative_to(store).as_posix())
+    project = project.resolve()
+    sources = [*_configured_sources(root, store), str(managed)]
     if not project.is_dir() or not any(project.is_relative_to(Path(p).resolve()) for p in sources):
         raise ComponentError("Standalone sample must be inside a registered AssetSource")
     _guard_source(project)
     config = _read_json(_config_path(root))
     work_root = os.environ.get("HYPERFRAMES_AI_WORK_ROOT") or config.get("work_root")
-    if any(project.is_relative_to(p.resolve()) for p in _tool_paths(root)) or project.is_relative_to(store.resolve()) or _work_conflict(project, work_root):
+    if any(project.is_relative_to(p.resolve()) for p in _tool_paths(root)) or (project.is_relative_to(store.resolve()) and not project.is_relative_to(managed)) or _work_conflict(project, work_root):
         raise ComponentError("Standalone samples cannot target Harness, AssetStore or a Work")
     return project
 
@@ -170,7 +178,7 @@ def _validate_package(directory: Path, expected_ref: str | None = None) -> dict:
     report = validate_component_release(directory, expected_ref=expected_ref, allow_unapproved=True)
     kinds = {"component", "effect", "module", "media"}
     if (directory / "asset.json").is_file():
-        kinds |= {"theme", "background", "motion"}
+        kinds |= {"theme", "background", "motion", "character", "icon-set"}
     if report["metadata"].get("asset_type", "component") not in kinds:
         raise ComponentError("Unsupported asset type for the Component contract")
     return report
@@ -301,23 +309,149 @@ def accept_component(store: Path, ref: str, sha256: str, note: str, *, runtime_r
     return acceptance
 
 
+def _discover_references(directory: Path) -> tuple[list[dict], list[dict]]:
+    assets, warnings = [], []
+    required = ("source_ref", "title", "purpose", "tags", "workflow_role",
+                "primary_category", "classification_status", "limits")
+    candidates = {path: "scene-source" for path in directory.rglob("manifest.json")}
+    candidates.update({path: "recipe" for path in directory.rglob("*.md") if path.name != "COMPONENT.md"})
+    for acceptance in directory.rglob("ACCEPTANCE.json"):
+        candidates.setdefault(acceptance.parent / "manifest.json", "scene-source")
+    for path, kind in sorted(candidates.items()):
+        try:
+            inside = path.resolve().is_relative_to(directory.resolve())
+        except (OSError, RuntimeError):
+            inside = False
+        if not inside:
+            warnings.append({"path": str(path), "code": "unsafe_reference_path"})
+            continue
+        try:
+            if kind == "recipe":
+                lines = path.read_text(encoding="utf-8-sig").splitlines()
+                if not lines or lines[0] != "---":
+                    continue
+                frontmatter = "\n".join(lines[1:lines.index("---", 1)] if "---" in lines[1:] else lines[1:])
+                try:
+                    metadata = json.loads(frontmatter)
+                except ValueError as error:
+                    if not any(f'"{key}"' in frontmatter or f"{key}:" in frontmatter
+                               for key in ("source_ref", "workflow_role", "entry")):
+                        continue
+                    raise ComponentError(f"Invalid JSON reference front matter: {error}") from error
+                if not isinstance(metadata, dict):
+                    continue
+                if "---" not in lines[1:] and any(key in metadata for key in ("source_ref", "workflow_role", "entry")):
+                    raise ComponentError("Reference requires an object in closed JSON front matter")
+            else:
+                metadata = _read_json(path) if path.is_file() else {}
+            if not any(key in metadata for key in ("source_ref", "workflow_role", "entry")) and not (
+                    kind == "scene-source" and (path.parent / "ACCEPTANCE.json").is_file()):
+                continue
+            fields = required + (("entry",) if kind == "scene-source" else ())
+            missing = [key for key in fields if key not in metadata or
+                       (key not in ("tags", "limits") and
+                        (not isinstance(metadata[key], str) or not metadata[key].strip()))]
+            for key in ("tags", "limits"):
+                if key == "limits" and isinstance(metadata.get(key), str):
+                    continue
+                if key in metadata and (not isinstance(metadata[key], list) or
+                        not all(isinstance(value, str) for value in metadata[key])):
+                    missing.append(key)
+            if missing:
+                warnings.append({"path": str(path), "code": "missing_discovery_fields", "fields": missing})
+            invalid_entry = False
+            if "entry" in metadata:
+                try:
+                    entry = path.parent / _safe_relative(metadata["entry"], "reference entry")
+                    if not entry.resolve().is_relative_to(path.parent.resolve()):
+                        raise ComponentError("Reference entry escapes its directory")
+                    if not entry.is_file():
+                        warnings.append({"path": str(path), "code": "missing_reference_file", "entry": metadata["entry"]})
+                        invalid_entry = True
+                except (ComponentError, OSError, RuntimeError, TypeError):
+                    warnings.append({"path": str(path), "code": "unsafe_reference_path", "entry": metadata["entry"]})
+                    invalid_entry = True
+            if missing or invalid_entry:
+                continue
+            assets.append({**{key: metadata[key] for key in fields},
+                "component_ref": metadata["source_ref"], "package_sha256": None,
+                "path": str(path), "origin": "source", "available": False, "installable": False,
+                "reference_only": True, "status": "derivation-reference", "asset_type": kind,
+                "communication_goal": metadata["purpose"], "verification": "self-described reference; not a package"})
+        except (ComponentError, OSError, UnicodeError) as error:
+            warnings.append({"path": str(path), "code": "invalid_discovery_metadata", "error": str(error)})
+    return assets, warnings
+
+
+def _validate_selection(selection):
+    from asset_contract import validate_asset_layer
+    if not isinstance(selection, dict) or any(not isinstance(value, dict) for value in selection.values()):
+        raise ComponentError("Selection metadata must map exact asset refs to objects")
+    for ref, value in selection.items():
+        parse_component_ref(ref)
+        for field in ("aliases", "tags", "examples", "limitations"):
+            if field in value and (not isinstance(value[field], list) or not all(isinstance(item, str) for item in value[field])):
+                raise ComponentError(f"Selection {field} must be an array of strings")
+        if "recommendation" in value and value["recommendation"] not in ("recommended", "historical", "pending"):
+            raise ComponentError("Selection recommendation must be recommended, historical or pending")
+        if "asset_layer" in value:
+            validate_asset_layer(value["asset_layer"])
+    return selection
+
+
+def _layer(metadata, extra=None):
+    from asset_contract import DECLARATIVE, validate_asset_layer
+    value = (extra or {}).get("asset_layer", metadata.get("asset_layer"))
+    if value is not None:
+        return validate_asset_layer(value)
+    return "content" if metadata.get("kind", metadata.get("asset_type")) in DECLARATIVE | {"media"} else "unclassified"
+
+
+def _retired_roots(store):
+    path = store / "catalog-migration.json"
+    if not path.exists():
+        return set()
+    data = _read_json(path)
+    roots = data.get("retired_roots") if isinstance(data, dict) else None
+    if not isinstance(roots, list) or not all(isinstance(item, str) and Path(item).is_absolute() for item in roots):
+        raise ComponentError("catalog-migration.json requires absolute retired_roots")
+    return {Path(item).resolve() for item in roots}
+
+
 def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
-                        recommendation=None, rebuild=False, research_root=None) -> dict:
+                        recommendation=None, rebuild=False, research_root=None, audit=False,
+                        config=None, asset_layer=None, include_references=False, broll_role=None) -> dict:
+    from asset_contract import validate_asset_layer
+    if asset_layer is not None and asset_layer != "unclassified":
+        validate_asset_layer(asset_layer)
+    if broll_role is not None and broll_role not in ("hook", "concept", "transition"):
+        raise ComponentError("Invalid broll role filter")
     def declared_ratios(metadata):
         compatibility = metadata.get("compatibility", {})
         return compatibility.get("ratios", []) if isinstance(compatibility, dict) else []
 
     roots = [(root / ".studio/components", "legacy")]
+    if config is not None:
+        if not isinstance(config.get("asset_root"), str) or not Path(config["asset_root"]).is_absolute():
+            raise ComponentError("AssetStore requires an absolute path")
+        sources = config.get("asset_source_roots", [])
+        if not isinstance(sources, list) or not all(isinstance(p, str) and Path(p).is_absolute() for p in sources):
+            raise ComponentError("Configured asset_source_roots must be absolute directories")
     try:
-        store = asset_store_root(root)
+        store = asset_store_root(root) if config is None else Path(config["asset_root"]).resolve()
     except ComponentError:
         store = None
     if store:
+        retired = _retired_roots(store)
+        roots = [(directory, origin) for directory, origin in roots if directory.resolve() not in retired]
         roots += [(store / "packages", "accepted"), (store / "candidates", "candidate")]
-        sources = _configured_sources(root, store)
-        roots += [(Path(path), "source") for path in sources]
-    assets, errors = [], []
-    cache_path = _target(store, ".discovery-cache.json") if store else None
+        sources = _configured_sources(root, store) if config is None else config.get("asset_source_roots", [])
+        roots += [(Path(path), "source") for path in sources if Path(path).resolve() not in retired and Path(path).resolve() != (store / "sources").resolve()]
+        managed = _target(store, "sources")
+        if managed.is_dir():
+            roots.append((managed, "source"))
+    assets, errors, warnings = [], [], []
+    cache_path = _target(store, ".discovery-cache.json") if store and not audit else None
     try:
         cache = _read_json(cache_path) if cache_path and cache_path.is_file() and not rebuild else {}
     except (ComponentError, ValueError, OSError):
@@ -338,16 +472,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
     selection = {}
     if store and (store / "selection.json").exists():
         try:
-            selection = read(store / "selection.json")
-            if not isinstance(selection, dict) or any(not isinstance(value, dict) for value in selection.values()):
-                raise ComponentError("Selection metadata must map exact asset refs to objects")
-            for ref, value in selection.items():
-                parse_component_ref(ref)
-                for field in ("aliases", "tags", "examples", "limitations"):
-                    if field in value and (not isinstance(value[field], list) or not all(isinstance(item, str) for item in value[field])):
-                        raise ComponentError(f"Selection {field} must be an array of strings")
-                if "recommendation" in value and value["recommendation"] not in ("recommended", "historical", "pending"):
-                    raise ComponentError("Selection recommendation must be recommended, historical or pending")
+            selection = _validate_selection(read(store / "selection.json"))
         except (ComponentError, OSError, ValueError) as error:
             selection = {}
             errors.append({"path": str(store / "selection.json"), "error": str(error), "unsynchronized": True})
@@ -358,7 +483,18 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
             if origin == "source":
                 errors.append({"path": str(directory), "error": "Source is unavailable"})
             continue
+        if origin == "source":
+            references, reference_warnings = _discover_references(directory)
+            assets.extend(references)
+            warnings.extend(reference_warnings)
         for metadata_path in sorted([*directory.rglob("COMPONENT.md"), *directory.rglob("asset.json")]):
+            try:
+                inside = metadata_path.resolve().is_relative_to(directory.resolve())
+            except (OSError, RuntimeError):
+                inside = False
+            if not inside:
+                errors.append({"path": str(metadata_path), "error": "Metadata path escapes asset root"})
+                continue
             if origin == "candidate" and "review" in metadata_path.relative_to(directory).parts:
                 continue
             package = metadata_path.parent
@@ -376,6 +512,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                                    "ratios": declared_ratios(metadata),
                                    "communication_goal": metadata.get("description", ""),
                                    "verification": "metadata-only; source is not accepted"})
+                    assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
                     continue
                 metadata = read(metadata_path)
                 if metadata_path.name == "asset.json":
@@ -412,6 +549,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                                "information_shapes": metadata.get("information_shapes", []),
                                "anti_use_cases": metadata.get("anti_use_cases", []), "acceptance": acceptance,
                                "verification": "metadata-only; verified on use"})
+                assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
                 if str(metadata.get("entry", "")).lower().endswith(".mp3"):
                     assets[-1]["media_type"] = "audio"
             except (ComponentError, OSError, ValueError, KeyError, TypeError) as error:
@@ -421,9 +559,24 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
         if asset["package_sha256"]:
             hashes.setdefault(asset["component_ref"], set()).add(asset["package_sha256"])
     for asset in assets:
-        if len(hashes.get(asset["component_ref"], set())) > 1:
+        if not asset.get("reference_only") and len(hashes.get(asset["component_ref"], set())) > 1:
             asset.update(available=False, conflict="Same identity/version has different package hashes")
-        extra = selection.get(asset["component_ref"], {})
+        extra = {} if asset.get("reference_only") else selection.get(asset["component_ref"], {})
+        try:
+            asset["asset_layer"] = "reference" if asset.get("reference_only") else _layer(asset, extra)
+        except ComponentError as error:
+            errors.append({"path": asset["path"], "error": str(error)})
+            asset.update(asset_layer="unclassified", available=False)
+        asset["lifecycle"] = "accepted" if asset.get("acceptance") else "source" if asset["origin"] == "source" else "candidate"
+        if asset["asset_layer"] == "unclassified":
+            warnings.append({"path": asset["path"], "component_ref": asset["component_ref"], "code": "unclassified_asset"})
+        if asset["asset_layer"] == "reference":
+            asset.update(reference_only=True, installable=False, available=False)
+        if asset["origin"] == "accepted":
+            missing = [key for key in ("purpose", "tags") if not extra.get(key, asset.get(key))]
+            if missing:
+                warnings.append({"path": str(store / "selection.json"), "code": "missing_selection_fields",
+                                 "component_ref": asset["component_ref"], "fields": missing})
         asset.update({key: extra[key] for key in ("aliases", "tags", "purpose", "examples", "limitations", "replacement") if key in extra})
         state = extra.get("recommendation", "pending")
         asset["recommendation"] = state if state in {"recommended", "historical", "pending"} else "pending"
@@ -435,15 +588,32 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
             asset["ratio"] = asset["ratios"][0]
         asset["check_scope"] = asset.get("verification", "metadata-only")
         asset["group"] = asset["origin"]
-        asset["match_reasons"] = [key for key in ("component_ref", "communication_goal", "purpose", "aliases", "tags", "information_shapes")
+        asset["match_reasons"] = [key for key in ("component_ref", "title", "communication_goal", "purpose", "aliases", "tags", "information_shapes", "workflow_role", "primary_category", "limits")
                                   if query and query.casefold() in json.dumps(asset.get(key, ""), ensure_ascii=False).casefold()]
         asset["use"] = ("appearance binding with exact ref/hash" if asset["asset_type"] in {"theme", "background", "motion"}
                         else "component install with exact ref/hash") if asset["available"] else "reference only; not accepted for use"
+        if asset.get("reference_only"):
+            asset["use"] = "derivation reference only; not installable"
+    if store and not audit:
+        index_path = _target(store, ".catalog-index.json")
+        index = {"schema_version": 1, "assets": [{key: value for key, value in asset.items() if key != "match_reasons"} for asset in assets], "errors": errors, "warnings": warnings}
+        try:
+            try:
+                previous = _read_json(index_path) if index_path.is_file() and not rebuild else None
+            except (ComponentError, ValueError):
+                previous = None
+            if previous != index:
+                _atomic_json(index_path, index)
+        except (ComponentError, OSError, ValueError) as error:
+            errors.append({"path": str(index_path), "error": str(error), "unsynchronized": True})
     if query:
         assets = [asset for asset in assets if asset["match_reasons"]]
     assets = [asset for asset in assets if (not kind or asset["asset_type"] == kind or asset.get("media_type") == kind)
+              and (not asset_layer or asset["asset_layer"] == asset_layer)
+              and (include_references or asset_layer == "reference" or asset["asset_layer"] != "reference")
               and (not ratio or ratio in asset["ratios"] or ratio == "unknown" and not asset["ratios"])
               and (not tag or tag in asset.get("tags", []))
+              and (not broll_role or isinstance(asset.get("broll"), dict) and asset["broll"].get("role") == broll_role)
               and (not recommendation or asset["recommendation"] == recommendation)]
     assets.sort(key=lambda asset: (not asset["available"], {"recommended": 0, "pending": 1, "historical": 2}[asset["recommendation"]], asset["component_ref"]))
     if cache_path and fresh != cache:
@@ -452,6 +622,8 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
         except (ComponentError, OSError) as error:
             errors.append({"path": str(cache_path), "error": str(error), "unsynchronized": True})
     result = {"assets": assets, "errors": errors, "refreshed": refreshed}
+    if audit:
+        result["audit"] = {"warnings": warnings, "warning_count": len(warnings), "error_count": len(errors)}
     if research_root is not None:
         from research_catalog import query as research_query
         result["research"] = research_query(research_root, query)["documents"]
@@ -465,8 +637,11 @@ def resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:
     is_path = path.is_dir()
     ref = _validate_package(path)["component_ref"] if is_path else value
     parse_component_ref(ref)
-    inventory = discover_components(root)
-    matches = [item for item in inventory["assets"] if item["component_ref"] == ref]
+    _selection_for_use(root)
+    inventory = discover_components(root, include_references=True)
+    if any(item["component_ref"] == ref and item.get("reference_only") and item.get("package_sha256") for item in inventory["assets"]):
+        raise ComponentError(f"Reference assets cannot be installed: {ref}")
+    matches = [item for item in inventory["assets"] if item["component_ref"] == ref and not item.get("reference_only")]
     if any(item.get("conflict") for item in matches):
         raise ComponentError(f"Conflicting identity/version across asset sources: {ref}")
     available = [item for item in matches if item["available"] and (not is_path or Path(item["path"]) == path.resolve())]
@@ -520,11 +695,24 @@ def _accepted_closure(store, references, *, runtime_root=None, visiting=None):
     return list(resolved.values())
 
 
+def _selection_for_use(root):
+    try:
+        store = asset_store_root(root)
+    except ComponentError:
+        return {}
+    path = store / "selection.json"
+    return _validate_selection(_read_json(path)) if path.exists() else {}
+
+
 def resolve_asset_closure(root: Path, references: list[dict]) -> list[dict]:
     """Resolve dependency-first accepted packages, never candidates or floating versions."""
     closure = _accepted_closure(asset_store_root(root), references, runtime_root=root)
+    selection = _selection_for_use(root)
+    for item in closure:
+        if _layer(item["metadata"], selection.get(item["ref"])) == "reference":
+            raise ComponentError(f"Reference assets cannot be installed: {item['ref']}")
     resolved_refs = {item["ref"] for item in closure}
-    for item in discover_components(root)["assets"]:
+    for item in discover_components(root, include_references=True)["assets"]:
         if item["component_ref"] in resolved_refs and item.get("conflict"):
             raise ComponentError(f"Conflicting identity/version across asset sources: {item['component_ref']}")
     return closure

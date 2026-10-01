@@ -24,8 +24,8 @@ class HTMLDependencies(HTMLParser):
         if tag == 'base' and 'href' in attrs:
             raise DependencyScanError('HTML base href changes the dependency root and is not supported')
         self.refs.extend({'value': attrs[key], 'kind': 'executable' if tag in ('script', 'iframe')
-                          or key == 'data-composition-src' else 'html'}
-                         for key in ('src', 'data-composition-src', 'poster') if attrs.get(key))
+                          or key in ('data-composition-src', 'data-card-source') else 'html'}
+                         for key in ('src', 'data-composition-src', 'data-card-source', 'poster') if attrs.get(key))
         if tag == 'link' and attrs.get('href'):
             executable = bool({'stylesheet', 'modulepreload'} & set(attrs.get('rel', '').lower().split())) or attrs.get('as', '').lower() == 'script'
             self.refs.append({'value': attrs['href'], 'kind': 'executable' if executable else 'html'})

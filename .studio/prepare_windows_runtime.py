@@ -13,7 +13,7 @@ from urllib.request import urlopen
 import zipfile
 
 REPO = Path(__file__).resolve().parent.parent
-VERSIONS = {"hyperframes": "0.8.27", "gsap": "3.14.2", "three": "0.160.0", "acorn": "8.15.0"}
+VERSIONS = {"hyperframes": "0.8.27", "gsap": "3.14.2", "three": "0.160.0", "acorn": "8.15.0", "koffi": "3.3.2"}
 ARCHIVES = [
     {"kind": "zip", "file": "node-v22.22.2-win-x64.zip", "target": "runtime/node",
      "strip_prefix": "node-v22.22.2-win-x64", "url": "https://nodejs.org/dist/v22.22.2/node-v22.22.2-win-x64.zip"},
@@ -40,11 +40,15 @@ def seed_lock(source: Path, metadata: list[Path], output: Path) -> None:
     for path in metadata:
         package = read(path)
         name = package["name"]
-        if name not in ("gsap", "three", "acorn") or package["version"] != VERSIONS[name] or package.get("dependencies"):
-            raise ValueError("Expected dependency-free metadata matching the pinned GSAP, Three or Acorn version")
+        native_koffi = name.startswith("@koromix/koffi-")
+        expected = VERSIONS.get("koffi" if native_koffi else name)
+        if name == "hyperframes" or expected is None or package["version"] != expected or package.get("dependencies"):
+            raise ValueError("Expected metadata matching a pinned runtime addition without required dependencies")
         lock["packages"][f"node_modules/{name}"] = {
             "version": package["version"], "resolved": package["dist"]["tarball"],
             "integrity": package["dist"]["integrity"], "license": package["license"],
+            **{key: package[key] for key in ("optionalDependencies", "os", "cpu") if key in package},
+            **({"optional": True} if native_koffi else {}),
         }
     lock["name"] = "hyperframes-windows-runtime"
     lock["version"] = "1.0.0"

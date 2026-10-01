@@ -1,0 +1,264 @@
+/* Approved r3 layout; scoped to independent L2/L4 instance roots. */
+.hf-card-kit {
+  position: absolute; inset: 0; pointer-events: none;
+  font-family: var(--appearance-typography-body, sans-serif); letter-spacing: 0;
+  --cf-ink: var(--appearance-colors-text, #202724);
+  --cf-muted: var(--appearance-colors-muted, #56645e);
+  --cf-accent: var(--appearance-colors-accent, #176b52);
+  --cf-secondary: var(--appearance-colors-secondary, #b45569);
+  --cf-surface: var(--appearance-surface-color, #ffffff);
+  --ink: var(--cf-ink); --muted: var(--cf-muted); --accent: var(--cf-accent);
+  --secondary: var(--cf-secondary); --paper: var(--cf-surface);
+  --rule: color-mix(in srgb, var(--cf-ink) 25%, var(--cf-surface));
+  --tone: color-mix(in srgb, var(--cf-accent) 12%, var(--cf-surface));
+  --band-b: color-mix(in srgb, var(--cf-accent) 4%, var(--cf-surface));
+  color: var(--ink);
+}
+.hf-card-kit, .hf-card-kit * { box-sizing: border-box; }
+/* --------------------------------------------------------- card layers -- */
+.hf-card-kit .card { position: absolute; will-change: transform, opacity; isolation: isolate; }
+
+.hf-card-kit .layer { position: absolute; inset: 0; }
+.hf-card-kit .layer2 { z-index: 2; }
+.hf-card-kit .layer4 {
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  padding: var(--pad, 40px);
+}
+.hf-card-kit .layer4--flush { padding: 0; }
+
+.hf-card-kit .deco { position: absolute; inset: 0; }
+.hf-card-kit .deco > * { position: absolute; }
+
+/* material surfaces (M0..M3) */
+.hf-card-kit .surface { position: absolute; }
+
+.hf-card-kit .card[data-material='M0'] .surface { background: var(--paper); }
+.hf-card-kit .card[data-material='M1'] .surface {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  box-shadow: 0 18px 44px rgba(20, 26, 23, 0.12);
+}
+.hf-card-kit .card[data-material='M2'] .surface { background: var(--tone); }
+
+/* F03 frosted glass: milky translucent tint, bright inner/top edge, broad soft
+   shadow. No thin gray outline, no figure blur, no whole-card backdrop-filter. */
+.hf-card-kit .card[data-material='M3'] .surface {
+  background: linear-gradient(155deg, color-mix(in srgb, var(--paper) 88%, transparent), color-mix(in srgb, var(--paper) 65%, transparent) 46%, color-mix(in srgb, var(--tone) 74%, transparent));
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.70), inset 0 -1px 0 rgba(255, 255, 255, 0.20), 0 26px 60px rgba(20, 26, 23, 0.18);
+}
+.hf-card-kit .frost-edge {
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0));
+  opacity: 0;
+}
+
+/* F02 flat color bands: independent tonal bands, no outer card, no shadows. */
+.hf-card-kit .band { border-radius: 4px; }
+.hf-card-kit .band--head, .hf-card-kit .band--a { background: var(--tone); }
+.hf-card-kit .band--b { background: var(--band-b); }
+
+/* F06 receipt: paper, dashed separators, tiny bottom teeth. */
+.hf-card-kit .ledger-dash { background: repeating-linear-gradient(90deg, var(--rule) 0 10px, transparent 10px 20px); }
+.hf-card-kit .teeth-path { fill: var(--paper); }
+
+/* F07 flat surfaces: distinct input block and output document, no wrapper card. */
+.hf-card-kit .io-surface { position: absolute; }
+.hf-card-kit .io-surface--in { background: var(--tone); border-radius: 4px; }
+.hf-card-kit .io-surface--out {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(20, 26, 23, 0.10);
+}
+.hf-card-kit .connector-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* F04 indexed spine + per-entry ticks and flat index labels. */
+.hf-card-kit .spine-rail { background: var(--accent); opacity: .45; }
+.hf-card-kit .tick { background: var(--accent); }
+.hf-card-kit .index-label { background: var(--tone); border-radius: 4px; }
+
+/* F01 horizontal annotated marker behind the first body line. */
+.hf-card-kit .anno-mark { background: var(--accent); border-radius: 2px; }
+
+/* F08 hard-edged sheets: 2px ink outline, no soft shadow, rear tone differs. */
+.hf-card-kit .sheet { position: absolute; }
+.hf-card-kit .sheet--front { background: var(--paper); border: 2px solid var(--ink); }
+.hf-card-kit .sheet--back { background: var(--tone); border: 2px solid var(--ink); }
+
+.hf-card-kit .rule { position: absolute; background: var(--rule); }
+.hf-card-kit .rule--head { background: var(--ink); }
+.hf-card-kit .rule--accent { background: var(--accent); }
+.hf-card-kit .rule--secondary { background: var(--secondary); }
+
+.hf-card-kit .cardicon {
+  width: 32px;
+  height: 32px;
+  background-color: var(--muted);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  transform-origin: 50% 50%;
+}
+.hf-card-kit .cardicon--title { width: 40px; height: 40px; }
+
+/* --------------------------------------------------------------- text --- */
+.hf-card-kit .t-title {
+  text-wrap: balance;
+  margin: 0;
+  font-size: 44px;
+  line-height: 58px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.hf-card-kit .t-body {
+  text-wrap: pretty;
+  font-size: 32px;
+  line-height: 46px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.hf-card-kit .t-lead {
+  font-size: 36px;
+  line-height: 50px;
+  font-weight: 500;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.hf-card-kit .card--narrow .t-lead { font-size: 32px; line-height: 46px; }
+.hf-card-kit .t-kicker {
+  font-size: 24px;
+  line-height: 34px;
+  font-weight: 600;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.hf-card-kit .t-key {
+  font-size: 24px;
+  line-height: 34px;
+  font-weight: 600;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.hf-card-kit .t-note {
+  font-size: 22px;
+  line-height: 32px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.hf-card-kit .title-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.hf-card-kit .spacer { flex: 0 0 auto; display: block; }
+.hf-card-kit .spacer-title { width: 40px; height: 40px; }
+.hf-card-kit .spacer-key { width: 32px; height: 32px; }
+.hf-card-kit .spacer-end { width: 32px; height: 32px; }
+
+.hf-card-kit .kicker { margin-bottom: 6px; }
+.hf-card-kit .note { margin-top: 8px; }
+
+/* --------------------------------------------------------------- rows --- */
+.hf-card-kit .rows { display: block; min-width: 0; }
+.hf-card-kit .lrow { min-width: 0; }
+.hf-card-kit .key-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  min-width: 0;
+}
+
+.hf-card-kit .lrow--line { display: flex; align-items: flex-start; gap: 12px; }
+.hf-card-kit .lrow--line .t-body { flex: 1 1 auto; }
+
+.hf-card-kit .lrow--key { display: grid; grid-template-columns: 148px minmax(0, 1fr); column-gap: 16px; align-items: start; }
+.hf-card-kit .lrow--outkey { display: grid; grid-template-columns: 120px minmax(0, 1fr); column-gap: 16px; align-items: start; }
+
+.hf-card-kit .lrow--key.is-narrow, .hf-card-kit .lrow--outkey.is-narrow {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 8px;
+}
+.hf-card-kit .lrow--key.is-narrow .key-cell, .hf-card-kit .lrow--outkey.is-narrow .key-cell { grid-column: 1; grid-row: 1; }
+.hf-card-kit .lrow--key.is-narrow .t-body, .hf-card-kit .lrow--outkey.is-narrow .t-body { grid-column: 1; grid-row: 2; }
+
+.hf-card-kit .rows--notes .lrow { padding: 18px 0; }
+.hf-card-kit .rows--glass .lrow { padding: 14px 0; }
+.hf-card-kit .rows--ledger .lrow { padding: 22px 0; }
+.hf-card-kit .rows--transform .lrow { padding: 16px 0; }
+.hf-card-kit .rows--stack .lrow { padding: 16px 0; }
+
+/* --------------------------------------------------------------- F02 ---- */
+.hf-card-kit .content { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
+
+.hf-card-kit .bands { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+.hf-card-kit .band-box { padding: 20px; min-width: 0; }
+.hf-card-kit .band-box--foot { padding: 20px; }
+
+/* --------------------------------------------------------------- F04 ---- */
+.hf-card-kit .rows--archive { min-width: 0; }
+.hf-card-kit .entry { padding: 18px 0 18px 20px; min-width: 0; }
+.hf-card-kit .entry-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hf-card-kit .entry .t-body { margin-top: 8px; }
+.hf-card-kit .rows--archive-cols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; }
+
+/* --------------------------------------------------------------- F03 ---- */
+.hf-card-kit .fig-slot { flex: 0 0 auto; width: 100%; }
+.hf-card-kit .fig-slot--glass { margin-bottom: 16px; }
+.hf-card-kit .fig-slot--editorial { margin-bottom: 16px; }
+.hf-card-kit .fig-slot--stack { margin-top: 16px; }
+
+.hf-card-kit .figlabels { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.hf-card-kit .fig-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  line-height: 28px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- figure -- */
+.hf-card-kit .figure-svg { display: block; }
+.hf-card-kit .figure-svg .fig-node { fill: var(--paper); stroke: currentColor; stroke-width: 3; }
+.hf-card-kit .figure-svg .fig-container { fill: var(--tone); stroke: currentColor; stroke-width: 3; }
+.hf-card-kit .figure-svg .fig-link { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* --------------------------------------------------------------- F05 ---- */
+.hf-card-kit .paragraphs { padding-left: 24px; margin-top: 8px; }
+.hf-card-kit .para { margin-bottom: 18px; }
+.hf-card-kit .para:last-child { margin-bottom: 0; }
+
+/* --------------------------------------------------------------- F07 ---- */
+.hf-card-kit .io-flow { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.hf-card-kit .io-flow--side { flex-direction: row; align-items: flex-start; }
+.hf-card-kit .io-block { min-width: 0; min-height: 0; padding: 24px; }
+.hf-card-kit .io-block--in { width: 62%; }
+.hf-card-kit .card--narrow .io-block--in { width: 100%; }
+.hf-card-kit .io-block--out { width: 100%; }
+.hf-card-kit .io-flow--side .io-block--in { width: 50%; }
+.hf-card-kit .io-flow--side .io-block--out { width: 50%; }
+.hf-card-kit .io-gap { flex: 0 0 auto; height: 40px; }
+.hf-card-kit .io-flow--side .io-gap { width: 56px; height: auto; align-self: stretch; }
+.hf-card-kit .io-label-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; min-width: 0; }
+.hf-card-kit .io-label { font-size: 22px; line-height: 32px; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.hf-card-kit .io-text { margin-bottom: 2px; }
+
+/* --------------------------------------------------------------- F08 ---- */
+.hf-card-kit .stack-content { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }

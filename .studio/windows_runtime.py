@@ -162,6 +162,8 @@ def environment(root: Path, config: dict | None = None) -> dict[str, str]:
         "HYPERFRAMES_NO_TELEMETRY": "1", "DO_NOT_TRACK": "1",
     })
     env["PATH"] = os.pathsep.join([str(root / "runtime/node"), str(root / "runtime/ffmpeg/bin"), env.get("PATH", "")])
+    # Every Node child uses this physical root, not a caller's preload from another installation.
+    env["NODE_OPTIONS"] = "--require " + json.dumps(str(root / ".studio/windows_node.cjs"), ensure_ascii=False)
     env["FFMPEG_PATH"] = env["HYPERFRAMES_FFMPEG_PATH"]
     env["FFPROBE_PATH"] = env["HYPERFRAMES_FFPROBE_PATH"]
     env["IMAGEIO_FFMPEG_EXE"] = env["FFMPEG_PATH"]
@@ -216,6 +218,15 @@ def doctor(root: Path, env: dict[str, str]) -> dict:
             result["checks"][name] = {"status": "unavailable", "error": str(error)}
     result["gpu"] = "pending-native-render-verification"
     result["fonts"] = "system-fonts; validate actual Work line breaks and glyph coverage"
+    if config.get("asset_root"):
+        from asset_store import ComponentError, discover_components
+        try:
+            audit = discover_components(root, audit=True, config=config)["audit"]
+            result["asset_audit"] = {key: audit[key] for key in ("warning_count", "error_count")}
+        except (ComponentError, OSError, ValueError) as error:
+            result["asset_audit"] = {"status": "unavailable", "error": str(error)}
+    else:
+        result["asset_audit"] = {"status": "not-configured"}
     return result
 
 

@@ -1,0 +1,8 @@
+.hf-math-kit{position:absolute;inset:0;pointer-events:none;color:var(--appearance-colors-text,#182b27);font-size:32px;line-height:1.25;font-weight:400;letter-spacing:0}
+.hf-math-kit *{box-sizing:border-box}
+.hf-math-item{position:absolute;opacity:0}
+.hf-math-label{position:absolute;display:flex;align-items:center;justify-content:center;white-space:pre;overflow:visible;font:inherit;letter-spacing:0}
+.hf-math-shape{position:absolute;border:3px solid var(--appearance-colors-accent,#19776b);background:var(--appearance-surface-color,transparent)}
+.hf-math-line{position:absolute;height:3px;background:var(--appearance-colors-text,#182b27)}
+.hf-math-tick{position:absolute;width:3px;background:var(--appearance-colors-text,#182b27)}
+.hf-math-glyphs{position:absolute;left:0;top:0;opacity:0;white-space:pre;font:inherit;pointer-events:none}

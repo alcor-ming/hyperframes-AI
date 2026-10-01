@@ -20,7 +20,7 @@ seed_spec.loader.exec_module(seed)
 
 class WindowsRootTest(unittest.TestCase):
     def make_root(self, base, *, review=False):
-        root = base / "root"
+        root = base / "root with spaces \u6d4b\u8bd5"
         (root / ".studio/.runtime").mkdir(parents=True)
         (root / ".release.json").write_text(json.dumps({"release": "candidate-test" if review else "local-test",
                                                        "channel": "candidate" if review else "local"}))
@@ -49,6 +49,9 @@ class WindowsRootTest(unittest.TestCase):
             with patch.dict(os.environ, pollution):
                 env = runtime.environment(root)
             self.assertNotIn("HYPERFRAMES_AI_SESSION", env)
+            with patch.dict(os.environ, {"NODE_OPTIONS": '--require "foreign-root.cjs"'}):
+                self.assertEqual(runtime.environment(root)["NODE_OPTIONS"],
+                                 "--require " + json.dumps(str(root / ".studio/windows_node.cjs"), ensure_ascii=False))
             self.assertEqual(env["HYPERFRAMES_AI_ROOT"], str(root))
             self.assertEqual(env["HYPERFRAMES_AI_CONFIG"], str(path))
             self.assertEqual(env["HYPERFRAMES_AI_ASSET_ROOT"], config["asset_root"])
@@ -125,6 +128,29 @@ class WindowsRootTest(unittest.TestCase):
             asset.write_bytes(b"changed")
             with self.assertRaisesRegex(ValueError, "SHA256"):
                 seed.download("", asset, expected)
+
+    def test_seed_preserves_pinned_loader_native_dependencies(self):
+        lock = seed.read(Path(__file__).resolve().parents[1] / "windows-npm.lock.json")
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            metadata = []
+            for key in list(lock["packages"]):
+                if key == "node_modules/koffi" or key.startswith("node_modules/@koromix/koffi-"):
+                    package = lock["packages"].pop(key)
+                    package.update(name=key.removeprefix("node_modules/"),
+                                   dist={"tarball": package["resolved"], "integrity": package["integrity"]})
+                    path = base / f"metadata-{len(metadata)}.json"
+                    path.write_text(json.dumps(package))
+                    metadata.append(path)
+            source, output = base / "source.json", base / "output.json"
+            source.write_text(json.dumps(lock))
+            seed.seed_lock(source, metadata, output)
+            result = seed.read(output)["packages"]
+            self.assertEqual(result[""]["dependencies"]["koffi"], seed.VERSIONS["koffi"])
+            self.assertEqual(result["node_modules/koffi"]["optionalDependencies"]["@koromix/koffi-win32-x64"],
+                             seed.VERSIONS["koffi"])
+            self.assertEqual(result["node_modules/@koromix/koffi-win32-x64"]["os"], ["win32"])
+            self.assertTrue(result["node_modules/@koromix/koffi-win32-x64"]["optional"])
 
 
 

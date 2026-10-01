@@ -47,6 +47,12 @@ class AppearanceRebindTest(unittest.TestCase):
         self.assertEqual("rebound", result["status"])
         after = cli.read_json(self.variant / "variant.yaml")
         self.assertEqual("main", after["id"])
+        metadata = cli.read_frontmatter(self.variant / 'ANIMATION_PLAN.md')
+        self.assertEqual(after['appearance_lock']['selection']['background'], metadata['background'])
+        self.assertEqual(after['appearance_lock']['sha256'], metadata['appearance_lock_sha256'])
+        self.assertEqual(after['plan_revision'], metadata['revision'])
+        self.assertEqual(before['ANIMATION_PLAN.md'].decode().split('## 全片方向', 1)[1],
+                         (self.variant / 'ANIMATION_PLAN.md').read_text().split('## 全片方向', 1)[1])
         for field in ("accepted_visual_plan", "accepted_preview", "accepted_plan_revision", "accepted_script_revision", "current_final"):
             self.assertIsNone(after[field])
         self.assertEqual("final.mp4", after["appearance_history"][-1]["current_final"])
@@ -70,6 +76,13 @@ class AppearanceRebindTest(unittest.TestCase):
         with self.assertRaisesRegex(appearance.AppearanceError, "user-modified"):
             self.update("--apply", "--upgrade-runtime")
         self.assertEqual(before, self.contents())
+
+    def test_mode_switch_defaults_captions_without_mutating_preview(self):
+        preview = self.update("--mode", "explainer")
+        self.assertTrue(preview["changes"]["selection"]["after"]["captions"])
+        self.assertEqual(self.before, self.contents())
+        preview = self.update("--mode", "explainer", "--captions", "off")
+        self.assertFalse(preview["changes"]["selection"]["after"]["captions"])
 
     def test_commit_failure_rolls_back_and_interruption_requires_recovery(self):
         plan = self.variant / "ANIMATION_PLAN.md"
@@ -112,6 +125,19 @@ class AppearanceRebindTest(unittest.TestCase):
         cli.write_json(record, {"pid": os.getpid()})
         with self.assertRaisesRegex(appearance.AppearanceError, "Stop"):
             self.invoke("--work", self.work_id, "--variant", "main", "appearance", "rebind", "--background", "white@v1", "--apply")
+
+    def test_v361_runtime_requires_explicit_upgrade(self):
+        runtime = self.variant / "project/runtime/appearance.js"
+        runtime.write_text("v3.6.1 frozen runtime fixture")
+        before = self.contents()
+        file_sha256 = cli.file_sha256
+        old_hash = "77cf4869f89604a42b1e7cfa3f09fda7c4b5ad4d593f7a6aece18a3e02f29abe"
+        with patch.object(cli, "file_sha256", side_effect=lambda path: old_hash if Path(path) == runtime else file_sha256(path)):
+            with self.assertRaisesRegex(appearance.AppearanceError, "upgrade-runtime"):
+                self.update("--apply")
+            self.assertEqual(before, self.contents())
+            self.assertTrue(self.update("--apply", "--upgrade-runtime")["runtime_upgrade"])
+        self.assertEqual((Path(appearance.__file__).parent / "runtime/appearance.js").read_bytes(), runtime.read_bytes())
 
     def test_explicit_target_required_and_known_runtime_upgrade(self):
         preview = self.update("--ratio", "9:16")

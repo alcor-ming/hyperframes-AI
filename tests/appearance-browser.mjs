@@ -37,14 +37,17 @@ for name, kind, payload in [
  refs[name] = {'ref':candidate['component_ref'],'kind':kind,'package_sha256':candidate['package_sha256']}
 for name in ('light','dark','clear','moving'):
  project = root/('project-'+name); project.mkdir()
- account = {'id':'fixture','revision':1,'theme':refs['paper'],'background':refs['light' if name == 'moving' else name],'mode':'text-led','ratio':'16:9','motion':{'reveal':None,'emphasis':None,'exit':None,'transition':None}}
+ account = {'id':'fixture','revision':1,'theme':refs['paper'],'background':refs['light' if name == 'moving' else name],'mode':'card','ratio':'16:9','motion':{'reveal':None,'emphasis':None,'exit':None,'transition':None}}
  account['overrides'] = {'theme':{'tokens.colors.text':'#19352b'}}
  if name == 'moving':
   account['motion']['reveal'] = {'asset':refs['gentle'],'entry':'reveal'}
   account['overrides']['motion'] = {'reveal':{'slots.reveal.duration':2}}
  lock = appearance.resolve(harness, account)
  appearance.materialize(harness,project,lock)
+free = root/'project-free'; free.mkdir()
+appearance.materialize(harness,free,appearance.resolve(harness,{},{'mode':'showcase','submodule':'pdoom'}))
 shutil.rmtree(assets)
+appearance.verify(free,json.loads((free/'appearance-lock.json').read_text()))
 for name in ('light','dark','clear','moving'):
  project = root/('project-'+name)
  appearance.verify(project,json.loads((project/'appearance-lock.json').read_text()))
@@ -53,7 +56,7 @@ assert.equal(build.status, 0, build.stderr);
 const html = `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><style>
 *{box-sizing:border-box}body{margin:0;font:20px system-ui;background:#b6b9bc}main{min-height:100vh;padding:48px 24px;display:grid;align-content:center;justify-items:center}article{padding:28px;max-width:520px;width:100%;border:1px solid #89998f;border-radius:6px}h1{font-size:32px;margin:0 0 16px}p{line-height:1.5;margin:0}
 </style><main id="stage"><article data-appearance-card><h1 data-appearance-text>Three Clear Choices</h1><p data-appearance-text>Theme controls the foreground. The background is selected independently.</p></article></main><script src="runtime/appearance.js"></script><script>window.ready=HarnessAppearance.load().then(value=>HarnessAppearance.apply(document.querySelector('main'),value));</script>`;
-for (const name of ['light', 'dark', 'clear', 'moving']) await fs.writeFile(path.join(output, `project-${name}`, 'index.html'), html);
+for (const name of ['light', 'dark', 'clear', 'moving', 'free']) await fs.writeFile(path.join(output, `project-${name}`, 'index.html'), html);
 const server = http.createServer(async (request, response) => {
   try {
     const relative = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1);
@@ -136,8 +139,23 @@ try {
   assert.notEqual(motion.frames[0], motion.frames[2]);
   assert.equal(motion.animations, 0);
   assert.equal(motion.unsupportedReduced, true, 'Legacy unsupported presets fail only when selected, without effects');
+  await page.goto(`http://127.0.0.1:${server.address().port}/project-free/index.html`);
+  const free = await page.evaluate(async () => {
+    const appearance = await ready;
+    const stage = document.querySelector('main'), card = document.querySelector('article');
+    const background = await HarnessAppearance.mountBackground(stage, appearance, { find() {} });
+    background.renderAt(1);
+    const motion = HarnessAppearance.bindMotion(card, appearance, 'reveal');
+    motion.seek(1);
+    motion.dispose();
+    background.dispose();
+    return { theme: appearance.theme, background: appearance.background, stage: stage.getAttribute('style'),
+             foreground: getComputedStyle(document.querySelector('h1')).color, card: card.getAttribute('style') };
+  });
+  assert.deepEqual(free, { theme: null, background: null, stage: null, foreground: 'rgb(0, 0, 0)', card: null },
+                   'Showcase without selected appearance must leave the host look untouched');
   assert.deepEqual(errors, []);
-  await fs.writeFile(path.join(output, 'evidence.json'), JSON.stringify({ static: evidence, motion }, null, 2));
+  await fs.writeFile(path.join(output, 'evidence.json'), JSON.stringify({ static: evidence, motion, free }, null, 2));
   console.log(output);
 } finally {
   if (browser) await browser.close();

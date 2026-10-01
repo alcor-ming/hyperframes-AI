@@ -31,7 +31,7 @@ LOCAL_SKILLS = {
     "design-taste-frontend": "eb6d1b2e9c86123ebd153123e1f12e16955c7d43a1ec28495c48f29f2641481e",
 }
 VERSION_PATTERN = re.compile(r"^(?:harness-)?(\d{4}\.\d{2}\.\d+)$")
-PUBLIC_ROOT_FILES = {"AGENTS.md", "README.md", "LICENSE", ".gitignore", "release", "release.ps1",
+PUBLIC_ROOT_FILES = {"AGENTS.md", "CLAUDE.md", "work-wsl.sh", "README.md", "LICENSE", ".gitignore", "release", "release.ps1",
                      "work", "work.cmd", "work.ps1", "asr-wsl.cmd", "windows-runtime.lock.json",
                      "windows-npm.lock.json", "skills-lock.json", "workspace.ps1"}
 
@@ -275,6 +275,10 @@ def stage_windows_rules(staging: Path) -> None:
     if not template.is_file():
         raise ReleaseError("Windows root rules are missing from the frozen sources")
     shutil.copyfile(template, staging / "AGENTS.md")
+    claude = staging / ".studio/templates/CLAUDE.template.md"
+    if not claude.is_file():
+        raise ReleaseError("Claude production rules are missing from the frozen sources")
+    shutil.copyfile(claude, staging / "CLAUDE.md")
 
 
 def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: list[str], *, channel: str = "candidate", runtime_files: dict | None = None) -> Path:

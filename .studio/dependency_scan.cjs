@@ -72,7 +72,9 @@ async function css(text) {
   return { refs, dynamic: [] };
 }
 
-(async () => {
+module.exports = { dependency };
+
+if (require.main === module) (async () => {
   const units = JSON.parse(fs.readFileSync(0, 'utf8'));
   const result = { refs: [], dynamic: [] };
   for (const unit of units) {

@@ -168,6 +168,7 @@ def command(root, args, api):
                 preview, metadata = _accepted_source(source, args.source_variant, args.source_version, api)
                 source_files = api.snapshot_tree_manifest(preview)
                 args.workflow, args.purpose, args.batch = "hyperframes_video", source_meta["purpose"], None
+                args.series = source_meta["series"]
                 settings = api.adopted_settings(root, args)
                 number = api.video_number(root, rows, identity)
                 work_id = f"work-hyperframes_video-{number:03d}-{api.work_slug(title)}"

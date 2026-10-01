@@ -45,7 +45,7 @@ class WorkCliTest(unittest.TestCase):
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            result = WORK_CLI.main(list(arguments), root=self.root)
+            result = WORK_CLI.main(['--json', *arguments], root=self.root)
         self.assertEqual(expected, result, stderr.getvalue())
         return stdout.getvalue().strip() or stderr.getvalue().strip()
 
@@ -76,6 +76,19 @@ class WorkCliTest(unittest.TestCase):
             with WORK_CLI.naming_lock(self.root, timeout=0.01):
                 self.assertEqual(WORK_CLI.os.getpid(), json.loads((lock / "owner.json").read_text())["pid"])
         self.assertFalse(lock.exists())
+
+    def test_plan_metadata_uses_adopted_identity_and_shared_inputs(self):
+        _, work = self.new_work()
+        variant = work / 'variants/main'
+        path = variant / 'ANIMATION_PLAN.md'
+        metadata = WORK_CLI.read_frontmatter(path)
+        self.assertEqual(work.name, metadata['work'])
+        self.assertEqual('main', metadata['variant'])
+        self.assertNotIn('.pending-', path.read_text())
+        self.assertEqual('shared/RESEARCH.md', metadata['inputs']['RESEARCH.md']['path'])
+        self.assertEqual(1, metadata['research_revision'])
+        self.assertEqual(1, path.read_text().count('<!-- plan-metadata:start -->'))
+        self.assertIsNone(metadata['appearance_lock_sha256'])
 
     def prepare_package_final(self, name: str = "quote-final", marker: bytes = b"one") -> Path:
         directory = self.root / name

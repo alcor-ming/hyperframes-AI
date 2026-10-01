@@ -1,0 +1,35 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "b64eab539465af375a65b1068ce718268fd8e041d969f2aa16ddc90821595726"
+    },
+    {
+      "path": "assets/vendor/gsap/CustomEase.min.js",
+      "sha256": "1d8a8575a2525f10b0ede48c915b6ad3738d09a2eeb0600f18fd0049aa24802d"
+    },
+    {
+      "path": "assets/vendor/gsap/gsap.min.js",
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "1e942b0b92fcb154282290f56a313f1fe14c37dd76461fd08fff0f5a16e36e58"
+    },
+    {
+      "path": "component.html",
+      "sha256": "fa14b7b26dc6b9316035121ec1fce0a948d3da97dd57f055abc8a351c2ad2264"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "1d622808aae615eb08504ad11b22e3f841d44762ba84785c67cba663fc996a0d"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "db97384943dac964dd32b17c1c9d1f5005eebd5f6ca4d9c698533eb3f57d2592"
+    }
+  ],
+  "package_sha256": "cd17fc64da06285cb5d7eb0076fc0f3b31419244abeaa48744fe610793262c00",
+  "asset_ref": "cover-title-core/9x16@v2"
+}
