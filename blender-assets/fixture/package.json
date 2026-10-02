@@ -1,0 +1,15 @@
+{
+  "name": "blender-asset-validation-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test test/*.test.mjs",
+    "validate": "node scripts/validate-glb.mjs",
+    "check:t1": "node scripts/check-t1.mjs",
+    "check:browser": "node scripts/check-browser.mjs"
+  },
+  "dependencies": { "three": "0.160.0" },
+  "devDependencies": { "gltf-validator": "2.0.0-dev.3.10", "playwright": "1.58.2", "pngjs": "7.0.0" }
+}

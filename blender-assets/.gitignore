@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+fixture/node_modules/
+.cache/
+.repeat/
+*.blend1

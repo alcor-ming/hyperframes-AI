@@ -1,0 +1,47 @@
+{
+  "state": "blocked",
+  "observedAt": "2026-10-02T14:13:40Z",
+  "three": "0.160.0",
+  "assets": [
+    {
+      "file": "../T1-device-mockups/out/phone.glb",
+      "sha256": "dfb8e11767af4254437e935cdf3e2bb16b4d22eace76645daf15af42c7b35791",
+      "browserVerified": false,
+      "attemptedInputSha256": "f6898cad457bf98010bc24d4789195838f66fe837c08d952fea33b6de6254e2c",
+      "note": "Final candidate updated only by a global phone-origin correction after the blocked launch; browser verification remains false."
+    },
+    {
+      "file": "../T1-device-mockups/out/laptop.glb",
+      "sha256": "398d2ce82f4253cc979164a16c91cd94fe7b9720cfe839d7c48e9cbd88edc013",
+      "browserVerified": false
+    }
+  ],
+  "attempts": [
+    {
+      "route": "Playwright normal installed Chromium launch",
+      "outcome": "process_singleton_posix.cc:297 socket() failed: Operation not permitted (1)"
+    },
+    {
+      "route": "One approved command-escalation retry, unchanged browser arguments",
+      "outcome": "process_singleton_posix.cc:297 socket() failed: Operation not permitted (1)"
+    },
+    {
+      "route": "Provided cloud browser, running fixture http://127.0.0.1:4173/?model=/assets/T1-device-mockups/out/laptop.glb",
+      "outcome": "net::ERR_BLOCKED_BY_CLIENT"
+    }
+  ],
+  "screenshots": [],
+  "unverified": [
+    "WebGL rendering",
+    "Chinese four-corner texture visual orientation",
+    "[t3,0,t1,t3] pixel equality",
+    "Lid-angle browser screenshots",
+    "Visual theme differences"
+  ],
+  "verifiedElsewhere": [
+    "8 unit tests passed",
+    "Actual T1 GLB contract inspection passed",
+    "Khronos Validator: zero errors and zero warnings for both final GLBs"
+  ],
+  "note": "This records actual execution-route failures. The complete check-browser.mjs suite was written and syntax checked but could not execute beyond browser launch in this environment. No security flags were added to bypass the failures."
+}

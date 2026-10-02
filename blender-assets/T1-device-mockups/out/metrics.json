@@ -1,0 +1,1641 @@
+{
+  "blender": "4.5.14 LTS",
+  "seed": 20261002,
+  "models": {
+    "phone": {
+      "triangles": 3202,
+      "meshes": {
+        "camera_aperture": {
+          "triangles": 124,
+          "vertices": 64,
+          "zero_area_faces": 0,
+          "signed_volume": 7.553900534932951e-10,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "camera_lens": {
+          "triangles": 124,
+          "vertices": 64,
+          "zero_area_faces": 0,
+          "signed_volume": 3.211959506667758e-10,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "chassis": {
+          "triangles": 572,
+          "vertices": 288,
+          "zero_area_faces": 0,
+          "signed_volume": 9.633996659019658e-05,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "display_bezel": {
+          "triangles": 1152,
+          "vertices": 576,
+          "zero_area_faces": 0,
+          "signed_volume": 5.79667797375949e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "power_key": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 4.068219883231649e-08,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "rear_camera": {
+          "triangles": 508,
+          "vertices": 256,
+          "zero_area_faces": 0,
+          "signed_volume": 2.4915009048324435e-08,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "rear_lens": {
+          "triangles": 124,
+          "vertices": 64,
+          "zero_area_faces": 0,
+          "signed_volume": 9.832549074356453e-09,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "screen": {
+          "triangles": 34,
+          "vertices": 36,
+          "zero_area_faces": 0,
+          "signed_volume": 1.432274585938168e-05,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 36,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": true
+        },
+        "volume_down": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.6994715827601703e-08,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "volume_up": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.6994711713702333e-08,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        }
+      },
+      "axis": "+Y up; +Z front",
+      "unit": "meter",
+      "bytes": 62572,
+      "sha256": "dfb8e11767af4254437e935cdf3e2bb16b4d22eace76645daf15af42c7b35791",
+      "screen_aspect": 0.46153846153846156
+    },
+    "laptop": {
+      "triangles": 16606,
+      "meshes": {
+        "base": {
+          "triangles": 572,
+          "vertices": 288,
+          "zero_area_faces": 0,
+          "signed_volume": 0.0008088081959796201,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "hinge_left": {
+          "triangles": 92,
+          "vertices": 48,
+          "zero_area_faces": 0,
+          "signed_volume": 3.1446510990053248e-06,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "hinge_right": {
+          "triangles": 92,
+          "vertices": 48,
+          "zero_area_faces": 0,
+          "signed_volume": 3.1446510990053248e-06,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_0": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646856837178884e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_1": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646880749237377e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_10": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646862905629634e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_11": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264685725810745e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_12": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646880749237395e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_13": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646856837178956e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_2": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646857258107598e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_3": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264686290562967e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_4": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646868553391185e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_5": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646858129375664e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_6": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646860908716128e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_7": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646860908716154e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_8": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646858129375725e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_0_9": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264686829950847e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_0": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646845557656042e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_1": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646869469701758e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_10": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264685162610312e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_11": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646845978584396e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_12": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646869469701776e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_13": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646845557658072e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_2": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646845978584174e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_3": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646851626104664e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_4": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264685727386302e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_5": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646846849852663e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_6": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264684962919177e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_7": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646849629192105e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_8": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646846849852327e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_1_9": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.26468570199793e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_0": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646835374653233e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_1": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264685928668797e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_10": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646841443098691e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_11": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646835795578775e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_12": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264685928668799e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_13": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646835374653222e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_2": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264683579557877e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_3": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264684144309872e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_4": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646847090858246e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_5": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646836666851275e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_6": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646839446190815e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_7": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264683944619082e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_8": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646836666851384e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_2_9": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264684683697588e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_0": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264686411667013e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_1": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264688802873938e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_10": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646870185124727e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_11": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646864537598863e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_12": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264688802873941e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_13": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646864116670115e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_2": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646864537598847e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_3": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646870185124716e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_4": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646875832890785e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_5": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264686540887087e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_6": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.264686818821257e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_7": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646868188212576e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_8": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646865408870963e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_3_9": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2646875579008258e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_0": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.807787839372311e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_1": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.8077882235548694e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_2": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.807788103043571e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_3": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.807788403832512e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_4": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.807788646146873e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_5": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.807788646146873e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_6": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.8077884038325126e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_7": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.8077881030435723e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_8": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.8077882235548715e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "key_4_9": {
+          "triangles": 188,
+          "vertices": 96,
+          "zero_area_faces": 0,
+          "signed_volume": 2.8077878393723146e-07,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "keyboard_tray": {
+          "triangles": 572,
+          "vertices": 288,
+          "zero_area_faces": 0,
+          "signed_volume": 1.386474027723701e-05,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "lid_bezel": {
+          "triangles": 1152,
+          "vertices": 576,
+          "zero_area_faces": 0,
+          "signed_volume": 1.1815258628586928e-06,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "lid_shell": {
+          "triangles": 572,
+          "vertices": 288,
+          "zero_area_faces": 0,
+          "signed_volume": 0.00040464124387251806,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "screen": {
+          "triangles": 2,
+          "vertices": 4,
+          "zero_area_faces": 0,
+          "signed_volume": -0.00012134831845190234,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 4,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": true
+        },
+        "trackpad": {
+          "triangles": 572,
+          "vertices": 288,
+          "zero_area_faces": 0,
+          "signed_volume": 2.1620480390133112e-06,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        },
+        "trackpad_border": {
+          "triangles": 572,
+          "vertices": 288,
+          "zero_area_faces": 0,
+          "signed_volume": 2.2719436406313527e-06,
+          "duplicate_vertices": 0,
+          "nonmanifold_edges": 0,
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "intentional_open_surface": false
+        }
+      },
+      "axis": "+Y up; +Z front",
+      "unit": "meter",
+      "bytes": 261856,
+      "sha256": "398d2ce82f4253cc979164a16c91cd94fe7b9720cfe839d7c48e9cbd88edc013",
+      "screen_aspect": 1.6
+    }
+  }
+}

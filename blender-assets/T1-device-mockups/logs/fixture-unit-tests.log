@@ -1,0 +1,21 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> blender-asset-validation-fixture@1.0.0 test
+> node --test test/*.test.mjs
+
+✔ Three exact r160 dependency (1.001782ms)
+✔ negative lid range sorts exported endpoints; degree conversion is explicit (0.908942ms)
+✔ material extras role takes priority over name and node role (0.363752ms)
+✔ every theme recolors actual hf_* roles without renaming materials (1.459361ms)
+✔ seeded random repeats for equal seeds and varies across seeds (0.504517ms)
+✔ MeshSurfaceSampler produces exactly 2000 reproducible points (9.78269ms)
+✔ character detection honors explicit index and named glyphs (0.665447ms)
+✔ absolute setTime survives backward seeks and clip end without accumulated update (3.281ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 174.756087

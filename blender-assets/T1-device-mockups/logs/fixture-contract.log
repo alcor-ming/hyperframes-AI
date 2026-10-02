@@ -1,0 +1,7 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> blender-asset-validation-fixture@1.0.0 check:t1
+> node scripts/check-t1.mjs
+
+PASS ../T1-device-mockups/out/phone.glb
+PASS ../T1-device-mockups/out/laptop.glb

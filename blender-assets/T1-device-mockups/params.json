@@ -1,0 +1,8 @@
+{
+  "seed": 20261002,
+  "phone": {"width": 0.074, "height": 0.16, "depth": 0.0082, "corner_radius": 0.010, "screen_height": 0.144, "screen_aspect": 0.46153846153846156},
+  "laptop": {"screen_diagonal": 0.36, "screen_aspect": 1.6, "base_width": 0.323, "base_depth": 0.228, "base_thickness": 0.011, "lid_thickness": 0.006, "closed_lid_bottom": 0.0065, "lid_max_open_deg": 130, "lid_default_open_deg": 105},
+  "bevel_segments": 3,
+  "preview_resolution": 512,
+  "preview_samples": 24
+}

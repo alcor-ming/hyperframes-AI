@@ -1,0 +1,335 @@
+{
+  "neutral": {
+    "label": "Neutral / 中性",
+    "background": "#10151e",
+    "roles": {
+      "body": {
+        "color": "#d8dce4",
+        "metalness": 0.55,
+        "roughness": 0.3
+      },
+      "frame": {
+        "color": "#9ba6b6",
+        "metalness": 0.65,
+        "roughness": 0.28
+      },
+      "bezel": {
+        "color": "#111820",
+        "metalness": 0.05,
+        "roughness": 0.34
+      },
+      "keyboard": {
+        "color": "#252d38",
+        "metalness": 0.05,
+        "roughness": 0.48
+      },
+      "keycap": {
+        "color": "#252d38",
+        "metalness": 0.05,
+        "roughness": 0.48
+      },
+      "trackpad": {
+        "color": "#b3bece",
+        "metalness": 0.4,
+        "roughness": 0.35
+      },
+      "screen": {
+        "color": "#ffffff",
+        "metalness": 0,
+        "roughness": 0.5
+      },
+      "glass": {
+        "color": "#172f43",
+        "metalness": 0,
+        "roughness": 0.1
+      },
+      "accent": {
+        "color": "#26b8ec",
+        "metalness": 0.25,
+        "roughness": 0.28
+      },
+      "text": {
+        "color": "#f3f7ff",
+        "metalness": 0.1,
+        "roughness": 0.28
+      },
+      "icon": {
+        "color": "#73caf0",
+        "metalness": 0.25,
+        "roughness": 0.28
+      },
+      "hf_surface": {
+        "color": "#d8dce4",
+        "metalness": 0.55,
+        "roughness": 0.3
+      },
+      "hf_muted": {
+        "color": "#111820",
+        "metalness": 0.05,
+        "roughness": 0.34
+      },
+      "hf_screen": {
+        "color": "#ffffff",
+        "metalness": 0,
+        "roughness": 0.5
+      },
+      "hf_accent": {
+        "color": "#26b8ec",
+        "metalness": 0.25,
+        "roughness": 0.28
+      },
+      "hf_text": {
+        "color": "#f3f7ff",
+        "metalness": 0.1,
+        "roughness": 0.28
+      },
+      "hf_icon": {
+        "color": "#73caf0",
+        "metalness": 0.25,
+        "roughness": 0.28
+      },
+      "hf_background": {
+        "color": "#111820",
+        "metalness": 0.05,
+        "roughness": 0.34
+      },
+      "hf_primary": {
+        "color": "#26b8ec",
+        "metalness": 0.25,
+        "roughness": 0.28
+      },
+      "hf_secondary": {
+        "color": "#9ba6b6",
+        "metalness": 0.65,
+        "roughness": 0.28
+      },
+      "hf_outline": {
+        "color": "#111820",
+        "metalness": 0.05,
+        "roughness": 0.34
+      }
+    }
+  },
+  "warm": {
+    "label": "Warm / 暖色",
+    "background": "#241b18",
+    "roles": {
+      "body": {
+        "color": "#dbc0a4",
+        "metalness": 0.5,
+        "roughness": 0.32
+      },
+      "frame": {
+        "color": "#b7835c",
+        "metalness": 0.6,
+        "roughness": 0.3
+      },
+      "bezel": {
+        "color": "#231a17",
+        "metalness": 0,
+        "roughness": 0.4
+      },
+      "keyboard": {
+        "color": "#4b3930",
+        "metalness": 0,
+        "roughness": 0.52
+      },
+      "keycap": {
+        "color": "#4b3930",
+        "metalness": 0,
+        "roughness": 0.52
+      },
+      "trackpad": {
+        "color": "#c4a68b",
+        "metalness": 0.4,
+        "roughness": 0.36
+      },
+      "screen": {
+        "color": "#ffffff",
+        "metalness": 0,
+        "roughness": 0.5
+      },
+      "glass": {
+        "color": "#472c20",
+        "metalness": 0,
+        "roughness": 0.1
+      },
+      "accent": {
+        "color": "#ff9d45",
+        "metalness": 0.25,
+        "roughness": 0.28
+      },
+      "text": {
+        "color": "#fff0dd",
+        "metalness": 0.1,
+        "roughness": 0.3
+      },
+      "icon": {
+        "color": "#f7ba61",
+        "metalness": 0.25,
+        "roughness": 0.3
+      },
+      "hf_surface": {
+        "color": "#dbc0a4",
+        "metalness": 0.5,
+        "roughness": 0.32
+      },
+      "hf_muted": {
+        "color": "#231a17",
+        "metalness": 0,
+        "roughness": 0.4
+      },
+      "hf_screen": {
+        "color": "#ffffff",
+        "metalness": 0,
+        "roughness": 0.5
+      },
+      "hf_accent": {
+        "color": "#ff9d45",
+        "metalness": 0.25,
+        "roughness": 0.28
+      },
+      "hf_text": {
+        "color": "#fff0dd",
+        "metalness": 0.1,
+        "roughness": 0.3
+      },
+      "hf_icon": {
+        "color": "#f7ba61",
+        "metalness": 0.25,
+        "roughness": 0.3
+      },
+      "hf_background": {
+        "color": "#231a17",
+        "metalness": 0,
+        "roughness": 0.4
+      },
+      "hf_primary": {
+        "color": "#ff9d45",
+        "metalness": 0.25,
+        "roughness": 0.28
+      },
+      "hf_secondary": {
+        "color": "#b7835c",
+        "metalness": 0.6,
+        "roughness": 0.3
+      },
+      "hf_outline": {
+        "color": "#231a17",
+        "metalness": 0,
+        "roughness": 0.4
+      }
+    }
+  },
+  "cool": {
+    "label": "Cool / 冷色",
+    "background": "#0d1828",
+    "roles": {
+      "body": {
+        "color": "#7899c9",
+        "metalness": 0.55,
+        "roughness": 0.3
+      },
+      "frame": {
+        "color": "#355b94",
+        "metalness": 0.65,
+        "roughness": 0.27
+      },
+      "bezel": {
+        "color": "#111b32",
+        "metalness": 0,
+        "roughness": 0.35
+      },
+      "keyboard": {
+        "color": "#223453",
+        "metalness": 0,
+        "roughness": 0.48
+      },
+      "keycap": {
+        "color": "#223453",
+        "metalness": 0,
+        "roughness": 0.48
+      },
+      "trackpad": {
+        "color": "#8ba9d3",
+        "metalness": 0.4,
+        "roughness": 0.35
+      },
+      "screen": {
+        "color": "#ffffff",
+        "metalness": 0,
+        "roughness": 0.5
+      },
+      "glass": {
+        "color": "#172749",
+        "metalness": 0,
+        "roughness": 0.1
+      },
+      "accent": {
+        "color": "#9d8dff",
+        "metalness": 0.3,
+        "roughness": 0.28
+      },
+      "text": {
+        "color": "#e4eeff",
+        "metalness": 0.1,
+        "roughness": 0.28
+      },
+      "icon": {
+        "color": "#83bdff",
+        "metalness": 0.3,
+        "roughness": 0.3
+      },
+      "hf_surface": {
+        "color": "#7899c9",
+        "metalness": 0.55,
+        "roughness": 0.3
+      },
+      "hf_muted": {
+        "color": "#111b32",
+        "metalness": 0,
+        "roughness": 0.35
+      },
+      "hf_screen": {
+        "color": "#ffffff",
+        "metalness": 0,
+        "roughness": 0.5
+      },
+      "hf_accent": {
+        "color": "#9d8dff",
+        "metalness": 0.3,
+        "roughness": 0.28
+      },
+      "hf_text": {
+        "color": "#e4eeff",
+        "metalness": 0.1,
+        "roughness": 0.28
+      },
+      "hf_icon": {
+        "color": "#83bdff",
+        "metalness": 0.3,
+        "roughness": 0.3
+      },
+      "hf_background": {
+        "color": "#111b32",
+        "metalness": 0,
+        "roughness": 0.35
+      },
+      "hf_primary": {
+        "color": "#9d8dff",
+        "metalness": 0.3,
+        "roughness": 0.28
+      },
+      "hf_secondary": {
+        "color": "#355b94",
+        "metalness": 0.65,
+        "roughness": 0.27
+      },
+      "hf_outline": {
+        "color": "#111b32",
+        "metalness": 0,
+        "roughness": 0.35
+      }
+    }
+  }
+}

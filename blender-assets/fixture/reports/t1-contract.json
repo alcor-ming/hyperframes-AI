@@ -1,0 +1,267 @@
+[
+  {
+    "file": "../T1-device-mockups/out/phone.glb",
+    "sha256": "dfb8e11767af4254437e935cdf3e2bb16b4d22eace76645daf15af42c7b35791",
+    "threeRevision": "160",
+    "checks": [
+      {
+        "name": "three-exact-r160",
+        "pass": true
+      },
+      {
+        "name": "named-device-root",
+        "pass": true
+      },
+      {
+        "name": "standalone-screen-mesh",
+        "pass": true
+      },
+      {
+        "name": "root-meter-unit",
+        "pass": true
+      },
+      {
+        "name": "root-identity-transform",
+        "pass": true
+      },
+      {
+        "name": "screen-has-uv",
+        "pass": true
+      },
+      {
+        "name": "screen-aspect-metadata",
+        "pass": true
+      },
+      {
+        "name": "screen-geometry-matches-aspect",
+        "pass": true
+      },
+      {
+        "name": "screen-uv-physical-top-left-v0",
+        "pass": true,
+        "details": []
+      },
+      {
+        "name": "screen-full-uv-0-1",
+        "pass": true,
+        "details": [
+          0,
+          1,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "all-materials-have-role-extras",
+        "pass": true
+      },
+      {
+        "name": "no-zero-area-triangles",
+        "pass": true,
+        "details": 0
+      }
+    ],
+    "measures": {
+      "screen": {
+        "width": 0.06646154075860977,
+        "height": 0.14399999380111694,
+        "aspect": 0.4615384973585621,
+        "exportedAspect": 0.46153846153846156,
+        "expectedAspect": 0.46153846153846156
+      },
+      "meshes": {
+        "count": 10,
+        "triangles": 3202,
+        "degenerateTriangles": 0,
+        "materialRoles": [
+          "hf_muted",
+          "hf_screen",
+          "hf_surface"
+        ]
+      }
+    },
+    "pass": true
+  },
+  {
+    "file": "../T1-device-mockups/out/laptop.glb",
+    "sha256": "398d2ce82f4253cc979164a16c91cd94fe7b9720cfe839d7c48e9cbd88edc013",
+    "threeRevision": "160",
+    "checks": [
+      {
+        "name": "three-exact-r160",
+        "pass": true
+      },
+      {
+        "name": "named-device-root",
+        "pass": true
+      },
+      {
+        "name": "standalone-screen-mesh",
+        "pass": true
+      },
+      {
+        "name": "root-meter-unit",
+        "pass": true
+      },
+      {
+        "name": "root-identity-transform",
+        "pass": true
+      },
+      {
+        "name": "screen-has-uv",
+        "pass": true
+      },
+      {
+        "name": "screen-aspect-metadata",
+        "pass": true
+      },
+      {
+        "name": "screen-geometry-matches-aspect",
+        "pass": true
+      },
+      {
+        "name": "screen-uv-physical-top-left-v0",
+        "pass": true,
+        "details": []
+      },
+      {
+        "name": "screen-full-uv-0-1",
+        "pass": true,
+        "details": [
+          0,
+          1,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "all-materials-have-role-extras",
+        "pass": true
+      },
+      {
+        "name": "no-zero-area-triangles",
+        "pass": true,
+        "details": 0
+      },
+      {
+        "name": "lid-direct-child-of-root",
+        "pass": true
+      },
+      {
+        "name": "screen-descendant-of-lid",
+        "pass": true
+      },
+      {
+        "name": "lid-at-hinge-origin",
+        "pass": true
+      },
+      {
+        "name": "lid-range-extras-radians",
+        "pass": true
+      },
+      {
+        "name": "lid-default-105-degrees",
+        "pass": true
+      },
+      {
+        "name": "negative-angle-opens-up",
+        "pass": true,
+        "details": [
+          {
+            "degrees": 0,
+            "hinge": [
+              0,
+              0,
+              0
+            ],
+            "farEdgeY": 0,
+            "farEdgeZ": 0.20779961347579956
+          },
+          {
+            "degrees": -30,
+            "hinge": [
+              0,
+              0,
+              0
+            ],
+            "farEdgeY": 0.10389980673789977,
+            "farEdgeZ": 0.1799597441666296
+          },
+          {
+            "degrees": -60,
+            "hinge": [
+              0,
+              0,
+              0
+            ],
+            "farEdgeY": 0.17995974416662958,
+            "farEdgeZ": 0.10389980673789981
+          },
+          {
+            "degrees": -90,
+            "hinge": [
+              0,
+              0,
+              0
+            ],
+            "farEdgeY": 0.20779961347579956,
+            "farEdgeZ": 4.6140783077808125e-17
+          },
+          {
+            "degrees": -105,
+            "hinge": [
+              0,
+              0,
+              0
+            ],
+            "farEdgeY": 0.2007190133491607,
+            "farEdgeZ": -0.053782497532479344
+          },
+          {
+            "degrees": -130,
+            "hinge": [
+              0,
+              0,
+              0
+            ],
+            "farEdgeY": 0.15918373918540776,
+            "farEdgeZ": -0.13357101683989597
+          }
+        ]
+      },
+      {
+        "name": "hinge-fixed-through-angle-range",
+        "pass": true
+      }
+    ],
+    "measures": {
+      "screen": {
+        "width": 0.305279403924942,
+        "height": 0.19079961255192757,
+        "aspect": 1.6000001249575804,
+        "exportedAspect": 1.6,
+        "expectedAspect": 1.6
+      },
+      "meshes": {
+        "count": 75,
+        "triangles": 16606,
+        "degenerateTriangles": 0,
+        "materialRoles": [
+          "hf_muted",
+          "hf_screen",
+          "hf_surface"
+        ]
+      },
+      "lidRange": {
+        "min": -2.2689280275926285,
+        "max": 0,
+        "units": "radians",
+        "source": [
+          0,
+          -2.2689280275926285
+        ]
+      }
+    },
+    "pass": true
+  }
+]

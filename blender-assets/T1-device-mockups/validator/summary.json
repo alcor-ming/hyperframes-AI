@@ -1,0 +1,22 @@
+[
+  {
+    "file": "../T1-device-mockups/out/laptop.glb",
+    "bytes": 261856,
+    "sha256": "398d2ce82f4253cc979164a16c91cd94fe7b9720cfe839d7c48e9cbd88edc013",
+    "validatorVersion": "2.0.0-dev.3.10",
+    "errors": 0,
+    "warnings": 0,
+    "infos": 3,
+    "report": "laptop-398d2ce82f42.validator.json"
+  },
+  {
+    "file": "../T1-device-mockups/out/phone.glb",
+    "bytes": 62572,
+    "sha256": "dfb8e11767af4254437e935cdf3e2bb16b4d22eace76645daf15af42c7b35791",
+    "validatorVersion": "2.0.0-dev.3.10",
+    "errors": 0,
+    "warnings": 0,
+    "infos": 1,
+    "report": "phone-dfb8e11767af.validator.json"
+  }
+]

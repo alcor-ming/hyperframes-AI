@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blender asset fixture · Three r160</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+</head>
+<body>
+  <main>
+    <section class="viewport"><canvas id="stage" aria-label="3D asset preview"></canvas><span id="badge">THREE r160 · LOCAL GLB</span></section>
+    <aside>
+      <h1>Asset fixture</h1><p class="muted">Local, repeatable validation. No upload.</p>
+      <label>Choose GLB<input id="file" type="file" accept=".glb,model/gltf-binary"></label>
+      <label>Theme<select id="theme"></select></label>
+      <label><input id="screen-test" type="checkbox" checked> Screen corner test / 四角测试</label>
+      <div class="row"><button id="fit">Frame asset</button><button id="screen-view">Front of screen</button></div>
+      <section id="lid-section" hidden><label>Lid · radians <output id="lid-value"></output><input id="lid" type="range" step="0.0001"></label><small id="lid-range"></small></section>
+      <label>Animation<select id="clip"><option value="-1">None</option></select></label>
+      <label>Absolute time · seconds <output id="time-value">0.000</output><input id="time" type="range" min="0" max="4" step="0.001" value="0"></label>
+      <div class="row"><button id="seek-test">Test [t3, 0, t1, t3]</button><button id="screenshot">Save PNG</button></div>
+      <section id="characters-section" hidden><h2>Characters</h2><div id="characters"></div></section>
+      <section id="sampling-section" hidden><label><input id="sampling" type="checkbox"> Seeded surface: 2,000 points</label><label>Seed<input id="seed" type="number" value="160" min="0" step="1"></label></section>
+      <h2>Diagnostics</h2><pre id="status">Choose a local GLB or pass ?model=/assets/path.glb</pre>
+    </aside>
+  </main>
+  <script type="module" src="main.mjs"></script>
+</body>
+</html>

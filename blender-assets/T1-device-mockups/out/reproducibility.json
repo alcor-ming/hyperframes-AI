@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "files": [
+    {
+      "file": "laptop.glb",
+      "first_sha256": "398d2ce82f4253cc979164a16c91cd94fe7b9720cfe839d7c48e9cbd88edc013",
+      "second_sha256": "398d2ce82f4253cc979164a16c91cd94fe7b9720cfe839d7c48e9cbd88edc013",
+      "identical": true,
+      "bytes": 261856
+    },
+    {
+      "file": "phone.glb",
+      "first_sha256": "dfb8e11767af4254437e935cdf3e2bb16b4d22eace76645daf15af42c7b35791",
+      "second_sha256": "dfb8e11767af4254437e935cdf3e2bb16b4d22eace76645daf15af42c7b35791",
+      "identical": true,
+      "bytes": 62572
+    }
+  ]
+}
