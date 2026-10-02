@@ -1,0 +1,461 @@
+# O3 无状态后期与转场
+
+调查日期：2026-10-02。首推r160原生UnrealBloom、基础ShaderPass组、BokehPass、精选四个GL Transitions。宁可少装pass，也不把库的默认“动画效果”误当可任意seek。
+
+## 帧合同与版本证据
+- 宿主先按绝对t产生当前场景颜色/深度，再依次执行纯空间pass。允许同一帧内使用临时ping-pong render targets；禁止读取上一帧内容。缓冲区“存在”与“历史反馈”不是同一件事。
+- 颗粒/故障的伪随机由seed、pixel coordinate、frameIndex闭式计算；不得Math.random()或累计delta生成。固定浏览器/GPU/颜色空间是像素复验条件，不承诺跨GPU浮点逐位一致。
+- Three代码直接固定r160；postprocessing固定v6.35.6（peer范围包含r160），当前main明确排除。GL Transitions只确认所选GLSL可包装路线，未声称上游的r160承诺。
+- 本次完成源码/许可证/peer范围检查；未集成到目标harness、未GPU编译、未截图比对。这些是后续接纳测试，不能把估计GPU开销当实测fps。
+
+## 完整效果覆盖
+bloom→O3-01；色差/颗粒/暗角/半调→O3-02；景深→O3-03；shader转场与无历史glitch→O3-04；CRT静态扫描线组合→O3-05。TAA、afterimage、累积运动模糊、feedback buffer全部拒绝。原生FilmPass虽无反馈，但time累加需换ShaderPass直接赋t。
+
+## 合同缺口
+后期参数、pass顺序、render-target格式、colorSpace/tonemapping、resolutionScale、seed/frameIndex必须冻结。图像转场需明确from/to为哪一个时刻的场景纹理、UV cover/contain与透明度规则；同一t的纹理内容不能来自上一次调用。
+
+## 候选卡
+
+### O3-01 Three.js r160 UnrealBloomPass
+
+- **ID**：O3-01
+- **调查路**：O3
+- **名称**：Three.js r160 UnrealBloomPass
+- **仓库**：https://github.com/mrdoob/three.js
+- **固定版本**：r160 / d04539a76736ff500cae883d6a38b3dd8643c548
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Three.js r160 UnrealBloomPass — three.js authors，MIT，https://github.com/mrdoob/three.js，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：vanilla JS ES modules + GLSL
+  - source_files：
+    - path：examples/jsm/postprocessing/UnrealBloomPass.js
+    - bytes：12406
+  - preview：https://threejs.org/examples/
+  - preview_note：当前站点非r160固定预览，源码审查以固定SHA为准；未保存原站图像。
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：按需抽取r160 pass并接render(t)，纳完整依赖闭包。
+- **时间可寻址性**：纯函数
+- **运行环境**：Three.js r160（0.160.0）；vanilla，无React；本地JS/GLSL，无CDN/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2023-12-22T21:31:45+09:00
+  - source：https://github.com/mrdoob/three.js/commit/d04539a76736ff500cae883d6a38b3dd8643c548
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：与宿主同r160，当前帧多级模糊无历史依赖
+- **审查与适配说明**：
+  - absolute_time：每个t先完成场景→当前颜色缓冲，再bloom。strength/radius/threshold直接由t算；每次中间RT由当前帧重写，不保留过去高亮。
+  - GPU_estimate：中高：阈值提取+5层缩小纹理的双向模糊+合成；优先降分辨率/控strength
+  - evidence：
+    - label：examples/jsm/postprocessing/UnrealBloomPass.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/postprocessing/UnrealBloomPass.js
+  - compatibility：直接取r160 tag提交，源码版本匹配已核；本次未做GPU编译/像素一致性实测。
+
+### O3-02 Three.js r160 基础后期：色差/暗角/颗粒/半调
+
+- **ID**：O3-02
+- **调查路**：O3
+- **名称**：Three.js r160 基础后期：色差/暗角/颗粒/半调
+- **仓库**：https://github.com/mrdoob/three.js
+- **固定版本**：r160 / d04539a76736ff500cae883d6a38b3dd8643c548
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Three.js r160 基础后期：色差/暗角/颗粒/半调 — three.js authors，MIT，https://github.com/mrdoob/three.js，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：vanilla JS ES modules + GLSL
+  - source_files：
+    - path：examples/jsm/shaders/RGBShiftShader.js
+    - bytes：1115
+    - path：examples/jsm/shaders/VignetteShader.js
+    - bytes：893
+    - path：examples/jsm/shaders/FilmShader.js
+    - bytes：923
+    - path：examples/jsm/shaders/HalftoneShader.js
+    - bytes：8584
+    - path：examples/jsm/postprocessing/HalftonePass.js
+    - bytes：1522
+  - preview：https://threejs.org/examples/
+  - preview_note：当前站点非r160固定预览，源码审查以固定SHA为准；未保存原站图像。
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：按需抽取r160 pass并接render(t)，纳完整依赖闭包。
+- **时间可寻址性**：纯函数
+- **运行环境**：Three.js r160（0.160.0）；vanilla，无React；本地JS/GLSL，无CDN/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2023-12-22T21:31:45+09:00
+  - source：https://github.com/mrdoob/three.js/commit/d04539a76736ff500cae883d6a38b3dd8643c548
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：轻量效果逐个按需，不把自动FilmPass时钟带入
+- **审查与适配说明**：
+  - absolute_time：ShaderPass包装RGBShift/Vignette/Film；FilmShader.time直接设t或frameIndex/fps，禁止FilmPass.time += deltaTime；Halftone仅当前像素与固定几何hash。
+  - GPU_estimate：低至中：RGBShift多通道采样，暗角/颗粒廉价；半调采样较多
+  - evidence：
+    - label：examples/jsm/shaders/RGBShiftShader.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/shaders/RGBShiftShader.js
+    - label：examples/jsm/shaders/VignetteShader.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/shaders/VignetteShader.js
+    - label：examples/jsm/shaders/FilmShader.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/shaders/FilmShader.js
+    - label：examples/jsm/shaders/HalftoneShader.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/shaders/HalftoneShader.js
+    - label：examples/jsm/postprocessing/HalftonePass.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/postprocessing/HalftonePass.js
+  - compatibility：直接取r160 tag提交，源码版本匹配已核；本次未做GPU编译/像素一致性实测。
+
+### O3-03 Three.js r160 BokehPass 景深
+
+- **ID**：O3-03
+- **调查路**：O3
+- **名称**：Three.js r160 BokehPass 景深
+- **仓库**：https://github.com/mrdoob/three.js
+- **固定版本**：r160 / d04539a76736ff500cae883d6a38b3dd8643c548
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Three.js r160 BokehPass 景深 — three.js authors，MIT，https://github.com/mrdoob/three.js，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：vanilla JS ES modules + GLSL
+  - source_files：
+    - path：examples/jsm/postprocessing/BokehPass.js
+    - bytes：3394
+    - path：examples/jsm/shaders/BokehShader.js
+    - bytes：5769
+  - preview：https://threejs.org/examples/
+  - preview_note：当前站点非r160固定预览，源码审查以固定SHA为准；未保存原站图像。
+- **映射**：
+  - module
+- **产品线**：
+  - explainer
+  - showcase
+- **适配等级**：B：按需抽取r160 pass并接render(t)，纳完整依赖闭包。
+- **时间可寻址性**：纯函数
+- **运行环境**：Three.js r160（0.160.0）；vanilla，无React；本地JS/GLSL，无CDN/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2023-12-22T21:31:45+09:00
+  - source：https://github.com/mrdoob/three.js/commit/d04539a76736ff500cae883d6a38b3dd8643c548
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推（explainer/showcase）：无历史景深，card默认关闭
+- **审查与适配说明**：
+  - absolute_time：每个t相机/主体/焦点均固定求值，同帧重渲深度；focus/aperture/maxblur随t显式赋值。不是TAA、多帧累積散景或“先跑几帧收敛”。
+  - GPU_estimate：高：额外深度场景绘制+数十颜色采样；不是累积式DOF
+  - evidence：
+    - label：examples/jsm/postprocessing/BokehPass.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/postprocessing/BokehPass.js
+    - label：examples/jsm/shaders/BokehShader.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/shaders/BokehShader.js
+  - compatibility：直接取r160 tag提交，源码版本匹配已核；本次未做GPU编译/像素一致性实测。
+
+### O3-04 GL Transitions 精选四个无状态转场
+
+- **ID**：O3-04
+- **调查路**：O3
+- **名称**：GL Transitions 精选四个无状态转场
+- **仓库**：https://github.com/gl-transitions/gl-transitions
+- **固定版本**：902218a1b63773ac0d0d9f491951da3392365bfe
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/gl-transitions/gl-transitions/blob/902218a1b63773ac0d0d9f491951da3392365bfe/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：GL Transitions 精选四个无状态转场 — gl-transitions contributors；gre、Eke Péter、pschroen、Gunnar Roth / natewave，MIT，https://github.com/gl-transitions/gl-transitions，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/gl-transitions/gl-transitions/blob/902218a1b63773ac0d0d9f491951da3392365bfe/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：GLSL片元函数
+  - selected：
+    - name：cube
+    - path：transitions/cube.glsl
+    - bytes：1738
+    - name：crosswarp
+    - path：transitions/crosswarp.glsl
+    - bytes：228
+    - name：directionalwarp
+    - path：transitions/directionalwarp.glsl
+    - bytes：503
+    - name：GlitchMemories
+    - path：transitions/GlitchMemories.glsl
+    - bytes：607
+  - preview：https://gl-transitions.com/
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：r160 ShaderMaterial/ShaderPass薄包装，补from/to纹理采样、ratio、progress入口；不安装其他GL运行时。
+- **时间可寻址性**：纯函数
+- **运行环境**：无React/Three强依赖；包装后固定r160；无网络/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2026-06-22T23:30:48+02:00
+  - source：https://github.com/gl-transitions/gl-transitions/commit/902218a1b63773ac0d0d9f491951da3392365bfe
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：显式progress接口天然可seek，GlitchMemories名字虽像记忆但不读历史帧
+- **审查与适配说明**：
+  - time_route：progress=clamp((t-start)/duration)，输入两张确定的同时间场景纹理；这四个文件只用UV、输入图、progress与参数，无反馈纹理或历史累加。
+  - effect_notes：cube=空间翻面；crosswarp=中心扭曲交替；directionalwarp=有方向的压扁过渡；GlitchMemories=量化progress驱动RGB错位。
+  - compatibility：GLSL算法不依赖Three版本；静态检查可包装进r160的GLSL1 ShaderMaterial。尚未实测编译、边界采样、色彩管理；不能声称上游承诺r160。
+  - license_audit：根LICENSE及四个shader头部均核对MIT；整个仓库其余文件没有自动授权入选。
+  - GPU_estimate：低中，单全屏pass；两场景本身的渲染成本另计。
+  - evidence：
+    - label：transitions/cube.glsl
+    - url：https://github.com/gl-transitions/gl-transitions/blob/902218a1b63773ac0d0d9f491951da3392365bfe/transitions/cube.glsl
+    - label：transitions/crosswarp.glsl
+    - url：https://github.com/gl-transitions/gl-transitions/blob/902218a1b63773ac0d0d9f491951da3392365bfe/transitions/crosswarp.glsl
+    - label：transitions/directionalwarp.glsl
+    - url：https://github.com/gl-transitions/gl-transitions/blob/902218a1b63773ac0d0d9f491951da3392365bfe/transitions/directionalwarp.glsl
+    - label：transitions/GlitchMemories.glsl
+    - url：https://github.com/gl-transitions/gl-transitions/blob/902218a1b63773ac0d0d9f491951da3392365bfe/transitions/GlitchMemories.glsl
+
+### O3-05 postprocessing v6.35.6 静态特效与CRT构件
+
+- **ID**：O3-05
+- **调查路**：O3
+- **名称**：postprocessing v6.35.6 静态特效与CRT构件
+- **仓库**：https://github.com/pmndrs/postprocessing
+- **固定版本**：v6.35.6 / 502f583d57e32579d47b5136b00216acc88f41c8
+- **许可**：
+  - spdx：Zlib AND CC-BY-3.0 (Scanline来源)
+  - path：LICENSE.md
+  - url：https://github.com/pmndrs/postprocessing/blob/502f583d57e32579d47b5136b00216acc88f41c8/LICENSE.md
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：postprocessing — Raoul van Rüschen，Zlib，https://github.com/pmndrs/postprocessing/tree/502f583d57e32579d47b5136b00216acc88f41c8。Scanline effect based on Georg “Leviathan” Steinrohder，CC BY 3.0，https://creativecommons.org/licenses/by/3.0/。原样使用；若实际适配，改为“已修改：绝对时间驱动及（实际改动）”。
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：vanilla JS效果库；选Bloom/ChromaticAberration/Noise/Vignette/Scanline
+  - preview：https://pmndrs.github.io/postprocessing/public/demo/
+  - bytes：未构建最小生产bundle，体积待本地tree-shake后测。
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：仅白名单effect；绕开EffectPass累加time，或每帧先赋绝对time再render(delta=0)。CRT曲面变形需另写无状态UV映射。
+- **时间可寻址性**：纯函数
+- **运行环境**：Three peer >=0.152.0 <0.167.0；宿主r160在范围。vanilla无React；本地构建，非react-postprocessing。
+- **维护证据**：
+  - last_commit_at：2024-07-05T15:17:51+02:00
+  - source：https://github.com/pmndrs/postprocessing/commit/502f583d57e32579d47b5136b00216acc88f41c8
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：6.35.6兼容r160范围，但要控制内部时钟和Scanline署名
+- **审查与适配说明**：
+  - compatibility：固定tag package.json peerDependencies为three >=0.152.0 <0.167.0，包含0.160.0；当前main已改>=0.168，不可跟随latest。
+  - source_audit：EffectPass.render()累加material.time，光把外部clock暂停不够；所有effect.update()必须审计，禁用GlitchEffect自动随机/时间累积。
+  - CRT_recipe：当前帧扫描线+暗角+RGB偏移+可选固定噪点；不实现磷光拖尾/余像/temporal feedback。Scanline scrollSpeed=0直接静态；动扫描需改绝对time。
+  - license_split：库根Zlib；ScanlineEffect.js明确标其基础实现CC BY 3.0，保留原作者与该许可链接，不能只留Zlib。
+  - evidence：
+    - label：package.json
+    - url：https://github.com/pmndrs/postprocessing/blob/502f583d57e32579d47b5136b00216acc88f41c8/package.json
+    - label：LICENSE.md
+    - url：https://github.com/pmndrs/postprocessing/blob/502f583d57e32579d47b5136b00216acc88f41c8/LICENSE.md
+    - label：src/effects/ScanlineEffect.js
+    - url：https://github.com/pmndrs/postprocessing/blob/502f583d57e32579d47b5136b00216acc88f41c8/src/effects/ScanlineEffect.js
+    - label：src/passes/EffectPass.js
+    - url：https://github.com/pmndrs/postprocessing/blob/502f583d57e32579d47b5136b00216acc88f41c8/src/passes/EffectPass.js
+  - GPU_estimate：静态Noise/Vignette/Scanline低；Bloom/DOF中高。合并effect可降drawcalls，但应先满足seek合同。
+
+### O3-06 Three.js r160 原生GlitchPass
+
+- **ID**：O3-06
+- **调查路**：O3
+- **名称**：Three.js r160 原生GlitchPass
+- **仓库**：https://github.com/mrdoob/three.js
+- **固定版本**：d04539a76736ff500cae883d6a38b3dd8643c548
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Three.js r160 原生GlitchPass — three.js authors，MIT，https://github.com/mrdoob/three.js，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：JS postprocess passes
+  - preview：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/postprocessing/GlitchPass.js
+- **映射**：
+  - 仅参考
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：D：原pass不接纳。
+- **时间可寻址性**：不可用
+- **运行环境**：r160源码兼容并不代表符合时间合同；无React。
+- **维护证据**：
+  - last_commit_at：2023-12-22T21:31:45+09:00
+  - source：https://github.com/mrdoob/three.js/commit/d04539a76736ff500cae883d6a38b3dd8643c548
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：排除：依赖帧历史/累加或随机时钟
+- **审查与适配说明**：
+  - source_reason：curF++、随机触发周期与每帧Math.random；同一t不同历史会有不同图。可以另写seed+frameIndex闭式glitch，但原pass排除。
+  - evidence：
+    - label：examples/jsm/postprocessing/GlitchPass.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/postprocessing/GlitchPass.js
+
+### O3-07 Three.js r160 TAARenderPass / AfterimagePass
+
+- **ID**：O3-07
+- **调查路**：O3
+- **名称**：Three.js r160 TAARenderPass / AfterimagePass
+- **仓库**：https://github.com/mrdoob/three.js
+- **固定版本**：d04539a76736ff500cae883d6a38b3dd8643c548
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Three.js r160 TAARenderPass / AfterimagePass — three.js authors，MIT，https://github.com/mrdoob/three.js，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：JS postprocess passes
+  - preview：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/postprocessing/TAARenderPass.js
+- **映射**：
+  - 仅参考
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：D：原pass不接纳。
+- **时间可寻址性**：不可用
+- **运行环境**：r160源码兼容并不代表符合时间合同；无React。
+- **维护证据**：
+  - last_commit_at：2023-12-22T21:31:45+09:00
+  - source：https://github.com/mrdoob/three.js/commit/d04539a76736ff500cae883d6a38b3dd8643c548
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：排除：依赖帧历史/累加或随机时钟
+- **审查与适配说明**：
+  - source_reason：TAA积累过去采样；Afterimage把旧texture与当前texture混合。暂停/倒放不会恢复正确历史，正中禁用项。
+  - evidence：
+    - label：examples/jsm/postprocessing/TAARenderPass.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/postprocessing/TAARenderPass.js
+    - label：examples/jsm/postprocessing/AfterimagePass.js
+    - url：https://github.com/mrdoob/three.js/blob/d04539a76736ff500cae883d6a38b3dd8643c548/examples/jsm/postprocessing/AfterimagePass.js
+
+### O3-08 postprocessing 当前main/GlitchEffect默认模式
+
+- **ID**：O3-08
+- **调查路**：O3
+- **名称**：postprocessing 当前main/GlitchEffect默认模式
+- **仓库**：https://github.com/pmndrs/postprocessing
+- **固定版本**：9cf03cff26615636a564d8bfddf765edb8917441
+- **许可**：
+  - spdx：Zlib
+  - path：LICENSE.md
+  - url：https://github.com/pmndrs/postprocessing/blob/9cf03cff26615636a564d8bfddf765edb8917441/LICENSE.md
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：postprocessing 当前main/GlitchEffect默认模式 — Raoul van Rüschen，Zlib，https://github.com/pmndrs/postprocessing，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/pmndrs/postprocessing/blob/9cf03cff26615636a564d8bfddf765edb8917441/LICENSE.md
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：当前源码树
+  - version：当前package.json peer >=0.168.0 <0.187.0
+  - preview：https://github.com/pmndrs/postprocessing/blob/9cf03cff26615636a564d8bfddf765edb8917441/package.json
+- **映射**：
+  - 仅参考
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：D：r160宿主不接收当前main；6.35.6仍禁默认GlitchEffect。
+- **时间可寻址性**：不可用
+- **运行环境**：当前peer不含0.160.0；vanilla，非React。
+- **维护证据**：
+  - last_commit_at：2026-09-09T21:35:45+02:00
+  - source：https://github.com/pmndrs/postprocessing/commit/9cf03cff26615636a564d8bfddf765edb8917441
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：排除：当前版本不支持r160；自动glitch又有随机时间状态
+- **审查与适配说明**：
+  - evidence：
+    - label：package.json
+    - url：https://github.com/pmndrs/postprocessing/blob/9cf03cff26615636a564d8bfddf765edb8917441/package.json
+    - label：src/effects/GlitchEffect.js
+    - url：https://github.com/pmndrs/postprocessing/blob/9cf03cff26615636a564d8bfddf765edb8917441/src/effects/GlitchEffect.js
+  - reason：两个独立门槛：版本兼容与时间无状态。改旧版本不能自动修好GlitchEffect。

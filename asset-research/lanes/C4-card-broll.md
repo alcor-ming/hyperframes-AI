@@ -1,0 +1,425 @@
+# C4 card简洁B-roll调查
+
+调查日期：2026-10-02。首推D3直接几何图表、D3预算排名、ProgressBar.set、Devices.css。原库有animation/start/pause不等于能按任意t渲染。
+
+## 覆盖矩阵
+- 数字滚动：CountUp原时钟不接纳；从起止值和绝对t自己算数值，按位翻牌另需glyph/位数插槽
+- 柱/线/饼/对比条：D3按完整状态渲染；ECharts关闭自跑动画仅作较重备选
+- 排名变化：预算带稳定tie-break的rank keyframes，按t插值，不顺序执行transition
+- 进度：ProgressBar.set(progress(t))
+- 手机/电脑框：纯CSS静态壳+截图槽，运动由宿主t控制
+- 地图：渲染器机制可用；中国边界数据不可用，本次不采纳
+
+## 后续本地验收（本次未做实现/接纳）
+同一组件固定seed/尺寸，按0→终点、终点→0、随机t顺序各渲染并比较同t像素。检查字体/图片已离线加载、图表内部timer全部关闭、重复set状态不会积累元素。排名、轴域、数字精度和缺失值规则必须成为接口卡字段；否则便宜模型仍得写新代码。
+
+## 地图结论
+没有取得可证明符合中国国家标准地图要求的边界资产，故中国地图高亮模块不可用。索引名称、MIT库许可、公有领域数据以及“网上很多人用”都不能替代素材合规证据。
+
+## 候选卡
+
+### C4-01 D3 7.9.0 柱/线/饼/对比条
+
+- **ID**：C4-01
+- **调查路**：C4
+- **名称**：D3 7.9.0 柱/线/饼/对比条
+- **仓库**：https://github.com/d3/d3
+- **固定版本**：ca958d45217b4c15332d971b935451a6d4c978f4
+- **许可**：
+  - spdx：ISC
+  - path：LICENSE
+  - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：D3 7.9.0 柱/线/饼/对比条 — Mike Bostock，ISC，https://github.com/d3/d3，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：ES modules；SVG/Canvas几何工具
+  - quantity：line/area/arc/pie/scale/format等低层函数；不是现成视频模块
+  - bytes：完整生产bundle未在本次构建，不能用src/index.js字节冒充运行时体积。只纳所需子模块。
+  - preview：https://observablehq.com/@d3/gallery
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：建立数据和标签插槽，按绝对t插值后直接生成SVG path/rect。
+- **时间可寻址性**：纯函数
+- **运行环境**：vanilla DOM/SVG/Canvas；无需Three/React；本地ESM子模块；不引CDN。
+- **维护证据**：
+  - last_commit_at：2026-05-28T07:43:00-07:00
+  - source：https://github.com/d3/d3/commit/ca958d45217b4c15332d971b935451a6d4c978f4
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：完全绕开自带transition时钟，最贴近card合同
+- **审查与适配说明**：
+  - time_route：render(t)计算u=clamp((t-start)/duration)，数值和几何直接由u求值；线图用clip或切线长度，饼图由终值角度×u计算。禁止d3.transition()/timer()自动跑。
+  - slots：dataset、label/value/units、颜色、轴域、格式化、小数位、duration；9:16最多约5–7条，16:9最多约8–10条，作为设计预算不是库限制。
+  - evidence：
+    - label：docs/d3-scale/linear.md
+    - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/docs/d3-scale/linear.md
+    - label：docs/d3-shape/line.md
+    - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/docs/d3-shape/line.md
+    - label：docs/d3-shape/arc.md
+    - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/docs/d3-shape/arc.md
+
+### C4-02 D3 排名变化 / bar chart race路线
+
+- **ID**：C4-02
+- **调查路**：C4
+- **名称**：D3 排名变化 / bar chart race路线
+- **仓库**：https://github.com/d3/d3
+- **固定版本**：ca958d45217b4c15332d971b935451a6d4c978f4
+- **许可**：
+  - spdx：ISC
+  - path：LICENSE
+  - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：D3 排名变化 / bar chart race路线 — Mike Bostock，ISC，https://github.com/d3/d3，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：按数据快照预计算排名的JS模块方案
+  - preview：https://observablehq.com/@d3/bar-chart-race
+  - bytes：无现成包体；本候选为基于D3函数重写的模块路线，未复制Observable笔记本。
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：挂载时预算关键排名，render(t)插值value和rank，DOM稳定按id重用。
+- **时间可寻址性**：可烘焙
+- **运行环境**：vanilla；无React；预计算CPU O(N*K log K)，输出帧无模拟历史。
+- **维护证据**：
+  - last_commit_at：2026-05-28T07:43:00-07:00
+  - source：https://github.com/d3/d3/commit/ca958d45217b4c15332d971b935451a6d4c978f4
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：排名变化适合知识卡，但不要照搬交互示例的逐次transition
+- **审查与适配说明**：
+  - rank_rules：每个采样点按(value降序,id稳定次序)排序；临界点并列规则固定；固定列表id，不用上一帧顺序打破平局。rank(t)、value(t)、date(t)分别插值；离线数据冻结。
+  - not_claimed：尚未实现/跑seek一致性测试；纯函数/可烘焙指适配方案，不表示网页demo原样满足。
+  - dependency_freeze：D3根package的caret依赖不是完整冻结；实际构建须锁定每个d3子模块版本/hash和LICENSE后形成闭包。
+  - evidence：
+    - label：docs/d3-array/sort.md
+    - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/docs/d3-array/sort.md
+    - label：docs/d3-interpolate/value.md
+    - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/docs/d3-interpolate/value.md
+  - module_contract：补time-indexed data/keyframes、tie-break、maxBars、rank interpolation和单位/数值格式插槽。
+
+### C4-03 ProgressBar.js set(progress)
+
+- **ID**：C4-03
+- **调查路**：C4
+- **名称**：ProgressBar.js set(progress)
+- **仓库**：https://github.com/kimmobrunfeldt/progressbar.js
+- **固定版本**：1f0ebf3afc00764fd4024181e8236c9bdce75463
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/kimmobrunfeldt/progressbar.js/blob/1f0ebf3afc00764fd4024181e8236c9bdce75463/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：ProgressBar.js set(progress) — Kimmo Brunfeldt，MIT，https://github.com/kimmobrunfeldt/progressbar.js，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/kimmobrunfeldt/progressbar.js/blob/1f0ebf3afc00764fd4024181e8236c9bdce75463/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：SVG直线、环、半圆、自定义path
+  - dist_min_js_bytes：42369
+  - preview：https://kimmobrunfeldt.github.io/progressbar.js/
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：封装set(clamp(progress(t)))，主题映射stroke/trail/text；不调用animate。
+- **时间可寻址性**：纯函数
+- **运行环境**：vanilla SVG；CommonJS bundle，内带tween依赖；无React/Three；只用set。
+- **维护证据**：
+  - last_commit_at：2024-11-02T12:38:42+02:00
+  - source：https://github.com/kimmobrunfeldt/progressbar.js/commit/1f0ebf3afc00764fd4024181e8236c9bdce75463
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：已有直接set入口，进度/对比条适配成本低
+- **审查与适配说明**：
+  - source_audit：src/path.js set(progress)先停止tween，再直接设置strokeDashoffset；step回调必须仅依赖传入数值，不能自行累加。
+  - clock_warning：animate()走shifty自带时钟，不能用pause/resume冒充任意seek。
+  - evidence：
+    - label：src/path.js
+    - url：https://github.com/kimmobrunfeldt/progressbar.js/blob/1f0ebf3afc00764fd4024181e8236c9bdce75463/src/path.js
+    - label：src/shape.js
+    - url：https://github.com/kimmobrunfeldt/progressbar.js/blob/1f0ebf3afc00764fd4024181e8236c9bdce75463/src/shape.js
+  - dependencies：lodash.merge与shifty的许可需随真实打包闭包带齐，本次根许可并不代替依赖许可。
+
+### C4-04 Devices.css 手机/电脑样机框
+
+- **ID**：C4-04
+- **调查路**：C4
+- **名称**：Devices.css 手机/电脑样机框
+- **仓库**：https://github.com/picturepan2/devices.css
+- **固定版本**：11846244977a4905a4fb9ac12bb2121e068d6147
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/picturepan2/devices.css/blob/11846244977a4905a4fb9ac12bb2121e068d6147/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Devices.css 手机/电脑样机框 — Yan Zhu，MIT，https://github.com/picturepan2/devices.css，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/picturepan2/devices.css/blob/11846244977a4905a4fb9ac12bb2121e068d6147/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 设备外观/品牌名称/商标可能另受保护；避免暗示官方背书，可优先抽象无logo设备壳。
+  - 示例screen截图不随代码MIT自动可用；用户自己的截图走media槽。
+- **内容、格式、体积与预览**：
+  - format：纯CSS壳+HTML图片screen插槽
+  - dist_min_css_bytes：50506
+  - preview：https://devicescss.xyz/
+  - families：手机、电脑、平板、手表；本路仅选手机/电脑
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：抽取单个设备CSS并做responsive缩放；screen固定为本地图片槽。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：vanilla CSS/HTML；无React/Three/网络依赖。
+- **维护证据**：
+  - last_commit_at：2022-09-18T13:41:56+08:00
+  - source：https://github.com/picturepan2/devices.css/commit/11846244977a4905a4fb9ac12bb2121e068d6147
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：屏幕截图不需要3D模型/WebGL，card成本更低
+- **审查与适配说明**：
+  - slot_plan：screenImage、fit(contain/cover)、screenCrop、deviceColor、caption。9:16手机竖放占中部；16:9笔记本或手机+说明横排；外框整体变换由宿主t控制。
+  - source_audit：README将responsive/landscape列为后续项，不应声称库原生完美响应式。
+  - evidence：
+    - label：README.md
+    - url：https://github.com/picturepan2/devices.css/blob/11846244977a4905a4fb9ac12bb2121e068d6147/README.md
+    - label：dist/devices.css
+    - url：https://github.com/picturepan2/devices.css/blob/11846244977a4905a4fb9ac12bb2121e068d6147/dist/devices.css
+
+### C4-05 Apache ECharts（关闭动画的外部时间方案）
+
+- **ID**：C4-05
+- **调查路**：C4
+- **名称**：Apache ECharts（关闭动画的外部时间方案）
+- **仓库**：https://github.com/apache/echarts
+- **固定版本**：62e3373dc1afcce0643d13059c43583ca275fd56
+- **许可**：
+  - spdx：Apache-2.0
+  - path：LICENSE
+  - url：https://github.com/apache/echarts/blob/62e3373dc1afcce0643d13059c43583ca275fd56/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Apache ECharts（关闭动画的外部时间方案） — The Apache Software Foundation，Apache-2.0，https://github.com/apache/echarts，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/apache/echarts/blob/62e3373dc1afcce0643d13059c43583ca275fd56/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：Canvas/SVG图表
+  - version：6.1.0源码树
+  - dist_min_js_bytes：1121883
+  - preview：https://echarts.apache.org/examples/en/index.html
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：animation=false、progressive=0、关闭universalTransition与自跑轮播；每个t显式计算状态并更新。
+- **时间可寻址性**：纯函数
+- **运行环境**：vanilla；zrender 6.1.0、tslib；无需React/Three；离线本地bundle。
+- **维护证据**：
+  - last_commit_at：2026-09-30T12:13:40+08:00
+  - source：https://github.com/apache/echarts/commit/62e3373dc1afcce0643d13059c43583ca275fd56
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：类型多但比D3定制模块重，复杂卡片才值得
+- **审查与适配说明**：
+  - time_route：不使用realtimeSort自带排序动画当seek。排名/折线增长等中间态由调用端算完整数据。关闭lazyUpdate；每次渲染等待同步/finished状态后再取帧，具体版本集成还需实测。
+  - risk：持续setOption可能合并残留series，必须稳定id并明确replaceMerge/notMerge策略；仅animation=false并不能证明所有内部状态无历史依赖。
+  - evidence：
+    - label：test/ut/spec/series/bar.test.ts
+    - url：https://github.com/apache/echarts/blob/62e3373dc1afcce0643d13059c43583ca275fd56/test/ut/spec/series/bar.test.ts
+    - label：src/chart/bar/BarSeries.ts
+    - url：https://github.com/apache/echarts/blob/62e3373dc1afcce0643d13059c43583ca275fd56/src/chart/bar/BarSeries.ts
+    - label：NOTICE
+    - url：https://github.com/apache/echarts/blob/62e3373dc1afcce0643d13059c43583ca275fd56/NOTICE
+  - license_scope：保留Apache LICENSE与NOTICE；zrender、tslib等依赖与附带图片另查；不纳任何示例地图数据。
+
+### C4-06 CountUp.js 数字滚动原库
+
+- **ID**：C4-06
+- **调查路**：C4
+- **名称**：CountUp.js 数字滚动原库
+- **仓库**：https://github.com/inorganik/countUp.js
+- **固定版本**：2346e4994f870fdc9028944b3d79dc80af3b33d2
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE.md
+  - url：https://github.com/inorganik/countUp.js/blob/2346e4994f870fdc9028944b3d79dc80af3b33d2/LICENSE.md
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：CountUp.js 数字滚动原库 — Inorganik / CountUp.js contributors，MIT，https://github.com/inorganik/countUp.js，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/inorganik/countUp.js/blob/2346e4994f870fdc9028944b3d79dc80af3b33d2/LICENSE.md
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：TypeScript/JS数字计数
+  - version：2.10.1源码树
+  - source_bytes：14538
+  - preview：https://inorganik.github.io/countUp.js/
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：只借用格式化/缓动思路，重写绝对t计数器；原库不是A。
+- **时间可寻址性**：不可用
+- **运行环境**：vanilla；原实现requestAnimationFrame+可选IntersectionObserver自动触发，必须不启用这些时钟。
+- **维护证据**：
+  - last_commit_at：2026-07-02T07:09:16-06:00
+  - source：https://github.com/inorganik/countUp.js/commit/2346e4994f870fdc9028944b3d79dc80af3b33d2
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选（仅改写路线）：原start/update使用RAF与startTime，不能直接任意seek
+- **审查与适配说明**：
+  - source_audit：count(timestamp)写startTime/remaining/frameVal，随后requestAnimationFrame并可能触发smart-easing二阶段update；pauseResume是暂停继续，不是任意t求值。
+  - recommendation：数值=round(lerp(start,end,ease(u)),decimals)；字符串格式和按位翻牌分开；宽度用tabular-nums/预留最大值宽度。无需为一个数字运行整个计数器时钟。
+  - evidence：
+    - label：src/countUp.ts
+    - url：https://github.com/inorganik/countUp.js/blob/2346e4994f870fdc9028944b3d79dc80af3b33d2/src/countUp.ts
+
+### C4-07 D3 geo 地图高亮渲染器（不含边界数据）
+
+- **ID**：C4-07
+- **调查路**：C4
+- **名称**：D3 geo 地图高亮渲染器（不含边界数据）
+- **仓库**：https://github.com/d3/d3
+- **固定版本**：ca958d45217b4c15332d971b935451a6d4c978f4
+- **许可**：
+  - spdx：ISC
+  - path：LICENSE
+  - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：D3 geo 地图高亮渲染器（不含边界数据） — Mike Bostock，ISC，https://github.com/d3/d3，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 地图数据许可、审图要求与边界表达是独立门槛；开源/公有领域不等于合规。
+- **内容、格式、体积与预览**：
+  - format：GeoJSON→SVG/Canvas path工具
+  - preview：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/docs/d3-geo/path.md
+  - bytes：几何数据未选，体积不可估计；库与地图数据许可分开
+- **映射**：
+  - module
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：固定投影、视口、合法数据；高亮颜色按t求值。
+- **时间可寻址性**：纯函数
+- **运行环境**：vanilla；本地GeoJSON；不用在线瓦片API/CDN。
+- **维护证据**：
+  - last_commit_at：2026-05-28T07:43:00-07:00
+  - source：https://github.com/d3/d3/commit/ca958d45217b4c15332d971b935451a6d4c978f4
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：只批准无历史渲染机制，没有批准任何中国边界数据
+- **审查与适配说明**：
+  - compliance：中国地图当前不可用。D3没有替边界内容背书；任何包含中国轮廓的世界地图同样触发审查，不能只把china组件删掉就声称规避。
+  - allowed_scope：待用户本地提供与使用场景匹配的合规标准地图资产/审核依据之后再实现；本次不导入数据。
+  - evidence：
+    - label：docs/d3-geo/path.md
+    - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/docs/d3-geo/path.md
+    - label：docs/d3-geo/projection.md
+    - url：https://github.com/d3/d3/blob/ca958d45217b4c15332d971b935451a6d4c978f4/docs/d3-geo/projection.md
+
+### C4-08 中国地图数据：CorrectChinaMap索引及通用世界地图
+
+- **ID**：C4-08
+- **调查路**：C4
+- **名称**：中国地图数据：CorrectChinaMap索引及通用世界地图
+- **仓库**：https://github.com/blackboxo/CorrectChinaMap
+- **固定版本**：未固定（排除项；只取得公开索引网页，未完成许可/数据证据）
+- **许可**：
+  - spdx：NOASSERTION
+  - path：None
+  - note：索引不等于边界文件的再发布/改造许可；未取得固定版本独立LICENSE及与目标素材对应的合规依据。
+- **义务**：
+  - attribution：False
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：四false只表示本次无法确定这四类义务，不代表自由使用；本项明确排除。
+- **可粘贴署名**：不适用：不采纳、不下载地图资产。
+- **署名位置**：调查排除记录
+- **风险**：
+  - 中国地图边界不合规风险，未经证实不得上线。
+  - Natural Earth默认采用de facto边界，不能当中国国家标准地图替代品。
+- **内容、格式、体积与预览**：
+  - format：公开索引/线索
+  - quantity：0
+  - bytes：0
+  - preview：https://github.com/blackboxo/CorrectChinaMap
+- **映射**：
+  - 仅参考
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：D：不可用；不退而求其次。
+- **时间可寻址性**：不可用
+- **运行环境**：不适用
+- **维护证据**：
+  - last_commit_at：未验证
+  - checked_at：2026-10-02
+- **结论**：排除：没有可核对的合规标准地图边界包，不以普通开源GeoJSON替代。
+- **审查与适配说明**：
+  - source：https://github.com/blackboxo/CorrectChinaMap
+  - boundary_policy：https://www.naturalearthdata.com/about/disputed-boundaries-policy/
+  - next_step：本地需取得实际标准地图、对应审图号/版本与允许的加工使用范围，之后重新审批；不假定高亮/裁切/重新投影都被允许。

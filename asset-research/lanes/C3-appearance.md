@@ -1,0 +1,682 @@
+# C3 账号外观调查
+
+调查日期：2026-10-02。首推：Noto Sans SC、Noto Serif SC、得意黑、Radix Colors、Open Props。五类中文字体均有候选；圆体和大手写字库因体积/覆盖验证成本暂为备选。
+
+## 字体审查口径
+- 实测文件字节、fvar权重范围、OS/2字重、cmap字符数。cmap总数不是一级3500字验证。
+- 得意黑v2.0.1有作者正式项目README声明覆盖通规8105字，可标“官方声明覆盖”；其余本次没有权威3500字逐字对照，全部明确标未验证，不能写成保证覆盖。
+- 有RFN时子集/格式变化通常触发修改版命名约束；霞鹜当前许可有特定例外，见候选卡，不能一刀切。现阶段资产包统一改为自有subset family名最容易执行。
+- 西文优先使用各中文家族内建Latin；数字滚动另启用等宽数字特性（存在时）并验收，不额外引未经审查的远程字体。
+
+## 背景和motion的确定性门槛
+- 点阵、网格：CSS重复渐变是静态纯函数；纸纹/噪点：固定seed采样或烘焙PNG；柔光斑/渐变网格：有限个光斑中心通过sin/cos(t)或固定关键帧求值。
+- 所有资源只按绝对t、seed、viewport和主题token决定。关闭浏览器animation自跑、随机刷新、依赖鼠标或上一帧的过程。
+- 仅提议perspective-flip、corner-hinge、twister三类现有词表没有的motion机制；不重复已有fade/pop/wipe/glitch/pulse/shake/wobble/glow与缓动。
+
+## 合同缺口
+主题需携带font identity、RFN、子集字符manifest、版权/完整许可、缺字检查结果；motion若不支持3D变换需扩展；背景须有固定seed/尺寸/颜色空间和render(t)入口。
+
+## 候选卡
+
+### C3-01 Noto Sans SC（黑体）
+
+- **ID**：C3-01
+- **调查路**：C3
+- **名称**：Noto Sans SC（黑体）
+- **仓库**：https://github.com/google/fonts
+- **固定版本**：9710da1eacb3be272583c3224dcb70f9da6eadbb
+- **许可**：
+  - spdx：OFL-1.1
+  - path：ofl/notosanssc/OFL.txt
+  - url：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notosanssc/OFL.txt
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：True
+  - non_commercial：False
+  - no_derivatives：False
+  - note：OFL的同许可义务限定字体软件及修改字体：保留版权与OFL，修改版字体继续以OFL发布并遵守RFN；用字体渲染的图片/视频不因此要求OFL或CC-SA。
+- **可粘贴署名**：原样使用：Noto Sans SC（黑体） — Adobe / Noto Project，OFL-1.1，https://github.com/google/fonts，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notosanssc/OFL.txt
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 字体文件大；禁止运行时Google Fonts/CDN加载。
+  - 一级字未验证项在通过实际字表测试前不可作全中文覆盖承诺。
+  - 子集、格式转换属修改；OFL/RFN义务附在资产闭包。
+- **内容、格式、体积与预览**：
+  - typeface_category：黑体
+  - files：
+    - path：google-fonts/ofl/notosanssc/NotoSansSC[wght].ttf
+    - bytes：17772300
+    - cmap_codepoints：30890
+    - glyphs：31036
+    - weight_class：100
+    - axes：
+      - tag：wght
+      - min：100.0
+      - default：100.0
+      - max：900.0
+    - license_description：This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://scripts.sil.org/OFL
+    - license_url：http://scripts.sil.org/OFL
+  - level1_coverage：
+    - level1_3500：未验证
+    - basis：本次只读cmap总数，不等于已与官方3500字逐字比对；不能把中文支持/GB2312支持写成一级字全覆盖。
+  - latin_pairing：自带Latin，先用同一字族配西文/数字以减少闭包；品牌要求独立西文字体时另调查许可和数字宽度。
+  - preview：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/README.md
+- **映射**：
+  - theme
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：按用字子集化/变量轴实例化、离线打包、按RFN规则命名。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-09-30T11:54:00+02:00
+  - source：https://github.com/google/fonts/commit/9710da1eacb3be272583c3224dcb70f9da6eadbb
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：通用信息卡正文字体，先限定字重和子集
+- **审查与适配说明**：
+  - RFN：Source
+  - subset_plan：按本期文本、标点、ASCII数字/英文并保留所需OpenType表离线subset；有RFN的修改版使用新的family/PostScript名，保留版权与OFL；每期先查缺字再渲染。
+  - evidence：
+    - label：ofl/notosanssc/OFL.txt
+    - url：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notosanssc/OFL.txt
+    - label：ofl/notosanssc/METADATA.pb
+    - url：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notosanssc/METADATA.pb
+  - test_scope：实际读取固定版本字体文件大小、fvar、OS/2、cmap；未进行逐帧浏览器/视频渲染和全部字形视觉测试。
+
+### C3-02 Noto Serif SC（宋体）
+
+- **ID**：C3-02
+- **调查路**：C3
+- **名称**：Noto Serif SC（宋体）
+- **仓库**：https://github.com/google/fonts
+- **固定版本**：9710da1eacb3be272583c3224dcb70f9da6eadbb
+- **许可**：
+  - spdx：OFL-1.1
+  - path：ofl/notoserifsc/OFL.txt
+  - url：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notoserifsc/OFL.txt
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：True
+  - non_commercial：False
+  - no_derivatives：False
+  - note：OFL的同许可义务限定字体软件及修改字体：保留版权与OFL，修改版字体继续以OFL发布并遵守RFN；用字体渲染的图片/视频不因此要求OFL或CC-SA。
+- **可粘贴署名**：原样使用：Noto Serif SC（宋体） — Google / Adobe / Noto Project，OFL-1.1，https://github.com/google/fonts，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notoserifsc/OFL.txt
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 字体文件大；禁止运行时Google Fonts/CDN加载。
+  - 一级字未验证项在通过实际字表测试前不可作全中文覆盖承诺。
+  - 子集、格式转换属修改；OFL/RFN义务附在资产闭包。
+- **内容、格式、体积与预览**：
+  - typeface_category：宋体
+  - files：
+    - path：google-fonts/ofl/notoserifsc/NotoSerifSC[wght].ttf
+    - bytes：25125512
+    - cmap_codepoints：30928
+    - glyphs：31058
+    - weight_class：200
+    - axes：
+      - tag：wght
+      - min：200.0
+      - default：200.0
+      - max：900.0
+    - license_description：This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+    - license_url：https://openfontlicense.org
+  - level1_coverage：
+    - level1_3500：未验证
+    - basis：本次只读cmap总数，不等于已与官方3500字逐字比对；不能把中文支持/GB2312支持写成一级字全覆盖。
+  - latin_pairing：自带Latin，先用同一字族配西文/数字以减少闭包；品牌要求独立西文字体时另调查许可和数字宽度。
+  - preview：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/README.md
+- **映射**：
+  - theme
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：按用字子集化/变量轴实例化、离线打包、按RFN规则命名。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-09-30T11:54:00+02:00
+  - source：https://github.com/google/fonts/commit/9710da1eacb3be272583c3224dcb70f9da6eadbb
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：引文、历史、人文账号与黑体形成明显区隔
+- **审查与适配说明**：
+  - RFN：未在此OFL版权段或字体name版权字段发现RFN；仍保留OFL
+  - subset_plan：按本期文本、标点、ASCII数字/英文并保留所需OpenType表离线subset；有RFN的修改版使用新的family/PostScript名，保留版权与OFL；每期先查缺字再渲染。
+  - evidence：
+    - label：ofl/notoserifsc/OFL.txt
+    - url：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notoserifsc/OFL.txt
+    - label：ofl/notoserifsc/METADATA.pb
+    - url：https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notoserifsc/METADATA.pb
+  - test_scope：实际读取固定版本字体文件大小、fvar、OS/2、cmap；未进行逐帧浏览器/视频渲染和全部字形视觉测试。
+
+### C3-03 Resource Han Rounded CN（圆体）
+
+- **ID**：C3-03
+- **调查路**：C3
+- **名称**：Resource Han Rounded CN（圆体）
+- **仓库**：https://github.com/CyanoHao/Resource-Han-Rounded
+- **固定版本**：be90fee7a031c1297da5a260ccfb91756088d51c
+- **许可**：
+  - spdx：OFL-1.1
+  - path：OFL-License.txt
+  - url：https://github.com/CyanoHao/Resource-Han-Rounded/blob/be90fee7a031c1297da5a260ccfb91756088d51c/OFL-License.txt
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：True
+  - non_commercial：False
+  - no_derivatives：False
+  - note：OFL的同许可义务限定字体软件及修改字体：保留版权与OFL，修改版字体继续以OFL发布并遵守RFN；用字体渲染的图片/视频不因此要求OFL或CC-SA。
+- **可粘贴署名**：原样使用：Resource Han Rounded CN（圆体） — Cyano Hao；基于Adobe Source Han Sans，OFL-1.1，https://github.com/CyanoHao/Resource-Han-Rounded，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/CyanoHao/Resource-Han-Rounded/blob/be90fee7a031c1297da5a260ccfb91756088d51c/OFL-License.txt
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 字体文件大；禁止运行时Google Fonts/CDN加载。
+  - 一级字未验证项在通过实际字表测试前不可作全中文覆盖承诺。
+  - 子集、格式转换属修改；OFL/RFN义务附在资产闭包。
+- **内容、格式、体积与预览**：
+  - typeface_category：圆体
+  - files：
+    - path：ResourceHanRoundedCN-VF.otf
+    - bytes：67520564
+    - cmap_codepoints：30892
+    - glyphs：31036
+    - weight_class：200
+    - axes：
+      - tag：wght
+      - min：200.0
+      - default：200.0
+      - max：900.0
+      - tag：ROND
+      - min：0.0
+      - default：100.0
+      - max：100.0
+    - license_description：This Font Software is licensed under the SIL Open Font License, Version 1.1. This Font Software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the SIL Open Font License for the specific language, permissions and limitations governing your use of this Font Software.
+    - license_url：https://scripts.sil.org/OFL
+  - level1_coverage：
+    - level1_3500：未验证
+    - basis：本次只读cmap总数，不等于已与官方3500字逐字比对；不能把中文支持/GB2312支持写成一级字全覆盖。
+  - latin_pairing：自带Latin，先用同一字族配西文/数字以减少闭包；品牌要求独立西文字体时另调查许可和数字宽度。
+  - preview：https://github.com/CyanoHao/Resource-Han-Rounded/blob/be90fee7a031c1297da5a260ccfb91756088d51c/README.md
+  - archive_bytes：16255241
+  - download：https://github.com/CyanoHao/Resource-Han-Rounded/releases/download/v1.910/RHR-CFF2-CN-1.910.7z
+  - file_size_basis：这是v1.910 / cc99ac738bf02e639b796d1f5200c00af6f0f81b公开release的体积实测，仅作预算参考；本候选许可固定于有OFL-License.txt的源码HEAD，尚未构建该HEAD，不能把这组字节说成该HEAD的成品。
+  - release_license_gate：v1.910 tag没有独立LICENSE；旧release不直接接纳。需从当前已固定、有LICENSE.md/OFL-License.txt的源码重建，并复核Source Han Sans输入许可与构建闭包。
+- **映射**：
+  - theme
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：按用字子集化/变量轴实例化、离线打包、按RFN规则命名。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2022-05-07T07:25:06+08:00
+  - source：https://github.com/CyanoHao/Resource-Han-Rounded/commit/be90fee7a031c1297da5a260ccfb91756088d51c
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选（仅有许可的固定源码重建路线）：圆度可调；旧release不直接接纳
+- **审查与适配说明**：
+  - RFN：Source
+  - subset_plan：按本期文本、标点、ASCII数字/英文并保留所需OpenType表离线subset；有RFN的修改版使用新的family/PostScript名，保留版权与OFL；每期先查缺字再渲染。
+  - evidence：
+    - label：OFL-License.txt
+    - url：https://github.com/CyanoHao/Resource-Han-Rounded/blob/be90fee7a031c1297da5a260ccfb91756088d51c/OFL-License.txt
+  - test_scope：实际读取固定版本字体文件大小、fvar、OS/2、cmap；未进行逐帧浏览器/视频渲染和全部字形视觉测试。
+
+### C3-04 霞鹜文楷 LXGW WenKai（手写/楷体）
+
+- **ID**：C3-04
+- **调查路**：C3
+- **名称**：霞鹜文楷 LXGW WenKai（手写/楷体）
+- **仓库**：https://github.com/lxgw/LxgwWenKai
+- **固定版本**：8bd6319350fb3ae1904c1cb1a41595ab15d21140
+- **许可**：
+  - spdx：OFL-1.1
+  - path：OFL.txt
+  - url：https://github.com/lxgw/LxgwWenKai/blob/8bd6319350fb3ae1904c1cb1a41595ab15d21140/OFL.txt
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：True
+  - non_commercial：False
+  - no_derivatives：False
+  - note：OFL的同许可义务限定字体软件及修改字体：保留版权与OFL，修改版字体继续以OFL发布并遵守RFN；用字体渲染的图片/视频不因此要求OFL或CC-SA。
+- **可粘贴署名**：原样使用：霞鹜文楷 LXGW WenKai（手写/楷体） — LXGW；Klee Project Authors，OFL-1.1，https://github.com/lxgw/LxgwWenKai，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/lxgw/LxgwWenKai/blob/8bd6319350fb3ae1904c1cb1a41595ab15d21140/OFL.txt
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 字体文件大；禁止运行时Google Fonts/CDN加载。
+  - 一级字未验证项在通过实际字表测试前不可作全中文覆盖承诺。
+  - 子集、格式转换属修改；OFL/RFN义务附在资产闭包。
+- **内容、格式、体积与预览**：
+  - typeface_category：手写/楷体
+  - files：
+    - path：lxgw/fonts/TTF/LXGWWenKai-Regular.ttf
+    - bytes：25575676
+    - cmap_codepoints：46490
+    - glyphs：46867
+    - weight_class：400
+    - axes：
+    - license_description：This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+    - license_url：https://openfontlicense.org
+    - path：lxgw/fonts/TTF/LXGWWenKai-Light.ttf
+    - bytes：28267156
+    - cmap_codepoints：46490
+    - glyphs：46865
+    - weight_class：300
+    - axes：
+    - license_description：This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+    - license_url：https://openfontlicense.org
+    - path：lxgw/fonts/TTF/LXGWWenKai-Medium.ttf
+    - bytes：25379848
+    - cmap_codepoints：46490
+    - glyphs：46867
+    - weight_class：500
+    - axes：
+    - license_description：This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+    - license_url：https://openfontlicense.org
+  - level1_coverage：
+    - level1_3500：未验证
+    - basis：本次只读cmap总数，不等于已与官方3500字逐字比对；不能把中文支持/GB2312支持写成一级字全覆盖。
+  - latin_pairing：自带Latin，先用同一字族配西文/数字以减少闭包；品牌要求独立西文字体时另调查许可和数字宽度。
+  - preview：https://github.com/lxgw/LxgwWenKai/blob/8bd6319350fb3ae1904c1cb1a41595ab15d21140/README.md
+- **映射**：
+  - theme
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：按用字子集化/变量轴实例化、离线打包、按RFN规则命名。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-09-21T07:17:43Z
+  - source：https://github.com/lxgw/LxgwWenKai/commit/8bd6319350fb3ae1904c1cb1a41595ab15d21140
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：温暖注释/短引文，不用于密集正文
+- **审查与适配说明**：
+  - RFN：霞鹜、霞鶩、落霞孤鹜、落霞孤鶩、LXGW；当前版本有有限web子集/格式转换额外授权
+  - subset_plan：按本期文本、标点、ASCII数字/英文并保留所需OpenType表离线subset；有RFN的修改版使用新的family/PostScript名，保留版权与OFL；每期先查缺字再渲染。
+  - evidence：
+    - label：OFL.txt
+    - url：https://github.com/lxgw/LxgwWenKai/blob/8bd6319350fb3ae1904c1cb1a41595ab15d21140/OFL.txt
+  - test_scope：实际读取固定版本字体文件大小、fvar、OS/2、cmap；未进行逐帧浏览器/视频渲染和全部字形视觉测试。
+  - RFN_exception_note：额外许可仅覆盖原源未改重编译或纯web分发的subset/格式转换，且限制可安装桌面字库分发。本项目离线资产包是否符合该例外未定，采用独立新名字最稳妥；不笼统说所有子集必须改名，也不把例外扩到一切用途。
+
+### C3-05 得意黑 Smiley Sans（标题展示体）
+
+- **ID**：C3-05
+- **调查路**：C3
+- **名称**：得意黑 Smiley Sans（标题展示体）
+- **仓库**：https://github.com/atelier-anchor/smiley-sans
+- **固定版本**：67e3821f4b06cbd7155fa6fa69daff4b6f311b76
+- **许可**：
+  - spdx：OFL-1.1
+  - path：LICENSE
+  - url：https://github.com/atelier-anchor/smiley-sans/blob/67e3821f4b06cbd7155fa6fa69daff4b6f311b76/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：True
+  - non_commercial：False
+  - no_derivatives：False
+  - note：OFL的同许可义务限定字体软件及修改字体：保留版权与OFL，修改版字体继续以OFL发布并遵守RFN；用字体渲染的图片/视频不因此要求OFL或CC-SA。
+- **可粘贴署名**：原样使用：得意黑 Smiley Sans（标题展示体） — atelierAnchor，OFL-1.1，https://github.com/atelier-anchor/smiley-sans，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/atelier-anchor/smiley-sans/blob/67e3821f4b06cbd7155fa6fa69daff4b6f311b76/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 字体文件大；禁止运行时Google Fonts/CDN加载。
+  - 一级字未验证项在通过实际字表测试前不可作全中文覆盖承诺。
+  - 子集、格式转换属修改；OFL/RFN义务附在资产闭包。
+- **内容、格式、体积与预览**：
+  - typeface_category：标题展示体
+  - files：
+    - path：SmileySans-Oblique.ttf
+    - bytes：2629764
+    - cmap_codepoints：9440
+    - glyphs：9497
+    - weight_class：400
+    - axes：
+    - license_description：This Font Software is licensed under the SIL Open Font License, Version 1.1. This Font Software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the SIL Open Font License for the specific language, permissions and limitations governing your use of this Font Software.
+    - license_url：https://scripts.sil.org/OFL
+  - level1_coverage：
+    - level1_3500：官方项目明确声明覆盖（未独立逐字复测）
+    - basis：v2.0.1 README字符支持声明覆盖《通用规范汉字表》全部8105字，包含一级3500字。
+    - source：https://github.com/atelier-anchor/smiley-sans/blob/67e3821f4b06cbd7155fa6fa69daff4b6f311b76/README.md
+  - latin_pairing：自带Latin，先用同一字族配西文/数字以减少闭包；品牌要求独立西文字体时另调查许可和数字宽度。
+  - preview：https://github.com/atelier-anchor/smiley-sans/blob/67e3821f4b06cbd7155fa6fa69daff4b6f311b76/README.md
+  - download：https://github.com/atelier-anchor/smiley-sans/releases/download/v2.0.1/smiley-sans-v2.0.1.zip
+  - zip_bytes：5781344
+  - all_formats_bytes：
+    - TTF：2629764
+    - OTF：2003884
+    - TTF_WOFF2：1150924
+    - OTF_WOFF2：1361268
+  - weights：只有400 Oblique，不能伪称多字重；避免浏览器合成粗体/斜体
+- **映射**：
+  - theme
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：按用字子集化/变量轴实例化、离线打包、按RFN规则命名。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2024-02-07T18:24:48+08:00
+  - source：https://github.com/atelier-anchor/smiley-sans/commit/67e3821f4b06cbd7155fa6fa69daff4b6f311b76
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：小体积斜黑标题；作者明确宣称覆盖通规8105字
+- **审查与适配说明**：
+  - RFN：Smiley、得意黑
+  - subset_plan：按本期文本、标点、ASCII数字/英文并保留所需OpenType表离线subset；有RFN的修改版使用新的family/PostScript名，保留版权与OFL；每期先查缺字再渲染。
+  - evidence：
+    - label：LICENSE
+    - url：https://github.com/atelier-anchor/smiley-sans/blob/67e3821f4b06cbd7155fa6fa69daff4b6f311b76/LICENSE
+  - test_scope：实际读取固定版本字体文件大小、fvar、OS/2、cmap；未进行逐帧浏览器/视频渲染和全部字形视觉测试。
+
+### C3-06 Radix Colors
+
+- **ID**：C3-06
+- **调查路**：C3
+- **名称**：Radix Colors
+- **仓库**：https://github.com/radix-ui/colors
+- **固定版本**：dbdb85470547c7d34b9001f48fddb08ded335979
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/radix-ui/colors/blob/dbdb85470547c7d34b9001f48fddb08ded335979/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Radix Colors — Modulz / WorkOS，MIT，https://github.com/radix-ui/colors，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/radix-ui/colors/blob/dbdb85470547c7d34b9001f48fddb08ded335979/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：TypeScript/CSS色阶
+  - tiers：12
+  - variants：亮/暗、实色/alpha，另有P3
+  - preview：https://github.com/radix-ui/colors/blob/dbdb85470547c7d34b9001f48fddb08ded335979/colors.png
+- **映射**：
+  - theme
+  - background
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：A：提取静态token；动态背景则B按t封装。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：vanilla CSS/JS；全部本地。noise需WebGL/GLSL包装；无React/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2025-12-17T12:46:00-08:00
+  - source：https://github.com/radix-ui/colors/commit/dbdb85470547c7d34b9001f48fddb08ded335979
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：12阶语义分层适合矩阵账号token化
+- **审查与适配说明**：
+  - mapping：建议1背景、2卡面、6边界、9强调、12正文；深浅主题分别取本套dark/light，不简单反转RGB。实际文字/背景组合仍须测对比度。
+  - evidence：
+    - label：src/light.ts
+    - url：https://github.com/radix-ui/colors/blob/dbdb85470547c7d34b9001f48fddb08ded335979/src/light.ts
+    - label：src/dark.ts
+    - url：https://github.com/radix-ui/colors/blob/dbdb85470547c7d34b9001f48fddb08ded335979/src/dark.ts
+
+### C3-07 Open Props 色板与静态渐变
+
+- **ID**：C3-07
+- **调查路**：C3
+- **名称**：Open Props 色板与静态渐变
+- **仓库**：https://github.com/argyleink/open-props
+- **固定版本**：530682d04327f842f56bb1ec33cf84a3cadb3876
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/argyleink/open-props/blob/530682d04327f842f56bb1ec33cf84a3cadb3876/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Open Props 色板与静态渐变 — Adam Argyle，MIT，https://github.com/argyleink/open-props，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/argyleink/open-props/blob/530682d04327f842f56bb1ec33cf84a3cadb3876/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：CSS custom properties / JS token
+  - preview：https://github.com/argyleink/open-props/blob/530682d04327f842f56bb1ec33cf84a3cadb3876/src/props.gradients.js
+  - scope：colors、colors-oklch、gradients，不导入normalize/组件行为
+- **映射**：
+  - theme
+  - background
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：A：提取静态token；动态背景则B按t封装。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：vanilla CSS/JS；全部本地。noise需WebGL/GLSL包装；无React/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2026-08-10T17:41:43-07:00
+  - source：https://github.com/argyleink/open-props/commit/530682d04327f842f56bb1ec33cf84a3cadb3876
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：静态多层渐变能直接补柔光斑与渐变网格外观
+- **审查与适配说明**：
+  - mapping：提取颜色/梯度为theme/background参数。柔光斑用2–4层radial-gradient，中心x(t),y(t)用闭式sin/cos求值；网格/点阵用repeat渐变且固定像素频率。
+  - evidence：
+    - label：src/props.colors.js
+    - url：https://github.com/argyleink/open-props/blob/530682d04327f842f56bb1ec33cf84a3cadb3876/src/props.colors.js
+    - label：src/props.gradients.js
+    - url：https://github.com/argyleink/open-props/blob/530682d04327f842f56bb1ec33cf84a3cadb3876/src/props.gradients.js
+
+### C3-08 Ashima / Stefan Gustavson webgl-noise
+
+- **ID**：C3-08
+- **调查路**：C3
+- **名称**：Ashima / Stefan Gustavson webgl-noise
+- **仓库**：https://github.com/ashima/webgl-noise
+- **固定版本**：6abed1e77ed1e18b181627c35f688eb30c9fe75e
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/ashima/webgl-noise/blob/6abed1e77ed1e18b181627c35f688eb30c9fe75e/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Ashima / Stefan Gustavson webgl-noise — Ashima Arts / Stefan Gustavson，MIT，https://github.com/ashima/webgl-noise，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/ashima/webgl-noise/blob/6abed1e77ed1e18b181627c35f688eb30c9fe75e/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：2D/3D/4D GLSL simplex/classic/cellular噪声函数
+  - preview：https://github.com/ashima/webgl-noise/blob/6abed1e77ed1e18b181627c35f688eb30c9fe75e/README
+- **映射**：
+  - background
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：关闭独立时钟、固定seed并封装成background模块或静态纹理。
+- **时间可寻址性**：纯函数
+- **运行环境**：vanilla CSS/JS；全部本地。noise需WebGL/GLSL包装；无React/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2024-11-15T21:49:15+01:00
+  - source：https://github.com/ashima/webgl-noise/commit/6abed1e77ed1e18b181627c35f688eb30c9fe75e
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：纸纹、噪点和漂移云雾的纯函数底层；不是现成一键背景
+- **审查与适配说明**：
+  - seek_contract：例如snoise(vec3(uv*scale,t*speed)+seedOffset)，seedOffset在挂载时固定；不读上一帧，不逐帧random()。静态纸纹可离线烘成PNG；不能把SVG feTurbulence放进C2。
+  - evidence：
+    - label：src/noise3D.glsl
+    - url：https://github.com/ashima/webgl-noise/blob/6abed1e77ed1e18b181627c35f688eb30c9fe75e/src/noise3D.glsl
+    - label：src/classicnoise2D.glsl
+    - url：https://github.com/ashima/webgl-noise/blob/6abed1e77ed1e18b181627c35f688eb30c9fe75e/src/classicnoise2D.glsl
+
+### C3-09 css-doodle 生成式纹理
+
+- **ID**：C3-09
+- **调查路**：C3
+- **名称**：css-doodle 生成式纹理
+- **仓库**：https://github.com/css-doodle/css-doodle
+- **固定版本**：2b867d4b47813cd6f434d61032c7c72fd3f11400
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/css-doodle/css-doodle/blob/2b867d4b47813cd6f434d61032c7c72fd3f11400/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：css-doodle 生成式纹理 — Yuan Chuan，MIT，https://github.com/css-doodle/css-doodle，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/css-doodle/css-doodle/blob/2b867d4b47813cd6f434d61032c7c72fd3f11400/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：Web Component / CSS网格规则
+  - preview：https://github.com/css-doodle/css-doodle/blob/2b867d4b47813cd6f434d61032c7c72fd3f11400/docs/images/example.png
+- **映射**：
+  - background
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：关闭独立时钟、固定seed并封装成background模块或静态纹理。
+- **时间可寻址性**：可烘焙
+- **运行环境**：vanilla CSS/JS；全部本地。noise需WebGL/GLSL包装；无React/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2026-09-30T11:09:53+08:00
+  - source：https://github.com/css-doodle/css-doodle/commit/2b867d4b47813cd6f434d61032c7c72fd3f11400
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：seed可重复，但原生动画时钟不能直接当render(t)
+- **审查与适配说明**：
+  - seek_contract：seed只解决随机布局重复；src/component/clock.js仍管理时钟。选固定seed的静态规则导出纹理，或改写为固定seed解析布局+外部t属性；禁止mouse/随机刷新/@t实时自跑。
+  - evidence：
+    - label：src/core/random.js
+    - url：https://github.com/css-doodle/css-doodle/blob/2b867d4b47813cd6f434d61032c7c72fd3f11400/src/core/random.js
+    - label：src/component/clock.js
+    - url：https://github.com/css-doodle/css-doodle/blob/2b867d4b47813cd6f434d61032c7c72fd3f11400/src/component/clock.js
+
+### C3-10 Magic Animations：三种新motion机制
+
+- **ID**：C3-10
+- **调查路**：C3
+- **名称**：Magic Animations：三种新motion机制
+- **仓库**：https://github.com/miniMAC/magic
+- **固定版本**：f26d3c3beaf3017c90fb27ac6f67168fac26de06
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/miniMAC/magic/blob/f26d3c3beaf3017c90fb27ac6f67168fac26de06/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Magic Animations：三种新motion机制 — Christian Pucci，MIT，https://github.com/miniMAC/magic，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/miniMAC/magic/blob/f26d3c3beaf3017c90fb27ac6f67168fac26de06/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：CSS关键帧
+  - preview：https://github.com/miniMAC/magic
+  - novel_effects：
+    - perspective-flip（翻面）
+    - corner-hinge（绕角铰链开合）
+    - twister（扭转旋入）
+- **映射**：
+  - motion
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：C：需支持3D变换关键帧属性，确认后转换为motion JSON。
+- **时间可寻址性**：可烘焙
+- **运行环境**：vanilla CSS/JS；全部本地。noise需WebGL/GLSL包装；无React/WASM/Worker。
+- **维护证据**：
+  - last_commit_at：2022-07-28T11:27:54+02:00
+  - source：https://github.com/miniMAC/magic/commit/f26d3c3beaf3017c90fb27ac6f67168fac26de06
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：只提取当前词表没有的3D翻转/铰链/扭转，不重复fade/pop/shake
+- **审查与适配说明**：
+  - novelty：perspective-flip通过rotateX/Y+perspective翻背，适合问答揭晓；corner-hinge绕角打开/合拢，适合揭密与贴纸；twister把旋转/偏移耦合，适合综艺小贴纸，不用于长正文。
+  - contract_gap：需确认motion JSON支持transformOrigin、perspective、rotationX/Y以及分段曲线；缺失则C，不能硬映射为已有pop。使用暂停GSAP timeline绝对seek或闭式关键帧插值。
+  - evidence：
+    - label：assets/scss/perspective/_perspectiveDown.scss
+    - url：https://github.com/miniMAC/magic/blob/f26d3c3beaf3017c90fb27ac6f67168fac26de06/assets/scss/perspective/_perspectiveDown.scss
+    - label：assets/scss/static_effects/_openDownRight.scss
+    - url：https://github.com/miniMAC/magic/blob/f26d3c3beaf3017c90fb27ac6f67168fac26de06/assets/scss/static_effects/_openDownRight.scss
+    - label：assets/scss/magic_effects/_twisterInUp.scss
+    - url：https://github.com/miniMAC/magic/blob/f26d3c3beaf3017c90fb27ac6f67168fac26de06/assets/scss/magic_effects/_twisterInUp.scss
+
+### C3-11 Animate.css 当前v4.1.1树
+
+- **ID**：C3-11
+- **调查路**：C3
+- **名称**：Animate.css 当前v4.1.1树
+- **仓库**：https://github.com/animate-css/animate.css
+- **固定版本**：3f8ab233dbbd9d2fe577528d2296382954be3d1a
+- **许可**：
+  - spdx：Hippocratic-2.1
+  - path：LICENSE
+  - url：https://github.com/animate-css/animate.css/blob/3f8ab233dbbd9d2fe577528d2296382954be3d1a/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：有署名及人权使用约束；不是通常意义上的MIT。四个布尔不能完整表达该自定义约束，本条排除且不得自动许可放行。
+- **可粘贴署名**：原样使用：Animate.css 当前v4.1.1树 — Daniel Eden，Hippocratic-2.1，https://github.com/animate-css/animate.css，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/animate-css/animate.css/blob/3f8ab233dbbd9d2fe577528d2296382954be3d1a/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 固定版本许可有效；重新升级必须重查。
+- **内容、格式、体积与预览**：
+  - format：CSS动画库
+  - preview：https://github.com/animate-css/animate.css/blob/3f8ab233dbbd9d2fe577528d2296382954be3d1a/README.md
+- **映射**：
+  - 仅参考
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：D：排除当前版本直接入库。
+- **时间可寻址性**：不适用（仅许可审查）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2024-03-02T10:57:25Z
+  - source：https://github.com/animate-css/animate.css/commit/3f8ab233dbbd9d2fe577528d2296382954be3d1a
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：排除：实际LICENSE是Hippocratic 2.1，不是MIT，超出本计划自动可收许可清单
+- **审查与适配说明**：
+  - reason：README/npm历史描述不能覆盖固定SHA里的LICENSE；没有把普通bounce/fade等已有词表重复列候选。若以后另选旧MIT tag，要重新逐版本审查，不能本次自动沿用。
+  - evidence：
+    - label：LICENSE
+    - url：https://github.com/animate-css/animate.css/blob/3f8ab233dbbd9d2fe577528d2296382954be3d1a/LICENSE

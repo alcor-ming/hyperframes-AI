@@ -1,0 +1,550 @@
+# C2 SVG槽内容调查
+
+调查日期：2026-10-02。结论：首推Phosphor、Tabler、Twemoji图形、Fluent High Contrast。先按单枚media接纳，icon-set新provider是合同改造，不是安装React组件包。
+
+## 方法与硬门槛
+本次在临时目录只读clone固定SHA，解析限定目录全部SVG。只允许计划中的21种标签：svg/g/defs/path/rect/circle/ellipse/line/polyline/polygon/text/tspan/title/desc/linearGradient/radialGradient/stop/clipPath/mask/use/symbol。
+扫描记录是目录文件数（包括风格、尺寸与肤色变体），不是独立语义图标数。字节数为原始SVG总和、不含zip或运行时。通过标签扫描不等于已完成安全净化/画面验收；后续仍需屏蔽事件/外链并验证局部ID。
+
+## 排除边界
+- Fluent Color不按原样SVG接纳；Flat也不能整套盲收。
+- Noto的third_party/region-flags与未清理私有元素不接纳；根许可证不能代替子目录许可证。
+- 无LICENSE、ND、来源不明转存、AI生成插画均不进入候选；Open Peeps只采用可追溯原作者许可的DiceBear定义。
+- 改色不是默认已发生。每卡署名分别给原样/后续修改用法；真正打包时删去不适用分支。MIT/Apache的完整许可证必须另保留，短署名不能代替法律文本。
+
+## 候选卡
+
+### C2-01 Phosphor Icons
+
+- **ID**：C2-01
+- **调查路**：C2
+- **名称**：Phosphor Icons
+- **仓库**：https://github.com/phosphor-icons/core
+- **固定版本**：2b75f3ad12b420c9504ef05df8d2564a28f8500e
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/phosphor-icons/core/blob/2b75f3ad12b420c9504ef05df8d2564a28f8500e/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Phosphor Icons — Phosphor Icons，MIT，https://github.com/phosphor-icons/core，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/phosphor-icons/core/blob/2b75f3ad12b420c9504ef05df8d2564a28f8500e/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 品牌logo仍有商标限制，开源不代表获商标许可。
+  - emoji人物为绘制形象；不得误示真实人物背书。
+  - 旗帜/地图图形逐项审查，本次不接纳中国边界图。
+- **内容、格式、体积与预览**：
+  - svg_whitelist：直接合格（本次限定目录全量标签扫描）
+  - scope：assets
+  - files：9072
+  - raw_bytes：4767507
+  - currentColor_files：9072
+  - forbidden_files：0
+  - preview：https://github.com/phosphor-icons/core/blob/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/thin/youtube-logo-thin.svg
+  - inspection：Python XML ElementTree全量解析元素本地名；2026-10-02；只验证标签，非完整安全净化。
+- **映射**：
+  - icon-set
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：C：整套icon-set需支持非lucide provider；挑单枚SVG作media则A。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-01-06T14:28:48-07:00
+  - source：https://github.com/phosphor-icons/core/commit/2b75f3ad12b420c9504ef05df8d2564a28f8500e
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：面性/双色补充lucide最直接
+- **审查与适配说明**：
+  - assessment：1512个图形×thin/light/regular/bold/fill/duotone六种样式；duotone默认以同色不同opacity构成，双token需要映射子路径。
+  - palette：全部currentColor，可跟主题。
+  - svg_gate：额外拒绝脚本/事件属性、外链href、data:资源、url外部引用；局部defs ID必须按实例加前缀，防多个SVG重复ID。
+  - evidence：
+    - label：LICENSE
+    - url：https://github.com/phosphor-icons/core/blob/2b75f3ad12b420c9504ef05df8d2564a28f8500e/LICENSE
+    - label：assets/thin/youtube-logo-thin.svg
+    - url：https://github.com/phosphor-icons/core/blob/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/thin/youtube-logo-thin.svg
+
+### C2-02 Tabler Icons
+
+- **ID**：C2-02
+- **调查路**：C2
+- **名称**：Tabler Icons
+- **仓库**：https://github.com/tabler/tabler-icons
+- **固定版本**：74929e50416e2b7c0abb8368cdc74bdcb2560ab6
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/tabler/tabler-icons/blob/74929e50416e2b7c0abb8368cdc74bdcb2560ab6/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Tabler Icons — Paweł Kuna，MIT，https://github.com/tabler/tabler-icons，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/tabler/tabler-icons/blob/74929e50416e2b7c0abb8368cdc74bdcb2560ab6/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 品牌logo仍有商标限制，开源不代表获商标许可。
+  - emoji人物为绘制形象；不得误示真实人物背书。
+  - 旗帜/地图图形逐项审查，本次不接纳中国边界图。
+- **内容、格式、体积与预览**：
+  - svg_whitelist：直接合格（本次限定目录全量标签扫描）
+  - scope：icons
+  - files：6220
+  - raw_bytes：3662446
+  - currentColor_files：6220
+  - forbidden_files：0
+  - preview：https://github.com/tabler/tabler-icons/blob/74929e50416e2b7c0abb8368cdc74bdcb2560ab6/icons/outline/zzz.svg
+  - inspection：Python XML ElementTree全量解析元素本地名；2026-10-02；只验证标签，非完整安全净化。
+- **映射**：
+  - icon-set
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：C：整套icon-set需支持非lucide provider；挑单枚SVG作media则A。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-09-28T15:02:12+02:00
+  - source：https://github.com/tabler/tabler-icons/commit/74929e50416e2b7c0abb8368cdc74bdcb2560ab6
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：大覆盖线性与面性，适合成套语义插槽
+- **审查与适配说明**：
+  - assessment：outline 5166枚、filled 1054枚；同一主题统一stroke/fill，避免品牌图标混入普通语义图标。
+  - palette：全部currentColor，可跟主题。
+  - svg_gate：额外拒绝脚本/事件属性、外链href、data:资源、url外部引用；局部defs ID必须按实例加前缀，防多个SVG重复ID。
+  - evidence：
+    - label：LICENSE
+    - url：https://github.com/tabler/tabler-icons/blob/74929e50416e2b7c0abb8368cdc74bdcb2560ab6/LICENSE
+    - label：icons/outline/zzz.svg
+    - url：https://github.com/tabler/tabler-icons/blob/74929e50416e2b7c0abb8368cdc74bdcb2560ab6/icons/outline/zzz.svg
+
+### C2-03 Heroicons
+
+- **ID**：C2-03
+- **调查路**：C2
+- **名称**：Heroicons
+- **仓库**：https://github.com/tailwindlabs/heroicons
+- **固定版本**：616b7a4dbbf3d011760af8066262cd5c6b3868f3
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/tailwindlabs/heroicons/blob/616b7a4dbbf3d011760af8066262cd5c6b3868f3/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Heroicons — Tailwind Labs, Inc.，MIT，https://github.com/tailwindlabs/heroicons，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/tailwindlabs/heroicons/blob/616b7a4dbbf3d011760af8066262cd5c6b3868f3/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 品牌标志/命名不等于商标授权；只选普通语义图标。
+- **内容、格式、体积与预览**：
+  - svg_whitelist：直接合格（本次限定目录全量标签扫描）
+  - scope：optimized
+  - files：1288
+  - raw_bytes：693135
+  - currentColor_files：1288
+  - forbidden_files：0
+  - preview：https://github.com/tailwindlabs/heroicons/blob/616b7a4dbbf3d011760af8066262cd5c6b3868f3/optimized/24/solid/x-mark.svg
+  - inspection：Python XML ElementTree全量解析元素本地名；2026-10-02；只验证标签，非完整安全净化。
+- **映射**：
+  - icon-set
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：C：整套icon-set需支持非lucide provider；挑单枚SVG作media则A。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-05-12T15:51:15+02:00
+  - source：https://github.com/tailwindlabs/heroicons/commit/616b7a4dbbf3d011760af8066262cd5c6b3868f3
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：小尺寸面性清晰，数量比Tabler少
+- **审查与适配说明**：
+  - assessment：24px outline/solid与20px、16px solid；尺寸不是同一图形简单缩放，选择与插槽字号匹配的版型。
+  - palette：全部currentColor，可跟主题。
+  - svg_gate：额外拒绝脚本/事件属性、外链href、data:资源、url外部引用；局部defs ID必须按实例加前缀，防多个SVG重复ID。
+  - evidence：
+    - label：LICENSE
+    - url：https://github.com/tailwindlabs/heroicons/blob/616b7a4dbbf3d011760af8066262cd5c6b3868f3/LICENSE
+    - label：optimized/24/solid/x-mark.svg
+    - url：https://github.com/tailwindlabs/heroicons/blob/616b7a4dbbf3d011760af8066262cd5c6b3868f3/optimized/24/solid/x-mark.svg
+
+### C2-04 Iconoir
+
+- **ID**：C2-04
+- **调查路**：C2
+- **名称**：Iconoir
+- **仓库**：https://github.com/iconoir-icons/iconoir
+- **固定版本**：d7dfa4d0341df0670bfed9fc24221c9d7ef2112e
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/iconoir-icons/iconoir/blob/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Iconoir — Luca Burgio，MIT，https://github.com/iconoir-icons/iconoir，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/iconoir-icons/iconoir/blob/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 品牌标志/命名不等于商标授权；只选普通语义图标。
+- **内容、格式、体积与预览**：
+  - svg_whitelist：直接合格（本次限定目录全量标签扫描）
+  - scope：icons
+  - files：1671
+  - raw_bytes：1333696
+  - currentColor_files：1671
+  - forbidden_files：0
+  - preview：https://github.com/iconoir-icons/iconoir/blob/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/solid/youtube.svg
+  - inspection：Python XML ElementTree全量解析元素本地名；2026-10-02；只验证标签，非完整安全净化。
+- **映射**：
+  - icon-set
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：C：整套icon-set需支持非lucide provider；挑单枚SVG作media则A。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-08-12T04:18:40Z
+  - source：https://github.com/iconoir-icons/iconoir/commit/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：另一套细线风格，但与lucide功能重叠
+- **审查与适配说明**：
+  - assessment：regular 1383枚、solid 288枚；不为数量另引入整套运行时。
+  - palette：全部currentColor，可跟主题。
+  - svg_gate：额外拒绝脚本/事件属性、外链href、data:资源、url外部引用；局部defs ID必须按实例加前缀，防多个SVG重复ID。
+  - evidence：
+    - label：LICENSE
+    - url：https://github.com/iconoir-icons/iconoir/blob/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/LICENSE
+    - label：icons/solid/youtube.svg
+    - url：https://github.com/iconoir-icons/iconoir/blob/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/solid/youtube.svg
+
+### C2-05 Twemoji graphics（jdecked维护版）
+
+- **ID**：C2-05
+- **调查路**：C2
+- **名称**：Twemoji graphics（jdecked维护版）
+- **仓库**：https://github.com/jdecked/twemoji
+- **固定版本**：b6b55fef1e8636b540a6d016a4729ca8cdf2e60b
+- **许可**：
+  - spdx：CC-BY-4.0
+  - path：LICENSE-GRAPHICS
+  - url：https://github.com/jdecked/twemoji/blob/b6b55fef1e8636b540a6d016a4729ca8cdf2e60b/LICENSE-GRAPHICS
+  - scope：详见候选说明
+  - split：graphics CC-BY-4.0；代码MIT，代码证据 https://github.com/jdecked/twemoji/blob/b6b55fef1e8636b540a6d016a4729ca8cdf2e60b/LICENSE
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Twemoji graphics（jdecked维护版） — Twitter及Twemoji contributors，CC-BY-4.0，https://github.com/jdecked/twemoji，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/jdecked/twemoji/blob/b6b55fef1e8636b540a6d016a4729ca8cdf2e60b/LICENSE-GRAPHICS
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 品牌logo仍有商标限制，开源不代表获商标许可。
+  - emoji人物为绘制形象；不得误示真实人物背书。
+  - 旗帜/地图图形逐项审查，本次不接纳中国边界图。
+- **内容、格式、体积与预览**：
+  - svg_whitelist：直接合格（本次限定目录全量标签扫描）
+  - scope：assets/svg
+  - files：4009
+  - raw_bytes：10121593
+  - currentColor_files：0
+  - forbidden_files：0
+  - preview：https://github.com/jdecked/twemoji/blob/b6b55fef1e8636b540a6d016a4729ca8cdf2e60b/assets/svg/e50a.svg
+  - inspection：Python XML ElementTree全量解析元素本地名；2026-10-02；只验证标签，非完整安全净化。
+- **映射**：
+  - media
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：A：已合格的单枚SVG可走media。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-06-01T15:16:04-07:00
+  - source：https://github.com/jdecked/twemoji/commit/b6b55fef1e8636b540a6d016a4729ca8cdf2e60b
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：扁平emoji全部通过标签扫描，署名负担可管理
+- **审查与适配说明**：
+  - assessment：JS代码为MIT；SVG图形为CC BY 4.0，绝不能沿用代码MIT标记。固定多色填充，不随currentColor；可改色但肤色/旗帜不应机械统一。
+  - palette：硬编码多色；应维护语义颜色映射，不能全局把所有fill改成currentColor。
+  - svg_gate：额外拒绝脚本/事件属性、外链href、data:资源、url外部引用；局部defs ID必须按实例加前缀，防多个SVG重复ID。
+  - evidence：
+    - label：LICENSE-GRAPHICS
+    - url：https://github.com/jdecked/twemoji/blob/b6b55fef1e8636b540a6d016a4729ca8cdf2e60b/LICENSE-GRAPHICS
+    - label：assets/svg/e50a.svg
+    - url：https://github.com/jdecked/twemoji/blob/b6b55fef1e8636b540a6d016a4729ca8cdf2e60b/assets/svg/e50a.svg
+
+### C2-06 OpenMoji color/black
+
+- **ID**：C2-06
+- **调查路**：C2
+- **名称**：OpenMoji color/black
+- **仓库**：https://github.com/hfg-gmuend/openmoji
+- **固定版本**：aeb8bb3a59e2de39c754ac79180c8131c906acea
+- **许可**：
+  - spdx：CC-BY-SA-4.0
+  - path：LICENSE.txt
+  - url：https://github.com/hfg-gmuend/openmoji/blob/aeb8bb3a59e2de39c754ac79180c8131c906acea/LICENSE.txt
+  - scope：详见候选说明
+  - split：图形CC-BY-SA-4.0；工具不沿用图形结论
+- **义务**：
+  - attribution：True
+  - share_alike：True
+  - non_commercial：False
+  - no_derivatives：False
+  - note：修改版图形以同一许可发布；保留署名、许可链接并指明修改。
+- **可粘贴署名**：原样使用：OpenMoji color/black — OpenMoji contributors / HfG Schwäbisch Gmünd，CC-BY-SA-4.0，https://github.com/hfg-gmuend/openmoji，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/hfg-gmuend/openmoji/blob/aeb8bb3a59e2de39c754ac79180c8131c906acea/LICENSE.txt
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 品牌logo仍有商标限制，开源不代表获商标许可。
+  - emoji人物为绘制形象；不得误示真实人物背书。
+  - 旗帜/地图图形逐项审查，本次不接纳中国边界图。
+- **内容、格式、体积与预览**：
+  - svg_whitelist：直接合格（本次限定目录全量标签扫描）
+  - scope：color/svg
+  - files：4565
+  - raw_bytes：14436457
+  - currentColor_files：0
+  - forbidden_files：0
+  - preview：https://github.com/hfg-gmuend/openmoji/blob/aeb8bb3a59e2de39c754ac79180c8131c906acea/color/svg/F8FF.svg
+  - inspection：Python XML ElementTree全量解析元素本地名；2026-10-02；只验证标签，非完整安全净化。
+- **映射**：
+  - media
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：A：已合格的单枚SVG可走media。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-08-12T11:57:37+02:00
+  - source：https://github.com/hfg-gmuend/openmoji/commit/aeb8bb3a59e2de39c754ac79180c8131c906acea
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：风格统一，但SA要单独隔离
+- **审查与适配说明**：
+  - assessment：主选color/svg 4565文件；另有black与源文件目录；固定色板，可改为主题token。工具helpers另有LICENSE.txt；不得把图形SA改写为工具许可。
+  - palette：硬编码多色；应维护语义颜色映射，不能全局把所有fill改成currentColor。
+  - svg_gate：额外拒绝脚本/事件属性、外链href、data:资源、url外部引用；局部defs ID必须按实例加前缀，防多个SVG重复ID。
+  - evidence：
+    - label：LICENSE.txt
+    - url：https://github.com/hfg-gmuend/openmoji/blob/aeb8bb3a59e2de39c754ac79180c8131c906acea/LICENSE.txt
+    - label：color/svg/F8FF.svg
+    - url：https://github.com/hfg-gmuend/openmoji/blob/aeb8bb3a59e2de39c754ac79180c8131c906acea/color/svg/F8FF.svg
+  - share_alike_scope：对实际修改后的图形保留相同许可；视频是否形成适应作品需按组合方式审查，不能自动宣称整个视频必须SA或一定不受SA。
+
+### C2-07 Noto Emoji 2D SVG
+
+- **ID**：C2-07
+- **调查路**：C2
+- **名称**：Noto Emoji 2D SVG
+- **仓库**：https://github.com/googlefonts/noto-emoji
+- **固定版本**：e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e
+- **许可**：
+  - spdx：Apache-2.0
+  - path：2D/svg/LICENSE
+  - url：https://github.com/googlefonts/noto-emoji/blob/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/2D/svg/LICENSE
+  - scope：详见候选说明
+  - split：2D/svg/LICENSE=Apache-2.0；根LICENSE和fonts=OFL-1.1；third_party国旗单独许可，不纳入
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Noto Emoji 2D SVG — Google, Inc.，Apache-2.0，https://github.com/googlefonts/noto-emoji，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/googlefonts/noto-emoji/blob/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/2D/svg/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 品牌logo仍有商标限制，开源不代表获商标许可。
+  - emoji人物为绘制形象；不得误示真实人物背书。
+  - 旗帜/地图图形逐项审查，本次不接纳中国边界图。
+- **内容、格式、体积与预览**：
+  - svg_whitelist：需清理/筛选；原目录不全合格
+  - scope：2D/svg
+  - files：3750
+  - raw_bytes：41703189
+  - currentColor_files：0
+  - forbidden_files：170
+  - preview：https://github.com/googlefonts/noto-emoji/blob/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/2D/svg/emoji_ufe82b.svg
+  - inspection：Python XML ElementTree全量解析元素本地名；2026-10-02；只验证标签，非完整安全净化。
+- **映射**：
+  - media
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：逐枚清理/筛选、改色映射、验证后走media；含滤镜的效果保真版本转PNG。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-09-24T17:35:00Z
+  - source：https://github.com/googlefonts/noto-emoji/commit/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：小插画感强；170个图形须去制作元数据
+- **审查与适配说明**：
+  - assessment：2D/svg下3750文件，其中170含非白名单aipgf；清除该编辑器私有元素后需重扫和图像diff。不要把third_party/region-flags纳入本候选；根LICENSE为OFL，2D SVG按自己的Apache-2.0。
+  - palette：硬编码多色；应维护语义颜色映射，不能全局把所有fill改成currentColor。
+  - svg_gate：额外拒绝脚本/事件属性、外链href、data:资源、url外部引用；局部defs ID必须按实例加前缀，防多个SVG重复ID。
+  - evidence：
+    - label：2D/svg/LICENSE
+    - url：https://github.com/googlefonts/noto-emoji/blob/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/2D/svg/LICENSE
+    - label：2D/svg/emoji_ufe82b.svg
+    - url：https://github.com/googlefonts/noto-emoji/blob/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/2D/svg/emoji_ufe82b.svg
+
+### C2-08 Fluent Emoji High Contrast + 逐枚Flat白名单
+
+- **ID**：C2-08
+- **调查路**：C2
+- **名称**：Fluent Emoji High Contrast + 逐枚Flat白名单
+- **仓库**：https://github.com/microsoft/fluentui-emoji
+- **固定版本**：1ffb34c752ecf5d402f04cfb4b392c77f57c54bc
+- **许可**：
+  - spdx：MIT
+  - path：LICENSE
+  - url：https://github.com/microsoft/fluentui-emoji/blob/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc/LICENSE
+  - scope：详见候选说明
+- **义务**：
+  - attribution：True
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：保留对应版权和完整许可。Apache还须保留NOTICE（如适用）、标明修改；CC BY需合理署名、许可链接及修改说明。
+- **可粘贴署名**：原样使用：Fluent Emoji High Contrast + 逐枚Flat白名单 — Microsoft Corporation，MIT，https://github.com/microsoft/fluentui-emoji，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/microsoft/fluentui-emoji/blob/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc/LICENSE
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 品牌logo仍有商标限制，开源不代表获商标许可。
+  - emoji人物为绘制形象；不得误示真实人物背书。
+  - 旗帜/地图图形逐项审查，本次不接纳中国边界图。
+- **内容、格式、体积与预览**：
+  - svg_whitelist：需清理/筛选；原目录不全合格
+  - scope：assets
+  - files：7885
+  - raw_bytes：155552178
+  - currentColor_files：0
+  - forbidden_files：2963
+  - preview：https://github.com/microsoft/fluentui-emoji/blob/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc/assets/Zzz/High%20Contrast/zzz_high_contrast.svg
+  - inspection：Python XML ElementTree全量解析元素本地名；2026-10-02；只验证标签，非完整安全净化。
+  - style_audit：
+    - High Contrast：
+      - count：1595
+      - forbidden：0
+      - bytes：6391750
+    - Flat：
+      - count：3145
+      - forbidden：6
+      - bytes：17244387
+    - Color：
+      - count：3145
+      - forbidden：2957
+      - bytes：131916041
+- **映射**：
+  - media
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：逐枚清理/筛选、改色映射、验证后走media；含滤镜的效果保真版本转PNG。
+- **时间可寻址性**：不适用（静态素材）
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-08-24T16:51:12-07:00
+  - source：https://github.com/microsoft/fluentui-emoji/commit/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：首推：High Contrast可直接用；Flat逐枚筛选
+- **审查与适配说明**：
+  - assessment：High Contrast 1595文件全部过；Flat 3145中6个禁用标签，Color 3145中2957个禁用标签。Color柔光不能直接删filter后声称原样；保持效果应转PNG走media，不放SVG槽。
+  - palette：硬编码多色；应维护语义颜色映射，不能全局把所有fill改成currentColor。
+  - svg_gate：额外拒绝脚本/事件属性、外链href、data:资源、url外部引用；局部defs ID必须按实例加前缀，防多个SVG重复ID。
+  - evidence：
+    - label：LICENSE
+    - url：https://github.com/microsoft/fluentui-emoji/blob/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc/LICENSE
+    - label：assets/Zzz/High Contrast/zzz_high_contrast.svg
+    - url：https://github.com/microsoft/fluentui-emoji/blob/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc/assets/Zzz/High%20Contrast/zzz_high_contrast.svg
+
+### C2-09 Open Peeps via DiceBear styles
+
+- **ID**：C2-09
+- **调查路**：C2
+- **名称**：Open Peeps via DiceBear styles
+- **仓库**：https://github.com/dicebear/styles
+- **固定版本**：67f54a0d45034c078cdb03e7374037eeacd6ab62
+- **许可**：
+  - spdx：CC0-1.0
+  - path：LICENSE.md
+  - url：https://github.com/dicebear/styles/blob/67f54a0d45034c078cdb03e7374037eeacd6ab62/LICENSE.md
+  - scope：详见候选说明
+- **义务**：
+  - attribution：False
+  - share_alike：False
+  - non_commercial：False
+  - no_derivatives：False
+  - note：此Open Peeps样式CC0不强制署名；推荐保留出处。若分发生成器代码，MIT版权/许可保留义务另行适用。
+- **可粘贴署名**：原样使用：Open Peeps via DiceBear styles — Pablo Stanley，CC0-1.0，https://github.com/dicebear/styles，未修改。若后续发生修改，将末句替换为“已修改（填写实际的换色、裁切、子集化或代码改动）”。许可：https://github.com/dicebear/styles/blob/67f54a0d45034c078cdb03e7374037eeacd6ab62/LICENSE.md
+- **署名位置**：资产包说明/THIRD_PARTY_NOTICES；CC署名同时汇总到视频简介或片尾
+- **风险**：
+  - 原作者明确CC0；不要使用未溯源搬运仓库。
+  - 不要把整个DiceBear合集当CC0，各style分别授权。
+- **内容、格式、体积与预览**：
+  - format：离线JSON样式定义，生成SVG
+  - bytes：192322
+  - preview：https://www.dicebear.com/styles/open-peeps/
+  - source_elements：
+    - path：188
+    - ellipse：7
+    - circle：2
+- **映射**：
+  - media
+- **产品线**：
+  - card
+  - explainer
+  - showcase
+- **适配等级**：B：离线按seed生成指定组合SVG，再按白名单全量扫描输出；不引HTTP API到作品。
+- **时间可寻址性**：可烘焙
+- **运行环境**：静态素材；离线本地引用；不需要React、CDN、WASM或Worker。
+- **维护证据**：
+  - last_commit_at：2026-09-28T00:04:38+02:00
+  - source：https://github.com/dicebear/styles/commit/67f54a0d45034c078cdb03e7374037eeacd6ab62
+  - checked_at：2026-10-02
+  - meaning：此固定ref对应的提交日期；不是对持续维护的承诺。
+- **结论**：备选：可组合人物插画，需实际输出审查后才接纳
+- **审查与适配说明**：
+  - svg_whitelist：源定义仅path/ellipse/circle；本次未运行生成器，最终输出SVG是否混入mask/style仍未验证，不能标直接合格。
+  - palette：skin/clothing/ink/headContrast四类颜色槽可映射theme；保留合理肤色。
+  - license_split：样式CC0；生成器DiceBear代码MIT，须同时保留其NOTICE（如随包分发）。
+  - evidence：
+    - label：LICENSE.md
+    - url：https://github.com/dicebear/styles/blob/67f54a0d45034c078cdb03e7374037eeacd6ab62/LICENSE.md
+    - label：src/open-peeps.json
+    - url：https://github.com/dicebear/styles/blob/67f54a0d45034c078cdb03e7374037eeacd6ab62/src/open-peeps.json
+    - label：LICENSE
+    - url：https://github.com/dicebear/dicebear/blob/4db7af08605ecbf1c142b710ad1819473c096895/LICENSE
