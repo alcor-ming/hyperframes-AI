@@ -2,7 +2,7 @@
   "schema_version": 2,
   "contract_version": 1,
   "id": "graph-grow",
-  "version": 1,
+  "version": 2,
   "kind": "module",
   "asset_layer": "building-block",
   "entry": "main.js",
@@ -11,10 +11,11 @@
     "state.js",
     "scene.js",
     "vendor/three.min.js",
-    "vendor/LICENSE.three.txt"
+    "vendor/LICENSE.three.txt",
+    "layout.js"
   ],
   "usage": "USAGE.md",
-  "description": "Calm light semantic Three.js B-roll; source candidate, requires local visual acceptance.",
+  "description": "Calm-light 2.5D semantic module source candidate; requires local visual acceptance.",
   "tags": [
     "style:calm-light",
     "threejs",
@@ -49,7 +50,7 @@
     },
     "camera.orbit_deg": {
       "type": "number",
-      "default": 15,
+      "default": 0,
       "minimum": 0,
       "maximum": 30
     }
@@ -65,27 +66,28 @@
     "timing": "stretch",
     "key_moments": [
       0,
+      0.35,
       0.6,
-      1.2,
-      2,
+      0.95,
+      1.8,
       2.8,
-      3.6,
-      4.2,
-      5.2,
-      5.8
+      3.35,
+      4.225,
+      5.1,
+      5.2
     ],
     "sfx_cues": [
       {
         "time": 0,
-        "purpose": "appear"
+        "purpose": "hub appears"
       },
       {
-        "time": 4.2,
-        "purpose": "signal"
+        "time": 3.35,
+        "purpose": "directed route begins"
       },
       {
-        "time": 5.2,
-        "purpose": "endpoint settles"
+        "time": 5.1,
+        "purpose": "destination emphasis"
       }
     ],
     "slots": {
@@ -158,7 +160,7 @@
       },
       "camera.orbit_deg": {
         "type": "number",
-        "default": 15,
+        "default": 0,
         "minimum": 0,
         "maximum": 30
       }
@@ -178,9 +180,9 @@
         0.16
       ]
     },
-    "usage": "// Host loads frozen runtime/appearance.js, runtime/rolls.js, runtime/broll.js first.\nconst appearance = await HarnessAppearance.load();\nconst {mount} = await import('./vendor/components/graph-grow/v1/main.js');\n// Separate connected, positioned, equally sized elements under these layers:\n// stage.closest('[data-hf-layer]').dataset.hfLayer === 'stage'\n// text.closest('[data-hf-layer]').dataset.hfLayer === 'text'\nconst cues = {find: key => ({sceneStart:0, shotStart:2, shotEnd:8, sceneEnd:9})[key]};\nconst shot = await mount({stage, text, appearance,\n  slots: {hub:'调度', n1:'输入', n2:'工具', n3:'记忆', n4:'输出'},\n  params: {topology:'star', path:'n1>hub>n4', seed:1, 'camera.orbit_deg':15},\n  startCue:'shotStart', endCue:'shotEnd', cues});\nconst rolls = HarnessRolls.mount({cues, scenes:[{id:'S01', startCue:'sceneStart', endCue:'sceneEnd',\n  a:{text:aText, items:[{id:'a1',element:aItem,cue:'sceneStart'}]},\n  b:[{startCue:'shotStart',endCue:'shotEnd',retreat:'hide',media:stage,text}]}]});\nasync function renderAt(globalSeconds) { shot.renderAt(globalSeconds); await rolls.renderAt(globalSeconds); }\nawait renderAt(4.2);\nconst {key_moments, sfx_cues} = shot.moments();\nfunction dispose() { shot.dispose(); rolls.dispose(); appearance.dispose(); }",
+    "usage": "// Host loads frozen runtime/appearance.js, runtime/rolls.js, runtime/broll.js first.\nconst appearance = await HarnessAppearance.load();\nconst {mount} = await import('./vendor/components/graph-grow/v2/main.js');\n// Separate connected, positioned, equally sized elements under these layers:\n// stage.closest('[data-hf-layer]').dataset.hfLayer === 'stage'\n// text.closest('[data-hf-layer]').dataset.hfLayer === 'text'\nconst cues = {find: key => ({sceneStart:0, shotStart:2, shotEnd:8, sceneEnd:9})[key]};\nconst shot = await mount({stage, text, appearance,\n  slots: {hub:'调度', n1:'输入', n2:'工具', n3:'记忆', n4:'输出'},\n  params: {topology:'star', path:'n1>hub>n4', seed:1, 'camera.orbit_deg':0},\n  startCue:'shotStart', endCue:'shotEnd', cues});\nconst rolls = HarnessRolls.mount({cues, scenes:[{id:'S01', startCue:'sceneStart', endCue:'sceneEnd',\n  a:{text:aText, items:[{id:'a1',element:aItem,cue:'sceneStart'}]},\n  b:[{startCue:'shotStart',endCue:'shotEnd',retreat:'hide',media:stage,text}]}]});\nasync function renderAt(globalSeconds) { shot.renderAt(globalSeconds); await rolls.renderAt(globalSeconds); }\nawait renderAt(4.2);\nconst {key_moments, sfx_cues} = shot.moments();\nfunction dispose() { shot.dispose(); rolls.dispose(); appearance.dispose(); }",
     "examples": [
-      "// Host loads frozen runtime/appearance.js, runtime/rolls.js, runtime/broll.js first.\nconst appearance = await HarnessAppearance.load();\nconst {mount} = await import('./vendor/components/graph-grow/v1/main.js');\n// Separate connected, positioned, equally sized elements under these layers:\n// stage.closest('[data-hf-layer]').dataset.hfLayer === 'stage'\n// text.closest('[data-hf-layer]').dataset.hfLayer === 'text'\nconst cues = {find: key => ({sceneStart:0, shotStart:2, shotEnd:8, sceneEnd:9})[key]};\nconst shot = await mount({stage, text, appearance,\n  slots: {hub:'调度', n1:'输入', n2:'工具', n3:'记忆', n4:'输出'},\n  params: {topology:'star', path:'n1>hub>n4', seed:1, 'camera.orbit_deg':15},\n  startCue:'shotStart', endCue:'shotEnd', cues});\nconst rolls = HarnessRolls.mount({cues, scenes:[{id:'S01', startCue:'sceneStart', endCue:'sceneEnd',\n  a:{text:aText, items:[{id:'a1',element:aItem,cue:'sceneStart'}]},\n  b:[{startCue:'shotStart',endCue:'shotEnd',retreat:'hide',media:stage,text}]}]});\nasync function renderAt(globalSeconds) { shot.renderAt(globalSeconds); await rolls.renderAt(globalSeconds); }\nawait renderAt(4.2);\nconst {key_moments, sfx_cues} = shot.moments();\nfunction dispose() { shot.dispose(); rolls.dispose(); appearance.dispose(); }"
+      "// Host loads frozen runtime/appearance.js, runtime/rolls.js, runtime/broll.js first.\nconst appearance = await HarnessAppearance.load();\nconst {mount} = await import('./vendor/components/graph-grow/v2/main.js');\n// Separate connected, positioned, equally sized elements under these layers:\n// stage.closest('[data-hf-layer]').dataset.hfLayer === 'stage'\n// text.closest('[data-hf-layer]').dataset.hfLayer === 'text'\nconst cues = {find: key => ({sceneStart:0, shotStart:2, shotEnd:8, sceneEnd:9})[key]};\nconst shot = await mount({stage, text, appearance,\n  slots: {hub:'调度', n1:'输入', n2:'工具', n3:'记忆', n4:'输出'},\n  params: {topology:'star', path:'n1>hub>n4', seed:1, 'camera.orbit_deg':0},\n  startCue:'shotStart', endCue:'shotEnd', cues});\nconst rolls = HarnessRolls.mount({cues, scenes:[{id:'S01', startCue:'sceneStart', endCue:'sceneEnd',\n  a:{text:aText, items:[{id:'a1',element:aItem,cue:'sceneStart'}]},\n  b:[{startCue:'shotStart',endCue:'shotEnd',retreat:'hide',media:stage,text}]}]});\nasync function renderAt(globalSeconds) { shot.renderAt(globalSeconds); await rolls.renderAt(globalSeconds); }\nawait renderAt(4.2);\nconst {key_moments, sfx_cues} = shot.moments();\nfunction dispose() { shot.dispose(); rolls.dispose(); appearance.dispose(); }"
     ]
   }
 }
