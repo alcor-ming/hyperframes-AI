@@ -6,6 +6,63 @@ import {pathToFileURL} from 'node:url';
 
 export const defaults = {step: 0.5, width: 960, timeout_ms: 5000};
 
+export function inspectCarry() {
+  const result = [];
+  const visit = (doc, x = 0, y = 0, scaleX = 1, scaleY = 1) => {
+    const win = doc.defaultView;
+    const visible = element => {
+      for (let node = element; node; node = node.parentElement) {
+        const style = win.getComputedStyle(node);
+        if (style.display === 'none' || style.visibility !== 'visible' || +style.opacity < .02) return false;
+      }
+      const box = element.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && box.right > 0 && box.bottom > 0 && box.x < win.innerWidth && box.y < win.innerHeight;
+    };
+    for (const element of doc.querySelectorAll('[data-hf-carry]')) {
+      if (!visible(element)) continue;
+      const box = element.getBoundingClientRect();
+      result.push({id: element.dataset.hfCarry, box: [x + box.x * scaleX, y + box.y * scaleY, box.width * scaleX, box.height * scaleY]});
+    }
+    for (const frame of doc.querySelectorAll('iframe')) {
+      if (!visible(frame) || !frame.contentDocument) continue;
+      const box = frame.getBoundingClientRect();
+      visit(frame.contentDocument, x + box.x * scaleX, y + box.y * scaleY,
+        scaleX * box.width / frame.clientWidth, scaleY * box.height / frame.clientHeight);
+    }
+  };
+  visit(document);
+  const root = document.querySelector('[data-width][data-height]');
+  const box = root?.getBoundingClientRect();
+  if (box?.width && box.height) for (const item of result) {
+    item.box = [(item.box[0] - box.x) * +root.dataset.width / box.width,
+      (item.box[1] - box.y) * +root.dataset.height / box.height,
+      item.box[2] * +root.dataset.width / box.width, item.box[3] * +root.dataset.height / box.height];
+  }
+  return result;
+}
+
+export async function layerPixels(page, frame, screenshot) {
+  const styles = [];
+  const excluded = '[data-hf-layer="background"], [data-hf-layer="captions"], [data-hf-ambient], [data-hf-motion="idle"], [data-hf-motion="talk"]';
+  const hide = async target => {
+    styles.push(await target.addStyleTag({content: excluded.split(',').flatMap(selector => [selector, selector.trim() + ' *']).join(',') + '{visibility:hidden!important}'}));
+    for (const child of target.childFrames()) await hide(child);
+  };
+  try {
+    await hide(frame);
+    const bytes = await screenshot();
+    return await page.evaluate(async base64 => {
+      const image = new Image(); image.src = 'data:image/png;base64,' + base64; await image.decode();
+      const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+      const context = canvas.getContext('2d', {willReadFrequently: true});
+      context.drawImage(image, 0, 0);
+      return Array.from(context.getImageData(0, 0, canvas.width, canvas.height).data);
+    }, Buffer.from(bytes).toString('base64'));
+  } finally {
+    for (const style of styles.reverse()) await style.evaluate(element => element.remove()).catch(() => {});
+  }
+}
+
 // Helper intent is only a candidate: the Python report also requires a visible state change.
 export function inspectRhythmFrame() {
   const observed = element => {
@@ -360,6 +417,7 @@ export async function inspectCardFrames(frame, scenes, time, remaining) {
 export async function probe(input) {
   const deadline = Date.now() + 25 * 60 * 1000;
   const parameters = {...defaults, ...input.parameters};
+  if (input.fps !== undefined && (!Number.isFinite(input.fps) || input.fps <= 0)) throw new Error('Invalid frame rate');
   for (const key of Object.keys(defaults)) if (!Number.isFinite(parameters[key]) || parameters[key] <= 0)
     throw new Error('Invalid positive parameter: ' + key);
   if (parameters.width < 160 || parameters.width > 4096 || parameters.timeout_ms < 100 ||
@@ -378,6 +436,14 @@ export async function probe(input) {
       args: ['--disable-dev-shm-usage', '--disable-background-networking', '--disable-component-update',
         '--no-first-run', ...(process.platform === 'linux' ? ['--no-sandbox'] : [])]});
     const page = await browser.newPage();
+    await page.evaluateOnNewDocument(() => {
+      window.addEventListener('message', event => {
+        const player = document.querySelector('hyperframes-player'), value = event.data;
+        if (event.source !== player?.iframeElement?.contentWindow || value?.source !== 'hf-preview') return;
+        const fps = value.fps?.numerator / value.fps?.denominator;
+        if (Number.isFinite(fps) && fps > 0) window.__hfProbeFps = fps;
+      });
+    });
     page.on('pageerror', error => result.unverified.push('Page error: ' + error.message));
     let navigation = 0;
     page.on('framenavigated', () => { navigation++; });
@@ -417,7 +483,8 @@ export async function probe(input) {
     if (!Number.isFinite(duration) || duration <= 0) throw new Error('Invalid Studio duration');
     if (duration / parameters.step > 2000) throw new Error('Sampling budget exceeded; increase step (maximum 2000 baseline samples)');
     const samples = new Map();
-    const sample = async requested => {
+    let previousPixels = null;
+    const sample = async (requested, measurePixels = false) => {
       if (Date.now() >= deadline) throw new Error('Diagnostic time budget exceeded; browser closed before outer command timeout');
       const time = Math.round(Math.min(duration - 0.001, Math.max(0, requested)) * 1e6) / 1e6;
       if (samples.has(time)) return samples.get(time);
@@ -473,8 +540,29 @@ export async function probe(input) {
           value.unverified.push(...info.unverified, ...cards.unverified);
           result.timeline.push(...info.timeline, ...cards.timeline);
           value.ready = cards.ready;
+          if (input.measurements) {
+            value.carry = await frame.evaluate(inspectCarry);
+            const shot = () => page.screenshot({type: 'png', clip: box});
+            if (input.evidence_dir) {
+              await fs.mkdir(input.evidence_dir, {recursive: true});
+              value.screenshot = `frame-${String(Math.round(time * 1e6)).padStart(12, '0')}.png`;
+              await fs.writeFile(path.join(input.evidence_dir, value.screenshot), await shot());
+            }
+            if (measurePixels && value.ready) {
+              const pixels = await layerPixels(page, frame, shot);
+              const prior = previousPixels;
+              let delta = 0;
+              if (prior?.pixels.length === pixels.length) {
+                for (let i = 0; i < pixels.length; i++) delta += Math.abs(pixels[i] - prior.pixels[i]);
+                value.still = {from: prior.time, mean_delta: delta / pixels.length, pixels: pixels.length / 4};
+              }
+              previousPixels = {time, pixels};
+            } else if (measurePixels) previousPixels = null;
+          }
         } catch (error) {
           if (before !== navigation && Date.now() < sampleDeadline) { value.retried_after_navigation = true; continue; }
+          value.ready = false;
+          if (measurePixels) previousPixels = null;
           value.unverified.push('Sample not verified: ' + error.message);
         }
         break;
@@ -484,7 +572,21 @@ export async function probe(input) {
     const times = new Set([0, Math.max(0, duration - 0.001)]);
     for (let time = parameters.step; time < duration; time += parameters.step) times.add(time);
     for (const scene of input.scenes || []) if (scene.start >= 0 && scene.start < duration) times.add(scene.start);
-    for (const time of [...times].sort((a, b) => a - b)) await sample(time);
+    for (const time of [...times].sort((a, b) => a - b)) await sample(time, !!input.measurements);
+    if (input.measurements) {
+      const boundaries = new Set([...(input.scenes || []).map(scene => scene.start), ...(input.boundaries || [])]);
+      for (const time of await frame.evaluate(() => [...(window.__hfRollBoundaries || [])].flatMap(read => read()))) boundaries.add(time);
+      result.boundaries = [...boundaries].filter(time => time >= 0 && time < duration).sort((a, b) => a - b);
+      const fps = await page.evaluate(() => window.__hfProbeFps) || input.fps || 60;
+      result.fps = fps;
+      if (input.fps && input.fps !== fps) result.unverified.push(`Studio sampling fps ${fps} differs from Plan fps ${input.fps}; boundary pairs use Studio frames.`);
+      for (const boundary of result.boundaries) {
+        const first = Math.ceil(boundary * fps - 1e-7) / fps;
+        await sample(first - 1 / fps);
+        await sample(first);
+        for (const offset of [-.2, -.1, 0, .1, .2, .4]) await sample(boundary + offset);
+      }
+    }
     // Sample exact helper boundaries, including short actions lost by the baseline grid.
     for (const value of [...samples.values()]) for (const event of value.rhythm_candidates) {
       if (event.time < 0 || event.time >= duration) continue;

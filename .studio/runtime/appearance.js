@@ -504,7 +504,7 @@
     // Ownership lasts through fill-before/fill-after. Use explicit layers for overlapping properties.
     for (const { target, properties } of plans) {
       const owned = motionOwners.get(target);
-      if (properties.some(key => owned?.has(key)) || target.getAnimations().some(animation => animation.effect?.getKeyframes().some(frame => properties.some(key => key in frame)))) throw new Error("Motion property ownership conflict");
+      if (properties.some(key => owned?.has(key) || global.__hfRollOwners?.get(target)?.includes(key)) || target.getAnimations().some(animation => animation.effect?.getKeyframes().some(frame => properties.some(key => key in frame)))) throw new Error("Motion property ownership conflict");
     }
     const animations = [];
     let disposed = false;

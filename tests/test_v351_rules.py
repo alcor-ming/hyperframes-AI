@@ -79,11 +79,11 @@ class V351RulesTests(unittest.TestCase):
         for token in ("Work 级", "各 Variant 共享", "可定位位置", "取得状态", "确有缺口"):
             self.assertIn(token, research)
         plan = read(".studio/templates/ANIMATION_PLAN.template.md")
-        overview = plan.split("## 概览", 1)[1].split("\n## ", 1)[0]
+        overview = plan.split("## 分镜表", 1)[1].split("\n## ", 1)[0]
         self.assertNotIn("screen", overview)
-        self.assertNotIn("A/B", overview)
+        self.assertIn("起点口播词", overview)
         scene = plan.split("## S01", 1)[1].split("\n## ", 1)[0]
-        for token in ("A/B 编排", "### I01", "```screen", "B 素材", "声音 cue", "事件序列"):
+        for token in ("A/B 编排", "### I01", "```screen", "B 素材", "声音 cue", "刻意停顿例外"):
             self.assertIn(token, scene)
         self.assertIn("元信息由 CLI", plan)
         self.assertEqual(1, plan.count("```sound"))

@@ -1,6 +1,6 @@
 # HyperFrames v3.7：流程优化与复盘
 
-状态：v3.7.0 最终规划已批准（2026-10-02），交由 Codex 在 WSL 开发仓实施，尚未实现；v3.7.1、v3.7.2 待讨论；简化设计在 v3.8。本文件是 v3.7 大版本的产品真源；Trellis 任务 `hyperframes-v37-simplify-retro` 只绑定当前推进的小版本（文件名与任务 ID 沿用最初的"simplify"，不改名以免断链，简化设计已移到 v3.8）。
+状态：v3.7.0 最终规划已批准（2026-10-02），已在 WSL 开发仓实现并完成隔离验证；Windows 原生、宿主指定模型看图和生产验收未执行；v3.7.1、v3.7.2 待讨论；简化设计在 v3.8。本文件是 v3.7 大版本的产品真源；Trellis 任务 `hyperframes-v37-simplify-retro` 只绑定当前推进的小版本（文件名与任务 ID 沿用最初的"simplify"，不改名以免断链，简化设计已移到 v3.8）。
 
 ## 1. 背景与目标
 
@@ -52,7 +52,9 @@ v3.7 的目标有两个：
 
 ## 4. v3.7.0 边界
 
-### 4.1 现状证据
+实施记录（2026-10-02）：S1–S10 当前范围已落地。新 Variant 使用冻结 line、三层设置及 3.7.0 Plan（showcase 保留专用 Plan）；旧 Variant 不迁移。新增 `settings show|set|unset`、`critic round|record`，critic 只生成证据并记录建议，由宿主按生效设置派生能看图的 Agent。错相运行时、像素静止和 carry 几何测量已通过隔离 Chromium 与本机缓存 Studio 0.8.80 验证；Studio 交界帧使用实际预览协议帧率，无法确认时明确标未测量。锁定运行时 0.8.27 的原生验证、Windows、指定 critic 模型与生产新旧流程对照仍未执行。未部署或改动生产内容。
+
+### 4.1 规划时的现状证据
 
 - Plan 逐 Scene 事件表由 `.studio/visual_plan.py:287-294` 解析（`cue | 层 | 目标 | 变化` 与 `例外` 行），卡片块事件由 `.studio/visual_plan.py:262-268` 自动推导。
 - `preview diagnose`（`.studio/work.py:3798`）用 `.studio/visual_diagnostics.py:26` 的 `rhythm_diagnostics` 计算第 2–4 层的实际可见事件；Plan 声明的事件只用来核对目标是否命中（`.studio/visual_diagnostics.py:102-121`），不产生事件。
@@ -74,7 +76,7 @@ v3.7 的目标有两个：
 - **S10 视觉延续测量**（MVK"被延续对象末帧 = 下一场首帧"，冻结时间测量；文章"一形贯穿"）：分镜表"延续"列写延续对象；工程在交界两侧的对象上标同一 `data-hf-carry="<ID>"`；`preview diagnose` 在交界前一帧与起点帧读取两者的位置与尺寸，报告偏差，只报告不设门禁。card 自动生成的卡片块不加标记，card 线延续仍靠 A 文字组拉回。
 - **S6 设置清单**（用户要求，服务于上述开关）：只收录本版引入的开关——方向批准开关、critic 提供方/模型/最多轮数等。声明式清单（键、类型、档案默认值、可覆盖层级、阶段、成本类型 token/人工、说明），三层合并后输出每个键的生效值与来源层，CLI 可读写并输出 JSON，供日后 Web 前端直接使用。
 
-### 4.3 补充现状证据
+### 4.3 规划时的补充现状证据
 
 - Variant 已有 `profile` 字段，含义是视觉风格（`.studio/work.py:71` `PROFILES`），产品线档案不能复用这个名字，改称 `line`。CLI 也已有 `work review`（隔离测试 WorkStore，`.studio/work.py:3617`），再次确认独立评审命名为 `critic`。
 - `plan_scene_rows` 只接受 `plan_format` 3.5.2，其余一律报错（`.studio/visual_plan.py:211-219`）；新格式需要并行解析，而不是替换。

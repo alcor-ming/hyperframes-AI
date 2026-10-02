@@ -75,7 +75,7 @@
       if (!groups.has(id)) throw new Error(`Unknown generated card Scene: ${id}`);
       return groups.get(id).a;
     },
-    async setRolls(scenes) {
+    async setRolls(scenes, {reducedMotion} = {}) {
       await ready;
       if (rolls) throw new Error('Card rolls are already bound');
       // A/B metadata belongs to the host; card content stays exclusively in Plan.
@@ -89,7 +89,7 @@
           instance.retime(cue => activeTime(group.cues.find(cue)), activeTime(group.scene.start + group.scene.duration));
         return {...scene, a: group.a};
       });
-      rolls = HarnessRolls.mount({cues: [...groups.values()][0].cues, scenes: entries});
+      rolls = HarnessRolls.mount({cues: [...groups.values()][0].cues, scenes: entries, reducedMotion});
       for (const scene of scenes) {
         const group = groups.get(scene.id);
         group.binding.dispose();

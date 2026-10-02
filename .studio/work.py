@@ -65,6 +65,9 @@ import appearance_rebind
 import research_catalog
 import work_migration
 import work_successor
+import critic
+import lines
+import settings as work_settings
 
 WORKFLOWS = {"hyperframes_video", "podcast_quote_image"}
 TEMPLATES = {"talking_head", "pure_hyperframes"}
@@ -279,7 +282,7 @@ def command_explainer_build(root: Path, args: argparse.Namespace) -> None:
         if cues.get("sources", {}).get("script_sha256") != hashlib.sha256(text.encode("utf-8")).hexdigest():
             raise HarnessError("Narration changed; rebuild cues before sound")
         plan_path = input_path(variant, "ANIMATION_PLAN.md")
-        if read_frontmatter(plan_path).get("status") != "approved":
+        if read_frontmatter(plan_path).get("status") != "approved" and effective_settings(root, state)['direction_approval']['value']:
             raise HarnessError("ANIMATION_PLAN.md must be approved before sound build")
         plan_scene_rows(plan_path.read_text(encoding="utf-8"))
         blocks = re.findall(r"^```sound[ \t]*\n(.*?)^```[ \t]*$", document_body(plan_path), re.M | re.S)
@@ -436,7 +439,9 @@ def plan_metadata(path: Path, state: dict[str, Any]) -> dict[str, Any]:
         inputs[name] = {"path": state.get("shared_inputs", {}).get(name, f"variants/{state['id']}/{name}"),
                         "revision": read_frontmatter(target).get("revision")}
     work = path.parent.parent
-    return {"plan_format": PLAN_FORMAT, "work": read_frontmatter(work / 'WORK.md')['id'], "variant": state["id"],
+    return {"plan_format": '3.7.0' if state.get('line') and state.get('mode') != 'showcase' else PLAN_FORMAT,
+            **({'line': state['line']} if state.get('line') else {}),
+            "work": read_frontmatter(work / 'WORK.md')['id'], "variant": state["id"],
             "revision": state.get("plan_revision", 1), "inputs": inputs,
             **{key: state.get(key) for key in ("template", "profile", "subject_position")},
             "script_revision": inputs["SCRIPT.md"]["revision"], "research_revision": inputs["RESEARCH.md"]["revision"],
@@ -490,9 +495,16 @@ def command_plan_check(root: Path, args: argparse.Namespace) -> None:
     variant, state = selected_variant(root, work, args)
     project = variant / "project"
     text = (variant / "ANIMATION_PLAN.md").read_text(encoding="utf-8")
-    plan_scene_rows(text)
+    rows = plan_scene_rows(text)
     dependencies = validate_dependencies(project)
     findings = seek_check.findings(project, dependencies)
+    if read_frontmatter(variant / 'ANIMATION_PLAN.md').get('plan_format') == '3.7.0':
+        script = input_path(variant, 'SCRIPT.md').read_text(encoding='utf-8')
+        script_scenes = set(re.findall(r'^\|\s*(S[0-9]+[A-Z]*)\s*\|', script, re.M))
+        if script_scenes != set(rows):
+            findings.append({'kind': 'script_scene_mismatch', 'script': sorted(script_scenes), 'plan': list(rows)})
+        if read_frontmatter(variant / 'ANIMATION_PLAN.md').get('line') != state.get('line'):
+            findings.append({'kind': 'line_binding_mismatch'})
     diagnostic = visual_diagnostics.explainer_diagnostics(project, dependencies, state.get("appearance_lock"), text)
     findings.extend(diagnostic["findings"])
     if state.get("series_binding", {}).get("spec") == "math-rap":
@@ -544,6 +556,8 @@ def command_review_package(root: Path, args: argparse.Namespace) -> None:
 def adopt_variant(path: Path, settings: dict[str, Any], *, shared: bool = False, branch: str | None = None) -> None:
     state = read_json(path / "variant.yaml")
     state.update({key: value for key, value in settings.items() if value is not None})
+    if (path / 'ANIMATION_PLAN.md').is_file():
+        state['line'] = lines.bind(state)
     if settings.get("theme") or settings.get("appearance_lock"):
         state["profile"] = None
     work = path.parent.parent
@@ -957,6 +971,9 @@ def create_video_variant(
         "RESEARCH_REVISION": json.dumps(research_revision),
     }
     atomic_write(path / "variant.yaml", template_text(root, "VARIANT.template.yaml", values))
+    state = read_json(path / 'variant.yaml')
+    state['line'] = lines.bind(state)
+    write_variant(path, state)
     if copy_script_from:
         shutil.copy2(copy_script_from, path / "SCRIPT.md")
     else:
@@ -1599,10 +1616,10 @@ def command_math(root: Path, args: argparse.Namespace) -> None:
         plan = plan_bytes.decode('utf-8')
         plan_scene_rows(plan)
         metadata = read_frontmatter(plan_path)
-        if metadata.get('status') != 'approved':
-            raise HarnessError('ANIMATION_PLAN.md must be approved before math build')
         state_bytes = (variant / 'variant.yaml').read_bytes() if variant else None
         state = json.loads(state_bytes) if state_bytes is not None else metadata
+        if metadata.get('status') != 'approved' and (not variant or effective_settings(root, state)['direction_approval']['value']):
+            raise HarnessError('ANIMATION_PLAN.md must be approved before math build')
         lock = state.get('appearance_lock') if variant else read_json(project / 'appearance-lock.json')
         if (not lock or lock.get('mode') != 'explainer'
                 or state.get('series_binding', {}).get('spec') != 'math-rap'
@@ -1637,6 +1654,8 @@ def command_cards(root: Path, args: argparse.Namespace) -> None:
         project = variant / 'project'
         plan_path = storage.scoped_path(variant, 'ANIMATION_PLAN.md')
 
+    direction_approval = not variant or effective_settings(root, read_json(variant / 'variant.yaml'))['direction_approval']['value']
+
     def update(payload=None):
         with package_write_lock(work_requests.safe(project.parent, '.runtime/component-install.lock')):
             plan_bytes = plan_path.read_bytes()
@@ -1664,7 +1683,7 @@ def command_cards(root: Path, args: argparse.Namespace) -> None:
                 if state is not None:
                     state.update(plan_revision=metadata['revision'], accepted_preview=None, current_final=None)
                     extra[variant / 'variant.yaml'] = (json.dumps(state, ensure_ascii=False, indent=2) + '\n').encode()
-            elif metadata.get('status') != 'approved':
+            elif metadata.get('status') != 'approved' and direction_approval:
                 raise HarnessError('ANIMATION_PLAN.md must be approved before cards build')
             expected = {plan_path: plan_bytes}
             if variant:
@@ -1745,7 +1764,7 @@ def command_component_install(root: Path, args: argparse.Namespace) -> None:
         plan = read_frontmatter(plan_path)
         if args.purpose == "plan":
             assert_preview_ready(variant, state, purpose="plan", kind="reference")
-        elif plan.get("status") != "approved":
+        elif plan.get("status") != "approved" and effective_settings(root, state)['direction_approval']['value']:
             raise HarnessError("ANIMATION_PLAN.md must be approved before Component installation")
         plan_scene_rows(plan_path.read_text(encoding="utf-8"))
         if not animation_plan_contains_component_ref(plan_path, args.component_ref):
@@ -2095,14 +2114,16 @@ def copy_snapshot(project: Path, destination: Path, kind: str = "executable") ->
             shutil.copy2(source, target)
 
 
-def assert_preview_ready(variant: Path, state: dict[str, Any], *, purpose: str = "draft", kind: str = "executable") -> None:
+def assert_preview_ready(variant: Path, state: dict[str, Any], *, purpose: str = "draft", kind: str = "executable", direction_approval: bool = True) -> None:
     script = read_frontmatter(input_path(variant, "SCRIPT.md"))
     plan = read_frontmatter(variant / "ANIMATION_PLAN.md")
+    if plan.get('plan_format') == '3.7.0' and plan.get('line') != state.get('line'):
+        raise HarnessError('Plan line differs from the frozen Variant line')
     if script.get("approval") == "pending":
         raise HarnessError("SCRIPT.md still requires approval")
     if script.get("revision") != state.get("script_revision"):
         raise HarnessError("SCRIPT.md revision does not match variant.yaml")
-    if purpose != "plan" and plan.get("status") != "approved":
+    if purpose != "plan" and direction_approval and plan.get("status") != "approved":
         raise HarnessError("ANIMATION_PLAN.md is not approved")
     if plan.get("revision") != state.get("plan_revision"):
         raise HarnessError("ANIMATION_PLAN.md revision does not match variant.yaml")
@@ -2222,7 +2243,9 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError("Layout requires --purpose plan, --sample-dir and --scene")
     if not layout and not scene and (args.sample_dir or args.scene):
         raise HarnessError("--sample-dir and --scene require --kind layout")
-    assert_preview_ready(variant, state, purpose=purpose, kind=kind)
+    effective = getattr(args, '_effective_settings', None) or effective_settings(root, state)
+    direction_approval = effective['direction_approval']['value']
+    assert_preview_ready(variant, state, purpose=purpose, kind=kind, direction_approval=direction_approval)
     draft = Path(args.draft_file).expanduser().resolve() if args.draft_file else None
     studio_draft = purpose == "draft" and draft is None
     if draft is not None and (not draft.is_file() or draft.stat().st_size == 0):
@@ -2251,7 +2274,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     input_hashes = preview_input_hashes(variant) if all(input_path(variant, name).is_file() for name in PREVIEW_DOCUMENTS) else None
     if studio_draft:
         input_hashes = preview_input_hashes(variant)
-    if purpose == "draft" and state.get("accepted_visual_plan"):
+    if purpose == "draft" and direction_approval and state.get("accepted_visual_plan"):
         assert_plan_baseline(variant, state, variant / "previews" / validate_id(state["accepted_visual_plan"], "Visual Plan"), project)
     if draft_digest:
         assert_draft_source(variant, draft_digest, source_digest)
@@ -2310,7 +2333,7 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             "plan_sha256": plan_digest,
             "adopted_settings": {key: state.get(key) for key in (
                 "template", "profile", "theme", "theme_revision", "theme_settings", "mode", "ratio", "subject_position", "account", "account_revision", "account_settings", "batch",
-                "background", "motion", "appearance_lock", "series_binding")},
+                "background", "motion", "appearance_lock", "series_binding", "line")},
         }
         if input_hashes is not None:
             metadata["input_sha256"] = input_hashes
@@ -2438,12 +2461,26 @@ def command_preview_accept(root: Path, args: argparse.Namespace) -> None:
         raise HarnessError("Draft media changed or missing")
     if snapshot_digest(preview / "source-snapshot") != metadata.get("snapshot_sha256"):
         raise HarnessError("Draft snapshot changed")
-    if metadata.get("source_plan") or metadata.get("review_mode") == "studio":
-        assert_preview_ready(variant, state)
+    effective = effective_settings(root, state)
+    direction_approval = effective['direction_approval']['value']
     if metadata.get("script_revision") != state.get("script_revision"):
         raise HarnessError("Preview targets a different Script revision")
     if metadata.get("plan_revision") != state.get("plan_revision"):
         raise HarnessError("Preview targets a different Plan revision")
+    if state.get('line') or metadata.get("source_plan") or metadata.get("review_mode") == "studio":
+        assert_preview_ready(variant, state, direction_approval=direction_approval)
+    if not direction_approval:
+        plan_path = variant / 'ANIMATION_PLAN.md'
+        text = plan_path.read_text(encoding='utf-8')
+        plan = read_frontmatter(plan_path)
+        if plan.get('revision') != metadata['plan_revision']:
+            raise HarnessError('Draft must approve the exact Plan revision')
+        plan['status'] = 'approved'
+        atomic_write(plan_path, '---\n' + json.dumps(plan, ensure_ascii=False) + text[text.index('\n---', 3):])
+    if state.get('line'):
+        state['draft_acceptance'] = {'draft_id': draft_id, 'snapshot_sha256': metadata['snapshot_sha256'],
+                                     'plan_revision': metadata['plan_revision'], 'settings': effective,
+                                     'direction_approval': direction_approval}
     state.update(
         accepted_preview=draft_id,
         accepted_script_revision=metadata.get("script_revision"),
@@ -2626,7 +2663,7 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     parameters = visual_diagnostics.parameters(args)
     work, _ = selected_work(root, args, allow_archive=True)
     require_workflow(work, 'hyperframes_video')
-    variant, _ = selected_variant(root, work, args)
+    variant, state = selected_variant(root, work, args)
     target = validate_id(args.preview_id, 'preview')
     record = bound_studio(variant, target)
     project = Path(record['project'])
@@ -2677,6 +2714,29 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
     browser = args.browser or os.environ.get('HYPERFRAMES_BROWSER_PATH') or str(studio_preview.browser_path())
     request = {'cli': str(cli), 'url': record['url'], 'browser': browser,
                'scenes': scenes, 'parameters': parameters}
+    plan_meta = read_frontmatter(input_path(documents, 'ANIMATION_PLAN.md'))
+    line = lines.frozen({'line': plan_meta.get('line')})
+    if line or getattr(args, '_evidence_dir', None):
+        line = line or lines.select(state)
+        request.update(measurements=True, fps=plan_meta.get('fps') or 60)
+        if getattr(args, '_evidence_dir', None):
+            request['evidence_dir'] = str(args._evidence_dir)
+    declared, carry_unverified = {}, []
+    if line:
+        declared = {}
+        cue_path = project / 'runtime/cues.json'
+        cues = read_json(cue_path) if cue_path.is_file() else None
+        for row in plan_scene_rows(contents['ANIMATION_PLAN.md']).values():
+            for segment in row.get('segments', []):
+                if not segment['carry']:
+                    continue
+                try:
+                    from visual_plan import plan_cue
+                    at = explainer.find_cue(cues, plan_cue(segment['cue']))
+                    declared.setdefault(round(at, 6), []).extend(segment['carry'])
+                except (ValueError, TypeError, KeyError):
+                    carry_unverified.append({'reason': 'carry_cue_unresolved', 'segment': segment['id']})
+        request['boundaries'] = list(declared)
     sampled = visual_diagnostics.probe(request, os.environ.get('HYPERFRAMES_NODE', 'node'))
     lock_path = project / 'appearance-lock.json'
     diagnostic_lock = read_json(lock_path) if lock_path.is_file() else {}
@@ -2698,14 +2758,19 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
               'rhythm': visual_diagnostics.rhythm_diagnostics(sampled['samples'], scenes,
                   plan=contents['ANIMATION_PLAN.md'],
                   cues=read_json(project / 'runtime/cues.json') if (project / 'runtime/cues.json').is_file() else None,
-                  mode=diagnostic_lock.get('mode')),
+                  mode='talking_head' if state.get('template') == 'talking_head' else diagnostic_lock.get('mode')),
               'samples': sampled['samples'], 'viewport': sampled.get('viewport'),
-              'unverified': sampled.get('unverified', []) + [
+              'unverified': sampled.get('unverified', []) + carry_unverified + [
                   {'reason': 'finite_sampling_not_full_playback_or_quality_acceptance'},
                   {'reason': 'script_generated_text_between_samples_not_verified',
                    'files': [name for name in dependencies if Path(name).suffix in {'.js', '.mjs'}]},
                   {'reason': 'static_candidates_not_observed_not_screen_text', 'entries': static_unverified}],
               'cross_version_differences': []}
+    if line:
+        report['fps'] = sampled.get('fps') or plan_meta.get('fps') or 60
+        report['still'] = visual_diagnostics.still_diagnostics(sampled['samples'], report['rhythm'], line['thresholds'])
+        report['boundaries'] = sorted(set(sampled.get('boundaries', [])) | declared.keys())
+        report['carry'] = visual_diagnostics.carry_diagnostics(sampled['samples'], report['boundaries'], fps=report['fps'], declared=declared)
     if diagnostic_lock:
         report['explainer'] = visual_diagnostics.explainer_diagnostics(
             project, dependencies, diagnostic_lock, contents['ANIMATION_PLAN.md'])
@@ -3473,11 +3538,186 @@ def command_request(root: Path, args: argparse.Namespace) -> None:
     print(str(result))
 
 
+def command_critic_round(root, args):
+    from contextlib import redirect_stdout
+    import io
+    if not args.work_override or not args.variant_override:
+        raise HarnessError('Critic requires explicit --work and --variant')
+    work, _ = selected_work(root, args)
+    require_workflow(work, 'hyperframes_video')
+    variant, state = selected_variant(root, work, args)
+    effective = effective_settings(root, state)
+    ledger_path = variant / 'critic' / 'ledger.json'
+    ledger = read_json(ledger_path) if ledger_path.is_file() else {'rounds': []}
+    prior = critic.pending_issues(ledger['rounds'])
+    automatic = len(ledger['rounds']) < effective['critic.max_rounds']['value']
+    if args.automatic and not automatic:
+        print_result(root, args, {'status': 'round_limit', 'message': 'Automatic limit reached; a manual critic round remains available'})
+        return
+    target = args.preview_id
+    if target is None:
+        register = SimpleNamespace(**{**vars(args), 'purpose': 'draft', 'kind': 'executable', 'scope': 'full',
+            'scene': [], 'sample_dir': None, 'draft_file': None, 'media_readiness': 'complete', '_effective_settings': effective})
+        with redirect_stdout(io.StringIO()) as output:
+            command_preview_register(root, register)
+        target = output.getvalue().strip()
+    preview, metadata = checked_preview(variant, validate_id(target, 'Draft'))
+    assert_full_draft(metadata)
+    if metadata.get('kind', 'executable') != 'executable':
+        raise HarnessError('Critic requires an executable Draft')
+    assert_preview_inputs(preview, metadata)
+    opener = SimpleNamespace(**{**vars(args), 'preview_id': target, 'legacy': False, 'no_open': True,
+                               'hyperframes_dist': None, 'port': 0})
+    with redirect_stdout(io.StringIO()):
+        command_preview_open(root, opener)
+    directory = variant / 'critic'
+    directory.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.pending-', dir=directory) as temp:
+        staging = Path(temp) / 'bundle'
+        staging.mkdir()
+        diagnostic = SimpleNamespace(**{**vars(args), 'preview_id': target, 'json': True, '_evidence_dir': staging / 'images',
+            'minimum': 20, 'similarity': .8, 'exceptions': None})
+        with redirect_stdout(io.StringIO()) as output:
+            command_preview_diagnose(root, diagnostic)
+        report = json.loads(output.getvalue())
+        number = len(ledger['rounds']) + 1
+        name = f'round-{number:03d}'
+        entry = {'round': number, 'draft_id': target, 'snapshot_sha256': metadata['snapshot_sha256'],
+                 'input_sha256': metadata.get('input_sha256'), 'settings': effective, 'package': name,
+                 'previous_issues': prior, 'created_at': now(),
+                 'historical_issue_ids': [item['id'] for row in ledger['rounds'] for item in row.get('verdict', {}).get('new_issues', [])]}
+        rows = plan_scene_rows((preview / 'ANIMATION_PLAN.md').read_text(encoding='utf-8'))
+        direction = {sid: {'brief': row.get('brief', {}), 'segments': row.get('segments', []), 'exceptions': row['exceptions']} for sid, row in rows.items()}
+        try:
+            entry['files'] = critic.package(staging, report, direction, prior, entry)
+        except ValueError as error:
+            raise HarnessError(str(error)) from error
+        with naming_lock(root):
+            current = read_json(ledger_path) if ledger_path.is_file() else {'rounds': []}
+            if current != ledger:
+                raise HarnessError('Critic ledger changed during sampling; retry the round')
+            _, final_metadata = checked_preview(variant, target)
+            if final_metadata != metadata:
+                raise HarnessError('Draft changed during critic round')
+            staging.rename(directory / name)
+            ledger['rounds'].append(entry)
+            try:
+                write_json(ledger_path, ledger)
+            except Exception:
+                shutil.rmtree(directory / name)
+                raise
+    result = {'round': number, 'draft_id': target, 'package': str(directory / name), 'settings': effective,
+              'automatic_critic': effective['critic.provider']['value'] != 'off' and (automatic or not args.automatic)}
+    if effective['critic.provider']['value'] != 'off':
+        result['prompt'] = str(directory / name / 'PROMPT.md')
+    print_result(root, args, result)
+
+
+def command_critic_record(root, args):
+    if not args.work_override or not args.variant_override:
+        raise HarnessError('Critic requires explicit --work and --variant')
+    work, _ = selected_work(root, args)
+    require_workflow(work, 'hyperframes_video')
+    variant, _ = selected_variant(root, work, args)
+    with naming_lock(root):
+        path = variant / 'critic' / 'ledger.json'
+        ledger = read_json(path)
+        value = read_json(Path(args.file))
+        if not ledger['rounds']:
+            raise HarnessError('No critic round to record')
+        entry = ledger['rounds'][-1]
+        if 'verdict' in entry:
+            raise HarnessError('This round already has a verdict')
+        try:
+            package_path = storage.scoped_path(variant, 'critic/' + validate_id(entry['package'], 'critic package'))
+            if critic.hashes(package_path) != entry['files']:
+                raise ValueError('Critic evidence package changed')
+            _, metadata = checked_preview(variant, entry['draft_id'])
+            if metadata['snapshot_sha256'] != entry['snapshot_sha256'] or metadata.get('input_sha256') != entry['input_sha256']:
+                raise ValueError('Critic Draft changed')
+            entry['verdict'] = critic.validate_verdict(value, entry)
+        except ValueError as error:
+            raise HarnessError(str(error)) from error
+        write_json(path, ledger)
+    print_result(root, args, {'round': entry['round'], 'recorded': True, 'advisory_only': True})
+
+
+def effective_settings(root, state):
+    path = runtime_root(root) / 'settings.json'
+    try:
+        return work_settings.effective(state, read_json(path) if state.get('line') and path.is_file() else {})
+    except ValueError as error:
+        raise HarnessError(str(error)) from error
+
+
+def command_settings(root, args):
+    variant, state = None, {}
+    if args.layer == 'variant' or args.work_override or args.variant_override:
+        work, _ = selected_work(root, args)
+        require_workflow(work, 'hyperframes_video')
+        variant, state = selected_variant(root, work, args)
+    path = runtime_root(root) / 'settings.json'
+    if args.settings_command != 'show':
+        if args.layer == 'variant' and not state.get('line'):
+            raise HarnessError('Legacy Variant settings are unchanged; no implicit migration')
+        with naming_lock(root):
+            if args.layer == 'variant':
+                state = read_json(variant / 'variant.yaml')
+            values = dict(state.get('settings', {})) if args.layer == 'variant' else read_json(path) if path.is_file() else {}
+            try:
+                if args.key not in lines.catalogue('settings')['keys']:
+                    raise ValueError('Unknown setting: ' + args.key)
+                if args.settings_command == 'set':
+                    try:
+                        value = json.loads(args.value)
+                    except ValueError:
+                        value = args.value
+                    values[args.key] = value
+                else:
+                    values.pop(args.key, None)
+                work_settings.validate(values, args.layer)
+            except ValueError as error:
+                raise HarnessError(str(error)) from error
+            if args.layer == 'variant':
+                state['settings'] = values
+                write_variant(variant, state)
+            else:
+                write_json(path, values)
+    result = {'schema': lines.catalogue('settings'), 'line': state.get('line'),
+              'values': effective_settings(root, state) if variant else {},
+              'user': read_json(path) if path.is_file() else {}}
+    print_result(root, args, result)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="work", description="Local creative Work lifecycle")
     parser.add_argument("--work", dest="work_override", help="temporarily select a Work")
     parser.add_argument("--variant", dest="variant_override", help="temporarily select a Variant")
     commands = parser.add_subparsers(dest="command", required=True)
+    critic_parser = commands.add_parser('critic', help='Freeze and sample a Draft; record advisory visual review')
+    critic_commands = critic_parser.add_subparsers(dest='critic_command', required=True)
+    critic_round = critic_commands.add_parser('round')
+    critic_round.add_argument('preview_id', nargs='?')
+    critic_round.add_argument('--automatic', action='store_true', help='Respect the automatic round limit')
+    critic_round.add_argument('--hyperframes-cli')
+    critic_round.add_argument('--browser')
+    critic_round.add_argument('--step', type=float, default=.5)
+    critic_round.add_argument('--width', type=int, default=960)
+    critic_round.add_argument('--timeout-ms', type=int, default=5000)
+    critic_round.set_defaults(handler=command_critic_round)
+    critic_record = critic_commands.add_parser('record')
+    critic_record.add_argument('--file', required=True, help='Verdict JSON for the latest round')
+    critic_record.set_defaults(handler=command_critic_record)
+    switches = commands.add_parser('settings', help='Product-line defaults and per-command user/Variant switches')
+    switch_commands = switches.add_subparsers(dest='settings_command', required=True)
+    for operation in ('show', 'set', 'unset'):
+        switch = switch_commands.add_parser(operation)
+        switch.add_argument('--layer', choices=('user', 'variant'), default='variant')
+        if operation != 'show':
+            switch.add_argument('key')
+        if operation == 'set':
+            switch.add_argument('value', help='JSON boolean/integer or string')
+        switch.set_defaults(handler=command_settings)
 
     new = commands.add_parser("new")
     new.add_argument("title")

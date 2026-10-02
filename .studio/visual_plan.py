@@ -212,11 +212,12 @@ def plan_scene_rows(plan_text):
     """Parse Scene-local design only; overview tables are never design authority."""
     metadata = re.match(r'\A---\s*\n(.*?)\n---(?:\n|$)', plan_text, re.S)
     try:
-        supported = metadata and json.loads(metadata[1]).get('plan_format') == PLAN_FORMAT
+        supported = metadata and json.loads(metadata[1]).get('plan_format') in (PLAN_FORMAT, '3.7.0')
     except (ValueError, AttributeError):
         supported = False
     if not supported:
         raise VisualPlanError(f'Animation Plan 格式不支持: expected plan_format {PLAN_FORMAT}')
+    modern = json.loads(metadata[1]).get('plan_format') == '3.7.0'
     rows, information = {}, {}
     screen_count = card_count = 0
     for match in markdown_structure_lines(plan_text):
@@ -291,6 +292,8 @@ def plan_scene_rows(plan_text):
                 elif cells[0] not in {'cue', 'Cue'} and not all(re.fullmatch(r':?-+:?', cell) for cell in cells):
                     if len(cells) != 4 or cells[1] not in {'2', '3', '4'} or not cells[0] or not cells[3]:
                         raise VisualPlanError(f'{sid}: event row requires cue | layer (2/3/4) | target | change')
+                    if modern:
+                        raise VisualPlanError(f'{sid}: new Plan uses exception rows, not an event table')
                     row['events'].append(dict(cue=plan_cue(cells[0]), layer=int(cells[1]), target=cells[2], change=cells[3]))
         if fence:
             raise VisualPlanError(f'{sid}: unclosed {fence[1]} fence')
@@ -333,6 +336,18 @@ def plan_scene_rows(plan_text):
                         layers = ([4] if kinds[target] in ('formula', 'equals') else [2, 4]) if target in kinds else [2]
                         rows[sid]['events'].extend({'cue': event['cue'], 'layer': layer, 'target': target,
                                                    'change': 'math_' + action, 'derived': True} for layer in layers)
+    if modern:
+        import director_plan
+        try:
+            direction = director_plan.parse(plan_text, json.loads(metadata[1]), rows)
+        except ValueError as error:
+            raise VisualPlanError(str(error)) from error
+        if direction['findings']:
+            raise VisualPlanError(json.dumps(direction['findings'], ensure_ascii=False))
+        for sid, row in rows.items():
+            row['segments'] = direction['segments'][sid]
+            row['brief'] = direction['brief']
+            row['plan_format'] = '3.7.0'
     return rows
 
 

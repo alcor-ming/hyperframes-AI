@@ -35,6 +35,7 @@ class V36IntegrationTest(unittest.TestCase):
         state = cli.read_json(variant / "variant.yaml")
         plan = cli.read_frontmatter(variant / "ANIMATION_PLAN.md")
         self.assertEqual(state["appearance_lock"]["submodule"], "pdoom")
+        self.assertEqual(state['line'], {'id': 'showcase/pdoom', 'version': 1})
         self.assertEqual(plan["submodule"], "pdoom")
         self.assertEqual(plan["appearance_lock_sha256"], state["appearance_lock"]["sha256"])
         self.assertIn("# Showcase Plan", (variant / "ANIMATION_PLAN.md").read_text())
@@ -46,6 +47,7 @@ class V36IntegrationTest(unittest.TestCase):
             self.invoke("variant", "add", "missing", "--account", "a", "--mode", "showcase")
         self.invoke("variant", "add", "science", "--account", "a", "--mode", "showcase", "--submodule", "science")
         sibling = variant.parent / "science"
+        self.assertEqual(cli.read_json(sibling / 'variant.yaml')['line'], {'id': 'showcase/science', 'version': 1})
         self.assertEqual(cli.read_json(sibling / "variant.yaml")["appearance_lock"]["submodule"], "science")
         self.assertEqual(cli.read_frontmatter(sibling / "ANIMATION_PLAN.md")["submodule"], "science")
 
@@ -76,6 +78,7 @@ class V36IntegrationTest(unittest.TestCase):
         state = cli.read_json(variant / "variant.yaml")
         expected = {key: series[key] for key in ("id", "revision", "mode", "spec")}
         self.assertEqual(state["series_binding"], expected)
+        self.assertEqual(state['line'], {'id': 'explainer/math-rap', 'version': 1})
         self.assertEqual(state["appearance_lock"]["mode"], "explainer")
         self.assertTrue(state["appearance_lock"]["selection"]["captions"])
         self.assertEqual(cli.read_frontmatter(variant / "ANIMATION_PLAN.md")["series_binding"], expected)
@@ -89,6 +92,11 @@ class V36IntegrationTest(unittest.TestCase):
         adopted = cli.read_json(variant.parent / "next/variant.yaml")
         self.assertEqual(adopted["series_binding"]["revision"], series["revision"] + 1)
         self.assertEqual(adopted["mode"], "card")
+        self.assertEqual(adopted['line'], {'id': 'card', 'version': 1})
+
+    def test_explainer_line_is_bound_at_creation(self):
+        _, variant = self.create('--mode', 'explainer')
+        self.assertEqual(cli.read_json(variant / 'variant.yaml')['line'], {'id': 'explainer', 'version': 1})
 
     def test_plan_and_beats_cli_use_frozen_math_contract(self):
         cli.account_service(self.root).put("series", "fixture", {"name": "Math", "mode": "explainer", "spec": "math-rap"})
@@ -96,6 +104,7 @@ class V36IntegrationTest(unittest.TestCase):
         work = variant.parent.parent
         self.assertIn("原作者", (work / "shared/RESEARCH.md").read_text())
         metadata = cli.read_frontmatter(variant / "ANIMATION_PLAN.md")
+        metadata["plan_format"] = "3.5.2"
         contract = dict(units=[dict(id="u1", symbol="x", graphic="")], symbols={"x": "box"},
                         invariants=[], zero_basics=[], cues=[dict(cue="a", keep=[], reveal=["u1"], remove=[])])
         (variant / "ANIMATION_PLAN.md").write_text("---\n" + json.dumps(metadata) + "\n---\n## S01\n```math-plan\n" + json.dumps(contract) + "\n```\n")

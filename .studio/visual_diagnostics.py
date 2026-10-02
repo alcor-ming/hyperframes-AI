@@ -99,7 +99,7 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
                    if identity not in row.get('cards', {})}
         planned.update({f'{identity}:{number}': item['text'] for identity, card in row.get('cards', {}).items()
                         for number, item in card_rows(card)})
-        for event in row.get('events', []):
+        for event in ([] if row.get('plan_format') == '3.7.0' else row.get('events', [])):
             target = str(event.get('target') or '').lstrip('#')
             location = {'scene': sid, 'target': target or None, 'cue': event['cue'], 'change': event.get('change', '')}
             try:
@@ -122,7 +122,7 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
                 scheduled.update((identity, at) for identity in identities)
             except (ValueError, TypeError, KeyError):
                 pass
-        if not scheduled:
+        if not scheduled and row.get('plan_format') != '3.7.0':
             unverified.append({'reason': 'lay_out_and_wait_requires_information_cue_visibility_mapping', 'scene': sid})
         for sample in samples:
             if not sample.get('ready') or not bounds[sid][0] <= sample['time'] < bounds[sid][1]:
@@ -169,6 +169,81 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
     unverified.append({'reason': 'finite_sampling_between_samples_requires_review'})
     return {'events': sorted(events, key=lambda item: item['time']), 'findings': findings,
             'declared_exceptions': declared, 'unverified': unverified, 'advisory_only': True}
+
+
+def still_diagnostics(samples, rhythm, thresholds):
+    """Finite sampled pixel differences, with explicit exclusions and no pass/fail."""
+    excluded = [{'start': item['start'], 'end': item['end'], 'reason': 'talking_head'}
+                for item in rhythm['declared_exceptions'] if item['kind'] == 'talking_head']
+    for sample in samples:
+        for item in sample.get('rhythm_candidates', []):
+            if item['kind'] in {'camera_start', 'camera_turn', 'pan_start', 'zoom_start'} and item.get('duration', 0) > 0:
+                span = {'start': item['time'], 'end': item['time'] + item['duration'], 'reason': 'continuous_camera'}
+                if span not in excluded:
+                    excluded.append(span)
+    spans, unmeasured = [], list(excluded)
+    current = None
+    for sample in sorted(samples, key=lambda value: value['time']):
+        measurement = sample.get('still')
+        if not measurement:
+            if not sample.get('ready'):
+                current = None
+                unmeasured.append({'time': sample['time'], 'reason': 'sample_unavailable'})
+            continue
+        start, end = measurement['from'], sample['time']
+        if not sample.get('ready') or any(item['start'] < end and item['end'] > start for item in excluded):
+            current = None
+            continue
+        if measurement['mean_delta'] > thresholds['pixel_mean_delta']:
+            current = None
+            continue
+        if current is None or abs(current['end'] - start) > .00001:
+            current = {'start': start, 'end': end}
+            spans.append(current)
+        else:
+            current['end'] = end
+    result = []
+    for span in spans:
+        span['duration'] = span['end'] - span['start']
+        if span['duration'] < thresholds['still_seconds']:
+            continue
+        pauses = [item for item in rhythm['declared_exceptions'] if item['kind'] == 'pause' and item['start'] <= span['start'] and item['end'] >= span['end']]
+        result.append({**span, 'kind': 'pixel_still', 'declared_exception': bool(pauses), 'exceptions': pauses})
+    return {'intervals': result, 'unmeasured': unmeasured, 'thresholds': thresholds,
+            'basis': 'layer_2_4_mean_pixel_difference', 'advisory_only': True}
+
+
+def carry_diagnostics(samples, boundaries, *, fps=60, declared=None):
+    result = []
+    samples = {round(item['time'], 6): item for item in samples}
+    for boundary in boundaries:
+        if boundary <= 0:
+            continue
+        first = math.ceil(boundary * fps - 1e-7) / fps
+        previous = max(0, first - 1 / fps)
+        before = samples.get(round(previous, 6), {})
+        after = samples.get(round(first, 6), {})
+        if (not before.get('ready') or not after.get('ready')
+                or abs(before.get('actual_time', before.get('time', 0)) - previous) > .00001
+                or abs(after.get('actual_time', after.get('time', 0)) - first) > .00001):
+            result.append({'time': boundary, 'status': 'unmeasured', 'reason': 'boundary_sample_unavailable'})
+            continue
+        sides = []
+        for sample in (before, after):
+            side = {}
+            for item in sample.get('carry', []):
+                side.setdefault(item['id'], []).append(item['box'])
+            sides.append(side)
+        left, right = sides
+        for identity in sorted(set(left) | set(right) | set((declared or {}).get(round(boundary, 6), []))):
+            a, b = left.get(identity, []), right.get(identity, [])
+            entry = {'time': boundary, 'sample_times': [previous, first], 'id': identity, 'before': a, 'after': b}
+            if len(a) != 1 or len(b) != 1:
+                entry.update(status='unpaired', reason='missing_or_duplicate_marker')
+            else:
+                entry.update(status='paired', delta=dict(zip(('x', 'y', 'width', 'height'), [round(y - x, 6) for x, y in zip(a[0], b[0])])))
+            result.append(entry)
+    return {'boundaries': result, 'units': 'composition_px', 'advisory_only': True}
 
 
 def source_sections(script, research, information):

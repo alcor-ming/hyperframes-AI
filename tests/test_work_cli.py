@@ -375,6 +375,10 @@ class WorkCliTest(unittest.TestCase):
     def test_preview_rejects_unapproved_plan(self) -> None:
         _, work = self.new_work()
         variant = work / "variants" / "main"
+        state = WORK_CLI.read_json(variant / "variant.yaml")
+        state.pop("line", None)  # Historical Variants retain the direction gate.
+        self.update_frontmatter(variant / "ANIMATION_PLAN.md", plan_format="3.5.2", line=None)
+        WORK_CLI.write_variant(variant, state)
         draft = self.root / "draft.mp4"
         draft.write_bytes(b"draft")
         result = self.invoke("preview", "register", str(draft), expected=2)

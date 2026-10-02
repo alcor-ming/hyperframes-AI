@@ -1,5 +1,9 @@
 version: 1
 
+product_lines: lines.yaml
+settings: settings.yaml
+reference_mechanisms: mechanisms.yaml
+
 workflows:
   hyperframes_video:
     skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md

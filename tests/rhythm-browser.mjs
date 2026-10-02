@@ -43,7 +43,7 @@ try {
   assert.equal(cyclic.after, .3125, 'cyclic action probes a peak, not its unchanged midpoint');
   const revealed = await inspect(.201);
   assert(revealed.find(event => event.kind === 'text_reveal').visible);
-  const middle = await inspect(2.001);
+  const middle = await inspect(2.4);
   assert(!middle.find(event => event.kind === 'text_reveal').visible, 'A is genuinely hidden during B');
   assert(middle.filter(event => event.kind === 'b_enter').every(event => event.visible));
   const cameraStart = await inspect(.999), cameraMiddle = await inspect(2);

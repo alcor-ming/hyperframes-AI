@@ -37,7 +37,7 @@ class V343RulesTests(unittest.TestCase):
                               .replace("__RESEARCH_REVISION__", "1")
                               .replace("__SUBJECT_POSITION__", "null"))
         self.assertNotIn("profile", metadata)
-        for text in ("### I01", "```screen", "## S01", "B 素材", "模板说明", "| Scene | 一句话摘要 |"):
+        for text in ("### I01", "```screen", "## S01", "B 素材", "模板说明", "| 段 | 起点口播词 |"):
             self.assertIn(text, plan)
         self.assertNotIn("| 实际表达 |", plan)
         design = read(".studio/spec/visual-design.md")

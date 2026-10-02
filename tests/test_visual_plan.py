@@ -34,6 +34,11 @@ class VisualPlanTest(unittest.TestCase):
         WORK_CLI.account_service(self.root).put("series", "fixture", {"name": "Fixture"})
         self.run_cli("new", "Visual test", "--workflow", "hyperframes_video", "--account", "main")
         self.variant = next((self.root / "works" / "active").iterdir()) / "variants" / "main"
+        # This suite protects existing 3.5.2 Variant behavior.
+        state = WORK_CLI.read_json(self.variant / "variant.yaml")
+        state.pop("line", None)
+        WORK_CLI.write_variant(self.variant, state)
+        self.update("ANIMATION_PLAN.md", plan_format="3.5.2", line=None)
         self.project = self.variant / "project"
         self.update("RESEARCH.md", status="ready")
         plan = self.variant / "ANIMATION_PLAN.md"

@@ -34,13 +34,17 @@ await figures.renderAt(at);
 
 ## rolls.js
 
-用途：A/B 切换、冻结与返回；画幅：16:9、9:16；占层：A/B 文字 4、装饰和媒体 2。参数：`mount({cues,scenes})`，每场 `id/startCue/endCue/a/b/continuation?`；返回 `renderAt/dispose`。A 的 items 必须是 text 内不重复的子元素，不能用 text 宿主本身。
+用途：A/B 切换、冻结与返回；画幅：16:9、9:16；占层：A/B 文字 4、装饰和媒体 2。参数：`mount({cues,scenes,reducedMotion?})`，每场 `id/startCue/endCue/a/b/continuation?`；返回 `renderAt/dispose`。A 的 items 必须是 text 内不重复的子元素，不能用 text 宿主本身。
 
 ```js
 const rolls = HarnessRolls.mount({cues, scenes: [{id: 'S01', startCue: '主机', endCue: '结束',
   a: {text: textHost, items: [{id: 'I01', cue: '主机', element: titleElement}]}, b: []}]});
 rolls.renderAt(at);
 ```
+
+新版冻结运行时对 A/B 交接采用固定错相窗口：媒体在 B 起点前最多 0.2 秒开始，在起点落定；A 组在其后退场/虚化，B 文字稍后出现。返回时 B 文字先退、A 在返回 cue 恢复、媒体最后淡出。窗口在 Scene 边界与相邻 B 段之间裁剪，短 B 段按比例压缩。B 对象可加 `handoff: "cut"`，减少动态同样瞬切。A 时间只在原始 B 区间暂停。
+
+Rolls 独占 A/B 宿主的 opacity、visibility、filter；与 Motion 或其他动画冲突时挂载失败，给内容单独的子容器。时间状态与节奏事件均按实际目标起点计算；dispose 恢复原样式。旧工程冻结的 runtime 不升级，仍保持原交接行为。
 
 ## card-component.js
 
@@ -75,7 +79,7 @@ card.renderAt(3);
 
 ## card-project.js
 
-用途：`cards build` 生成的 Plan 挂载与宿主 seek 接线；画幅：16:9、9:16；占层：2、4。参数：生成块中的冻结 Plan 数据，不手改；`scene(id)` 提供 A 组，`setRolls(scenes)` 接受宿主的 B 编排并自动绑定 `rolls.js`，`renderAt(t)` 使用全片秒数。编辑通过 `cards edit` 或 `cards studio` 写回 Plan，生成块被手改时拒绝覆盖。
+用途：`cards build` 生成的 Plan 挂载与宿主 seek 接线；画幅：16:9、9:16；占层：2、4。参数：生成块中的冻结 Plan 数据，不手改；`scene(id)` 提供 A 组，`setRolls(scenes, {reducedMotion?})` 接受宿主的 B 编排并自动绑定 `rolls.js`，`renderAt(t)` 使用全片秒数。编辑通过 `cards edit` 或 `cards studio` 写回 Plan，生成块被手改时拒绝覆盖。
 
 ```js
 await HarnessCardProject.ready;
@@ -95,7 +99,7 @@ diagram.renderAt(3);
 
 ## math-project.js
 
-用途：`math build` 的 Plan 挂载与宿主 seek 接线；画幅：16:9、9:16；占层：2、4。参数：`math-plan` 的 cue 与 `math` 的布局生成的冻结数据，不手写挂载、不另建播放循环。`scene(id)` 提供 A 组，`setRolls(scenes)` 接受 B 编排，`renderAt(t)` 使用全片时间；修改生成块或丢失闭包依赖时预览校验拒绝。
+用途：`math build` 的 Plan 挂载与宿主 seek 接线；画幅：16:9、9:16；占层：2、4。参数：`math-plan` 的 cue 与 `math` 的布局生成的冻结数据，不手写挂载、不另建播放循环。`scene(id)` 提供 A 组，`setRolls(scenes, {reducedMotion?})` 接受 B 编排，`renderAt(t)` 使用全片时间；修改生成块或丢失闭包依赖时预览校验拒绝。
 
 ```js
 await HarnessMathProject.ready;

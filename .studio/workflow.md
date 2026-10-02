@@ -8,9 +8,9 @@
 
 账号属于 Variant；Work 级 Script/Research 由各 Variant 共享，各 Variant 独立维护 Plan、工程与接受结果。显式内容分支按 CLI 定位。新视频显式指定 `--purpose standard|ip|test`，生产用途指定系列；账号与制作版本可以稍后确定。独立输入为叙事模式、视觉主题、背景、画幅和可选 Motion；默认 `card`，IP 推荐 `explainer`。Theme 负责字体、语义色与表面，不决定模式、布局或 cue；Variant 使用冻结外观。
 
-模式另有 `showcase`，仅 Opus 5.5 制作，Codex 不接；创建时显式冻结 `pdoom` / `science` 子模块，见 [showcase.md](spec/showcase.md)。WSL 开发仓与 Claude 生产根会话按根规则区分；生产根通过 `work-wsl.sh` 调用已部署 Windows CLI，文稿和工程源仍可在授权 Work 内直接编辑，不另起 Studio 或渲染器。`explainer` 可采用系列规格 `math-rap`，创建 Variant 时冻结规格与系列版本；数学图解替代 D14 角色/生图要求，歌词字幕保持开启，见 [math-rap.md](spec/math-rap.md)。
+产品线差异以冻结的 `line` ID/版本查 [.studio/lines.yaml](lines.yaml)：制作模型、Plan 模板、阶段规则、Brief 字段、主体默认值、资产范围与豁免只在那里维护；版本发布后保留既有档案版本，不能原地改变旧版本语义。没有 `line` 的旧 Variant 沿用原规则，不自动迁移。`talking_head` 是 Template，播客不进入视频档案表。
 
-card 和数学单片只复用已冻结库资产，不调用 Opus；card 的风格 Motion / B-roll 可选、无配额。非数学 explainer 可在 Plan 列出 1–2 个 Opus 主镜头和 Asset Brief；方向批准后，Codex 停止该 Work/Variant 的写入，生产根 Claude 会话按根 `CLAUDE.md` 独占制作指定 Scene，交回后 Codex 续接。主镜头遵守完整 explainer 检查，不自动批准 Plan/Draft，不直接入通用库；接受后再另行提炼。交接不改变 Current 或接受记录，不新增交接 CLI。
+非数学 explainer 的 Opus 主镜头按档案资产范围和获批 Asset Brief 交接，原有制作独占与用户接受边界保持；交接不改变 Current 或接受记录。WSL 开发与生产根按根规则区分，生产根通过 `work-wsl.sh` 调用 Windows CLI。
 
 实验采用结果先复制或冻结到目标 Work；来源关系不等于接受。保留稳定 Scene/Anchor ID、正式声音、已有成果和冻结历史。更换主题、叙事结构或确认观点属于方向变化，只确认受影响部分。
 
@@ -24,27 +24,29 @@ Research 按段落或 Anchor 记录事实与来源、B-roll 候选（可定位�
 
 ## 2. 整片设计
 
-本节默认表达合同适用于 card / explainer。showcase 使用 `SHOWCASE_PLAN.template.md` 的概念、逐 Scene 要点、素材与声音、未验证项和作者审计元信息，不要求 explainer 正向方向、D14、五层或事件表；保留准确 Plan revision 的用户确认，不将形式豁免扩大为接受豁免。
-
+Plan 模板与适用检查从冻结档案读取；形式豁免不扩大为接受豁免。
 Plan 阶段按用途运行 `work component list --query <用途>` 查包、场景源与配方，再选择复用、派生或自制。场景源与配方只作派生参考。组件可在 WSL 开发任务或 Windows 可编辑源编写；生产内容制作保持根规则边界。
 
-按 [创作指南](spec/visual-design.md) 写全片方向与逐 Scene 一节：一句概括、A/B 编排、`card` 块、独立文字的 `screen` 块与 `cue | 层 | 目标 | 变化` 事件表；素材与声音仅在有内容时出现。积木 cue 不重复写入事件表。概览只作索引。元信息及 `plan_format` 由 CLI 生成，旧格式不自动转换；正式声音与字词对齐是时间依据，不另抄精确秒表。拟生成素材列用途、数量、风格与 Asset Brief，权限只见根规则。
+新 `plan_format=3.7.0` 按 [创作指南](spec/visual-design.md) 填导演 Brief 与按 A/B 段的分镜表，每段一个观看任务。逐 Scene 保留 `card`、`screen`、素材、声音与刻意停顿例外，不再写事件表。参考机制 ID 见 [机制目录](mechanisms.yaml)。正式声音与字词对齐仍是时间依据。CLI 冻结元信息，3.5.2 Plan 继续可读，不自动转换。拟生成素材列用途、数量、风格与 Asset Brief，权限只见根规则。
 
-完成全片 Plan 后只做一个真实 Scene 动态参考，使用真实文字、画幅、动作及已有音频；缺正式音频标 provisional。一次方向确认覆盖准确 Plan revision 与参考 Scene；方向确认不等于完整 Draft 接受。按短自检单检查，实质变化局部确认。
+通过 `work settings show --json` 读取档案默认 → 用户 → Variant 的生效值和来源；`settings set|unset --layer user|variant` 修改后只影响后续命令。开关不冻结，每轮 critic 保存实际值。`direction_approval=true` 时完成 Plan 后制作唯一真实参考 Scene，按短自检单检查并由用户确认准确 Plan revision；关闭时直接进入完整 Draft，方向随该 Draft 接受一并确认。dbs 改正文批准和完整 Draft 接受不可关闭。
 
 派工只传 Plan 路径、Scene ID、负责范围与写入边界，由执行者按引用读取同版全片方向和对应 Scene，不重复复制正文；不附加比 Plan 更严的禁止项，不可行时回报准确冲突。对应对象只加载已选资产接口卡与必要合同，不再派发全库研究。主模型负责内容结果。模型不产出模板之外的设计说明或自写检查脚本；检查使用 CLI 与诊断，Work 与工程中确需的文件不受影响。
 
 ## 3. Studio 制作与验收
 
-showcase 保留 ready、seek、离线闭包和授权等硬约束，以及准确 full Draft 的用户接受；不适用下文 Q1 活力自检或 Draft 前节奏诊断必经闭环。`preview diagnose` 可用且只报告，不强制处理节奏疑点。math-rap 仍按 explainer 流程核对实际歌词、数学关系与收尾事件。
-
-方向确认后扩成全片 Draft。占位到素材齐备是同一阶段的准备度变化：用稳定 ID 补齐媒体，只重定时受影响范围，保持全部 Scene、A/B、动作与阅读安排。最终接受前正式声音与必需效果齐备。
+是否要求 Q1 或节奏闭环由档案 exemptions 决定；ready、seek、离线闭包、授权和准确完整 Draft 接受始终保留。
+完成当前方向批准设置要求后扩成全片 Draft。占位到素材齐备是同一阶段的准备度变化：用稳定 ID 补齐媒体，只重定时受影响范围，保持全部 Scene、A/B、动作与阅读安排。最终接受前正式声音与必需效果齐备。
 
 使用 CLI 返回的锁定官方 Studio URL。登记版本在独立审阅副本打开；依照 [hyperframes.md](spec/hyperframes.md) 验证 ready、seek、闭包与技术 QA，按创作指南 Q1 带声连续观看。阅读区域稳定，节奏事件与声音对应；Windows 原生连续播放、暂停、任意 seek、回拖和跨 Scene 证据单独报告。
 
-交付 Draft 前对准确版本运行 `preview diagnose`。逐项处理每个 `rhythm_gap` 与未验证区间：修正工程后重新诊断、在 Plan 事件表写例外行并随方向确认批准，或在交付说明逐项解释原因。交付说明附诊断报告位置与未处理项；诊断只定位，不判通过、不替代观看，不新增审批门。默认读取摘要，确需完整结构时用 `--json`，不读取 `probe.json` 等原始采样。
+交付 Draft 前对准确版本运行 `preview diagnose`。逐项处理每个 `rhythm_gap` 与未验证区间：修正工程后重新诊断、在 Plan 写例外行并随对应方向或完整 Draft 接受确认，或在交付说明逐项解释原因。交付说明附诊断报告位置与未处理项；诊断只定位，不判通过、不替代观看，不新增审批门。默认读取摘要，确需完整结构时用 `--json`，不读取 `probe.json` 等原始采样。
 
 `preview register` 冻结准确 Draft，`preview open <id>` 审阅，再由用户接受准确 full Draft。技术 PASS、素材 complete 与方向确认不替代这一决定。反馈绑定版本、Scene 与时间范围：信息缺口回 Plan，证据缺口回 Research，布局或实现问题就地修复；等义、换行、easing、安全区与性能修复无需重新批准方向。新增事实或改变原意回权威来源。工程文字同步逐 Scene 的实际 `screen` 表达。
+
+`work --work <id> --variant <id> critic round [draft-id]` 复用登记、独立 Studio 审阅副本与诊断，一次生成准确 Draft 的截图、contact sheet、逐帧页、Scene 交界前后帧和 Scene/A/B 帧条，追加 Variant `critic/ledger.json`。不导出视频。省略 Draft ID 时先登记当前完整工程；失败不追加成功轮次。`--automatic` 在轮数上限停止；不带该参数可手动继续。
+
+critic 提供方为 off 时仍生成证据和 ledger，不生成提示词。开启时宿主以 `critic.model` 派生支持图像输入的只读子 Agent，只读评审包并实际看 PNG；宿主不支持该模型或图像时报告未验证，不用纯文本替代。CLI 不调用模型 API。`critic record --file <verdict.json>` 校验准确轮次/快照、新问题和上一轮未解决问题的 FIXED / PARTLY / STILL；意见不阻止登记或接受。
 
 ## 4. Final 交付
 

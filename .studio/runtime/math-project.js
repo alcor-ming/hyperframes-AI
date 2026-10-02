@@ -59,7 +59,7 @@
       if (!groups.has(id)) throw new Error('Unknown generated math Scene: ' + id);
       return groups.get(id).a;
     },
-    async setRolls(scenes) {
+    async setRolls(scenes, {reducedMotion} = {}) {
       await ready;
       if (rolls) throw new Error('Math rolls are already bound');
       const entries = scenes.map(scene => {
@@ -70,7 +70,7 @@
         return {...scene, a: group.a};
       });
       const first = groups.values().next().value;
-      rolls = HarnessRolls.mount({cues: first.cues, scenes: entries});
+      rolls = HarnessRolls.mount({cues: first.cues, scenes: entries, reducedMotion});
       for (const scene of scenes) {
         const group = groups.get(scene.id); group.binding.dispose();
         group.roots.stage.style.display = group.roots.text.style.display = '';

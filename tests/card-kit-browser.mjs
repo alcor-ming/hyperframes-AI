@@ -218,8 +218,8 @@ try {
       await HarnessCardProject.renderAt(12.3); const globalAPI = a.text.innerHTML === beforeAPI;
       const b = document.createElement('div'); b.dataset.hfLayer = 'stage'; document.querySelector('main').appendChild(b);
       await HarnessCardProject.setRolls([{ id: 'S2', startCue: 'K', endCue: 'U', b: [{ startCue: 'N', endCue: 'P', retreat: 'hide', media: b }] }]);
-      await seekDocument(13.1 - offset); const frozen = a.text.innerHTML;
-      await seekDocument(14.8 - offset); const paused = a.text.innerHTML === frozen;
+      await seekDocument(13.4 - offset); const frozen = a.text.innerHTML;
+      await seekDocument(14.6 - offset); const paused = a.text.innerHTML === frozen;
       await seekDocument(16.4 - offset); const direct = a.text.innerHTML;
       const second = a.items.find(item => item.id === 'C1:2').element;
       const resumed = Number(second.parentElement.style.opacity) === 1 && getComputedStyle(second).visibility === 'visible';

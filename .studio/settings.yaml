@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "keys": {
+    "direction_approval": {
+      "type": "boolean",
+      "layers": [
+        "user",
+        "variant"
+      ],
+      "stage": "plan",
+      "cost": "human",
+      "description": "单独方向批准；关闭时随完整 Draft 接受"
+    },
+    "critic.provider": {
+      "type": "string",
+      "layers": [
+        "user",
+        "variant"
+      ],
+      "stage": "draft",
+      "cost": "token",
+      "description": "独立评审提供方",
+      "choices": [
+        "off",
+        "codex-subagent"
+      ]
+    },
+    "critic.model": {
+      "type": "string",
+      "layers": [
+        "user",
+        "variant"
+      ],
+      "stage": "draft",
+      "cost": "token",
+      "description": "必须支持图像输入的评审模型"
+    },
+    "critic.max_rounds": {
+      "type": "integer",
+      "layers": [
+        "user",
+        "variant"
+      ],
+      "stage": "draft",
+      "cost": "token",
+      "description": "自动评审最多轮数；允许手动继续",
+      "minimum": 1
+    }
+  },
+  "critic_models": {
+    "gpt-6.1-sol": {
+      "image_input": true
+    },
+    "deepseek-v4.1-flash": {
+      "image_input": true,
+      "host_verification": "required"
+    }
+  }
+}

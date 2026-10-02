@@ -21,7 +21,7 @@ Motion v3 支持 pop、stamp、wipe、glitch-in；pulse、shake、wobble、glow�
 
 ## 镜头接口
 
-module 导出 `mount({stage, text?, appearance, slots, params, startCue, endCue, cues})`，返回 `renderAt(t)` / `moments()` / `dispose()`。宿主使用全片秒数，镜头不自启时钟，不依赖历史帧、随机数或 `onUpdate` 写状态。第 2 层 stage 交给 `HarnessRolls` 的 `media`；第 4 层 text 交给 B 文字组。
+module 导出 `mount({stage, text?, appearance, slots, params, startCue, endCue, cues})`，返回 `renderAt(t)` / `moments()` / `dispose()`。宿主使用全片秒数，镜头不自启时钟，不依赖历史帧、随机数或 `onUpdate` 写状态。第 2 层 stage 交给 `HarnessRolls` 的 `media`；第 4 层 text 交给 B 文字组。新版 Rolls 自动错相，B 段可声明 `handoff: "cut"` 保持瞬切；减少动态时也瞬切。镜头不要写宿主 stage/text 的 opacity、visibility、filter，动画放在其子容器；窗口和属性所有权见 [runtime-interfaces.md](runtime-interfaces.md#rollsjs)。
 
 `asset.json` 的可选 `broll` 块必填字段：
 

@@ -46,8 +46,8 @@ class V35RulesTests(unittest.TestCase):
                       "不设固定数量或间隔配额", "未试听", "Plan 检查", "Q1"):
             self.assertIn(token, design)
         plan = read(".studio/templates/ANIMATION_PLAN.template.md")
-        for token in ("全片方向", "B 素材", "声音导出", "A/B 编排", "事件序列",
-                      "起始 cue", "结束 cue", "词#第几次", "```sound"):
+        for token in ("导演 Brief", "B 素材", "声音导出", "A/B 编排", "刻意停顿例外",
+                      "起始 cue", "结束 cue", "起点口播词", "```sound"):
             self.assertIn(token, plan)
         spec = read(".studio/spec/hyperframes.md")
         spec += read(".studio/spec/runtime-interfaces.md")

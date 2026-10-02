@@ -166,8 +166,8 @@ try {
         const other = await HarnessMathProject.scene('S3');
         otherScene = Number(other.items[0].element.style.opacity) === 1;
       }
-      await seek(13.1 - offset); const freeze = a.text.innerHTML;
-      await seek(14.8 - offset); const paused = freeze === a.text.innerHTML;
+      await seek(13.4 - offset); const freeze = a.text.innerHTML;
+      await seek(14.6 - offset); const paused = freeze === a.text.innerHTML;
       await seek(16.5 - offset); const direct = a.text.innerHTML;
       await seek(19 - offset); await seek(16.5 - offset); const reverse = direct === a.text.innerHTML;
       await HarnessMathProject.renderAt(16.5); const rollAPI = direct === a.text.innerHTML;

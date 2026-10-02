@@ -91,6 +91,8 @@ class CardCliTest(unittest.TestCase):
         html = (self.project / 'index.html').read_text()
         self.assertIn('Updated', html)
         self.assertIn('Handwriting', html)
+        self.scoped('cards', 'build')  # card defaults to direction approval off
+        self.scoped('settings', 'set', 'direction_approval', 'true')
         with self.assertRaisesRegex(cli.HarnessError, 'approved'):
             self.scoped('cards', 'build')
 

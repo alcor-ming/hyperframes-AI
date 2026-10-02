@@ -1,35 +1,26 @@
 ---
-{"status":"draft","revision":1,"plan_format":"3.7.0","template":"__TEMPLATE__","ratio":"__RATIO__","script_revision":__SCRIPT_REVISION__,"research_revision":__RESEARCH_REVISION__,"timing_source":"estimated","subject_position":__SUBJECT_POSITION__}
+{"status":"draft","revision":1,"plan_format":"3.5.2","template":"__TEMPLATE__","ratio":"__RATIO__","script_revision":__SCRIPT_REVISION__,"research_revision":__RESEARCH_REVISION__,"timing_source":"estimated","subject_position":__SUBJECT_POSITION__}
 ---
 
 # Animation Plan
 
 元信息由 CLI 从 Variant 与 appearance lock 生成；未冻结或未提供的值保持 null，模型不手填。输入版本更新后用 `work --work <id> --variant <id> plan refresh` 刷新机器字段；这不接受改动后的内容。
 
-## 导演 Brief
+## 全片方向
 
-**核心表达：** <一句话概念、叙事弧、核心比喻>
-**主体/次主体：** <注意力主次与空间层次>
-**禁止项：** <颜色、动作、信息与风格边界>
-**错相：** <主事件与延迟回应>
-**运动语言：** <预备 → 冲击 → 回稳>
-**物理：** <重量、惯性与约束>
-**光：** <照明与材质的表达目的>
-**节拍与声音：** <正式口播 Anchor、声音签名与事件对应>
-**验收标准：** <能由准确 Draft 检查的画面结果>
-**参考机制：** persistent-anchor
+一句话概念、叙事弧、核心比喻；按需补前后呼应、背景情绪弧与声音签名。所有模式填写，card 可以只写前三项。
 
-card 只必填核心表达、主体/次主体、禁止项；explainer（含 math-rap）全部必填并引用 1–3 个机制 ID。按冻结 line 加载规则。
+## 概览
 
-## 分镜表
+| Scene | 一句话摘要 |
+|---|---|
+| S01 | <本场摘要> |
 
-| 段 | 起点口播词 | 观众看到什么 | 本段任务 | 主体 | 交接例外 | 延续 |
-|---|---|---|---|---|---|---|
-| S01·A1 | <口播词> | <画面> | <任务> | | | |
-
-主体空则采用档案 A/B 默认值；A 开头、A/B 交替，可以 B 结束。交接例外只填 cut；延续填写 data-hf-carry ID。表格不生成宿主接线。
+概览只作索引；设计只在对应 Scene 节维护。保留实际 Script 的 Scene ID，不为模板重编号。
 
 ## S01
+
+<一句场景概括>
 
 **A/B 编排与延续：** <A 与 B 各是什么；A → B → A 或 A → B；B 接管时 A 隐藏或虚化；跨场返回时延续自哪个 Scene>
 
@@ -54,10 +45,13 @@ title: <卡片标题> @<口播词>
 
 **声音 cue：** <如有，写声音资产与对应可见事件>
 
-### 刻意停顿例外
+### 事件序列与例外
 
-仅需要停顿时填写 `| 例外 | 起始 cue | 结束 cue | pause 或 talking_head | 原因 |`。
-第 2–4 层的实际事件和像素静止由 preview diagnose 测量；不写事件表。方向批准关闭时，例外随完整 Draft 接受确认。
+| cue | 层 | 目标 | 变化 |
+|---|---|---|---|
+| <口播词或词#第几次> | 4 | I01 | 揭示文字 |
+
+只写积木块之外的事件。目标可为空，此时标未验证；有目标时只匹配该目标或子元素。例外另起行：`| 例外 | 起始 cue | 结束 cue | pause 或 talking_head | 原因 |`。声明不代表批准，停顿随本版方向确认批准。字幕、背景漂移、待机/说话起伏及持续镜头运动的中间过程不计。
 
 ## 声音导出
 
@@ -69,7 +63,7 @@ title: <卡片标题> @<口播词>
 
 <!-- 模板说明，不保留通过的自检清单：
 
-- 每段观看任务与主体明确，测量第 2–4 层节奏和静止，不“铺开再等”。
+- 每场 A/B 编排与第 2–4 层可见事件明确，相邻有效事件间隔不超过 2 秒，不“铺开再等”。
 - A 文字不照搬口播，B 素材有来源或 Brief，事实边界清楚。
 - 第 4 层阅读保护期间，第 2、3 层继续产生事件；刻意停顿写明区间和原因，talking_head 真人区间单独声明。
 卡片文字中的 @ 与 [ 必须转义；SVG 写在 cue 后的方括号中，只接受闭包内图标引用或 custom:文件.svg。exit 可写退场 cue。无卡片、独立文字、素材或声音时省略对应块。信息 ID 全片唯一，延续信息只引用 ID。screen 默认 A、第 4 层，例外才写所属画面。Plan 只记录未通过项与例外。
@@ -77,7 +71,7 @@ title: <卡片标题> @<口播词>
 F04 每条后可用缩进 `indexKey: 文字 @cue`，F06 用 `key: 文字 @cue [SVG]`；F07 使用 `input`、`inputLabel`、`outputLabel`，均为文字 @cue，输入与输出标签可带端点 SVG，inputLabel 不带图。F03/F05/F08 可用 `figure: custom:文件.svg @cue`；`emphasis: cue` 可对已揭示内容强调。F05/F06/F07 不接条目正文 SVG，F06 的图放 key。区域仅 full/left/right/top/bottom 或安全区内正像素尺寸。详细槽位见 `.studio/spec/card-kit.md`；条数与实际文字溢出均须通过 `cards build`，不手改生成块。
 -->
 
-## 唯一参考 Scene 与方向批准（开关开启时）
+## 唯一参考 Scene 与方向批准
 
 **Scene ID：** <一个实际 Scene>
 

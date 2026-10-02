@@ -29,7 +29,7 @@ class MathCliTest(unittest.TestCase):
         self.project = self.variant / 'project'
         self.plan = self.variant / 'ANIMATION_PLAN.md'
         self.metadata = cli.read_frontmatter(self.plan)
-        self.metadata['status'] = 'approved'
+        self.metadata.update(status='approved', plan_format='3.5.2')
         font = self.project / 'assets/font.ttf'
         font.parent.mkdir(exist_ok=True)
         font.write_bytes(b'font fixture; browser is separately tested')

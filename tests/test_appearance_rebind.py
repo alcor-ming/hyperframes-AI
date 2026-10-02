@@ -51,8 +51,8 @@ class AppearanceRebindTest(unittest.TestCase):
         self.assertEqual(after['appearance_lock']['selection']['background'], metadata['background'])
         self.assertEqual(after['appearance_lock']['sha256'], metadata['appearance_lock_sha256'])
         self.assertEqual(after['plan_revision'], metadata['revision'])
-        self.assertEqual(before['ANIMATION_PLAN.md'].decode().split('## 全片方向', 1)[1],
-                         (self.variant / 'ANIMATION_PLAN.md').read_text().split('## 全片方向', 1)[1])
+        self.assertEqual(before['ANIMATION_PLAN.md'].decode().split('## 导演 Brief', 1)[1],
+                         (self.variant / 'ANIMATION_PLAN.md').read_text().split('## 导演 Brief', 1)[1])
         for field in ("accepted_visual_plan", "accepted_preview", "accepted_plan_revision", "accepted_script_revision", "current_final"):
             self.assertIsNone(after[field])
         self.assertEqual("final.mp4", after["appearance_history"][-1]["current_final"])
