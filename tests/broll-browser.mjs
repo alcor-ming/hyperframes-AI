@@ -227,6 +227,27 @@ window.__rejects = async () => {
   }
   return results;
 };
+window.__durationEdges = async () => {
+  const a = await window.__ready;
+  const zone = {}; zone[a.lock.ratio] = [0,0.84,1,0.16];
+  const broll = (duration, timing) => ({role:'concept', takeover:'inline', duration, timing:timing||'stretch', key_moments:[0], sfx_cues:[{time:duration.default, purpose:'end'}], slots:{}, params:{}, carries_info:false, caption_safe_zone:zone, usage:'mount', examples:['mount']});
+  const cases = [
+    ['min_at_nonzero_cue', broll({min:1.2,max:4,default:2}), 10, 11.2, true],
+    ['max_at_nonzero_cue', broll({min:0.6,max:0.9,default:0.75}), 10, 10.9, true],
+    ['hold_end_at_nonzero_cue', broll({min:1.2,max:4,default:1.2}, 'hold-end'), 10, 11.2, true],
+    ['below_min_at_nonzero_cue', broll({min:1.2,max:4,default:2}), 10, 11.19, false],
+    ['above_max_at_nonzero_cue', broll({min:0.6,max:0.9,default:0.75}), 10, 10.91, false]
+  ];
+  const results = [];
+  for (const [name, meta, startCue, endCue, accepted] of cases) {
+    try {
+      const shot = await window.__raw(meta, {stage, appearance:a, params:{}, slots:{}, startCue, endCue, cues:{}});
+      const mappedEnd = shot.moments().sfx_cues[0].time; shot.dispose();
+      results.push([name, accepted && Math.abs(mappedEnd - endCue) < 1e-9, String(mappedEnd)]);
+    } catch (e) { results.push([name, !accepted && String(e.message).includes('broll_duration_outside_range'), String(e.message)]); }
+  }
+  return results;
+};
 window.__failedMount = async () => {
   const before = window.__baseline();
   const beforeStage = stage.children.length;
@@ -352,6 +373,8 @@ print(json.dumps(rhythm_diagnostics(json.load(sys.stdin),[dict(id='S01',start=0,
 
     const rejects = await page.evaluate(() => window.__rejects());
     record(`${cfg.name}: invalid slots/paths rejected`, rejects.every(item => item[1]), JSON.stringify(rejects));
+    const edges = await page.evaluate(() => window.__durationEdges());
+    record(`${cfg.name}: decimal cue duration edges mount, true overruns rejected`, edges.every(item => item[1]), JSON.stringify(edges));
     const closure = await page.evaluate(() => window.__closureSlots());
     record(`${cfg.name}: installed media/icon and bounded parameters`, closure.valid && closure.canonical && closure.failures.every(Boolean), JSON.stringify(closure));
 

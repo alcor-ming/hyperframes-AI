@@ -102,7 +102,7 @@
 | 风格 | 风格叠加的 Motion 手感 | 镜头建议 | 适合 card |
 |---|---|---|---|
 | 赛博 HUD | glitch-in、wipe、glow | hook 系统启动标题；hook 数字锁定（数字插槽）；concept 数据流扫描；concept 目标锁定框（图标插槽）；transition 扫描线切换 | 转场与 glow 强调 |
-| 贴纸拼贴 | stamp、wobble、`hold_fps:12` | hook 贴纸标题拍入；concept 剪贴对比（双文字插槽）；concept 手绘圈重点；transition 纸片翻页 | 最适合，温和、信息友好 |
+| 贴纸拼贴 | stamp、wobble、`hold_fps:12`（仅原地拍章/强调；位移、旋转、翻面逐帧求值，2026-10-02 数学镜头返工补充） | hook 贴纸标题拍入；concept 剪贴对比（双文字插槽）；concept 手绘圈重点；transition 纸片翻页 | 最适合，温和、信息友好 |
 | 综艺花字 | pop、shake、pulse、spring | hook 花字爆出；concept 大数字冲击；transition 色块冲屏；强调 惊叹贴 | 仅强调与转场，少用 hook |
 
 建议先从贴纸拼贴做起：它三条线都能用，最能检验"一套风格叠加、多账号换色"这件事。

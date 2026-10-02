@@ -64,8 +64,9 @@ function dispose() { shot.dispose(); rolls.dispose(); appearance.dispose(); }
 - 整帧镜头仍在第 2 层，可盖背景；overlay 在上，captions 始终最高。主图与文字避开字幕安全区。
 - 承载信息的独立标题、解释与关键数字进入 text 根，遵守 A1、实际口播 cue 与阅读保护；stage 只放图形附着的短标注。B 结束恢复 A 的既有状态。
 - 纯注意力镜头不新增可读信息；事实约束不豁免，示意数据或界面标 `data-hf-schematic`。
+- `hold_fps` 等低帧量化只用于原地拍章、pulse、wobble；平移、旋转、翻面、飞离与重排按宿主时间逐帧求值，缓入缓出、不用回弹过冲，同一时刻只做一个主动作。默认时长下运动件单帧位移不超过短边约 4%、旋转不超过 5°；移动件保持不透明，深色背景上的贴纸与线条要有可见切边，结论帧不压暗。
 - 两个 Theme、全部画幅、最短/默认/最长时长都检查容量与 seek。顺播、直接 seek 与回拖结果一致，末帧有收束。
 - 挂载时把带 target、实际秒数的事件注册到 `__hfRhythmSources`，dispose 时注销。探针仍验证可见变化，声明不能冒充事件；hold-end 尾部不自动补节奏，超过 2 秒需处理或声明合理例外。
 - 接口卡写清语义用途、不适用情形、一个完整填槽例子和样例工程。验收标准是 Codex 不看实现源码也能按 usage 正确挂载。
 
-首批建议先做贴纸拼贴（stamp / wobble / hold_fps），再做赛博 HUD（glitch / wipe / glow）和综艺花字（pop / shake / pulse / spring）。这是生产根的后续库制作，不是 Harness 开发或部署自动执行的内容。
+首批建议先做贴纸拼贴（stamp / wobble；hold_fps 仅限原地动作），再做赛博 HUD（glitch / wipe / glow）和综艺花字（pop / shake / pulse / spring）。这是生产根的后续库制作，不是 Harness 开发或部署自动执行的内容。

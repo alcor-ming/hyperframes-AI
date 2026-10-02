@@ -32,8 +32,11 @@
     if (!contract || !appearance?.lock || typeof build !== 'function') throw new Error('broll_requires_frozen_contract_and_appearance');
     const cueTime = cue => typeof cue === 'number' ? cue : cues?.find(cue);
     const start = cueTime(startCue), end = cueTime(endCue), duration = end - start;
-    if (!finite(start) || start < 0 || !finite(end) || duration < contract.duration.min || duration > contract.duration.max) throw new Error('broll_duration_outside_range');
-    if (!['stretch', 'hold-end'].includes(contract.timing) || contract.timing === 'hold-end' && duration < contract.duration.default) throw new Error('broll_invalid_timing');
+    // Decimal cues subtract inexactly (11.2 - 10 = 1.1999999999999993); compare at cue magnitude, keep the actual duration for mapping.
+    const tolerance = 1e-9 * Math.max(1, Math.abs(start), Math.abs(end));
+    const below = limit => duration < limit - tolerance, above = limit => duration > limit + tolerance;
+    if (!finite(start) || start < 0 || !finite(end) || below(contract.duration.min) || above(contract.duration.max)) throw new Error('broll_duration_outside_range');
+    if (!['stretch', 'hold-end'].includes(contract.timing) || contract.timing === 'hold-end' && below(contract.duration.default)) throw new Error('broll_invalid_timing');
     if (!contract.caption_safe_zone[appearance.lock.ratio]) throw new Error('broll_unsupported_ratio');
     if (!slots || typeof slots !== 'object' || Array.isArray(slots) || Object.keys(slots).some(key => !own(contract.slots, key))) throw new Error('broll_unknown_slot');
     if (!params || typeof params !== 'object' || Array.isArray(params) || Object.keys(params).some(key => !own(contract.params, key))) throw new Error('broll_unknown_parameter');
