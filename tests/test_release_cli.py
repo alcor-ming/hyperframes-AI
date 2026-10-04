@@ -32,6 +32,8 @@ class ReleaseCliTest(unittest.TestCase):
             with mock.patch.object(RELEASE, "REPO", repo), mock.patch.object(RELEASE.subprocess, "run") as run:
                 RELEASE.release_checks(repo / "staging")
             self.assertEqual(2, run.call_count)
+            self.assertTrue(all(str(repo / ".studio/remotion/node_modules") in call.kwargs["env"]["NODE_PATH"]
+                                for call in run.call_args_list))
             self.assertTrue(all(call.kwargs["env"]["HYPERFRAMES_DEPENDENCY_MODULE_ROOT"] == str(parser)
                                 for call in run.call_args_list))
 

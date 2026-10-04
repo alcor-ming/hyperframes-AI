@@ -66,7 +66,9 @@ class CardEditorTest(unittest.TestCase):
                         ('POST', '/arbitrary', {}, 404),
                     ]:
                         self.assertEqual(expected, request(method, path, payload if method == 'POST' else None, headers)[0])
-                    self.assertEqual(413, request('POST', '/save', {**payload, 'body': 'x' * 65536})[0])
+                    # Reject from Content-Length before reading an oversized body.
+                    # Sending the body while the server closes can race a TCP reset.
+                    self.assertEqual(413, request('POST', '/save', headers={'Content-Length': '65537'})[0])
                     self.assertEqual(400, request('POST', '/save', {**payload, 'card': 'unknown'})[0])
                     self.assertEqual([], calls)
                     code, raw = request('POST', '/save', payload)

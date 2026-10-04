@@ -383,9 +383,13 @@ class V371Test(unittest.TestCase):
         import root_deploy
         import test_release_cli
         repo = Path(__file__).resolve().parents[1]
+        git_fixture = self.root / 'git-ignore-fixture'
+        git_fixture.mkdir()
+        subprocess.run(['git', '-c', 'init.defaultBranch=main', 'init', '--quiet', str(git_fixture)], check=True)
+        shutil.copyfile(repo / '.gitignore', git_fixture / '.gitignore')
         for name in ('sample-library', 'known-defects', 'retro-summary'):
             with self.subTest(name=name):
-                ignored = subprocess.run(['git','check-ignore',name+'/fixture.json'],cwd=repo,capture_output=True)
+                ignored = subprocess.run(['git','check-ignore',name+'/fixture.json'],cwd=git_fixture,capture_output=True)
                 self.assertEqual(0, ignored.returncode)
                 self.assertFalse(test_release_cli.RELEASE.public_source(name+'/fixture.json'))
                 self.assertFalse(test_release_cli.RELEASE.public_source('.studio/'+name+'/fixture.json'))
