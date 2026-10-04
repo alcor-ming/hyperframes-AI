@@ -7,6 +7,9 @@ idea.md
 /outputs/
 /dist/
 /works/
+/sample-library/
+/known-defects/
+/retro-summary/
 /.studio/.runtime/
 __pycache__/
 *.py[cod]

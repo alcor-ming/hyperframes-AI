@@ -66,6 +66,8 @@ import research_catalog
 import work_migration
 import work_successor
 import critic
+import visual_memory
+import work_memory
 import lines
 import settings as work_settings
 
@@ -474,7 +476,20 @@ def command_plan_refresh(root: Path, args: argparse.Namespace) -> None:
     if any(type(value) is not int or value < 1 for value in revisions):
         raise HarnessError("Plan and input revisions must be positive integers")
     changed = any(original.get(key) != value for key, value in metadata.items() if key != "revision")
+    text = plan.read_text(encoding='utf-8')
+    effective = effective_settings(root, state)
+    reference_input = visual_memory.reference_input(text, effective)
+    memory_needed = bool(visual_memory.references(text) or original.get('reference_memory_sha256'))
+    old_memory = None
+    if original.get('reference_memory_sha256'):
+        old_memory = visual_memory.frozen(storage.scoped_path(variant, f"reference-memory/{original['revision']}"), original['reference_memory_sha256'])
+    changed = changed or (memory_needed and (old_memory is None or old_memory['input'] != reference_input))
     revision = max(state.get("plan_revision", 1), original.get("revision", 1)) + int(changed)
+    if memory_needed:
+        try:
+            metadata['reference_memory_sha256'] = visual_memory.freeze(configured_work_root(root) or root, variant, revision, text, state, effective)
+        except ValueError as error:
+            raise HarnessError(str(error)) from error
     state.update(plan_revision=revision, script_revision=metadata["script_revision"])
     metadata = {**original, **metadata, "revision": revision}
     # Frozen acceptance stays as the comparison baseline, not approval of new inputs.
@@ -498,6 +513,9 @@ def command_plan_check(root: Path, args: argparse.Namespace) -> None:
     rows = plan_scene_rows(text)
     dependencies = validate_dependencies(project)
     findings = seek_check.findings(project, dependencies)
+    _, _, reference_findings = visual_memory.resolve(configured_work_root(root) or root, text,
+        visual_memory.line_id(state), effective_settings(root, state))
+    findings.extend(reference_findings)
     if read_frontmatter(variant / 'ANIMATION_PLAN.md').get('plan_format') == '3.7.0':
         script = input_path(variant, 'SCRIPT.md').read_text(encoding='utf-8')
         script_scenes = set(re.findall(r'^\|\s*(S[0-9]+[A-Z]*)\s*\|', script, re.M))
@@ -511,7 +529,7 @@ def command_plan_check(root: Path, args: argparse.Namespace) -> None:
         cues = explainer.validate_cues(read_json(project / "runtime/cues.json"))
         scenes = scene_projection(project, text)
         try:
-            findings.extend(math_chain.plan_findings(text, cues, max(s["start"] + s["duration"] for s in scenes)))
+            findings.extend(math_chain.plan_findings(text, cues, max(s["start"] + s["duration"] for s in scenes), scenes=scenes))
         except ValueError as error:
             raise HarnessError(str(error)) from error
     print_result(root, args, {"status": "diagnostic_only", "findings": findings, "unverified": diagnostic["unverified"]})
@@ -2262,6 +2280,17 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
     elif kind == "executable" and (project / "scene-slots.json").is_file():
         validate_work_surface_inventory(project)
     plan_text = (variant / "ANIMATION_PLAN.md").read_text(encoding="utf-8")
+    plan_meta = read_frontmatter(variant / 'ANIMATION_PLAN.md')
+    reference_hash = plan_meta.get('reference_memory_sha256')
+    if any('·' in ref for ref in visual_memory.references(plan_text)) and not reference_hash:
+        raise HarnessError('Reference Plan requires plan refresh before registration')
+    if reference_hash:
+        try:
+            manifest = visual_memory.frozen(storage.scoped_path(variant, f"reference-memory/{plan_meta['revision']}"), reference_hash)
+            if manifest['input']['references'] != visual_memory.references(plan_text):
+                raise ValueError('References changed; run plan refresh')
+        except ValueError as error:
+            raise HarnessError(str(error)) from error
     visual = purpose == "plan" or studio_draft or bool(state.get("accepted_visual_plan"))
     scenes = reference_projection(plan_text) if reference else layout_projection(project, plan_text, args.scene) if layout else scene_projection(project, plan_text, args.scene if scene else None) if visual else None
     if not reference and visual:
@@ -2300,6 +2329,8 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             assert_preview_inputs(path, metadata)
             if snapshot_digest(path / "source-snapshot", kind) != metadata.get("snapshot_sha256"):
                 raise HarnessError("Preview snapshot changed")
+            if metadata.get('reference_memory_sha256'):
+                visual_memory.frozen(path / 'reference-memory', metadata['reference_memory_sha256'])
             print(path.name)
             return
     version = max((int(path.name.removeprefix(f"{purpose}-v")) for path in existing), default=0) + 1
@@ -2326,6 +2357,8 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
             "media_readiness": args.media_readiness,
             "approval_purpose": "direction" if purpose == "plan" else "full-version",
             "registered_at": now(),
+            "runtime_version": "3.7.1",
+            "runtime_sha256": file_sha256(Path(__file__)),
             "draft_sha256": draft_digest,
             "snapshot_sha256": source_digest,
             "script_revision": state.get("script_revision"),
@@ -2335,6 +2368,9 @@ def command_preview_register(root: Path, args: argparse.Namespace) -> None:
                 "template", "profile", "theme", "theme_revision", "theme_settings", "mode", "ratio", "subject_position", "account", "account_revision", "account_settings", "batch",
                 "background", "motion", "appearance_lock", "series_binding", "line")},
         }
+        if reference_hash:
+            visual_memory.copy_frozen(storage.scoped_path(variant, f"reference-memory/{plan_meta['revision']}"), staging / 'reference-memory', reference_hash)
+            metadata['reference_memory_sha256'] = reference_hash
         if input_hashes is not None:
             metadata["input_sha256"] = input_hashes
         if studio_draft:
@@ -2523,6 +2559,11 @@ def checked_preview(variant: Path, preview_id: str) -> tuple[Path, dict[str, Any
         raise HarnessError("Preview snapshot changed")
     if metadata.get("plan_sha256") and file_sha256(preview / "ANIMATION_PLAN.md") != metadata["plan_sha256"]:
         raise HarnessError("Frozen Animation Plan changed")
+    if metadata.get('reference_memory_sha256'):
+        try:
+            visual_memory.frozen(storage.scoped_path(preview, 'reference-memory'), metadata['reference_memory_sha256'])
+        except (ValueError, OSError) as error:
+            raise HarnessError(str(error)) from error
     if (preview / "visual-plan.json").is_file():
         plan_text = (preview / "ANIMATION_PLAN.md").read_text(encoding="utf-8")
         scenes = reference_projection(plan_text) if kind == "reference" else layout_projection(preview / "source-snapshot", plan_text, metadata["sample_scenes"]) if kind == "layout" else scene_projection(preview / "source-snapshot", plan_text, metadata.get("sample_scenes") if metadata.get("scope") == "scene" else None)
@@ -2781,7 +2822,7 @@ def command_preview_diagnose(root: Path, args: argparse.Namespace) -> None:
         try:
             report['math'] = {'findings': math_chain.plan_findings(contents['ANIMATION_PLAN.md'],
                 explainer.validate_cues(read_json(project / 'runtime/cues.json')),
-                max(s['start'] + s['duration'] for s in scenes))}
+                max(s['start'] + s['duration'] for s in scenes), scenes=scenes)}
         except ValueError as error:
             raise HarnessError(str(error)) from error
     icon_unverified = [{'reason': 'icon_provenance_unverified', 'time': sample['time'],
@@ -3538,6 +3579,38 @@ def command_request(root: Path, args: argparse.Namespace) -> None:
     print(str(result))
 
 
+def critic_memory(root, preview, metadata, staging):
+    storage.scoped_path(configured_work_root(root) or root, preview.relative_to(configured_work_root(root) or root).as_posix())
+    reference_hash = metadata.get('reference_memory_sha256')
+    if reference_hash:
+        manifest = visual_memory.copy_frozen(preview / 'reference-memory', staging / 'reference-memory', reference_hash)
+        references = manifest['references']
+        seeds = manifest['seeds']
+    else:
+        references = []
+        ids = {ref.removeprefix('跨线:') for ref in visual_memory.references((preview / 'ANIMATION_PLAN.md').read_text(encoding='utf-8'))}
+        seeds = [item for item in lines.catalogue('mechanisms')['mechanisms'] if item['id'] in ids]
+    state = metadata.get('adopted_settings', {})
+    line = visual_memory.line_id(state)
+    base = configured_work_root(root) or root
+    defects = [item for item in visual_memory.entries(base, 'defect', line) if item['status'] == '有效']
+    copied = []
+    for index, item in enumerate(defects):
+        visual_memory.verify_frames(visual_memory.library(base, 'defect'), item['frames'])
+        frames = []
+        for offset, frame in enumerate(item['frames']):
+            name = f'defect-{index:03d}-{offset:03d}.png'
+            shutil.copyfile(storage.scoped_path(visual_memory.library(base, 'defect'), frame['path']), staging / name)
+            frames.append({**frame, 'path': name})
+        visual_memory.verify_frames(staging, frames)
+        copied.append({**item, 'frames': frames})
+    checks = (lines.frozen(state) or lines.select(state))['critic_checks']
+    visual_memory.write(staging / 'memory.json', {'references': references, 'reference_frame_root': 'reference-memory',
+        'seeds': seeds, 'profile_checks': checks, 'known_defects': copied,
+        'unverified': [] if reference_hash else ['historical_draft_references_not_frozen']})
+    return {'reference_ids': [item['id'] for item in references], 'defect_ids': [item['id'] for item in defects]}
+
+
 def command_critic_round(root, args):
     from contextlib import redirect_stdout
     import io
@@ -3589,6 +3662,10 @@ def command_critic_round(root, args):
         rows = plan_scene_rows((preview / 'ANIMATION_PLAN.md').read_text(encoding='utf-8'))
         direction = {sid: {'brief': row.get('brief', {}), 'segments': row.get('segments', []), 'exceptions': row['exceptions']} for sid, row in rows.items()}
         try:
+            entry.update(critic_memory(root, preview, metadata, staging))
+            if metadata.get('reference_memory_sha256'):
+                frozen_settings = visual_memory.frozen(preview / 'reference-memory', metadata['reference_memory_sha256'])['input']['settings']
+                entry['settings'] = {**effective, **frozen_settings}
             entry['files'] = critic.package(staging, report, direction, prior, entry)
         except ValueError as error:
             raise HarnessError(str(error)) from error
@@ -3606,7 +3683,7 @@ def command_critic_round(root, args):
             except Exception:
                 shutil.rmtree(directory / name)
                 raise
-    result = {'round': number, 'draft_id': target, 'package': str(directory / name), 'settings': effective,
+    result = {'round': number, 'draft_id': target, 'package': str(directory / name), 'settings': entry['settings'],
               'automatic_critic': effective['critic.provider']['value'] != 'off' and (automatic or not args.automatic)}
     if effective['critic.provider']['value'] != 'off':
         result['prompt'] = str(directory / name / 'PROMPT.md')
@@ -3645,7 +3722,7 @@ def command_critic_record(root, args):
 def effective_settings(root, state):
     path = runtime_root(root) / 'settings.json'
     try:
-        return work_settings.effective(state, read_json(path) if state.get('line') and path.is_file() else {})
+        return work_settings.effective(state, read_json(path) if path.is_file() else {})
     except ValueError as error:
         raise HarnessError(str(error)) from error
 
@@ -3658,7 +3735,7 @@ def command_settings(root, args):
         variant, state = selected_variant(root, work, args)
     path = runtime_root(root) / 'settings.json'
     if args.settings_command != 'show':
-        if args.layer == 'variant' and not state.get('line'):
+        if args.layer == 'variant' and not state.get('line') and not args.key.startswith('samples.'):
             raise HarnessError('Legacy Variant settings are unchanged; no implicit migration')
         with naming_lock(root):
             if args.layer == 'variant':
@@ -3694,6 +3771,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--work", dest="work_override", help="temporarily select a Work")
     parser.add_argument("--variant", dest="variant_override", help="temporarily select a Variant")
     commands = parser.add_subparsers(dest="command", required=True)
+    work_memory.add_commands(commands, SimpleNamespace(**globals()))
     critic_parser = commands.add_parser('critic', help='Freeze and sample a Draft; record advisory visual review')
     critic_commands = critic_parser.add_subparsers(dest='critic_command', required=True)
     critic_round = critic_commands.add_parser('round')

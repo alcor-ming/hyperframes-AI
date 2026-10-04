@@ -30,7 +30,7 @@ class V36RulesTest(unittest.TestCase):
             text = (ROOT / name).read_text()
             for term in ('开发仓', '/mnt/d/AI/AI+hyperframes', 'work-wsl.sh', 'Opus 5.5'):
                 self.assertIn(term, text)
-        refinement = (ROOT / '.studio/templates/SHOWCASE_REFINEMENT.template.md').read_text()
+        refinement = (ROOT / '.studio/templates/VISUAL_RETRO.template.md').read_text()
         for term in ('积木', '动作配方或规则', '内容资产', '仅属于本片', 'pack / validate / accept'):
             self.assertIn(term, refinement)
 

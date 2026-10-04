@@ -79,6 +79,8 @@ F01-F08 卡片使用 Plan `card` 块作为唯一内容源。安装已接纳的 `
 
 对已打开的准确目标运行 `./work --work <id> --variant <id> preview diagnose <current或Plan/Draft-ID>`，支持 executable 登记（`plan-vNNN` / `draft-vNNN`），拒绝静态 `reference` 和 `layout`。只读输出上屏照搬、Plan 信息缺失/截短、其他实现偏离和静止疑点，不作 QA 通过判断。Plan 支持新 `screen` 信息块与旧表格格式。登记 Plan/Draft 使用同版冻结的 Script、Research、Plan 与工程，当前文稿的跨版本差异另列；输入在诊断期间变化则报告过期。单 Scene Plan 参考沿用登记的 `sample_scenes`，其他 Scene 列入 `d1.out_of_scope`（不在本参考范围），不报缺失或未验证。文字按 `data-info-id` 或与唯一信息块的精确文本匹配归属；无法唯一归属时按元素列为待核验，相关信息不报缺失。多信息 Scene 可在信息块容器上标注可选的 `data-info-id`。参数及明确引用例外见 `preview diagnose --help`。范围内未采样状态、无法确认 ready 的媒体/子画面及图片内文字保留未验证，仍需按 [Draft QA](.studio/spec/hyperframes.md#draft-qa) 连续观看；诊断不导出视频或修改接受状态。
 
+画面复盘使用 `./work --work <id> --variant <id> retro open <Draft-ID>` 与 `retro check`。记录按 Draft 保存；用户确认的样片和缺陷分别通过 `sample`、`defect` 管理，跨片机械统计用 `retro summary`。制作在 Plan 中引用样片段，`plan refresh` 固定参考帧与设置，Draft 和 critic 继承同组证据。详情及完整命令见 [画面复盘与样片记忆](.studio/workflow.md#画面复盘与样片记忆)。生产根 `sample-library/`、`known-defects/`、`retro-summary/` 属于用户内容，不进入 Git、发行包或部署管理清单。
+
 Draft 与 Final 生命周期：
 
 ```bash

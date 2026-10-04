@@ -56,7 +56,7 @@ critic 提供方为 off 时仍生成证据和 ledger，不生成提示词。开�
 
 ## 复用与交接
 
-showcase 接受后使用 `SHOWCASE_REFINEMENT.template.md` 记录积木、动作配方或规则、内容资产和仅属于本片四类。只提炼最小模块/接口/配方，不向其他线交整页代码；新可编辑 AssetSource 不引用 Work 路径，沿用 pack / validate / accept。规则提案交开发仓，开发会话不读取生产 Work。
+showcase 接受后使用 `VISUAL_RETRO.template.md` 记录积木、动作配方或规则、内容资产和仅属于本片四类。只提炼最小模块/接口/配方，不向其他线交整页代码；新可编辑 AssetSource 不引用 Work 路径，沿用 pack / validate / accept。规则提案交开发仓，开发会话不读取生产 Work。
 
 同对象、同依赖的有效检查沿用；变化仅检查受影响 Scene 和必要衔接，共享宿主或时间线变化按依赖扩大。Studio 内容检查、编码 QA 和归档完整性各自报告。
 
@@ -87,3 +87,19 @@ Windows 制作 Work 内容；WSL 负责工具与开发计划内的组件。工�
 候选阶段用 `dbs-resonate` 检查每个方案是否只服务一个核心机制；`dbs-spread` 只提供受众情绪、有效立场和第一传播者信号，用于候选理由与排序，不改写原文。文案阶段不得把读取 Skill 或默认借用规则当成调用：先完成不含平台大标题的开篇、每图小标题与正文草稿，再单独调用 `dbs-content` 输出针对表达效率、认知落差和小标题的具体修订诊断，由文案 Skill 应用诊断；正文与小标题稳定后，单独调用 `dbs-xhs-title` 仅根据获批文段生成 5 至 8 个候选，覆盖至少 3 类公式、标注公式编号并给出 Top 3，再选定不超过 20 字的 Top 1。嘉宾背景不得作为大标题前提，除非它本就存在于获批文段且对含义必不可少。最后单独调用必做的 `dbs-ai-check` 诊断完整成稿。`dbs-content` 只诊断，不代写；修订仍由文案 Skill 完成。`dbs-hook` 与 `dbs-script-flow` 不进入本工作流。
 
 URL 获取只调用外部 `trendradar-media` v2.0。适配器只接受成功 envelope 与单条成功 manifest，复核大小和 SHA-256 后原子复制到 `materials/source-video.*`，并保存不含外部临时路径的 `materials/acquisition.json`。YouTube 可先采用带结构化时间戳的原生转录；不可用时才在用户明确同意后调用共享 ASR。下载器本身不提供转录。
+
+## 画面复盘与样片记忆
+
+找问题由用户指定，优秀只由用户标记。生产根 Opus 优先、Codex 回退；复盘不修改作品源、Plan、Current 和接受记录。数学、card 的复盘之外仍遵守原只读边界。只使用登记 Draft 快照与 PNG，不导出视频，不调用外部服务。
+
+显式传 `--work <Work ID> --variant <Variant ID>` 后运行 `retro open <Draft ID>`；有匹配且 hash 完整的 critic 包时复制证据，否则加 `--hyperframes-cli` 和 `--browser` 从冻结快照采样，不写 critic ledger。记录在 `retro/<Draft ID>/VISUAL.md`，重开保留内容，不同 Draft 独立保存。`retro check <Draft ID>` 校验字段和枚举，不判断归因。
+
+用户确认段和借鉴理由后，`sample add <样片ID> --draft <Draft ID> --segment S03·B1 --reason <借鉴维度> [--mechanism <机制ID>]` 独立复制帧；没有 A/B 段时使用 `S03`。每个样片 ID 表示一整片，可多次添加不同段。`sample list` 默认本产品线，`--all-lines` 列全库；也可显式 `--line <产品线>`。`sample show <完整段ID>` 读取证据；`sample retire <ID> --reason <理由>` 与 `sample consolidate <ID> --into mechanism:<ID>`（也支持 asset:/rule:）只改状态，不删证据。样片不自动过期。
+
+制作时在 Brief（showcase 概念节）的 `**参考机制：**` 引用完整段 ID，跨线写 `跨线:<ID>`。`plan check` 读两层机制库，报告退役、巩固、已知行为变化提示；发行机制仍可引用。`plan refresh` 将有序帧、理由与 samples 设置冻结在 `reference-memory/<revision>/`，制作必须用 `sample show <ID> --plan-revision <N>` 看这组帧。引用或设置变动经 refresh 创建新 revision，Draft 继承独立副本；之后退役、巩固或设置变化不改变旧 Draft。禁止手改这些冻结文件。
+
+`samples.max_references` 默认 3，`samples.frames_per_reference` 默认 6；用户层与 Variant 层可覆盖。旧 Variant 补默认值而不重绑档案，无 line 的旧 Variant 仅允许新增 samples 设置，不改旧开关语义。explainer 总引用仍 1–3；card/showcase 可选。每段帧不足时取全部，超过时均匀选取；不补造帧。
+
+已知缺陷先在复盘问题行填写 `已知缺陷 ID`，用户确认后 `defect add <ID> --draft <Draft ID> --description <描述> --frame images/<帧>.png`（可重复 --frame）。`defect list` 默认本产品线；`defect retire <ID> --blocked-by <规则或诊断>` 保留证据。critic 只读本线有效缺陷，附在档案检查项后；每轮记录生效 ID。参考样片逐项评“达到 / 部分 / 未达”，按 reason 限定维度，不评相似度；`critic record` 拒绝遗漏、重复、未知引用和非法结论。
+
+`retro summary` 只读扫描已登记 Work，写生产根 `retro-summary/summary.json` 与 `SUMMARY.md`，不改 Work。资产按 Work/Variant/ref/version 去重，时间取 Variant 元数据（未知为 null）；样片按 Work/Variant/Plan revision/ID 去重，同 revision 多 Draft 不重复计数。问题按显式缺陷 ID、归因层、去向和产品线聚合；样片按显式机制 ID 分组，缺失关联记未关联。手写重复由人填写，只计数，不比对跨片代码。资产候选、规则与诊断提案不自动接受或执行。

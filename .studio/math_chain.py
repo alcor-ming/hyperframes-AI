@@ -115,15 +115,20 @@ def parse_plan(text):
     return {scene: _contract(value, scene) for scene, value in parse_scene_blocks(text, 'math-plan').items()}
 
 
-def plan_findings(text, cues, duration):
+def plan_findings(text, cues, duration, scenes=None):
     from explainer import find_cue, number
     number(duration, 'duration')
     findings, identities, events = [], {}, []
+    bounds = None
+    if scenes is not None:
+        bounds = {scene['id']: (scene['start'], scene['start'] + scene['duration']) for scene in scenes}
+    scene_events = {}
 
     def report(code, scene, message):
         findings.append(dict(code=code, scene=scene, message=message))
 
-    for scene, plan in parse_plan(text).items():
+    plans = parse_plan(text)
+    for scene, plan in plans.items():
         for unit in plan['units']:
             if not unit['graphic'].strip():
                 report('math_missing_graphic', scene, unit['id'])
@@ -142,10 +147,21 @@ def plan_findings(text, cues, duration):
                 at = find_cue(cues, event['cue'])
                 if at > duration:
                     raise ValueError('cue_outside_duration')
+                if bounds is not None and scene in bounds and not bounds[scene][0] <= at < bounds[scene][1]:
+                    raise ValueError('cue_outside_scene')
                 if event['reveal'] or event['remove']:
                     events.append(at)
+                    scene_events.setdefault(scene, []).append(at)
             except ValueError as exc:
                 report('math_unresolved_cue', scene, str(exc))
-    if duration - max(events, default=0) > 2:
-        report('math_trailing_gap', None, 'More than 2 seconds after the last mathematical event')
+    if bounds is None:
+        if duration - max(events, default=0) > 2:
+            report('math_trailing_gap', None, 'More than 2 seconds after the last mathematical event')
+    else:
+        for scene in plans:
+            if scene not in bounds:
+                continue
+            last = max(scene_events.get(scene, []), default=bounds[scene][0])
+            if bounds[scene][1] - last > 2:
+                report('math_trailing_gap', scene, 'More than 2 seconds after the last mathematical event')
     return findings

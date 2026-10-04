@@ -19,7 +19,10 @@ def pending_issues(rounds):
 
 
 def validate_verdict(value, entry):
-    if not isinstance(value, dict) or set(value) != {'round', 'draft_id', 'snapshot_sha256', 'new_issues', 'previous'}:
+    required = {'round', 'draft_id', 'snapshot_sha256', 'new_issues', 'previous'}
+    if entry.get('reference_ids'):
+        required.add('references')
+    if not isinstance(value, dict) or set(value) != required:
         raise ValueError('Verdict requires round, draft_id, snapshot_sha256, new_issues and previous')
     if any(value[key] != entry[key] or type(value[key]) is not type(entry[key]) for key in ('round', 'draft_id', 'snapshot_sha256')):
         raise ValueError('Verdict targets another round or snapshot')
@@ -45,6 +48,19 @@ def validate_verdict(value, entry):
         seen.add(item['id'])
     if seen != {item['id'] for item in entry['previous_issues']}:
         raise ValueError('Verdict must address every previous unresolved issue')
+    if entry.get('reference_ids'):
+        seen = set()
+        if not isinstance(value['references'], list):
+            raise ValueError('Reference verdicts must be an array')
+        for item in value['references']:
+            if (not isinstance(item, dict) or set(item) != {'id', 'status', 'detail'}
+                    or not isinstance(item['id'], str) or item['id'] in seen
+                    or item['status'] not in ('达到', '部分', '未达')
+                    or not isinstance(item['detail'], str) or not item['detail'].strip()):
+                raise ValueError('Invalid reference dimension verdict')
+            seen.add(item['id'])
+        if seen != set(entry['reference_ids']):
+            raise ValueError('Verdict must address every reference dimension exactly once')
     return value
 
 
@@ -110,5 +126,12 @@ def package(directory, report, direction, previous, entry):
                   '对 previous.json 每个问题逐项给 FIXED / PARTLY / STILL 和证据。结论只作建议，不代替用户接受。\n'
                   '输出严格 JSON：' + json.dumps({key: entry[key] for key in ('round', 'draft_id', 'snapshot_sha256')}, ensure_ascii=False)[:-1]
                   + ', "new_issues":[{"id":"unique-id","description":"问题及帧证据"}], "previous":[{"id":"existing-id","status":"FIXED|PARTLY|STILL","detail":"帧证据"}]}\n')
+        if (directory / 'memory.json').is_file():
+            prompt += ('读取 memory.json：先核对 profile_checks，再逐项核对 known_defects 的描述及证据帧。'
+                       '参考帧位于 reference-memory/，只对照每段 reason 限定的借鉴维度，不评相似度、不提名优秀。\n')
+        if entry.get('reference_ids'):
+            prompt += ('在上述 JSON 增加必填 references 数组，每个引用恰好一次：'
+                       + json.dumps([{'id': identity, 'status': '达到|部分|未达', 'detail': '借鉴维度与帧证据'}
+                                     for identity in entry['reference_ids']], ensure_ascii=False) + '\n')
         (directory / 'PROMPT.md').write_text(prompt, encoding='utf-8')
     return hashes(directory)

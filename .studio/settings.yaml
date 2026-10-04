@@ -45,6 +45,30 @@
       "cost": "token",
       "description": "自动评审最多轮数；允许手动继续",
       "minimum": 1
+    },
+    "samples.max_references": {
+      "type": "integer",
+      "layers": [
+        "user",
+        "variant"
+      ],
+      "stage": "plan",
+      "cost": "token",
+      "description": "Plan 最多引用的样片段数",
+      "minimum": 1,
+      "default": 3
+    },
+    "samples.frames_per_reference": {
+      "type": "integer",
+      "layers": [
+        "user",
+        "variant"
+      ],
+      "stage": "plan",
+      "cost": "token",
+      "description": "每段冻结参考帧数",
+      "minimum": 1,
+      "default": 6
     }
   },
   "critic_models": {

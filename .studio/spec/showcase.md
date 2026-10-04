@@ -8,4 +8,4 @@
 
 硬约束不变：事实与来源可追溯，不伪造界面与数据；单一 paused timeline、seek 安全，不依赖 `onUpdate` 写状态；依赖与媒体离线闭包，不用 CDN、不引用闭包外资产。授权与 Asset Brief 见根规则；Draft/test-work 不导出视频，仅生产 Variant 的 Finalize 渲染 MP4。继续使用已部署官方 Studio，不新建渲染器。
 
-接受后按 `SHOWCASE_REFINEMENT.template.md` 分类提炼为积木、动作配方或规则、内容资产、仅属于本片。交付其他产品线的是最小模块、接口卡、配方或 Plan 数据块，不是整页源码；冻结资产仍走现有 pack / validate / accept。
+接受后按 `VISUAL_RETRO.template.md` 分类提炼为积木、动作配方或规则、内容资产、仅属于本片。交付其他产品线的是最小模块、接口卡、配方或 Plan 数据块，不是整页源码；冻结资产仍走现有 pack / validate / accept。

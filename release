@@ -226,7 +226,7 @@ def public_source(name: str) -> bool:
     path = safe_member(name)
     if development_harness(name):
         return False
-    forbidden = {".git", ".runtime", "__pycache__", "node_modules", "works", "requests", "review",
+    forbidden = {".git", ".runtime", "__pycache__", "node_modules", "works", "sample-library", "known-defects", "retro-summary", "requests", "review",
                  "credentials", "secrets", ".env", ".codex", "dist"}
     if any(part in forbidden or part.startswith(".env.") for part in path.parts):
         return False

@@ -18,10 +18,15 @@ def parse(text, metadata, scenes):
     known = {item['id']: item for item in lines.catalogue('mechanisms')['mechanisms']}
     if line['mode'] == 'explainer' and not 1 <= len(references) <= 3:
         findings.append({'kind': 'reference_count', 'expected': '1–3'})
-    for identity in references:
+    for reference in references:
+        cross = reference.startswith('跨线:')
+        identity = reference.removeprefix('跨线:')
+        # User sample IDs are resolved against the local library by plan check/refresh.
+        if re.fullmatch(r'[\w.-]+·S[0-9]+[A-Z]*(?:·[AB][1-9][0-9]*)?', identity):
+            continue
         if identity not in known:
             findings.append({'kind': 'unknown_mechanism', 'id': identity})
-        elif line['id'] not in known[identity]['lines']:
+        elif line['id'] not in known[identity]['lines'] and not cross:
             findings.append({'kind': 'mechanism_line_mismatch', 'id': identity})
     section = re.search(r'^## 分镜表\s*\n(.*?)(?=^## |\Z)', text, re.M | re.S)
     segments, seen, previous_scene = {}, set(), None

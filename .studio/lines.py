@@ -1,6 +1,7 @@
 """Versioned product lines and their small reference mechanism catalogue."""
 from copy import deepcopy
 import json
+import re
 from pathlib import Path
 
 
@@ -51,4 +52,10 @@ def validate_catalogues():
         if any(not isinstance(item[key], str) or not item[key].strip() for key in ('id', 'mechanism', 'transfer', 'source')) or not item['source'].startswith('https://'):
             raise ValueError('Invalid reference mechanism fields')
         ids.add(item['id'])
+    for change in catalogue('behavior-changes')['changes']:
+        if (set(change) != {'version', 'lines', 'summary'}
+                or not re.fullmatch(r'\d+\.\d+\.\d+', change['version'])
+                or not change['lines'] or not set(change['lines']) <= lines.keys()
+                or not isinstance(change['summary'], str) or not change['summary'].strip()):
+            raise ValueError('Invalid behavior change')
     return lines

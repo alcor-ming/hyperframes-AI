@@ -1,0 +1,13 @@
+{
+  "changes": [
+    {
+      "version": "3.7.0",
+      "lines": [
+        "card",
+        "explainer",
+        "explainer/math-rap"
+      ],
+      "summary": "A/B 交接由同时变化改为错相交接"
+    }
+  ]
+}

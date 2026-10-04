@@ -26,3 +26,9 @@ Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取�
 资产开发任务完成指：包已打包接纳，或场景源/配方已写发现字段，并且 `work.cmd component list --audit` 无该项告警。场景源 `manifest.json` 与配方 Markdown 的 JSON front matter（`---` 内放 JSON 对象）使用 `source_ref`、`title`、`purpose`、`tags`（数组）、`workflow_role`、`primary_category`、`classification_status`、`limits`（字符串或数组），场景源另含相对本目录的 `entry`；它们是派生参考、不可安装。字段示例见 README 的资产入口。配方目录先用 `work.cmd component source-add <目录>` 登记为 AssetSource。现有 5 个场景源与 18 条配方由 Windows 补字段，WSL 不代改。
 
 保留现有内容、Scene/Anchor ID、正式音频/对齐与冻结快照。只报告实际结果、改动、缺口和必要决定；WSL/mock、Windows 原生与生产验收分别报告，未验证不冒充通过。
+
+## 画面复盘
+
+用户指定找问题或标记优秀后，生产根 Opus 优先执行，Codex 回退。显式绑定 Work/Variant 和登记 Draft，使用 `retro open <Draft ID>`，按 `VISUAL_RETRO.template.md` 填写，再 `retro check <Draft ID>`。复盘可写范围仅 `retro/`、生产根 `sample-library/`、`known-defects/` 与 `retro-summary/`；不改 Work 工程源、Plan、Current 或接受记录。采样所需可回收 Studio 记录由 CLI 管理。数学系列、card 单片的其余部分仍只读。
+
+样片与已知缺陷在用户对话确认后经 `sample add` / `defect add` 写入，不由 Agent 或 critic 自行提名。作品修复与资产制作另按原授权边界执行。样片、帧与记录留在生产根，开发仓只收无作品内容的最小复现。具体命令与冻结参考方式见 [.studio/workflow.md](.studio/workflow.md)。

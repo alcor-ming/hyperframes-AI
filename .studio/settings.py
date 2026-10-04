@@ -23,9 +23,12 @@ def effective(state, user=None):
     line = lines.frozen(state)
     defaults = line['defaults'] if line else {'direction_approval': True, 'critic.provider': 'off', 'critic.model': 'gpt-6.1-sol', 'critic.max_rounds': 1}
     result = {key: {'value': value, 'source': 'line' if line else 'legacy'} for key, value in defaults.items()}
-    # A user switch cannot silently migrate an older Variant.
-    if line:
-        for layer, values in (('user', user or {}), ('variant', state.get('settings', {}))):
-            for key, value in validate(values, layer).items():
-                result[key] = {'value': value, 'source': layer}
+    # New memory settings do not rebind an existing Variant or alter legacy switches.
+    schema = lines.catalogue('settings')['keys']
+    for key in ('samples.max_references', 'samples.frames_per_reference'):
+        result.setdefault(key, {'value': schema[key]['default'], 'source': 'release'})
+    for layer, values in (('user', user or {}), ('variant', state.get('settings', {}))):
+        allowed = values if line else {key: value for key, value in values.items() if key.startswith('samples.')}
+        for key, value in validate(allowed, layer).items():
+            result[key] = {'value': value, 'source': layer}
     return result

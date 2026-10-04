@@ -6,7 +6,7 @@ CLI 只用同根 `./work-wsl.sh` 调用 Windows `work.cmd`。先确定任务类�
 
 ## Showcase 制作
 
-仅 Opus 5.5 制作，创建时显式指定并冻结 `pdoom` / `science`。读取 [.studio/spec/showcase.md](.studio/spec/showcase.md) 与选定子模块参考，可编辑获授权 Work 的文稿、Plan、Scene 与工程源。只有这一类不要求 explainer 正向方向、D14、Q1 或 Draft 前节奏必经闭环；硬约束与用户接受不豁免。接受后按 `.studio/templates/SHOWCASE_REFINEMENT.template.md` 提炼最小积木、配方或内容资产，不把整页代码交给其他产品线。
+仅 Opus 5.5 制作，创建时显式指定并冻结 `pdoom` / `science`。读取 [.studio/spec/showcase.md](.studio/spec/showcase.md) 与选定子模块参考，可编辑获授权 Work 的文稿、Plan、Scene 与工程源。只有这一类不要求 explainer 正向方向、D14、Q1 或 Draft 前节奏必经闭环；硬约束与用户接受不豁免。接受后按 `.studio/templates/VISUAL_RETRO.template.md` 提炼最小积木、配方或内容资产，不把整页代码交给其他产品线。
 
 ## Explainer 主镜头
 
@@ -18,4 +18,10 @@ CLI 只用同根 `./work-wsl.sh` 调用 Windows `work.cmd`。先确定任务类�
 
 ## 只读审查
 
-数学系列、card 单片及未列出的系列一律只读，不修改 Work。数学审查包采用 [.studio/spec/math-rap.md](.studio/spec/math-rap.md) 的固定输出：证据【图】【码】【未实现】、严重度表、推荐分镜表。读取范围限声明文件，不代替用户观看或接受。
+除下述用户指定画面复盘的限定写入外，数学系列、card 单片及未列出的系列一律只读，不修改 Work。数学审查包采用 [.studio/spec/math-rap.md](.studio/spec/math-rap.md) 的固定输出：证据【图】【码】【未实现】、严重度表、推荐分镜表。读取范围限声明文件，不代替用户观看或接受。
+
+## 画面复盘
+
+用户指定找问题或标记优秀后，生产根 Opus 优先执行，Codex 回退。显式绑定 Work/Variant 和登记 Draft，使用 `retro open <Draft ID>`，按 `VISUAL_RETRO.template.md` 填写，再 `retro check <Draft ID>`。复盘可写范围仅 `retro/`、生产根 `sample-library/`、`known-defects/` 与 `retro-summary/`；不改 Work 工程源、Plan、Current 或接受记录。采样所需可回收 Studio 记录由 CLI 管理。数学系列、card 单片的其余部分仍只读。
+
+样片与已知缺陷在用户对话确认后经 `sample add` / `defect add` 写入，不由 Agent 或 critic 自行提名。作品修复与资产制作另按原授权边界执行。样片、帧与记录留在生产根，开发仓只收无作品内容的最小复现。具体命令与冻结参考方式见 [.studio/workflow.md](.studio/workflow.md)。
