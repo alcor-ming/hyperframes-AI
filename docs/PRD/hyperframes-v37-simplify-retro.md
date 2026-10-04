@@ -1,6 +1,6 @@
 # HyperFrames v3.7：流程优化与复盘
 
-状态：v3.7.0 最终规划已批准（2026-10-02），已在 WSL 开发仓实现并完成隔离验证；Windows 原生、宿主指定模型看图和生产验收未执行；v3.7.1 范围已批准（2026-10-04，第 5 节 R1–R9 与 AC1–AC10），待实施；v3.7.2 待讨论；简化设计在 v3.8。本文件是 v3.7 大版本的产品真源；Trellis 任务 `hyperframes-v37-simplify-retro` 只绑定当前推进的小版本（文件名与任务 ID 沿用最初的"simplify"，不改名以免断链，简化设计已移到 v3.8）。
+状态：v3.7.0 最终规划已批准（2026-10-02），已在 WSL 开发仓实现并完成隔离验证；Windows 原生、宿主指定模型看图和生产验收未执行；v3.7.1 已按审查补定实施 R1–R9（2026-10-04），WSL 隔离验证已通过；Windows 原生、宿主模型看图与生产验收未执行；v3.7.2 待讨论；简化设计在 v3.8。本文件是 v3.7 大版本的产品真源；Trellis 任务 `hyperframes-v37-simplify-retro` 只绑定当前推进的小版本（文件名与任务 ID 沿用最初的"simplify"，不改名以免断链，简化设计已移到 v3.8）。
 
 ## 1. 背景与目标
 
@@ -23,7 +23,7 @@ v3.7 的目标有两个：
 | 版本 | 主题 | 主要内容 | 依赖 |
 |---|---|---|---|
 | v3.7.0 | 流程优化与成本开关（只取观默文章与 MVK 中的做法） | 产品线档案（入口分流）；导演 Brief + 按 A/B 段的分镜表 Plan；取消事件表、节奏改为测量（第 2–4 层静止）；A/B 错相交接；视觉延续测量；参考机制库；评审轮次命令与 ledger；独立评审可切换且必须能看图；三层设置 | — |
-| v3.7.1 | 画面复盘 | 单片 `retro/VISUAL.md`（找问题 + 找优秀，提炼扩展到全模式）；样片记忆（生产根样片库、两层参考机制库、Brief 引用与 critic 对照）；已知缺陷（负面记忆）；跨片汇总（手写重复 → 资产候选与 Asset Brief，反复缺陷 → 规则/诊断提案，资产使用频率机械统计）；修正数学积木两处诊断缺陷。A/B 交接效果与 card 跨 Scene 精确延续已移出，由复盘提案立项 | v3.7.0 的 ledger 与评审包 |
+| v3.7.1 | 画面复盘 | 单片 `retro/<Draft ID>/VISUAL.md`（找问题 + 找优秀，提炼扩展到全模式）；样片记忆（生产根样片库、两层参考机制库、Brief 引用与 critic 对照）；已知缺陷（负面记忆）；跨片汇总（手写重复 → 资产候选与 Asset Brief，反复缺陷 → 规则/诊断提案，资产使用频率机械统计）；修正数学积木两处诊断缺陷。A/B 交接效果与 card 跨 Scene 精确延续已移出，由复盘提案立项 | v3.7.0 的 ledger 与评审包 |
 | v3.7.2 | 内容复盘 | 抖音 xlsx 导入；API 接入；逐秒留存对齐 Script Anchor / Scene / 画面事件；账号基线对比；回流到选题、Script 开头与 Plan | v3.7.0 设置；v3.7.1 可选 |
 | v3.8 | 简化设计 | 待讨论；依据 v3.7 的 ledger、设置生效值与新旧流程对照决定合并或删除哪些步骤 | v3.7 |
 
@@ -173,7 +173,7 @@ v3.7 的目标有两个：
 
 ## 5. v3.7.1 画面复盘
 
-状态：范围已批准（2026-10-04），待实施。已定事项见第 3 节 2026-10-02 各条；5.1–5.4 是设计，5.5–5.8 是现状证据、范围、验收与边界。
+状态：R1–R9 已在 WSL 开发仓实施并通过隔离验证（2026-10-04）；Windows 原生、指定 critic 模型看图与生产验收未执行。已定事项见第 3 节 2026-10-02 各条；5.1–5.4 是设计，5.5–5.8 是现状证据、范围、验收与边界。
 
 ### 5.1 两类复盘
 
@@ -245,10 +245,10 @@ v3.7 的目标有两个：
 
 ### 5.6 范围
 
-- **R1 单片复盘记录**：新模板 `VISUAL_RETRO.template.md` 覆盖全部模式，含找问题表（5.1 的字段）与找优秀表（四种粒度，保留 `SHOWCASE_REFINEMENT` 的四类）；它取代 `SHOWCASE_REFINEMENT`，原引用处改指新模板。`retro open --work --variant <Draft ID>` 在 Variant 下建 `retro/VISUAL.md`，绑定该 Draft 的快照 hash；证据复用该 Draft 已有的 critic 证据包，没有时按同一采样另生成一份，不写 critic ledger，不导出视频。`retro check` 只校验字段与枚举，不判断归因是否正确。系统去向以文字写在记录里，交 WSL 沿用"冻结最小复现"，本版不新增导出工具。
+- **R1 单片复盘记录**：新模板 `VISUAL_RETRO.template.md` 覆盖全部模式，含找问题表（5.1 的字段）与找优秀表（四种粒度，保留 `SHOWCASE_REFINEMENT` 的四类）；它取代 `SHOWCASE_REFINEMENT`，原引用处改指新模板。`work --work <Work ID> --variant <Variant ID> retro open <Draft ID>` 在 Variant 下建 `retro/<Draft ID>/VISUAL.md`，绑定该 Draft 的快照 hash；证据复用该 Draft 已有的 critic 证据包，没有时按同一采样另生成一份，不写 critic ledger，不导出视频。`retro check` 只校验字段与枚举，不判断归因是否正确。系统去向以文字写在记录里，交 WSL 沿用"冻结最小复现"，本版不新增导出工具。
 - **R2 样片库**：位于生产根，不进开发仓与 Git。`sample add` 从指定 Draft 快照与证据包独立复制该段帧证据（不用 hardlink / symlink），记录来源 Work / Variant / Draft、快照 hash，以及制作时的运行时与资产版本。索引按产品线分文件，每段一行（字段见 5.2）。段 ID 沿用分镜段（`<样片ID>·S03·B1`）；showcase 与旧格式 Plan 没有 A/B 段，按 Scene 标记（`<样片ID>·S03`）。`sample list` 默认只列本产品线，`--all-lines` 列全部；`sample show` 给出某段的帧与理由；`sample retire`、`sample consolidate --into <X>` 只改状态，不删证据。CLI 不设确认门禁，确认在对话中完成。
 - **R3 两层机制库与 Brief 引用**：`plan check` 读取发行层与生产根用户层（样片段条目）的合并结果，数量规则沿用 v3.7.0。跨产品线引用须显式标记（如 `跨线:<ID>`），未标记仍报 `mechanism_line_mismatch`。引用已退役条目时报告；引用已巩固条目时提示改用提炼后的条目；样片早于发行内置"行为变化清单"中的某项变化时提示（清单首条为 v3.7.0 错相交接）。`SHOWCASE_PLAN` 概念节增加可选"参考机制"行，走同一检查。
-- **R4 注入与 critic 对照**：Draft 登记时冻结 Plan 引用的样片段 ID 与帧 hash；制作 Agent 用 `sample show` 读同一组帧。`critic round` 证据包加入引用段的帧与理由（借鉴维度），帧数受设置限制；critic 对每个引用段只判该维度"达到 / 部分 / 未达"，不评相似度；ledger 记录引用 ID。发行层种子条目没有帧，只给文字。
+- **R4 注入与 critic 对照**：Plan refresh 时按 revision 冻结引用段 ID、借鉴理由、有序帧副本及 hash、两个 samples 设置的生效值；引用或设置变化产生新 revision。Draft 登记继承这份冻结输入，不重新检索或选帧；制作 Agent 用 `sample show` 读同一组帧。`critic round` 证据包加入引用段的帧与理由（借鉴维度），帧数受设置限制；critic 对每个引用段只判该维度"达到 / 部分 / 未达"，不评相似度；ledger 记录引用 ID。发行层种子条目没有帧，只给文字。
 - **R5 已知缺陷**：生产根按产品线存条目（描述、证据帧、来源复盘、状态）。`defect add|list|retire`；`critic round` 把本产品线的有效条目附在档案检查项之后，ledger 记录当轮生效的条目 ID。退役时写明拦住它的规则或诊断，证据保留。
 - **R6 跨片汇总**：`retro summary` 只读扫描生产根，输出 JSON 与 Markdown 到生产根：
   - 资产使用频率：按资产与版本、产品线统计各 Variant 冻结 closure 的引用次数与最近使用时间；
@@ -258,23 +258,31 @@ v3.7 的目标有两个：
 
   "手写重复"由复盘执行者写在记录里，汇总只计数，不做跨 Work 代码比对。
 - **R7 数学诊断修正**：`rhythm_diagnostics` 把 `math_reveal` / `math_remove` 计为可见事件，层由积木挂载目标决定（第 2 层或第 4 层）。`math_trailing_gap` 改为按 Scene 检查：每个 Scene 最后一个数学事件到 Scene 终点超过 2 秒即报告，并带 Scene ID。诊断不随 Variant 冻结，修正后对在制 Work 的后续诊断生效。同步修改 `.studio/spec/math-rap.md` 中"收尾"的表述。
-- **R8 设置**：`settings.yaml` 新增 `samples.max_references`（单个 Plan 最多引用的样片段数，同时受参考机制总数上限约束，默认 3）与 `samples.frames_per_reference`（制作与 critic 每段读取的帧数，默认 6），用户层与 Variant 层可覆盖，成本类型 token。
-- **R9 规则与执行者**：`.studio/workflow.md` 增加复盘一节，Router SKILL 增加复盘入口。根规则模板 `CLAUDE.template.md` 与 `WINDOWS_AGENTS.md` 增加"复盘"任务：生产根 Opus 优先，Codex 回退；可写范围只限 `retro/`、样片库与已知缺陷库，不改 Work 源、Plan、Current 与接受记录；样片与已知缺陷条目在用户对话确认后写入。
+- **R8 设置**：`settings.yaml` 新增 `samples.max_references`（单个 Plan 最多引用的样片段数，同时受参考机制总数上限约束，默认 3）与 `samples.frames_per_reference`（制作与 critic 每段读取的帧数，默认 6），用户层与 Variant 层可覆盖，成本类型 token。旧 Variant 缺键时补发行默认值，不重绑产品线；无 line 的旧 Variant 也允许覆盖 samples 两键，其他旧设置语义不变。
+- **R9 规则与执行者**：`.studio/workflow.md` 增加复盘一节，Router SKILL 增加复盘入口。根规则模板 `CLAUDE.template.md` 与 `WINDOWS_AGENTS.md` 增加"复盘"任务：生产根 Opus 优先，Codex 回退；可写范围只限 `retro/`、样片库、已知缺陷库与 `retro-summary/`，不改 Work 源、Plan、Current 与接受记录；样片与已知缺陷条目在用户对话确认后写入。
 
 ### 5.7 验收
 
 开发验收在 WSL 隔离 fixture 上完成；Windows 原生与生产验收分别报告。
 
-- **AC1** `retro open` 在 fixture WorkStore 上生成绑定快照 hash 的 `VISUAL.md`；有 critic 包时复用，没有时另行采样且 ledger 不变；未登记的 Draft 报错；全程不产生视频文件。
+- **AC1** `retro open` 在 fixture WorkStore 上生成绑定快照 hash 的 `VISUAL.md`；有 critic 包时复用，没有时另行采样且 ledger 不变；未登记的 Draft 报错；同一 Draft 重开保留用户填写内容，不同 Draft 互不覆盖；全程不产生视频文件。
 - **AC2** `retro check` 对非法枚举与缺字段给出报告，合法记录无发现。
 - **AC3** `sample add|list|show|retire|consolidate`：帧为独立副本（非符号链接、inode 不同）；索引按产品线分文件；默认只列本产品线；状态变化不删证据。
 - **AC4** `plan check`：用户层 ID 可引用；未标记的跨线引用报 mismatch，标记后通过；退役、已巩固、早于行为变化各给出对应发现；showcase 的可选参考行走同一检查；发行层条目的现有行为不变。
-- **AC5** Draft 登记冻结引用 ID 与帧 hash，之后退役或巩固该条目不改变已登记 Draft 的 critic 包；critic 包含引用帧与理由，帧数符合设置；ledger 记录引用 ID。
+- **AC5** Plan refresh 冻结引用 ID、理由、有序帧副本与 hash 及设置，Draft 登记继承，之后退役或巩固该条目不改变已登记 Draft 的 critic 包；critic 包含引用帧与理由，帧数符合冻结设置；ledger 记录引用 ID。制作读取 Plan 冻结帧，critic 读取 Draft 继承帧，逐帧 hash 相同；修改设置不会改变旧 Draft，仅 refresh 后的新 revision 生效；critic record 拒绝缺项、重复引用、未知引用或非法结论。
 - **AC6** 已知缺陷出现在本产品线的 critic 包检查项中，其他产品线与已退役条目不出现；ledger 记录生效条目 ID。
-- **AC7** `retro summary` 在含多个 Variant 的 fixture 上给出正确的资产引用计数、缺陷聚合与样片引用次数；运行前后 Work 文件 hash 不变。
-- **AC8** 数学 fixture：有揭示事件的 Scene 不再报整段无事件；最后一个事件距 Scene 终点超过 2 秒的 Scene 同时报 `rhythm_gap` 与带 Scene ID 的 `math_trailing_gap`；未超过的 Scene 不报。
-- **AC9** `settings show` 列出两个新键的生效值与来源层。
+- **AC7** `retro summary` 在含多个 Variant 的 fixture 上给出正确的资产引用计数、缺陷聚合与样片引用次数；运行前后 Work 文件 hash 不变；相同 Plan revision 的多轮 Draft 不重复计数，跨 revision 分开计数；缺失关联记未关联，不猜测。
+- **AC8** 数学 fixture：有揭示事件的 Scene 不再报整段无事件；最后一个数学事件距 Scene 终点超过 2 秒、且尾段无其他可见事件与豁免区间的 Scene 同时报 `rhythm_gap` 与带 Scene ID 的 `math_trailing_gap`；未超过的 Scene 不报 math_trailing_gap。补充尾段有其他可见动作的反例：仍报数学空档，但不报整体节奏空档；无数学事件的数学 Scene 从 Scene 起点计空档，cue 越界报告而不计入事件。
+- **AC9** `settings show` 列出两个新键的生效值与来源层；覆盖带旧 line 与无 line 的 Variant，验证默认 3/6、用户与 Variant 覆盖、正整数校验及 line 身份不变。
 - **AC10** 规则文档、Router、两份根规则模板更新后通过现有包校验；测试只用 fixture，不读取生产内容。
+
+### 审查后补定（2026-10-04，用户批准补齐并实施）
+
+- 复盘问题表增加可空的 `已知缺陷 ID`；优秀表分别记录四种留存粒度与原 showcase 四类，不混为一个枚举，并增加可空的 `机制 ID` 与 `手写重复`。样片段索引含可空的 `mechanism_id`；巩固目标明确为机制、资产或规则，原段不删除。
+- 汇总口径：资产按 `(Work, Variant, ref, version)` 对冻结 closure 去重计数，最近使用时间取 Variant 元数据时间，不用文件 mtime；样片引用按 `(Work, Variant, Plan revision, sample ID)` 去重（同 revision 多 Draft 只计一次），统计已冻结 Plan / Draft；机制聚合使用显式 mechanism_id。未知时间、缺失关联明确为 null / 未关联。汇总输出在生产根 `retro-summary/`，规则写范围包括此目录。
+- Plan 引用帧冻结存于 Variant 的 `reference-memory/<revision>/`，制作使用 `sample show <ID> --plan-revision <N>`；Draft 内继承副本，不依赖之后的库状态。样片证据不足设置帧数时使用全部可用帧，不补造；超出时均匀取样并固定顺序。帧数与引用数均为正整数，引用数超限报告。card/showcase 的机制可选，不额外引入旧版本不存在的总数限制；explainer 仍 1–3。
+- 缺少冻结引用的历史 Draft 不从当前库回填；其 critic 无样片对照并明确未冻结。复盘复用包需匹配 Draft、快照与文件 hash；无包时只从登记快照采样，证据输出到该 Draft 的 retro 目录，不写 critic ledger / Current / 接受记录。采样所需可回收 Studio 运行记录沿用工具现有机制。
+- 样片/缺陷库采用生产根 `sample-library/`、`known-defects/`；CLI 必须显式 Work/Variant 或产品线，不从 Current 隐式取值。条目确认在对话完成，CLI 不追加批准门。索引状态与证据完整性分别校验，损坏证据不能默默用于评审。
 
 ### 5.8 不在 v3.7.1 范围
 
