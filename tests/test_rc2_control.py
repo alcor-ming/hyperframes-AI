@@ -37,10 +37,6 @@ class Rc2ControlTest(unittest.TestCase):
         self.assertIn("requires --purpose", self.run_cli("new", "No purpose", "--workflow", "hyperframes_video", expected=2))
         self.assertIn("requires --series", self.run_cli("new", "No series", "--workflow", "hyperframes_video",
                                                     "--purpose", "ip", "--account", "a", expected=2))
-        podcast = self.run_cli("new", "Podcast", "--workflow", "podcast_quote_image")
-        self.assertEqual("work-podcast_quote_image-001", podcast)
-        self.assertEqual("work-podcast_quote_image-002", self.run_cli("new", "", "--workflow", "podcast_quote_image"))
-        self.assertIn("hyperframes_video", self.run_cli("--work", podcast, "variant", "name", "新版", expected=2))
         work_id = self.new("Agent四大阶段", purpose="ip")
         self.assertEqual("work-hyperframes_video-001-Agent四大阶段", work_id)
         self.run_cli("variant", "add", "second", "--account", "a", "--name", "横版完整版")

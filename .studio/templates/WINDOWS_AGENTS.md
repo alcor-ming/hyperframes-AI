@@ -10,7 +10,7 @@ WSL 与 Windows 均可编写组件，WSL 开发计划可以包含组件编辑。
 
 Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取根 `CLAUDE.md`，按任务类型制作 showcase、在 `asset-library/sources` 创作库资产，或独占制作已批准的非数学 explainer 1–2 个主镜头；card 单片、数学与未列出的系列只读。card 和数学单片只复用冻结库资产，不调用 Opus。库候选由 CLI pack，接纳仍由用户执行；主镜头遵守完整 explainer 规则，不享受 showcase 豁免。生产 CLI 只通过同根 `work-wsl.sh` 调用 `work.cmd`；准确授权 Work 的工程源可直接编辑，Current、Binding、接受状态与配置仍由 CLI 管理。作品、Draft、Final 留在唯一生产根；不在 WSL 另起 Studio 或渲染器，画面证据使用 CLI 截图与诊断。同一 Work/Variant 同时只允许一个执行者。
 
-安装工具、runtime、受管理规则、已接纳 AssetStore、vendor 与 Accepted Snapshot 只读；变更在可编辑源完成，复用时冻结新版本。更新保留用户 Skill 与未知文件，停止相关进程后使用安装器及恢复机制；不热换运行中的工具。Review 使用独立根配置、WorkStore、AssetStore 与必要 source-copy。
+安装工具、runtime、受管理规则、已接纳 AssetStore、vendor 与 Accepted Snapshot 只读；变更在可编辑源完成，复用时冻结新版本。更新保留未管理的用户 Skill 与未知文件；修改过的受管理退役文件保存到不会被发现为 Skill 的保留位置并报告，可回滚。继续管理文件的修改仍拒绝覆盖。停止相关进程后使用安装器及恢复机制；不热换运行中的工具。Review 使用独立根配置、WorkStore、AssetStore 与必要 source-copy。
 
 ## 授权边界
 
@@ -21,7 +21,7 @@ Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取�
 
 ## 入口与治理
 
-前台通过本根 `work.cmd current` 定位，无 Current 时 `work.cmd list`；后台显式绑定 Work/Variant，同一对象同时只允许一个执行者。按 [.agents/skills/hyperframes-codex-workflow/SKILL.md](.agents/skills/hyperframes-codex-workflow/SKILL.md) 加载当前阶段，生命周期和人工接受见 [.studio/workflow.md](.studio/workflow.md)。`podcast_quote_image` 保留创建与选择合同，方案批准前用 planner_skill，批准后用 copy_skill，不加载视频规则。
+前台通过本根 `work.cmd current` 定位，无 Current 时 `work.cmd list`；后台显式绑定 Work/Variant，同一对象同时只允许一个执行者。按 [.agents/skills/hyperframes-codex-workflow/SKILL.md](.agents/skills/hyperframes-codex-workflow/SKILL.md) 加载当前阶段，生命周期和人工接受见 [.studio/workflow.md](.studio/workflow.md)。本版本只提供视频制作。Work 管一期内容，Variant 管独立制作版本；已退役或未知类型只报告，不套用视频操作。
 
 资产开发任务完成指：包已打包接纳，或场景源/配方已写发现字段，并且 `work.cmd component list --audit` 无该项告警。场景源 `manifest.json` 与配方 Markdown 的 JSON front matter（`---` 内放 JSON 对象）使用 `source_ref`、`title`、`purpose`、`tags`（数组）、`workflow_role`、`primary_category`、`classification_status`、`limits`（字符串或数组），场景源另含相对本目录的 `entry`；它们是派生参考、不可安装。字段示例见 README 的资产入口。配方目录先用 `work.cmd component source-add <目录>` 登记为 AssetSource。现有 5 个场景源与 18 条配方由 Windows 补字段，WSL 不代改。
 

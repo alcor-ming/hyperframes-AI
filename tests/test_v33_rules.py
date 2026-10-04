@@ -53,18 +53,25 @@ class ProductionRulesTests(unittest.TestCase):
         self.assertIn("延续信息", plan)
         self.assertIn("A/B 编排与延续", plan)
 
-    def test_video_boundary_does_not_change_podcast_routing(self):
+    def test_video_only_routing_retains_export_and_reopen_boundaries(self):
         workflow = read(".studio/workflow.md")
-        router = read(ROUTER)
         self.assertIn("PACKAGE.md", workflow)
         self.assertIn("不是视频设计、制作或接受的前置", workflow)
         self.assertIn("test-work 不进入任何视频导出链", workflow)
-        self.assertIn("Finalize 不包含上传/发布，也不自动归档", workflow)
-        self.assertIn("planner_skill", router)
-        self.assertIn("copy_skill", router)
-        self.assertIn("## 播客金句图", workflow)
-        for skill in ("dbs-content", "dbs-xhs-title", "dbs-ai-check"):
-            self.assertIn(skill, workflow)
+        self.assertIn("Finalize 不包含上传/发布", workflow)
+        self.assertIn("归档准确 Variant", workflow)
+        self.assertIn("全部已归档时才自动归档 Work", workflow)
+        self.assertIn("work reopen <Work-ID> --variant-id <Variant-ID>", workflow)
+        self.assertIn("不改等待事项或兄弟版本的归档状态", workflow)
+        for path in (ROUTER, ".studio/capabilities.yaml", ".studio/workflow.md",
+                     ".studio/spec/creative.md", "README.md", "AGENTS.md",
+                     ".studio/templates/WINDOWS_AGENTS.md"):
+            with self.subTest(path=path):
+                content = read(path)
+                for retired in ("podcast_quote_image", "podcast-quote-image",
+                                "xiaohongshu-article-copy", "native-subtitle-quote-image",
+                                "planner_skill", "copy_skill"):
+                    self.assertNotIn(retired, content)
         for path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
             self.assertIn("Draft 与 test-work 不导出视频", read(path))
 

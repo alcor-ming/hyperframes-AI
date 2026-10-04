@@ -1,5 +1,7 @@
 # HyperFrames RC2 执行方案
 
+> v3.8 化繁为简更新：本文保留原版本设计与验证背景；播客保留范围及旧导航 / 归档规则已由当前[制作工作流](../../.studio/workflow.md)与[Final 合同](../../.studio/spec/hyperframes-final.md)替代。当前仅视频制作，导出归档指定 Variant，全部版本归档才汇总 Work；平级版本、冻结来源和继任旧实体保护继续有效。源码更新不表示已经部署或迁移生产数据。
+
 日期：2026-09-22
 
 状态：用户已批准 WSL 实施及 Windows 工具部署；本仓库已实现候选工具与规则，并只在隔离 fixture 验证迁移。Windows 部署结果以目标根收据为准；真实 WorkStore 的 dry-run/apply、生产作品修改和删除均未执行，仍须分别取得准确授权。

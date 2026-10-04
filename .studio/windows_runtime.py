@@ -166,7 +166,6 @@ def environment(root: Path, config: dict | None = None) -> dict[str, str]:
     env["NODE_OPTIONS"] = "--require " + json.dumps(str(root / ".studio/windows_node.cjs"), ensure_ascii=False)
     env["FFMPEG_PATH"] = env["HYPERFRAMES_FFMPEG_PATH"]
     env["FFPROBE_PATH"] = env["HYPERFRAMES_FFPROBE_PATH"]
-    env["IMAGEIO_FFMPEG_EXE"] = env["FFMPEG_PATH"]
     for key in ("work_root", "asset_root"):
         env[f"HYPERFRAMES_AI_{key.upper()}"] = config[key]
     if config.get("review"):

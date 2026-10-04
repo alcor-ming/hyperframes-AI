@@ -55,7 +55,7 @@ class V343RulesTests(unittest.TestCase):
         for text in ("| Plan |", "| Draft |", "visual-design.md", "hyperframes.md"):
             self.assertIn(text, router)
 
-    def test_retired_routing_leaves_legacy_profiles_and_podcast_intact(self):
+    def test_retired_routing_keeps_profiles_and_general_copywriting(self):
         retired = "hyperframes-" + "anti-ppt"
         self.assertFalse((ROOT / ".agents/skills" / retired / "SKILL.md").exists())
         for name in (".studio/capabilities.yaml", ROUTER, "README.md", ".gitignore",
@@ -64,8 +64,9 @@ class V343RulesTests(unittest.TestCase):
         capabilities = read(".studio/capabilities.yaml")
         self.assertNotIn("\nprofiles:", capabilities)
         self.assertNotIn("\n  default:", capabilities)
-        self.assertIn("podcast_quote_image: [bundled_asr, image_generation]", capabilities)
-        self.assertIn("package_pipeline:", capabilities)
+        self.assertNotIn("podcast_quote_image", capabilities)
+        self.assertNotIn("package_pipeline:", capabilities)
+        self.assertIn("optional: [dbs-xhs-title, media-publish-check]", capabilities)
         self.assertTrue((ROOT / ".agents/skills/hyperframes-codex-workflow/references/"
                          "hyperframes-design-profile-pack-v0.1.0/SKILL.md").is_file())
         for name in ("README.md", ".studio/templates/WINDOWS_AGENTS.md"):

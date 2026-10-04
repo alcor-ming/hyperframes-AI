@@ -83,14 +83,16 @@ class ControlPlaneTest(unittest.TestCase):
         identity = self.run_cli("new", "Episode", "--workflow", "hyperframes_video")
         work, _ = cli.locate_work(self.root, identity)
         variant = work / "variants/main"
-        state = (variant / "variant.yaml").read_bytes()
+        state = cli.read_json(variant / "variant.yaml")
+        (variant / "final").mkdir()
         (variant / "final/final.mp4").write_bytes(b"existing artifact")
         self.assertEqual(str(work), self.run_cli("archive"))
         self.assertEqual("archive", cli.locate_work(self.root, identity)[1])
         self.run_cli("--work", identity, "status")
         self.assertEqual("archive", cli.locate_work(self.root, identity)[1])
         self.run_cli("reopen", identity)
-        self.assertEqual(state, (variant / "variant.yaml").read_bytes())
+        reopened = cli.read_json(variant / "variant.yaml")
+        self.assertEqual(state, {key: reopened[key] for key in state})
         self.assertEqual(b"existing artifact", (variant / "final/final.mp4").read_bytes())
 
     def test_finalize_runs_target_only_and_preserves_final_on_qa_failure(self):
@@ -101,6 +103,7 @@ class ControlPlaneTest(unittest.TestCase):
         state["accepted_preview"] = "draft-v001"
         cli.write_variant(variant, state)
         old = variant / "final/final.mp4"
+        old.parent.mkdir(parents=True)
         old.write_bytes(b"old")
         def render(root, args):
             self.assertEqual("draft-v001", args.preview_id)
@@ -183,10 +186,11 @@ class ControlPlaneTest(unittest.TestCase):
         variant = work / "variants/main"
         runtime = variant / ".runtime"
         job = runtime / "finalize-fixture"
-        job.mkdir()
+        job.mkdir(parents=True)
         candidate = job / "candidate.mp4"
         candidate.write_bytes(b"valid Final")
         final = variant / "final/final.mp4"
+        final.parent.mkdir(parents=True)
         final.write_bytes(candidate.read_bytes())
         digest = cli.file_sha256(final)
         cli.write_json(variant / "final/manifest.json", {"final_sha256": digest})
@@ -210,8 +214,7 @@ class ControlPlaneTest(unittest.TestCase):
             self.assertEqual([], cli.reclaim_final_candidates(variant))
         self.assertTrue(candidate.exists())
         cli.write_json(variant / "final/manifest.json", {"final_sha256": digest})
-        with mock.patch.object(cli, "command_finalize_video"):
-            self.run_cli("finalize", str(final), "--qa-passed")
+        self.run_cli("storage", "cleanup", "--apply")
         self.assertFalse(candidate.exists())
         self.assertTrue((job / "qa.json").exists())
         self.assertTrue((job / "failure-notes.log").exists())
@@ -228,12 +231,13 @@ class ControlPlaneTest(unittest.TestCase):
         def render(root, args):
             Path(args.output).write_bytes(b"mock encoded result")
         def promote(root, args, work, location):
+            (variant / "final").mkdir(parents=True)
             shutil.copy2(args.final_file, variant / "final/final.mp4")
         warning = io.StringIO()
         with mock.patch.object(cli, "command_preview_render", side_effect=render), \
                 mock.patch.object(cli, "encoded_video_qa", return_value={"passed": True}), \
                 mock.patch.object(cli, "command_finalize_video", side_effect=promote), \
-                mock.patch.object(cli, "reclaim_final_candidates", side_effect=[[], cli.HarnessError("registry invalid")]), \
+                mock.patch.object(cli, "reclaim_final_candidates", side_effect=cli.HarnessError("registry invalid")), \
                 mock.patch.object(cli.sys, "stderr", warning):
             self.run_cli("finalize")
         self.assertEqual(b"mock encoded result", (variant / "final/final.mp4").read_bytes())

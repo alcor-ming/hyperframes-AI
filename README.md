@@ -1,6 +1,6 @@
 # HyperFrames AI Harness
 
-面向本地内容创作的轻量 Harness。它以 Work 组织一次交付，以 Variant 管理独立账号版本或测试批次，目前提供 `hyperframes_video` 与 `podcast_quote_image` 两条独立工作流。
+面向本地视频创作的轻量 Harness。v3.8 化繁为简：Work 管一期内容，Variant 管独立账号版本或测试批次；普通修改保留在原 Variant，Draft、接受快照与历次导出记录其迭代。当前只提供 `hyperframes_video` 制作。
 
 ## 快速开始
 
@@ -28,7 +28,7 @@ Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话�
 
 开发仓位于 `/home/jym/workspace/hyperframes+AI`，外部 WorkStore 位于 Windows `D:\AI\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`）。本机绑定保存在 Git 忽略的 `.studio/.runtime/work-root`；只有 `./work root set <absolute-path>` 会切换 WorkStore。
 
-`work new` 必须选择 Workflow。CLI 在命名锁内分配内部序号：视频使用 `work-hyperframes_video-<序号>-<初始标题slug>`，与系列号独立且不封顶于 999；播客保留 `work-podcast_quote_image-<三位序号>`。后续改标题不改 ID 或目录。视频制作入口是独立的叙事模式、视觉主题、背景与画幅，不要求前置 Profile。Theme 不拥有或限制叙事模式，也不隐含选择背景和运动。
+`work new` 创建视频 Work。CLI 在命名锁内分配 `work-hyperframes_video-<序号>-<初始标题slug>`，与系列号独立且不封顶于 999。后续改标题不改 ID 或目录。视频制作入口是独立的叙事模式、视觉主题、背景与画幅，不要求前置 Profile。Theme 不拥有或限制叙事模式，也不隐含选择背景和运动。
 
 ```bash
 ./work new "人物口播" --workflow hyperframes_video --purpose standard --series <series-id> --account <account-id> --variant-id talking-head --template talking_head --subject-position left
@@ -36,23 +36,13 @@ Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话�
 ./work resume
 ```
 
-播客图文接受本地视频或明确的来源 URL。URL 通过外部 `trendradar-media` v2.0 下载并校验后复制进 Work；YouTube 可先读取带时间戳的原生字幕，失败后再使用已授权的共享 ASR。第一个 Skill 通读转录并给出 3 个完整文章方案，用户确认其中 1 个；第二个 Skill 先调研嘉宾背景，再从获批的选取文段归纳开篇第一段、每图小标题和第三人称正文，最后仅根据这些文段的共同结论、冲突或因果拟定大标题。文段之外的嘉宾背景只能从开篇第二段起补充，不能主导标题。`PACKAGE.md` 直接保存可复制到创作者平台的纯文本标题、`01｜小标题` 分节、正文和话题，render 同步生成有序图片 JSON；每篇渲染 8 到 12 张图，图片用约 10 个汉字的 Hero 与支撑短句把中文控制在约 60 到 90 字，完整背景、案例和推导留在正文。画面使用 50px 中文与 30px 英文，Hero 至少占 60%，支撑字幕按双语文本高度紧凑排列：
+后台任务使用 `--detached` 创建 Work，并始终显式绑定自己的 Work / Variant。Current 只代表操作焦点；独立作品可并行推进，同一对象保持一个执行者。Script 稳定后用 `work name` 补充语义标题，不改变 ID 或目录。
 
 ```bash
-./work new "播客金句" --workflow podcast_quote_image
-./work finalize /path/to/render --qa-passed
+./work new "另一作品" --workflow hyperframes_video --purpose standard --series <series-id> --detached
+./work --work <work-id> --variant <variant-id> status
+./work list --tree
 ```
-
-多链接输入按“一条来源一个 Work”拆分，并以 detached 方式交给后台任务。`Current Work` 只代表前台焦点；后台任务必须始终显式绑定自己的 Work 和 Variant，因此小红书与 HyperFrames Work 可以同时运行：
-
-```bash
-./work new "播客 A" --workflow podcast_quote_image --detached
-./work --work <work-id> --variant main status
-./work --work <work-id> --variant main name "嘉宾名-核心主题"
-./work list
-```
-
-后台 Work 在创建时已经获得稳定序号；转录完成后只补充嘉宾名 + 核心主题，再完成 3 个文章方案并停在 `article_selection`。HyperFrames 视频在 Script 稳定后只补充核心主题。Work ID 与目录名始终不变，重复命名保留原序号；`work list` 按位置、Workflow 和序号排列。用户只需确认 1 个方案；单个 Work 失败不阻塞同批其他 Work。
 
 视频 `SCRIPT.md` 的口播正文可附成对 `scene-index` 注释包围的非口播 Scene 索引；配音、统计或对齐使用 `./work script text`。Research 按呈现需求准备候选材料，不规定实现；Plan 写清实际采用的屏幕文字、来源与声画取舍，不复制 Script/Research 全文。文字主导与动效主导独立于工程 Template；实际语义起点、同卡累积、三种场景策略和观看检查见 [表达合同](.studio/spec/visual-design.md)。PACKAGE 仅按交付需求生成，不是视频前置。
 
@@ -91,11 +81,31 @@ Draft 与 Final 生命周期：
 ./work finalize
 ```
 
-无文件参数注册素材齐备的 Studio executable Draft，冻结来源和闭合工程；须打开准确登记版本的隔离副本再接受，无整片 Draft MP4 前置。生产 Variant 可独立 Finalize，不等待其他账号；从接受快照渲染、保留正式收据并完成编码 QA，不重审未变设计。Draft 与 test-work 不导出视频，Studio 受限时也不以短段或预渲染镜头绕过。软归档是独立管理标记，无 Final 也可使用，不搬目录、不清理依赖；Finalize 不自动归档，也不包含发布/上传。
+无文件参数注册素材齐备的 Studio executable Draft，冻结来源和闭合工程；须打开准确登记版本的隔离副本再接受，无整片 Draft MP4 前置。生产 Variant 可独立 Finalize，不等待其他账号；从接受快照渲染、保留正式收据并完成编码 QA，不重审未变设计。Draft 与 test-work 不导出视频，Studio 受限时也不以短段或预渲染镜头绕过。成功 Finalize 归档目标 Variant；至少一个版本且全部归档后 Work 才整体归档。编码或 QA 失败不归档；成片已提升但归档记录中断时，重试从准确收据恢复，不重复编码。Finalize 不包含发布/上传。
 
-## v3.3 候选边界
+## 归档、反悔与导航
 
-系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。候选提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series`，但可无账号、零 Variant 先准备共享内容；明确账号时用 `--account <id> --variant-id <id>` 一步创建 Work 与版本，新生产 Variant 仍须已登记账号，可另指定 `--batch`、`--theme`、`--mode card|explainer|showcase` 与 `--ratio`，showcase 必须同时指定 `--submodule pdoom|science`，Theme/Background/Motion 可选且不继承账号外观；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。无显式、账号或系列模式时默认 `card`，不再默认填 Profile。系列身份/版本/规格、账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；`purpose=ip` 推荐 `explainer`，但不改默认值。播客新建与三位序号规则不变。
+`work list` 默认展示 active（含 parked），`--archived` 看归档、`--all` 看全部；`--tree` 和 WorkStore 的 `浏览目录.md` 展示同一份标题、系列号、版本归档数、焦点、等待事项与最近导出。工程、最新和历史成片均链接到准确对象，容量按需盘点，未知不当成 0。
+
+```bash
+./work list --archived --tree
+./work reopen <work-id> --variant-id <variant-id>
+./work --work <work-id> archive --variant-id <variant-id> --outcome abandoned
+./work --work <work-id> storage inspect
+./work --work <work-id> storage cleanup
+# 核对上一步清单后执行可回收缓存清理
+./work --work <work-id> storage cleanup --apply
+```
+
+对成片不满意，取消原 Variant 归档继续改，不新建 Work 或 successor。新增版本或重开任一版本后 Work 回 active，其他版本保持归档；零版本不自动完成。未导出版本可手动归档并显示未导出。归档与恢复不搬目录；`park` 只暂停 Work，`resume` 解除暂停，不改等待事项、兄弟版本归档或 Studio 路径。
+
+历史条目共同保留成片与当次收据；旧散装成片缺少可证明来源时显示历史来源未知。归档保留反悔所需文件。`storage cleanup` 默认仅预览，`--apply` 才清理证明归属、可重建、无引用且进程已停止的缓存；原媒体、源、接受快照、历史成片、未知内容和失败证据保留。
+
+已退役或未知 Work 会明确报告，不再执行旧制作流程，也不阻断无关视频创建；本版本不自动删除旧作品文件。
+
+## 账号、系列与制作版本
+
+系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series`，但可无账号、零 Variant 先准备共享内容；明确账号时用 `--account <id> --variant-id <id>` 一步创建 Work 与版本，新生产 Variant 仍须已登记账号，可另指定 `--batch`、`--theme`、`--mode card|explainer|showcase` 与 `--ratio`，showcase 必须同时指定 `--submodule pdoom|science`，Theme/Background/Motion 可选且不继承账号外观；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。无显式、账号或系列模式时默认 `card`，不再默认填 Profile。系列身份/版本/规格、账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；`purpose=ip` 推荐 `explainer`，但不改默认值。
 
 静态外观支持 schema 2 Theme/Background/Motion 资产，沿用 `component pack/import/accept`，不另建主题库。新账号以 `{ref,kind,package_sha256}` 保存 theme/background，motion 槽位可显式设 null。`appearance resolve --account <id> --appearance-file <json>` 只读展示最终选择；`new`/`variant add` 同样接受 `--appearance-file`、独立 `--background <id@vN>`、`--fps` 和 `--seed`。锁与真实 vendor 一起冻结并纳入 preview，不依赖源库在线。字段及参数结构见 [资产合同](.studio/spec/hyperframes.md)。候选能力不等于已部署；选择 UI、真实 Paper 拆分和 Windows 原生换配效果不由这些合同证明。
 
@@ -107,11 +117,11 @@ card 与数学单片只复用冻结库资产，不调用 Opus；card 镜头可�
 
 RC2 视频 Work 的全局 ID 与系列号独立递增且不封顶于 999；`name` 与 `series move <id>` 不改 ID/目录，旧系列号保留为查询别名。`list --tree`、`find --series <id> --number <n> [--account <id>]`、`account get <id>` 和可重建的 WorkStore `浏览目录.md` 用于定位。旧视频 Work 的一次性改名只经 `migrate dry-run --output <map.json>` 审阅映射，再由 `migrate apply --mapping <map.json>` 显式执行；缺用途或含糊标题可用 `--purpose-overrides` / `--title-overrides` JSON 映射重做 dry-run。若一项被阻断，可用重复的 `--only <old-id>` 生成安全子集映射；同系列须按旧 ID 顺序迁移。映射文件必须新建于 WorkStore 外。迁移只在 WSL 合成 WorkStore 验证，尚未对生产 WorkStore dry-run/apply；工具部署状态以目标根的部署收据为准。
 
-三项入口、四阶段及历史兼容见 [v3.3 合同](docs/PRD/hyperframes-v33-production-contract.md)，RC2 范围见 [RC2 执行方案](docs/PRD/hyperframes-rc2-execution-plan.md)。工具安装不等于 Remotion Windows 原生 Studio 联动、真实生产 Finalize/缓存复用或新 Work 内容验收；这些结果须分别取得证据，不以 mock 或文档冒充完成。除 RC2 明确的一次性旧视频 Work 身份迁移外，不批量迁移播客、接受快照与 Final。
+三项入口、四阶段及历史兼容见 [v3.3 合同](docs/PRD/hyperframes-v33-production-contract.md)，RC2 范围见 [RC2 执行方案](docs/PRD/hyperframes-rc2-execution-plan.md)。工具安装不等于 Remotion Windows 原生 Studio 联动、真实生产 Finalize/缓存复用或新 Work 内容验收；这些结果须分别取得证据，不以 mock 或文档冒充完成。除 RC2 明确的一次性旧视频 Work 身份迁移外，不批量迁移旧作品、接受快照与 Final。
 
 ## v3.4.1 补充
 
-[已批准补充方案](docs/PRD/hyperframes-v341-supplement.md) 增加归档生产 Work 的同号继任，并取消视频 main 的选择、继承与交付特权。Work 不属于账号；零 Variant 可整理共享内容、查看状态与切换 Work，但不能制作、预览或 Finalize。多版本无准确选择时返回候选，不自动选择 main；Current 只表示焦点，不跨 Work 沿用。`required_variants` 只表示明确交付集合，空集合或零版本不算完成。已有 main、账号冻结、接受和 Final 保持兼容；播客合同不变。
+[已批准补充方案](docs/PRD/hyperframes-v341-supplement.md) 增加归档生产 Work 的同号继任，并取消视频 main 的选择、继承与交付特权。Work 不属于账号；零 Variant 可整理共享内容、查看状态与切换 Work，但不能制作、预览或 Finalize。多版本无准确选择时返回候选，不自动选择 main；Current 只表示焦点，不跨 Work 沿用。v3.8 按所有现存 Variant 的归档状态汇总 Work，不再用 `required_variants` 维护另一套完成判据；零版本不算完成。已有 main、账号冻结、接受和 Final 保持兼容。
 
 继任入口为 `work successor <source-work> --source-variant <id> --source-version draft-vNNN --account <id> [--variant-id <id>] [--title <title>] [--detached]`。它从准确归档源的接受版本建立新实体与自有内容，不继承接受或 Final，保留原系列号且不改变高水位。`work find --series <id> --number <n>` 定位当前对象，`--history` 查看完整链；旧 ID/别名仍定位旧实体。普通新一期继续递增，归档或删除继任不使查询回退旧对象。日常修订或账号适配仍使用现有活动 Work，不以继任替代。文档不代表已部署或真实作品已变更。
 
@@ -138,9 +148,6 @@ RC2 视频 Work 的全局 ID 与系列号独立递增且不封顶于 999；`name
 - `AGENTS.md`：环境与权限边界。
 - `.studio/`：工作流、能力表、规范、Recipe、模板和生命周期 CLI。
 - `.agents/skills/hyperframes-codex-workflow/`：阶段路由 Skill 与可选的旧外观参考。
-- `.agents/skills/podcast-quote-image/`：转录理解、原文证据整理与 3 个文章候选方案 Skill。
-- `.agents/skills/xiaohongshu-article-copy/`：标题、开篇、每图文案、DBS 检查、取帧、渲染与 QA Skill。
-- `.agents/skills/native-subtitle-quote-image/`：无法转录时经人工确认启用的 [原版 v1.0.0 Skill](https://github.com/chengyi-ai/native-subtitle-quote-image/tree/f1fa5b70448f620ea92179357eca4b0222481b9d)。
 - `work`：无第三方依赖的本地 Work CLI。
 
 ## 私有内容
@@ -180,7 +187,7 @@ Windows 日常直接打开 `D:\AI\AI+hyperframes`；工具实际位于同根 `ru
 
 一次命令解析配置一次，Preview/render 固定本次输入；更新前通过已有进程管理停止相关进程，以最小互斥防止启动和更新交错，不热换依赖。配置变更只影响后续命令，Agent 更新后重读根规则。
 
-待安装 ZIP/staging 严格校验全部清单、hash 和路径；部署根只校验拥有的管理文件，保留合法用户文件和本地配置。更新先备份再覆盖管理文件，只有旧清单拥有且新版移除的文件可清理；用户修改冲突保留并报告，中断可检测恢复，不全根 mirror/delete。
+待安装 ZIP/staging 严格校验全部清单、hash 和路径；部署根只校验拥有的管理文件，保留合法用户文件和本地配置。更新先备份再覆盖管理文件；仍管理的文件有修改时拒绝覆盖。退出管理的文件未修改才删除，修改过的原字节保存到不会被发现为 Skill 的退役保留位置，记录原路径和摘要，更新可继续且回滚可恢复。未管理同名内容不覆盖，无法安全安置则报告冲突；不全根 mirror/delete。回滚会恢复原有用户修改并列出路径；这类根仍可能无法通过严格 `verify-root`，需处理修改后使用，不能把原包摘要改成用户文件摘要来绕过校验。
 
 WSL 固定部署入口（执行即更新指定根，必须已有该目标的部署授权）：
 

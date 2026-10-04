@@ -2,7 +2,7 @@
 
 本文件适用于 Claude Code 在 WSL 生产根 `/mnt/d/AI/AI+hyperframes` 的会话，不适用于 `/home/jym/workspace/hyperframes+AI` 开发仓。读取根 [AGENTS.md](AGENTS.md) 的授权边界；本文件不增加发布、外部服务、部署或接受权限。有 `AGENTS.local.md` 时同时读取。
 
-CLI 只用同根 `./work-wsl.sh` 调用 Windows `work.cmd`。先确定任务类型和准确授权对象；同一 Work/Variant 只允许一个执行者。不手改 Current、Binding、接受记录、配置或已部署工具。所有内容留在唯一生产根，只使用 Windows 官方 Studio 的截图和诊断，不在 WSL 另起 Studio、浏览器渲染器或导出 Draft 视频。生命周期见 [.studio/workflow.md](.studio/workflow.md)。
+CLI 只用同根 `./work-wsl.sh` 调用 Windows `work.cmd`。先确定任务类型和准确授权对象；同一 Work/Variant 只允许一个执行者。不手改 Current、Binding、接受记录、配置或已部署工具。所有内容留在唯一生产根，只使用 Windows 官方 Studio 的截图和诊断，不在 WSL 另起 Studio、浏览器渲染器或导出 Draft 视频。Work 管一期内容，Variant 管独立制作版本；正式导出成功后归档该版本，反悔在原版本取消归档后继续。生命周期见 [.studio/workflow.md](.studio/workflow.md)。
 
 ## Showcase 制作
 

@@ -101,13 +101,16 @@ def verify_package(root):
     return manifest
 
 
-def verify_root(root):
+def verify_root(root, *, retained=None):
     if safe(root, PENDING).exists():
         raise ValueError("Interrupted deployment; run recover before work")
     state = read(safe(root, MANIFEST))
     managed(state["files"])
     for name, value in state["files"].items():
-        if digest(safe(root, name)) != value:
+        path = safe(root, name)
+        if retained is not None and name not in retained:
+            continue
+        if digest(path) != value:
             raise ValueError(f"Locally modified managed file: {name}")
     return state
 
@@ -281,7 +284,11 @@ def deploy(package, root, config_path, keep=2):
         idle(root)
         if safe(root, PENDING).exists():
             raise ValueError("Interrupted deployment; run recover")
-        prior = verify_root(root) if safe(root, MANIFEST).exists() else {"files": {}}
+        retained = set(manifest["files"]) | {".release.json"}
+        if manifest.get("package_kind") == "tools":
+            # Tools-only updates continue managing the installed runtime unchanged.
+            retained.update(name for name in read(safe(root, MANIFEST))["files"] if name.startswith("runtime/"))
+        prior = verify_root(root, retained=retained) if safe(root, MANIFEST).exists() else {"files": {}}
         config_file = safe(root, CONFIG)
         config = read(config_file if config_file.exists() else config_path)
         if config_file.exists() and config_path and read(config_path) != config:
@@ -307,7 +314,30 @@ def deploy(package, root, config_path, keep=2):
             marker = Path(config["work_root"]) / ".runtime/review.json"
             if not marker.exists():
                 extras[marker.relative_to(root).as_posix()] = (json.dumps({"mode": "review", "review_id": marker.parent.parent.name, "ready": True}) + "\n").encode()
-        names = (set(prior["files"]) - set(files)) | changed | set(extras) | {MANIFEST}
+        retired = set(prior["files"]) - set(files)
+        skill_roots = {"/".join(name.split("/")[:3]) for name in retired if name.startswith(".agents/skills/")}
+        for skill in skill_roots:
+            if any(name.startswith(skill + "/") for name in files):
+                continue
+            for path in safe(root, skill).rglob("*"):
+                relative = path.relative_to(root).as_posix()
+                safe(root, relative)
+                if path.is_file() and relative not in prior["files"]:
+                    raise ValueError(f"Unmanaged retired Skill content: {relative}; relocate explicitly before updating")
+        preserved = []
+        for name in sorted(retired):
+            path = safe(root, name)
+            if path.exists() and not path.is_file():
+                raise ValueError(f"Retired managed path is not a regular file: {name}")
+            if path.is_file() and digest(path) != prior["files"][name]:
+                target = f"{STATE}/retired-files/{uuid.uuid4().hex}.bin"
+                if safe(root, target).exists():
+                    raise ValueError(f"Retirement preservation conflict: {target}")
+                data = path.read_bytes()
+                extras[target] = data
+                preserved.append({"original": name, "preserved": target,
+                                  "sha256": hashlib.sha256(data).hexdigest()})
+        names = retired | changed | set(extras) | {MANIFEST}
         backup_name = f"{STATE}/deploy-backups/{uuid.uuid4().hex}"
         backup = safe(root, backup_name)
         before = {}
@@ -318,12 +348,13 @@ def deploy(package, root, config_path, keep=2):
                 target = safe(backup, name)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, target)
-        state = {"release": manifest["release"], "files": files, "backup": backup_name}
+        state = {"release": manifest["release"], "files": files, "backup": backup_name,
+                 "retired_preserved": prior.get("retired_preserved", []) + preserved}
         extras[MANIFEST] = (json.dumps(state, indent=2) + "\n").encode()
         after = dict(files)
         after.update({name: hashlib.sha256(data).hexdigest() for name, data in extras.items()})
         transaction = {"backup": backup_name, "before": before, "after": after,
-                       "retention": "managed-v1",
+                       "retention": "managed-v1", "retired_preserved": preserved,
                        "config_sha256": digest(config_file) if config_file.exists() else after[CONFIG]}
         write_json(backup / "transaction.json", transaction)
         write_json(safe(root, PENDING), transaction)
@@ -333,7 +364,7 @@ def deploy(package, root, config_path, keep=2):
                 if name in writes or name in extras:
                     replace_file(writes.get(name), target, extras.get(name))
                 else:
-                    target.unlink()
+                    target.unlink(missing_ok=True)
             write_json(safe(root, MANIFEST), state)
             safe(root, PENDING).unlink()
             verify_root(root)
@@ -366,7 +397,10 @@ def recover(root, rollback=False):
         else:
             transaction = read(safe(root, PENDING))
         restore(root, transaction)
-    return {"restored": True}
+    modifications = [item["original"] for item in transaction.get("retired_preserved", [])]
+    return {"restored": True, "restored_modified_files": modifications,
+            "integrity": "restored_with_local_modifications" if modifications else "restored",
+            "note": "Original local edits restored; verify-root remains strict. Review edits before using this release." if modifications else None}
 
 
 def main():

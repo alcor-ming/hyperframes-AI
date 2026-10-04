@@ -77,7 +77,7 @@ class SuccessorTest(unittest.TestCase):
             self.assertEqual(before, cli.snapshot_tree_manifest(old))
         next_id = self.new("Next episode")
         self.assertEqual(16, cli.read_frontmatter(cli.locate_work(self.root, next_id)[0] / "WORK.md")["series_number"])
-        rows = json.loads(self.run_cli("list"))
+        rows = json.loads(self.run_cli("list", "--all"))
         self.assertEqual(3, sum(row["location"] == "archive" for row in rows))
         plan = cli.work_migration.build_plan(self.root, cli.SimpleNamespace(**vars(cli)))
         self.assertFalse(plan["blockers"], plan["blockers"])

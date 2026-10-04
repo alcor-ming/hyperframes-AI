@@ -10,6 +10,8 @@
 ./work --work <id> --variant <id> preview render <draft-id> --output <final.mp4> --final
 ```
 
-新编码文件检查流、规格（60fps high）、原音时长、全量解码、代表帧及必要音频核验；实际缺陷修复后重渲染。Final Error 阻止 `./work finalize ... --qa-passed`，通过后只完成目标 Variant 的 Finalize；软归档是独立标记，不自动归档、不搬目录。
+新编码文件检查流、规格（60fps high）、原音时长、全量解码、代表帧及必要音频核验；实际缺陷修复后重渲染。Final Error 阻止 `./work finalize ... --qa-passed`，通过后完成目标 Variant 的 Finalize 并归档该版本；至少一个 Variant 且全部归档才自动归档 Work，路径保持不变。取消归档只重开指定版本，保留上次成片和冻结证据。
+
+每次历史轮转共同保存 MP4 和当次 manifest，历史导航、继任接受证明与引用保护使用同一条目。旧散装 MP4 缺少可证明收据时标为历史来源未知，保留原件。轮转或归档状态写入失败可从准确收据恢复，不重复渲染、不重复历史，也不破坏有效 Final。
 
 QA 按影响范围：已接受且未变仅检查来源/证据适用性；局部变化只查受影响 Scene、状态和交接；共享布局/时间线/宿主变化按依赖扩展。编码 QA 不重审已接受观点/设计，仅 Finalize/归档核对来源、收据、文件、目标及归档结果，不重复审片/渲染。只报告结果与真实未验证项。

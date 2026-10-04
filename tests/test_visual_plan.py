@@ -128,7 +128,7 @@ class VisualPlanTest(unittest.TestCase):
             self.run_cli("finalize", str(final), "--qa-passed")
             renderer.assert_called_once()
         archived = self.variant
-        self.assertEqual("active", WORK_CLI.locate_work(self.root, self.variant.parent.parent.name)[1])
+        self.assertEqual("archive", WORK_CLI.locate_work(self.root, self.variant.parent.parent.name)[1])
         self.assertEqual(final.read_bytes(), (archived / "final/final.mp4").read_bytes())
         self.assertEqual(original, (archived / "previews/draft-v002/source-snapshot/compositions/S01.html").read_bytes())
 

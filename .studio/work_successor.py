@@ -183,7 +183,7 @@ def command(root, args, api):
                         "CREATED_AT": api.now(), "WORKFLOW": "hyperframes_video", "REQUIRED_VARIANTS": "[]"}))
                     work_meta = api.read_frontmatter(staging / "WORK.md")
                     work_meta.update(purpose=source_meta["purpose"], series=source_meta["series"],
-                                     series_number=source_meta["series_number"], required_variants=[], shared_source=True,
+                                     series_number=source_meta["series_number"], shared_source=True,
                                      source_work=source.name, source_variant=args.source_variant, source_version=args.source_version,
                                      predecessor=source.name)
                     api.atomic_write(staging / "WORK.md", "---\n" + json.dumps(work_meta, ensure_ascii=False)

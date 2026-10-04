@@ -6,13 +6,15 @@
 
 日期：2026-09-22
 
+v3.8 化繁为简的当前产品合同见[制作工作流](../../.studio/workflow.md#归档恢复与停放)、[Final 合同](../../.studio/spec/hyperframes-final.md)及 [README](../../README.md#归档反悔与导航)。本版退出播客制作，保留 Work / Variant 两层；正式导出归档准确版本，全部非空版本集合归档后汇总 Work，可在原版本取消归档。历史成片与收据共同保留；停放保持路径和会话稳定；容量与缓存清理按需执行。退役更新保留用户修改并退出活动入口，运行时按实际消费者裁剪。部署与生产结果仍单独记录。
+
 v3.6.1 增量见 [Opus 动效 B-roll 与 Motion v3](./hyperframes-v361-motion-broll.md)（Motion v3、混合版本闭包、B-roll 插槽与节奏合同已实现并完成 WSL 隔离验证）与 [资产库镜头创作指南](./hyperframes-v361-broll-asset-authoring.md)（已定稿为管理包指南及需求单）。用户已授权部署到统一 Windows 根，实际结果见本次部署收据；生产内容验收与首批库制作不在本任务内。
 
 v3.4.3 增量见 [信息承载、选择性配图与流程更新](./hyperframes-v343-text-imagery.md)：完整上屏信息单元、逐 Scene 配图取舍、Plan 阶段查库与检查、D1 反向核对、场景源/配方发现及只读漏登审计。WSL 实施与隔离回归已完成；未部署，Windows 原生与生产未验证，不包含生产 Work 修正或 Windows 资产补登记。
 
 v3.4.2 基线见 [上屏提炼与持续视觉变化](./hyperframes-v342-visual-outcomes.md)：A1/B1/Q1 与 D1/D2 保留，Plan 信息格式、检查路由与默认配图策略由 v3.4.3 更新（未部署，Windows 原生与生产未验证）。
 
-当前增量合同见 [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：归档同号继任、零 Variant 内容准备与平级账号版本；覆盖 RC2 中必须先绑定账号及 main 优先的旧假设。[RC2 执行方案](./hyperframes-rc2-execution-plan.md) 与 v3.3 制作工程合同仍为其余既有基线。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作采用三项入口、四阶段、独立 Finalize 与软归档。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
+当前增量合同见 [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：归档同号继任、零 Variant 内容准备与平级账号版本；覆盖 RC2 中必须先绑定账号及 main 优先的旧假设。[RC2 执行方案](./hyperframes-rc2-execution-plan.md) 与 v3.3 制作工程合同仍为其余既有基线。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作仍采用三项入口、四阶段与独立 Finalize，归档和恢复按 v3.8 当前合同执行。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
 
 ## 当前路径
 
@@ -84,6 +86,8 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 - 历史决策保留在[原决策台账](./_ledger/component-driven-motion-vnext.md)；不回写过去记录，不将已替换的五阶段、双画幅或透明根层规则继续施加给新模块。
 
 ## PRD 索引
+
+- v3.8 化繁为简：[Work / Variant 生命周期与导航](../../.studio/workflow.md#归档恢复与停放)、[Final 与历史收据](../../.studio/spec/hyperframes-final.md)。开发任务计划留在本地 Trellis，不作为产品配送内容。
 
 - [v3.7 流程优化与复盘](./hyperframes-v37-simplify-retro.md)：v3.7.0（产品线档案、导演 Brief 与按 A/B 段分镜、A/B 错相交接、静止与延续测量、可切换 critic、三层设置）已在 WSL 开发仓实现并通过隔离验证；Windows 原生、宿主指定 critic 模型与生产验收未执行；v3.7.1 画面复盘（单片复盘、样片记忆、已知缺陷、跨片汇总、数学诊断修正）已按审查补定在 WSL 开发仓实施并通过隔离验证；Windows 原生、指定 critic 模型看图与生产验收未执行；v3.7.2 内容复盘（第 6 节 C1–C8 与 AC1–AC8，含实验变量、跨期对照与 6.6 数据利用）已在 WSL 开发仓实现并通过合成 fixture、包校验与浏览器 / Studio 验收；Windows 原生与生产验收未执行，未部署；简化设计移到 v3.8。
 - [v3.6 showcase 模式、技术提炼与数学系列正式链路](./hyperframes-v36-showcase-math.md)：showcase、math-chain 与 math-kit 开发源码已落地，自动化验收见各自 Trellis 任务；未部署，Windows 原生与生产效果待验。

@@ -36,7 +36,9 @@ class V35RulesTests(unittest.TestCase):
         self.assertNotIn("bottom_subtitles", caps)
         self.assertNotIn("creator_draft:", caps)
         self.assertNotIn("publish_payload:", caps)
-        self.assertIn("podcast_quote_image: [bundled_asr, image_generation]", caps)
+        self.assertNotIn("podcast_quote_image", caps)
+        self.assertIn("hyperframes_video:", caps)
+        self.assertIn("global: [prompt_library, public_publishing]", caps)
 
     def test_design_and_plan_preserve_explainer_contract(self):
         design = read(".studio/spec/visual-design.md")

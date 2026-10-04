@@ -24,7 +24,7 @@ class PeerVariantTest(unittest.TestCase):
     def run_cli(self, *arguments, expected=0):
         output, error = io.StringIO(), io.StringIO()
         with redirect_stdout(output), redirect_stderr(error):
-            result = cli.main(list(arguments), root=self.root)
+            result = cli.main(["--json", *arguments], root=self.root)
         self.assertEqual(expected, result, error.getvalue())
         return output.getvalue().strip() or error.getvalue().strip()
 
@@ -37,8 +37,8 @@ class PeerVariantTest(unittest.TestCase):
         self.new("Previous", "--account", "a")
         work = self.new()
         self.assertEqual([], cli.variant_paths(work))
-        self.assertEqual([], cli.required_variants(work))
-        self.assertFalse(cli.all_required_finals_exist(work))
+        self.assertNotIn("required_variants", cli.read_frontmatter(work / "WORK.md"))
+        self.assertEqual("active", cli.locate_work(self.root, work.name)[1])
         self.assertIsNone(json.loads(self.run_cli("current"))["variant"])
         self.assertEqual("尚未创建制作版本", json.loads(self.run_cli("status"))["message"])
         self.assertEqual(1, cli.read_frontmatter(work / "shared/RESEARCH.md")["script_revision"])
@@ -73,10 +73,13 @@ class PeerVariantTest(unittest.TestCase):
         self.assertEqual("main", json.loads(self.run_cli("current"))["variant"])
         self.assertIn("Unknown variant", self.run_cli("--variant", "missing", "use", other.name, expected=2))
         self.assertEqual(work.name, json.loads(self.run_cli("current"))["work"])
-        self.run_cli("archive", "--outcome", "stored")
+        self.assertIn("Select --variant-id", self.run_cli("archive", "--outcome", "stored", expected=2))
+        self.run_cli("archive", "--outcome", "stored", "--variant-id", "main")
         self.run_cli("use", other.name)
-        self.run_cli("reopen", work.name)
-        self.assertIsNone(json.loads(self.run_cli("current"))["variant"])
+        self.run_cli("reopen", work.name, "--variant-id", "main")
+        self.assertEqual("main", json.loads(self.run_cli("current"))["variant"])
+        self.assertEqual("active", cli.read_json(work / "variants/main/variant.yaml")["lifecycle"])
+        self.assertEqual("active", cli.read_json(work / "variants/b/variant.yaml")["lifecycle"])
 
     def test_shared_source_explicit_branch_and_frozen_accounts(self):
         work = self.new("Shared", "--account", "a", "--variant-id", "first")
@@ -96,31 +99,18 @@ class PeerVariantTest(unittest.TestCase):
         self.assertEqual(7, cli.read_frontmatter(branch / "SCRIPT.md")["revision"])
         self.assertNotEqual(work / "shared/SCRIPT.md", cli.input_path(branch, "SCRIPT.md"))
 
-    def test_empty_delivery_is_not_complete_and_legacy_main_still_reads(self):
+    def test_final_metadata_alone_does_not_archive_and_single_variant_is_selected(self):
         work = self.new("Delivery", "--account", "a")
         variant = work / "variants/main"
         state = cli.read_json(variant / "variant.yaml")
         state["current_final"] = "final.mp4"
         cli.write_variant(variant, state)
+        (variant / "final").mkdir(exist_ok=True)
         (variant / "final/final.mp4").write_bytes(b"fixture")
-        self.assertFalse(cli.all_required_finals_exist(work))
-        metadata = cli.read_frontmatter(work / "WORK.md")
-        metadata["required_variants"] = ["main"]
-        cli.atomic_write(work / "WORK.md", "---\n" + json.dumps(metadata) + "\n---\n")
-        self.assertTrue(cli.all_required_finals_exist(work))
+        self.assertEqual("active", cli.locate_work(self.root, work.name)[1])
+        self.assertEqual("active", cli.read_json(variant / "variant.yaml")["lifecycle"])
         cli.clear_pointer(self.root, "current-variant")
         self.assertEqual("main", json.loads(self.run_cli("status"))["variant"]["id"])
-
-    def test_podcast_keeps_existing_main_contract(self):
-        identity = self.run_cli("new", "Podcast", "--workflow", "podcast_quote_image")
-        work, _ = cli.locate_work(self.root, identity)
-        self.assertEqual(["main"], cli.required_variants(work))
-        self.assertEqual(["main"], [path.name for path in cli.variant_paths(work)])
-        self.run_cli("variant", "add", "second")
-        self.assertEqual("second", json.loads(self.run_cli("status"))["variant"]["id"])
-        self.assertEqual("main", json.loads(self.run_cli("--work", identity, "status"))["variant"]["id"])
-        self.run_cli("use", identity)
-        self.assertEqual("main", json.loads(self.run_cli("current"))["variant"])
 
 
 if __name__ == "__main__":

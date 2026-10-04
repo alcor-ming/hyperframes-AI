@@ -61,6 +61,7 @@ import control_plane
 import appearance
 import explainer
 import storage
+import work_storage
 import appearance_rebind
 import research_catalog
 import work_migration
@@ -72,7 +73,7 @@ import content_retro
 import lines
 import settings as work_settings
 
-WORKFLOWS = {"hyperframes_video", "podcast_quote_image"}
+WORKFLOWS = {"hyperframes_video"}
 TEMPLATES = {"talking_head", "pure_hyperframes"}
 PROFILES = {"optical_fluidity", "kami_editorial", "monochrome_atelier"}
 RATIOS = {"16:9", "4:3", "9:16", "source"}
@@ -84,9 +85,6 @@ WAIT_REASONS = {
     "draft_feedback": ("waiting_user", "Wait for Draft feedback or acceptance"),
     "voiceover": ("waiting_asset", "Wait for the final voiceover"),
     "external_asset": ("waiting_asset", "Wait for an external media asset"),
-    "article_selection": ("waiting_user", "Wait for one article plan selection"),
-    "transcript_fallback": ("waiting_user", "Wait for the transcript fallback decision"),
-    "source_metadata": ("waiting_user", "Wait for source metadata"),
 }
 SNAPSHOT_ITEMS = ("index.html", "compositions", "DESIGN.md", "project-config.json")
 ID_PATTERN = re.compile(r"^[\w.-]+$", re.UNICODE)
@@ -641,7 +639,9 @@ def animation_plan_contains_component_ref(path: Path, component_ref: str) -> boo
 
 
 def work_workflow(work: Path) -> str:
-    value = read_frontmatter(work / "WORK.md").get("workflow", "hyperframes_video")
+    if work.is_symlink():
+        raise HarnessError("Linked Work is isolated")
+    value = read_frontmatter(work / "WORK.md").get("workflow")
     if value not in WORKFLOWS:
         raise HarnessError(f"Unknown workflow: {value}")
     return str(value)
@@ -735,19 +735,6 @@ def series_number(root: Path, rows: list[dict[str, Any]], state: dict[str, Any],
     return max(int(state["series_highwater"].get(series, 0)), *observed, 0) + 1
 
 
-def next_work_number(rows: Iterable[dict[str, Any]], workflow: str) -> int:
-    numbers: list[int] = []
-    for row in rows:
-        if row["workflow"] != workflow:
-            continue
-        number = work_id_number(row["id"], workflow)
-        if number is None:
-            number = title_number(row["title"])
-        if number is not None:
-            numbers.append(number)
-    return max(numbers, default=0) + 1
-
-
 def work_root_config_path(root: Path) -> Path:
     return root / ".studio" / ".runtime" / "work-root"
 
@@ -818,6 +805,48 @@ def archived_work_paths(root: Path) -> Iterable[Path]:
     return paths
 
 
+def variant_lifecycle(work: Path, state: dict[str, Any]) -> str:
+    # Old soft archives have no per-Variant field; keep them archived until reopened.
+    return state.get("lifecycle") or ("archived" if (work / ".runtime/archive.json").is_file() else "active")
+
+
+def ensure_mutable_work(root: Path, work: Path) -> None:
+    require_workflow(work, "hyperframes_video")
+    if any(work.name in record["chain"][:-1] for record in identity_state(root)["successions"].values()):
+        raise HarnessError("Succession predecessor must remain archived")
+    if work.parent.parent.name == "archive":
+        raise HarnessError("Legacy physical archive remains read-only; create a new Work for further production")
+
+
+def sync_work_lifecycle(root: Path, work: Path) -> None:
+    variants = variant_paths(work)
+    if variants and all(variant_lifecycle(work, read_json(path / "variant.yaml")) == "archived" for path in variants):
+        if not (work / ".runtime/archive.json").is_file():
+            move_to_archive(root, work, "variants_archived")
+    else:
+        (work / ".runtime/archive.json").unlink(missing_ok=True)
+
+
+def materialize_legacy_lifecycle(work: Path) -> None:
+    # Persist siblings before removing an old Work-only archive marker.
+    for path in variant_paths(work):
+        state = read_json(path / "variant.yaml")
+        if "lifecycle" not in state:
+            state["lifecycle"] = variant_lifecycle(work, state)
+            write_variant(path, state)
+
+
+def work_location(work: Path, physical: str) -> str:
+    if (work / ".runtime/archive.json").is_file() or physical == "archive":
+        return "archive"
+    if (work / ".runtime/parked.json").is_file():
+        return "parked"
+    # Old parked directories stay at their original path after v3.8 resume.
+    if physical == "parked" and not (work / ".runtime/resumed.json").is_file():
+        return "parked"
+    return "active"
+
+
 def locate_work(root: Path, work_id: str) -> tuple[Path, str]:
     validate_id(work_id, "work id")
     work_id = identity_state(root)["aliases"].get(work_id, work_id)
@@ -825,7 +854,7 @@ def locate_work(root: Path, work_id: str) -> tuple[Path, str]:
     for location in ("active", "parked"):
         candidate = works_root(root) / location / work_id
         if candidate.is_dir():
-            return candidate, "archive" if (candidate / ".runtime" / "archive.json").is_file() else location
+            return candidate, work_location(candidate, location)
     for candidate in archived_work_paths(root):
         if candidate.name == work_id:
             return candidate, "archive"
@@ -834,29 +863,69 @@ def locate_work(root: Path, work_id: str) -> tuple[Path, str]:
 
 def list_work_rows(root: Path, *, validate_identity: bool = True) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    def row_for(path: Path, location: str) -> dict[str, Any]:
-        metadata = read_frontmatter(path / "WORK.md")
-        variants = []
-        for variant in variant_paths(path):
-            state = read_json(variant / "variant.yaml")
-            variants.append({"id": variant.name, "name": state.get("name") or variant.name,
-                             "account": state.get("account"), "account_revision": state.get("account_revision"),
-                             "status": state.get("status"), "wait_for": state.get("wait_for"),
-                             "next_action": state.get("next_action")})
-        only = variants[0] if len(variants) == 1 else {}
-        return {"id": path.name, "title": str(metadata.get("title", "")),
-                "created_at": str(metadata.get("created_at", "")),
-                "workflow": str(metadata.get("workflow", "hyperframes_video")),
-                "purpose": metadata.get("purpose", "standard"), "series": metadata.get("series"),
-                "series_number": metadata.get("series_number"), "location": location,
-                "status": only.get("status"), "wait_for": only.get("wait_for"),
-                "next_action": only.get("next_action"), "variants": variants}
+    def row_for(path: Path, physical: str) -> dict[str, Any]:
+        row = {"id": path.name, "title": path.name, "created_at": "", "workflow": "unknown",
+               "purpose": "standard", "series": None, "series_number": None,
+               "location": work_location(path, physical), "path": str(path), "variants": [],
+               "status": None, "wait_for": None, "next_action": None,
+               "current": read_pointer(root, "current-work") == path.name,
+               "archived_variants": 0, "variant_count": 0,
+               "usage": {"bytes": None, "reason": "尚未盘点；运行 work storage inspect"}}
+        try:
+            if path.is_symlink():
+                raise HarnessError("Linked Work is isolated")
+            metadata = read_frontmatter(path / "WORK.md")
+            row.update({key: metadata[key] for key in ("title", "created_at", "workflow", "purpose", "series", "series_number") if key in metadata})
+            require_workflow(path, "hyperframes_video")
+            for variant in variant_paths(path):
+                if variant.is_symlink():
+                    raise HarnessError(f"Linked Variant is isolated: {variant.name}")
+                state = read_json(variant / "variant.yaml")
+                manifest = variant / "final/manifest.json"
+                final = read_json(manifest) if manifest.is_file() else {}
+                history = []
+                for video in sorted((variant / "final/history").glob("*/final.mp4")):
+                    receipt_path = video.parent / "manifest.json"
+                    receipt = read_json(receipt_path) if receipt_path.is_file() else {}
+                    history.append({"path": str(video), "manifest": str(receipt_path) if receipt else None,
+                                    "source_preview": receipt.get("source_preview"),
+                                    "provenance": "recorded" if receipt else "unknown"})
+                for video in sorted((variant / "final/history").glob("*.mp4")):
+                    history.append({"path": str(video), "manifest": None, "source_preview": None, "provenance": "unknown"})
+                row["variants"].append({"id": variant.name, "name": state.get("name") or variant.name,
+                    "account": state.get("account"), "account_revision": state.get("account_revision"),
+                    "ratio": state.get("ratio"), "status": state.get("status"), "wait_for": state.get("wait_for"),
+                    "next_action": state.get("next_action"), "lifecycle": variant_lifecycle(path, state),
+                    "current": row["current"] and read_pointer(root, "current-variant") == variant.name,
+                    "path": str(variant), "project": str(variant / "project"),
+                    "final": str(variant / "final/final.mp4") if (variant / "final/final.mp4").is_file() else None,
+                    "latest_export": final.get("finalized_at"), "source_preview": final.get("source_preview"),
+                    "history": history})
+            row["variant_count"] = len(row["variants"])
+            row["archived_variants"] = sum(item["lifecycle"] == "archived" for item in row["variants"])
+            if len(row["variants"]) == 1:
+                row.update({key: row["variants"][0][key] for key in ("status", "wait_for", "next_action")})
+            usage = path / ".runtime/storage.json"
+            if usage.is_file():
+                row["usage"] = read_json(usage)
+        except (HarnessError, OSError, ValueError, TypeError) as exc:
+            row["error"] = str(exc)
+        # Bad metadata is displayed as an isolated row, never fed into sort/number arithmetic.
+        for key in ("title", "created_at", "workflow", "purpose"):
+            if not isinstance(row[key], str):
+                row["error"] = f"Invalid {key} metadata"
+                row[key] = path.name if key == "title" else "unknown"
+        if row["series"] is not None and not isinstance(row["series"], str):
+            row["error"], row["series"] = "Invalid series metadata", None
+        if row["series_number"] is not None and type(row["series_number"]) is not int:
+            row["error"], row["series_number"] = "Invalid series number metadata", None
+        return row
     for location in ("active", "parked"):
         parent = works_root(root) / location
         if parent.is_dir():
             for path in sorted(parent.iterdir()):
                 if path.is_dir() and not path.name.startswith(".pending-"):
-                    rows.append(row_for(path, "archive" if (path / ".runtime" / "archive.json").is_file() else location))
+                    rows.append(row_for(path, location))
     for path in archived_work_paths(root):
         rows.append(row_for(path, "archive"))
     if validate_identity:
@@ -867,7 +936,7 @@ def list_work_rows(root: Path, *, validate_identity: bool = True) -> list[dict[s
             location_order[row["location"]],
             row["workflow"],
             row.get("series") or "",
-            row.get("series_number") or title_number(row["title"]) or 0,
+            row.get("series_number") if isinstance(row.get("series_number"), int) else title_number(row["title"]) or 0,
             row["created_at"],
             row["id"],
         )
@@ -881,7 +950,9 @@ def selected_work(root: Path, args: argparse.Namespace, *, allow_archive: bool =
         available = ", ".join(row["id"] for row in list_work_rows(root)) or "none"
         raise HarnessError(f"No current work. Available: {available}")
     path, location = locate_work(root, work_id)
-    if location == "archive" and not allow_archive:
+    require_workflow(path, "hyperframes_video")
+    readonly_preview = getattr(args, "preview_command", None) in {"context", "stop", "list", "diff"}
+    if location == "archive" and not allow_archive and not readonly_preview:
         raise HarnessError(f"Work is archived; run 'work reopen {work_id}' first")
     return path, location
 
@@ -894,15 +965,10 @@ def variant_paths(work: Path) -> list[Path]:
 
 
 def selected_variant_id(root: Path, work: Path, args: argparse.Namespace) -> str | None:
+    require_workflow(work, "hyperframes_video")
     variant_id = args.variant_override
     if variant_id and not (work / "variants" / validate_id(variant_id, "variant id")).is_dir():
         raise HarnessError(f"Unknown variant: {variant_id}")
-    if work_workflow(work) == "podcast_quote_image":
-        if not variant_id and not args.work_override:
-            variant_id = read_pointer(root, "current-variant")
-        if not variant_id or not (work / "variants" / variant_id).is_dir():
-            variant_id = "main" if (work / "variants" / "main").is_dir() else None
-        return variant_id
     if not variant_id and read_pointer(root, "current-work") == work.name:
         variant_id = read_pointer(root, "current-variant")
     if not variant_id or not (work / "variants" / variant_id).is_dir():
@@ -917,20 +983,28 @@ def selected_variant(root: Path, work: Path, args: argparse.Namespace) -> tuple[
         available = ", ".join(path.name for path in variant_paths(work)) or "none"
         raise HarnessError(f"No current variant. Select --variant. Available: {available}")
     validate_id(variant_id, "variant id")
-    path = work / "variants" / variant_id
+    path = storage.scoped_path(work, f"variants/{variant_id}")
     if not path.is_dir():
         raise HarnessError(f"Unknown variant: {variant_id}")
     if appearance_rebind.journal_path(path).exists() and getattr(args, "appearance_command", None) != "recover":
         raise HarnessError("Appearance recovery pending; run appearance recover with this exact --work and --variant")
-    return path, read_json(path / "variant.yaml")
+    state = read_json(path / "variant.yaml")
+    command = getattr(args, "command", None)
+    readonly = command in {None, "status", "archive", "reopen", "finalize", "storage", "request"} or (
+        command == "preview" and (getattr(args, "preview_command", None) in {"context", "stop", "list", "diff"}
+                                 or getattr(args, "preview_command", None) == "open" and getattr(args, "preview_id", "current") != "current"))
+    receipt_path = path / ".runtime/finalize.json"
+    pending_final = (path / ".runtime/final-promotion/prepared.json").exists() or (
+        receipt_path.is_file() and read_json(receipt_path).get("state") == "promoted")
+    if pending_final and not readonly:
+        raise HarnessError("Final recovery pending; run finalize before changing production inputs")
+    if not readonly and variant_lifecycle(work, state) == "archived":
+        raise HarnessError(f"Variant is archived; run 'work reopen {work.name} --variant-id {path.name}' first")
+    return path, state
 
 
 def focus_work(root: Path, work: Path, args: argparse.Namespace) -> None:
-    if work_workflow(work) == "podcast_quote_image":
-        variants = variant_paths(work)
-        variant_id = "main" if (work / "variants" / "main").is_dir() else (variants[0].name if variants else None)
-    else:
-        variant_id = selected_variant_id(root, work, args)
+    variant_id = selected_variant_id(root, work, args)
     write_pointer(root, "current-work", work.name)
     if variant_id:
         write_pointer(root, "current-variant", variant_id)
@@ -967,15 +1041,7 @@ def create_video_variant(
     if path.exists():
         raise HarnessError(f"Variant already exists: {variant_id}")
     path.mkdir(parents=True)
-    for directory in (
-        "media",
-        "project",
-        "previews",
-        "final/history",
-        ".history",
-        ".runtime/qa",
-    ):
-        (path / directory).mkdir(parents=True, exist_ok=True)
+    (path / "project").mkdir()
 
     source_research = copy_script_from.parent / "RESEARCH.md" if copy_script_from else None
     script_revision = read_frontmatter(copy_script_from).get("revision", 1) if copy_script_from else 1
@@ -1001,28 +1067,12 @@ def create_video_variant(
         shutil.copy2(source_research, path / "RESEARCH.md")
     else:
         atomic_write(path / "RESEARCH.md", template_text(root, "RESEARCH.template.md", values))
-    atomic_write(path / "PACKAGE.md", "# Package\n\n## 标题\n\n## 封面文字\n\n## 一句话\n\n## 内容概括\n\n")
     atomic_write(
         path / "ANIMATION_PLAN.md",
         template_text(root, "ANIMATION_PLAN.template.md", values),
     )
     metadata = {**read_frontmatter(path / "ANIMATION_PLAN.md"), **plan_metadata(path, read_json(path / "variant.yaml"))}
     atomic_write(path / "ANIMATION_PLAN.md", "---\n" + json.dumps(metadata, ensure_ascii=False) + "\n---\n" + plan_metadata_body(document_body(path / "ANIMATION_PLAN.md"), metadata))
-    return path
-
-
-def create_podcast_quote_variant(root: Path, work: Path, variant_id: str) -> Path:
-    validate_id(variant_id, "variant id")
-    path = work / "variants" / variant_id
-    if path.exists():
-        raise HarnessError(f"Variant already exists: {variant_id}")
-    path.mkdir(parents=True)
-    for directory in ("materials", "artifacts", "frames", "render", "final/history", ".runtime/qa"):
-        (path / directory).mkdir(parents=True, exist_ok=True)
-    values = {"VARIANT_ID": json_string_content(variant_id)}
-    atomic_write(path / "variant.yaml", template_text(root, "PODCAST_QUOTE_VARIANT.template.yaml", values))
-    atomic_write(path / "RESEARCH.md", template_text(root, "PODCAST_QUOTE_RESEARCH.template.md", {}))
-    atomic_write(path / "PACKAGE.md", template_text(root, "PODCAST_QUOTE_PACKAGE.template.md", {}))
     return path
 
 
@@ -1038,10 +1088,6 @@ def create_variant(
     subject_position: str | None = None,
     copy_script_from: Path | None = None,
 ) -> Path:
-    if workflow == "podcast_quote_image":
-        if any(value is not None for value in (template, profile, ratio, subject_position, copy_script_from)):
-            raise HarnessError("podcast_quote_image does not accept video Template, Profile, Ratio, subject, or --from options")
-        return create_podcast_quote_variant(root, work, variant_id)
     if workflow != "hyperframes_video":
         raise HarnessError(f"Unknown workflow: {workflow}")
     return create_video_variant(
@@ -1070,13 +1116,9 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
             appearance.check_mode(series_settings.get("mode"), "Series")
     if args.workflow == "hyperframes_video" and args.purpose != "test" and not series:
         raise HarnessError("Production video Work requires --series")
-    if args.workflow == "podcast_quote_image" and any(
-        value is not None for value in (args.template, args.profile, args.ratio, args.subject_position)
-    ):
-        raise HarnessError("podcast_quote_image does not accept video Template, Profile, Ratio, or subject options")
     ensure_roots(root)
     with naming_lock(root):
-        create_initial_variant = (args.workflow != "hyperframes_video" or args.purpose == "test"
+        create_initial_variant = (args.purpose == "test"
                                   or args.account is not None or getattr(args, "variant_id", None) is not None)
         if not create_initial_variant and any(getattr(args, key, None) is not None for key in (
             "batch", "theme", "background", "appearance_file", "fps", "seed", "mode", "captions", "template", "profile", "ratio", "subject_position"
@@ -1084,17 +1126,13 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
             raise HarnessError("Variant settings require --account; omit them to prepare shared Work content")
         settings = adopted_settings(root, args) if create_initial_variant else {}
         variant_id = validate_id(getattr(args, "variant_id", None) or "main", "variant id")
-        if args.workflow == "podcast_quote_image" and getattr(args, "variant_id", None):
-            raise HarnessError("podcast_quote_image does not accept --variant-id")
         rows = list_work_rows(root)
         identity = identity_state(root)
         existing_ids = {row["id"] for row in rows}
-        number = video_number(root, rows, identity) if args.workflow == "hyperframes_video" else next_work_number(rows, args.workflow)
+        number = video_number(root, rows, identity)
         title_text = semantic_title(args.title, video=args.workflow == "hyperframes_video")
         if args.workflow == "hyperframes_video" and (not title_text or any(char in title_text for char in "\r\n")):
             raise HarnessError("Work title must be non-empty on one line")
-        if args.workflow == "podcast_quote_image":
-            title_text = title_text or "untitled"
         if args.workflow == "hyperframes_video" and args.purpose == "test" and not args.separate:
             existing = [row["id"] for row in rows if row["workflow"] == "hyperframes_video"
                         and row["purpose"] == "test" and row["title"] == title_text]
@@ -1103,8 +1141,6 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
         assigned_series_number = (series_number(root, rows, identity, series)
                                   if args.workflow == "hyperframes_video" and args.purpose != "test" else None)
         while True:
-            if args.workflow == "podcast_quote_image" and number > 999:
-                raise HarnessError("Work name sequence is exhausted")
             work_id = f"work-{args.workflow}-{number:03d}"
             if args.workflow == "hyperframes_video":
                 work_id += f"-{work_slug(title_text)}"
@@ -1119,11 +1155,10 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
             number += 1
 
         try:
-            title = title_text if args.workflow == "hyperframes_video" else f"{number:03d}-{title_text}"
+            title = title_text
             atomic_write(staging / "WORK.md", template_text(root, "WORK.template.md", {
                 "WORK_ID": json_string_content(work_id), "TITLE": json_string_content(title),
                 "CREATED_AT": now(), "WORKFLOW": json_string_content(args.workflow),
-                "REQUIRED_VARIANTS": json.dumps(["main"] if args.workflow == "podcast_quote_image" else []),
             }))
             atomic_write(staging / "source.md", "# Source\n\n")
             (staging / "materials").mkdir()
@@ -1143,8 +1178,6 @@ def command_new(root: Path, args: argparse.Namespace) -> None:
                     settings["batch"] = args.batch or variant_id
                 if create_initial_variant:
                     create_adopted_variant(root, staging, variant_id, settings, shared=True, **options)
-            else:
-                create_variant(root, staging, "main", **options)
             if args.workflow == "hyperframes_video":
                 identity["video_highwater"] = number
                 if assigned_series_number is not None:
@@ -1176,6 +1209,10 @@ def command_current(root: Path, args: argparse.Namespace) -> None:
 def command_list(root: Path, args: argparse.Namespace) -> None:
     ensure_roots(root)
     rows = list_work_rows(root)
+    if getattr(args, "archived", False):
+        rows = [row for row in rows if row["location"] == "archive"]
+    elif not getattr(args, "all", False):
+        rows = [row for row in rows if row["location"] != "archive"]
     if args.tree:
         print("\n".join(tree_lines(root, rows)))
     else:
@@ -1214,10 +1251,10 @@ def tree_lines(root: Path, rows: list[dict[str, Any]]) -> list[str]:
     lines = []
     experiment_names = [row["title"] for row in rows if row["purpose"] == "test"]
     groups = (
-        ("生产系列", lambda row: row["workflow"] == "hyperframes_video" and row["purpose"] != "test" and row["location"] != "archive"),
-        ("临时实验", lambda row: row["workflow"] == "hyperframes_video" and row["purpose"] == "test" and row["location"] != "archive"),
-        ("历史归档", lambda row: row["workflow"] == "hyperframes_video" and row["location"] == "archive"),
-        ("播客作品", lambda row: row["workflow"] == "podcast_quote_image"),
+        ("生产系列", lambda row: row["workflow"] == "hyperframes_video" and row["purpose"] != "test" and row["location"] != "archive" and not row.get("error")),
+        ("临时实验", lambda row: row["workflow"] == "hyperframes_video" and row["purpose"] == "test" and row["location"] != "archive" and not row.get("error")),
+        ("历史归档", lambda row: row["workflow"] == "hyperframes_video" and row["location"] == "archive" and not row.get("error")),
+        ("隔离对象（已退役或无法读取）", lambda row: row.get("error")),
     )
     for heading, include in groups:
         members = [row for row in rows if include(row)]
@@ -1242,34 +1279,82 @@ def tree_lines(root: Path, rows: list[dict[str, Any]]) -> list[str]:
                 label += f" · {experiment_suffix(row)}"
             if row["location"] == "parked":
                 label += " (停放)"
-            lines.append(f"{indent}{label} [{row['id']}]")
+            focus = " ★" if row["current"] else ""
+            lines.append(f"{indent}{label}{focus} [{row['id']}] {row['archived_variants']}/{row['variant_count']} 已归档 · {row['path']}")
+            if row.get("error"):
+                lines.append(f"{indent}  隔离：{row['error']}")
+            usage = row["usage"]
+            lines.append(f"{indent}  占用：{usage.get('bytes')} bytes（盘点记录）" if usage.get("bytes") is not None
+                         else f"{indent}  占用未知：{usage.get('reason', '盘点不可用')}")
             for variant in row["variants"]:
                 lines.append(f"{indent}  {variant_account_label(row, variant)} · {variant['name']} "
-                             f"[{variant['id']}] {variant['status'] or 'unknown'}")
+                             f"[{variant['id']}] {'★ ' if variant['current'] else ''}{variant['ratio']} · {variant['lifecycle']} · {variant['status'] or 'unknown'}/{variant['wait_for']} · 最近导出 {variant['latest_export'] or '未导出'}")
+                lines.append(f"{indent}    工程：{variant['project']}")
+                if variant['final']:
+                    lines.append(f"{indent}    成片：{variant['final']}")
+                for item in variant['history']:
+                    lines.append(f"{indent}    历史：{item['path']} · {item['source_preview'] or '历史来源未知'}")
     return lines
 
 
 def refresh_browser(root: Path) -> None:
     store = works_root(root).parent
-    lines = ["# 浏览目录", ""]
     rows = list_work_rows(root)
-    if not any(row["workflow"] == "hyperframes_video" for row in rows) and not (store / "浏览目录.md").exists():
-        return
-    experiment_names = [row["title"] for row in rows if row["purpose"] == "test"]
-    for row in rows:
-        if row["workflow"] != "hyperframes_video":
-            continue
-        path, _ = locate_work(root, row["id"])
-        label = display_name(root, row)
-        if row["purpose"] == "test" and experiment_names.count(row["title"]) > 1:
-            label += f" · {experiment_suffix(row)}"
-        label = label.replace("]", "\\]")
-        section = "历史归档" if row["location"] == "archive" else "临时实验" if row["purpose"] == "test" else "生产系列"
-        link = quote(path.relative_to(store).as_posix(), safe="/")
-        lines.append(f"- {section} / [{label}]({link})")
-        for variant in row["variants"]:
-            lines.append(f"  - {variant_account_label(row, variant)} · {variant['name']} · {variant['status'] or 'unknown'}")
-    atomic_write(store / "浏览目录.md", "\n".join(lines) + "\n")
+    output = ["# 浏览目录", "", "★ 当前焦点；容量为按需盘点记录，非实时扫描。", ""]
+    def link(label: str, path: str) -> str:
+        relative = Path(path).relative_to(store).as_posix()
+        return "[" + label.replace("[", "\\[").replace("]", "\\]").replace("\n", " ") + "](" + quote(relative, safe="/") + ")"
+    for heading, members in (("制作中", [r for r in rows if r["location"] != "archive" and not r.get("error")]),
+                             ("历史归档", [r for r in rows if r["location"] == "archive" and not r.get("error")]),
+                             ("隔离对象", [r for r in rows if r.get("error")])):
+        output.extend(["## " + heading, ""])
+        for row in members:
+            label = display_name(root, row)
+            if row["purpose"] == "test" and sum(r["purpose"] == "test" and r["title"] == row["title"] for r in rows) > 1:
+                label += f" · {experiment_suffix(row)}"
+            focus = " ★" if row["current"] else ""
+            usage = row["usage"]
+            capacity = f"{usage['bytes']} bytes（盘点记录）" if usage.get("bytes") is not None else f"占用未知：{usage.get('reason') or '盘点不可用'}"
+            output.append(f"- {link(label, row['path'])}{focus} · {row['location']} · {row['archived_variants']}/{row['variant_count']} 已归档 · {capacity}")
+            if row.get("error"):
+                output.append("  - 隔离：" + row["error"])
+            elif not row["variants"]:
+                output.append("  - 尚未创建制作版本")
+            for variant in row["variants"]:
+                label = f"{variant_account_label(row, variant)} · {variant['name']} · {variant['ratio']}" + (" ★" if variant["current"] else "")
+                output.append(f"  - {link(label, variant['path'])} · {variant['lifecycle']} · {variant['status']}/{variant['wait_for']} · 最近导出 {variant['latest_export'] or '未导出'}")
+                output.append("    - " + link("工程", variant["project"]))
+                if variant["final"]:
+                    output.append("    - " + link("最新成片", variant["final"]))
+                for history in variant["history"]:
+                    output.append("    - " + link(history["source_preview"] or "历史来源未知", history["path"]))
+        output.append("")
+    atomic_write(store / "浏览目录.md", "\n".join(output))
+
+
+def command_storage(root: Path, args: argparse.Namespace) -> None:
+    work, _ = selected_work(root, args, allow_archive=True)
+    candidates, errors = [], []
+    for variant in variant_paths(work):
+        try:
+            names = reclaim_final_candidates(variant, apply=False)
+            candidates.extend({"variant": variant.name, "path": str(variant / ".runtime" / name),
+                               "bytes": (variant / ".runtime" / name).stat().st_size} for name in names)
+        except (HarnessError, storage.StorageError, OSError) as exc:
+            errors.append(str(exc))
+    removed = []
+    if args.storage_command == "cleanup" and args.apply:
+        # Revalidate under the same WorkStore lock immediately before each deletion.
+        for variant in variant_paths(work):
+            try:
+                removed.extend(str(variant / ".runtime" / name) for name in reclaim_final_candidates(variant))
+            except (HarnessError, storage.StorageError, OSError) as exc:
+                errors.append(str(exc))
+    usage = work_storage.measure(work)
+    usage.update(measured_at=now(), reclaimable_bytes=sum(item["bytes"] for item in candidates) if not errors else None,
+                 reclaimable=candidates, cleanup_errors=errors, removed=removed)
+    write_json(work / ".runtime/storage.json", usage)
+    print_result(root, args, usage)
 
 
 def command_browser_rebuild(root: Path, args: argparse.Namespace) -> None:
@@ -1452,18 +1537,7 @@ def command_name(root: Path, args: argparse.Namespace) -> None:
     with naming_lock(root):
         metadata_path = work / "WORK.md"
         metadata = read_frontmatter(metadata_path)
-        workflow = work_workflow(work)
-        if workflow == "hyperframes_video":
-            title = new_title
-        else:
-            number = work_id_number(work.name, workflow)
-            if number is None:
-                number = title_number(str(metadata.get("title", "")))
-            if number is None:
-                number = next_work_number(list_work_rows(root), workflow)
-            if number > 999:
-                raise HarnessError("Work name sequence is exhausted")
-            title = f"{number:03d}-{new_title}"
+        title = new_title
 
         lines = metadata_path.read_text(encoding="utf-8").splitlines()
         frontmatter_end = lines.index("---", 1)
@@ -1495,14 +1569,15 @@ def command_use(root: Path, args: argparse.Namespace) -> None:
 def command_status(root: Path, args: argparse.Namespace) -> None:
     work, location = selected_work(root, args, allow_archive=True)
     variant_id = selected_variant_id(root, work, args)
-    variant, state = selected_variant(root, work, args) if variant_id or work_workflow(work) == "podcast_quote_image" else (None, None)
+    variant, state = selected_variant(root, work, args) if variant_id else (None, None)
     output = {
         "work": read_frontmatter(work / "WORK.md"),
         "location": location,
         "path": str(work),
-        "variant": state,
+        "variant": ({**state, "lifecycle": variant_lifecycle(work, state)} if state else None),
         "variant_path": str(variant) if variant else None,
         "variants": [path.name for path in variant_paths(work)],
+        "summary": next(row for row in list_work_rows(root) if row["id"] == work.name),
         "message": "尚未创建制作版本" if not variant_paths(work) else None,
     }
     print_result(root, args, output)
@@ -1830,7 +1905,9 @@ def command_variant_add(root: Path, args: argparse.Namespace) -> None:
 
 
 def _command_variant_add(root: Path, args: argparse.Namespace) -> None:
-    work, _ = selected_work(root, args)
+    work, _ = selected_work(root, args, allow_archive=True)
+    ensure_mutable_work(root, work)
+    materialize_legacy_lifecycle(work)
     workflow = work_workflow(work)
     name = checked_variant_name(args.name) if workflow == "hyperframes_video" and args.name is not None else None
     settings = adopted_settings(root, args, work)
@@ -1859,6 +1936,7 @@ def _command_variant_add(root: Path, args: argparse.Namespace) -> None:
             write_variant(path, state)
     else:
         path = create_variant(root, work, args.variant_id, **options)
+    sync_work_lifecycle(root, work)
     if not args.work_override:
         write_pointer(root, "current-variant", path.name)
     print(path.name)
@@ -1881,6 +1959,7 @@ def command_variant_list(root: Path, args: argparse.Namespace) -> None:
     for path in variant_paths(work):
         state = read_json(path / "variant.yaml")
         rows.append({"id": path.name, "name": state.get("name") or path.name,
+                     "lifecycle": variant_lifecycle(work, state), "ratio": state.get("ratio"),
                      "account": state.get("account"), "account_revision": state.get("account_revision"),
                      "status": state.get("status"), "wait_for": state.get("wait_for")})
     print(json.dumps(rows, ensure_ascii=False, indent=2))
@@ -1896,63 +1975,49 @@ def command_wait(root: Path, args: argparse.Namespace) -> None:
 
 
 def restore_parked_work(root: Path, work: Path) -> Path:
-    destination = works_root(root) / "active" / work.name
-    if destination.exists():
-        raise HarnessError(f"Active work already exists: {work.name}")
-    os.replace(work, destination)
-    parked_state_path = destination / ".runtime" / "parked.json"
-    parked_state = read_json(parked_state_path) if parked_state_path.is_file() else {"variants": {}}
-    saved = parked_state.get("variants", {})
-    for variant in variant_paths(destination):
-        state = read_json(variant / "variant.yaml")
-        prior = saved.get(variant.name, {}) if isinstance(saved, dict) else {}
-        state.update(
-            status=prior.get("status", "active"),
-            wait_for=prior.get("wait_for", "none"),
-            next_action=prior.get("next_action", "Continue current production"),
-        )
-        write_variant(variant, state)
-    parked_state_path.unlink(missing_ok=True)
-    return destination
+    marker = work / ".runtime/parked.json"
+    saved = read_json(marker) if marker.is_file() else {}
+    if not saved.get("stable_path"):
+        updates = []
+        old_prefix = works_root(root) / "active" / work.name
+        for variant in variant_paths(work):
+            for path in (variant / ".runtime").glob("studio-*.json"):
+                record = read_json(path)
+                project = Path(record.get("project", ""))
+                if work.parent.name == "parked" and project.is_relative_to(old_prefix):
+                    if not storage.process_stopped(record.get("pid")):
+                        raise HarnessError("Legacy parked Studio still has a live or unknown process; stop it before resume")
+                    record["project"] = str(work / project.relative_to(old_prefix))
+                    updates.append((path, record))
+        for path, record in updates:
+            write_json(path, record)
+        # Legacy park changed wait fields. Restore from its durable original record;
+        # leave paths stable and keep the record on error so retry is idempotent.
+        for variant in variant_paths(work):
+            prior = saved.get("variants", {}).get(variant.name)
+            if prior:
+                state = read_json(variant / "variant.yaml")
+                state.update({key: prior[key] for key in ("status", "wait_for", "next_action") if key in prior})
+                write_variant(variant, state)
+    if work.parent.name == "parked":
+        write_json(work / ".runtime/resumed.json", {"stable_path": True, "resumed_at": now()})
+    marker.unlink(missing_ok=True)
+    return work
 
 
 def command_resume(root: Path, args: argparse.Namespace) -> None:
     work, location = selected_work(root, args)
-    variant_id = selected_variant_id(root, work, args)
-    restored_from_park = location == "parked"
     if location == "parked":
-        work = restore_parked_work(root, work)
-        if not args.work_override:
-            write_pointer(root, "current-work", work.name)
-    if not variant_id and work_workflow(work) == "hyperframes_video":
-        print(f"{work.name}: active; variants: " + (", ".join(path.name for path in variant_paths(work)) or "尚未创建制作版本"))
-        return
-    variant, state = selected_variant(root, work, args)
-    if not restored_from_park and state.get("status") != "active":
-        state.update(status="active", wait_for="none", next_action=args.next_action or "Continue current production")
-        write_variant(variant, state)
-    print(f"{work.name}/{variant.name}: {state.get('status')}")
+        restore_parked_work(root, work)
+    # Resume a paused Work, not a completed Variant or a waiting production step.
+    print(f"{work.name}: active; waiting items preserved")
 
 
 def command_park(root: Path, args: argparse.Namespace) -> None:
     work, location = selected_work(root, args)
-    if location == "parked":
-        print(work.name)
-        return
-    saved: dict[str, Any] = {"parked_at": now(), "variants": {}}
-    for variant in variant_paths(work):
-        state = read_json(variant / "variant.yaml")
-        saved["variants"][variant.name] = {
-            "status": state.get("status"),
-            "wait_for": state.get("wait_for"),
-            "next_action": state.get("next_action"),
-        }
-        state.update(status="parked", wait_for="none", next_action="Resume the parked work")
-        write_variant(variant, state)
-    write_json(work / ".runtime" / "parked.json", saved)
-    destination = works_root(root) / "parked" / work.name
-    os.replace(work, destination)
-    print(destination.name)
+    if location != "parked":
+        write_json(work / ".runtime/parked.json", {"parked_at": now(), "stable_path": True})
+    print(work.name)
 
 
 def file_sha256(path: Path) -> str:
@@ -1961,100 +2026,6 @@ def file_sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _manifest_artifact(root: Path, relative: str) -> Path:
-    candidate = Path(relative)
-    if candidate.is_absolute() or not relative or ".." in candidate.parts:
-        raise HarnessError(f"Invalid Final artifact path: {relative!r}")
-    path = root / candidate
-    if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
-        raise HarnessError(f"Final artifact is missing, empty, or a symlink: {relative}")
-    return path
-
-
-def validate_deliverable_manifest(directory: Path, expected_workflow: str) -> dict[str, Any]:
-    if directory.is_symlink() or not directory.is_dir():
-        raise HarnessError(f"Final candidate must be a regular directory: {directory}")
-    manifest_path = directory / "manifest.json"
-    if manifest_path.is_symlink() or not manifest_path.is_file():
-        raise HarnessError("Final candidate is missing manifest.json")
-    manifest = read_json(manifest_path)
-    if manifest.get("schema_version") != 1:
-        raise HarnessError("Final manifest schema_version must be 1")
-    if manifest.get("workflow") != expected_workflow:
-        raise HarnessError(f"Final manifest workflow must be {expected_workflow}")
-    if manifest.get("qa") != "passed":
-        raise HarnessError("Final manifest QA must be passed")
-    artifacts = manifest.get("artifacts")
-    if not isinstance(artifacts, list) or not artifacts:
-        raise HarnessError("Final manifest requires a non-empty artifacts array")
-
-    roles: dict[str, int] = {}
-    paths: set[str] = set()
-    for item in artifacts:
-        if not isinstance(item, dict):
-            raise HarnessError("Final manifest artifacts must be objects")
-        relative = item.get("path")
-        digest = item.get("sha256")
-        role = item.get("role")
-        if not isinstance(relative, str) or relative in paths:
-            raise HarnessError(f"Final manifest has an invalid or duplicate path: {relative!r}")
-        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-            raise HarnessError(f"Final manifest has an invalid sha256 for {relative}")
-        if not isinstance(role, str) or not role:
-            raise HarnessError(f"Final manifest has an invalid role for {relative}")
-        path = _manifest_artifact(directory, relative)
-        if file_sha256(path) != digest:
-            raise HarnessError(f"Final artifact digest mismatch: {relative}")
-        paths.add(relative)
-        roles[role] = roles.get(role, 0) + 1
-
-    if expected_workflow == "podcast_quote_image":
-        if roles.get("image", 0) not in range(8, 13):
-            raise HarnessError("podcast_quote_image Final requires 8 to 12 image artifacts")
-        if roles.get("contact_sheet") != 1 or roles.get("package") != 1:
-            raise HarnessError("podcast_quote_image Final requires one contact sheet and one package")
-        publish_payloads = roles.get("publish_payload", 0)
-        if manifest.get("publish_contract") == "xiaohongshu_creator_draft_v1" and publish_payloads != 1:
-            raise HarnessError("Xiaohongshu Creator draft Final requires one publish payload")
-        if publish_payloads not in (0, 1) or len(artifacts) != roles["image"] + 2 + publish_payloads:
-            raise HarnessError("podcast_quote_image Final contains unsupported artifact roles")
-    actual_files: set[str] = set()
-    for path in directory.rglob("*"):
-        relative = path.relative_to(directory)
-        if relative.parts and relative.parts[0] == "history":
-            continue
-        if path.is_symlink():
-            raise HarnessError(f"Final candidate contains a symlink: {relative.as_posix()}")
-        if path.is_file():
-            actual_files.add(relative.as_posix())
-    expected_files = paths | {"manifest.json"}
-    if actual_files != expected_files:
-        extras = sorted(actual_files - expected_files)
-        missing = sorted(expected_files - actual_files)
-        raise HarnessError(f"Final manifest file set mismatch: extras={extras}, missing={missing}")
-    return manifest
-
-
-def next_directory_history_path(final_dir: Path) -> Path:
-    versions = []
-    for path in (final_dir / "history").glob("final-v[0-9][0-9][0-9]"):
-        if path.is_dir():
-            versions.append(int(path.name.removeprefix("final-v")))
-    return final_dir / "history" / f"final-v{max(versions, default=0) + 1:03d}"
-
-
-def copy_directory_without_history(source: Path, destination: Path) -> None:
-    destination.mkdir(parents=True)
-    for path in source.iterdir():
-        if path.name == "history":
-            continue
-        target = destination / path.name
-        if path.is_dir():
-            shutil.copytree(path, target)
-        else:
-            shutil.copy2(path, target)
 
 
 def snapshot_items(project: Path) -> tuple[str, ...]:
@@ -3024,49 +2995,6 @@ def command_preview_render(root: Path, args: argparse.Namespace) -> None:
     print(str(output))
 
 
-def required_variants(work: Path) -> list[str]:
-    values = read_frontmatter(work / "WORK.md").get("required_variants")
-    if values is None and work_workflow(work) == "hyperframes_video":
-        return []
-    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
-        raise HarnessError("WORK.md requires a required_variants list")
-    if not values and work_workflow(work) == "podcast_quote_image":
-        raise HarnessError("WORK.md requires a non-empty required_variants list")
-    return [validate_id(value, "required variant") for value in values]
-
-
-def all_required_finals_exist(work: Path) -> bool:
-    workflow = work_workflow(work)
-    required = required_variants(work)
-    if not required:
-        return False
-    for variant_id in required:
-        variant = work / "variants" / variant_id
-        if not variant.is_dir():
-            raise HarnessError(f"Required variant does not exist: {variant_id}")
-        state = read_json(variant / "variant.yaml")
-        current = state.get("current_final")
-        if workflow == "hyperframes_video":
-            if current != "final.mp4" or not (variant / "final" / "final.mp4").is_file():
-                return False
-        elif current != "manifest.json":
-            return False
-        else:
-            validate_deliverable_manifest(variant / "final", workflow)
-    return True
-
-
-def next_final_history_path(final_dir: Path) -> Path:
-    versions = []
-    for path in (final_dir / "history").glob("final-v[0-9][0-9][0-9].mp4"):
-        versions.append(int(path.stem.removeprefix("final-v")))
-    return final_dir / "history" / f"final-v{max(versions, default=0) + 1:03d}.mp4"
-
-
-def archive_destination(root: Path, work_id: str) -> Path:
-    return works_root(root) / "archive" / f"{datetime.now().astimezone():%Y-%m}" / work_id
-
-
 def move_to_archive(root: Path, work: Path, outcome: str) -> Path:
     write_json(work / ".runtime" / "archive.json", {"outcome": outcome, "archived_at": now(), "soft": True})
     return work
@@ -3078,101 +3006,17 @@ def clear_current_if(root: Path, work_id: str) -> None:
         clear_pointer(root, "current-variant")
 
 
-def promote_final_directory(candidate: Path, final_dir: Path, workflow: str) -> str:
-    validate_deliverable_manifest(candidate, workflow)
-    candidate_digest = file_sha256(candidate / "manifest.json")
-    existing_manifest = final_dir / "manifest.json"
-    if existing_manifest.is_file() and file_sha256(existing_manifest) == candidate_digest:
-        validate_deliverable_manifest(final_dir, workflow)
-        return candidate_digest
-    if candidate == final_dir or final_dir in candidate.parents:
-        raise HarnessError("Final candidate cannot be the target Final directory or one of its children")
-
-    staging = final_dir.parent / f".final.staging-{uuid.uuid4().hex}"
-    backup = final_dir.parent / f".final.backup-{uuid.uuid4().hex}"
-    try:
-        copy_directory_without_history(candidate, staging)
-        validate_deliverable_manifest(staging, workflow)
-        if final_dir.is_dir():
-            existing_history = final_dir / "history"
-            if existing_history.is_dir():
-                shutil.copytree(existing_history, staging / "history")
-            if existing_manifest.is_file():
-                history_path = next_directory_history_path(staging)
-                copy_directory_without_history(final_dir, history_path)
-            os.replace(final_dir, backup)
-        os.replace(staging, final_dir)
-    except Exception:
-        shutil.rmtree(staging, ignore_errors=True)
-        if backup.exists() and not final_dir.exists():
-            os.replace(backup, final_dir)
-        raise
-    finally:
-        shutil.rmtree(backup, ignore_errors=True)
-    return candidate_digest
-
-
-def command_finalize_package(
-    root: Path,
-    args: argparse.Namespace,
-    work: Path,
-    location: str,
-) -> None:
-    candidate = Path(args.final_file).expanduser().resolve()
-    workflow = work_workflow(work)
-    if workflow != "podcast_quote_image":
-        raise HarnessError(f"Unsupported packaged Final workflow: {workflow}")
-    validate_deliverable_manifest(candidate, workflow)
-    candidate_digest = file_sha256(candidate / "manifest.json")
-    variant, state = selected_variant(root, work, args)
-    final_dir = variant / "final"
-
-    if location == "archive":
-        archived_manifest = final_dir / "manifest.json"
-        if archived_manifest.is_file() and file_sha256(archived_manifest) == candidate_digest:
-            validate_deliverable_manifest(final_dir, workflow)
-            write_json(
-                variant / ".runtime" / "finalize.json",
-                {"state": "complete", "final_manifest_sha256": candidate_digest},
-            )
-            clear_current_if(root, work.name)
-            print(str(final_dir))
-            return
-        raise HarnessError("Archived work has a different Final; reopen it before finalizing")
-    if not args.qa_passed:
-        raise HarnessError("Final QA must pass before finalize; use --qa-passed after the required checks")
-
-    candidate_digest = promote_final_directory(candidate, final_dir, workflow)
-    write_json(
-        variant / ".runtime" / "qa" / "final.json",
-        {
-            "passed": True,
-            "workflow": workflow,
-            "final_manifest_sha256": candidate_digest,
-            "recorded_at": now(),
-        },
-    )
-    state.update(current_final="manifest.json", status="active", wait_for="none", next_action="Finalize complete")
-    write_variant(variant, state)
-    write_json(
-        variant / ".runtime" / "finalize.json",
-        {"state": "promoted", "final_manifest_sha256": candidate_digest},
-    )
-
-    write_json(variant / ".runtime" / "finalize.json", {"state": "complete", "final_manifest_sha256": candidate_digest})
-    print(str(final_dir))
-
-
 def command_finalize(root: Path, args: argparse.Namespace) -> None:
     # ponytail: one WorkStore lock; use per-Work locks if concurrent Finalize throughput matters.
     with naming_lock(root):
         _command_finalize(root, args)
 
 
-def reclaim_final_candidates(variant: Path, completed: Path | None = None) -> list[str]:
+def reclaim_final_candidates(variant: Path, completed: Path | None = None, *, apply: bool = True) -> list[str]:
     """Run only under naming_lock; candidates are registered after successful promotion."""
-    runtime = variant / ".runtime"
-    registry_path = runtime / "final-candidates.json"
+    variant = storage.scoped_path(variant.parent.parent, "variants/" + variant.name)
+    runtime = storage.scoped_path(variant, ".runtime")
+    registry_path = storage.scoped_path(runtime, "final-candidates.json")
     registry = read_json(registry_path) if registry_path.is_file() else {"schema_version": 1, "entries": []}
     if not isinstance(registry.get("entries"), list) or not all(isinstance(entry, dict) for entry in registry["entries"]):
         raise HarnessError("Invalid Final candidate cleanup registry; retaining temporary files")
@@ -3182,16 +3026,38 @@ def reclaim_final_candidates(variant: Path, completed: Path | None = None) -> li
         registry["entries"].append({"path": relative, "state": "succeeded", "rebuildable": True,
                                     "sha256": file_sha256(completed), "registered_at": now()})
         write_json(registry_path, registry)
-    final = variant / "final" / "final.mp4"
-    manifest_path = variant / "final" / "manifest.json"
+    final = storage.scoped_path(variant, "final/final.mp4")
+    manifest_path = storage.scoped_path(variant, "final/manifest.json")
     if not final.is_file() or not manifest_path.is_file():
         return []
     manifest = read_json(manifest_path)
     digest = file_sha256(final)
     if manifest.get("final_sha256") != digest:
         return []
+    if (runtime / "final-promotion/prepared.json").exists():
+        return []
+    for path in runtime.glob("studio-*.json"):
+        storage.scoped_path(runtime, path.relative_to(runtime).as_posix())
+        session = read_json(path)
+        if session.get("pid") is None or not storage.process_stopped(session["pid"]):
+            return []
+    manifests = [manifest]
+    valid_hashes = {digest}
+    for path in (variant / "final/history").glob("*/manifest.json"):
+        storage.scoped_path(variant, path.relative_to(variant).as_posix())
+        item = read_json(path)
+        manifests.append(item)
+        video = storage.scoped_path(variant, (path.parent / "final.mp4").relative_to(variant).as_posix())
+        if video.is_file() and file_sha256(video) == item.get("final_sha256"):
+            valid_hashes.add(item["final_sha256"])
+        else:
+            raise HarnessError(f"Historical Final is missing or changed; retaining candidates: {video}")
     references = set()
-    for receipt in (manifest.get("render", {}), read_json(runtime / "render.json") if (runtime / "render.json").is_file() else {}):
+    receipts = [item.get("render", {}) for item in manifests]
+    receipts += [read_json(path) for path in runtime.glob("render*/render.json")]
+    if (runtime / "render.json").is_file():
+        receipts.append(read_json(runtime / "render.json"))
+    for receipt in receipts:
         if not isinstance(receipt, dict):
             raise HarnessError("Invalid render reference; retaining temporary files")
         source = receipt.get("source_snapshot")
@@ -3201,41 +3067,101 @@ def reclaim_final_candidates(variant: Path, completed: Path | None = None) -> li
                 references.add(resolved.relative_to(runtime).as_posix())
     removed = []
     for entry in registry["entries"]:
-        if entry.get("state") != "succeeded" or entry.get("sha256") != digest:
+        if entry.get("state") != "succeeded" or entry.get("sha256") not in valid_hashes or entry.get("rebuildable") is not True:
             continue
         candidate = storage.scoped_path(runtime, entry["path"])
-        if not candidate.is_file() or file_sha256(candidate) != digest:
+        if (candidate.name != "candidate.mp4" or not candidate.parent.name.startswith("finalize-")
+                or candidate.parent.parent != runtime or (candidate.parent / "failure.json").exists()
+                or not candidate.is_file() or file_sha256(candidate) != entry.get("sha256")):
+            continue
+        if entry.get("pid") is not None and not storage.process_stopped(entry["pid"]):
+            continue
+        if any(candidate == storage.scoped_path(runtime, ref) or candidate.is_relative_to(storage.scoped_path(runtime, ref))
+               or storage.scoped_path(runtime, ref).is_relative_to(candidate) for ref in references):
             continue
         qa_path = candidate.parent / "qa.json"
         if not qa_path.is_file():
             continue
         qa = read_json(qa_path)
-        if qa.get("passed") is not True or qa.get("sha256") != digest:
+        if qa.get("passed") is not True or qa.get("sha256") != entry.get("sha256"):
             continue
-        reclaimed = storage.reclaim(runtime, [entry], references)
+        reclaimed = storage.reclaim(runtime, [entry], references) if apply else [entry["path"]]
         if reclaimed:
-            entry.update(state="removed", removed_at=now())
+            if apply:
+                entry.update(state="removed", removed_at=now())
             removed.extend(reclaimed)
-    if removed:
+    if removed and apply:
         write_json(registry_path, registry)
     return removed
+
+
+def complete_final_lifecycle(root: Path, work: Path, variant: Path) -> None:
+    manifest = read_json(variant / "final/manifest.json")
+    receipt = read_json(variant / ".runtime/finalize.json")
+    if (receipt.get("final_sha256") != manifest.get("final_sha256")
+            or file_sha256(variant / "final/final.mp4") != manifest.get("final_sha256")
+            or receipt.get("manifest_sha256") != file_sha256(variant / "final/manifest.json")):
+        raise HarnessError("Final recovery receipt does not match the committed video and manifest")
+    state = read_json(variant / "variant.yaml")
+    state.update(current_final="final.mp4", lifecycle="archived", archive_outcome="exported",
+                 archived_at=manifest["finalized_at"], status="active", wait_for="none", next_action="Reopen to revise")
+    write_variant(variant, state)
+    sync_work_lifecycle(root, work)
+    write_json(variant / ".runtime/finalize.json", {**receipt, "state": "complete"})
+
+
+def preserve_final_history(final_dir: Path) -> None:
+    video, manifest = final_dir / "final.mp4", final_dir / "manifest.json"
+    if not video.is_file():
+        return
+    # The receipt is the identity: identical encoded bytes can belong to different Drafts.
+    identity = file_sha256(manifest) if manifest.is_file() else "unknown-" + file_sha256(video)
+    destination = final_dir / "history" / identity
+    if destination.exists():
+        if (not (destination / "final.mp4").is_file()
+                or file_sha256(destination / "final.mp4") != file_sha256(video)
+                or manifest.is_file() and (not (destination / "manifest.json").is_file()
+                    or file_sha256(destination / "manifest.json") != identity)):
+            raise HarnessError("Historical Final receipt conflict; retaining current Final")
+        return
+    temporary = destination.with_name(".pending-" + uuid.uuid4().hex)
+    temporary.mkdir(parents=True)
+    try:
+        shutil.copy2(video, temporary / "final.mp4")
+        if manifest.is_file():
+            shutil.copy2(manifest, temporary / "manifest.json")
+        os.replace(temporary, destination)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
 
 
 def _command_finalize(root: Path, args: argparse.Namespace) -> None:
     work, location = selected_work(root, args, allow_archive=True)
     if read_frontmatter(work / "WORK.md").get("purpose") == "test":
         raise HarnessError("test Work cannot Finalize or export video")
-    if work_workflow(work) == "podcast_quote_image":
-        if not args.final_file:
-            raise HarnessError("Package Finalize requires a deliverable directory")
-        command_finalize_package(root, args, work, location)
-        return
     variant, state = selected_variant(root, work, args)
-    if location != "archive":
-        try:
-            reclaim_final_candidates(variant)
-        except (OSError, HarnessError, storage.StorageError) as exc:
-            print(f"Prior temporary cleanup retained: {exc}", file=sys.stderr)
+    ensure_mutable_work(root, work)
+    recover_final_promotion(variant)
+    state = read_json(variant / "variant.yaml")
+    receipt_path = variant / ".runtime/finalize.json"
+    prepared = variant / ".runtime/final-promotion/prepared.json"
+    receipt = read_json(receipt_path) if receipt_path.is_file() else {}
+    if receipt.get("state") == "promoted" and not prepared.exists():
+        if args.final_file and (not Path(args.final_file).is_file()
+                               or file_sha256(Path(args.final_file)) != receipt.get("final_sha256")):
+            raise HarnessError("Final recovery pending for a different candidate; run finalize without a file, then reopen to export again")
+        complete_final_lifecycle(root, work, variant)
+        print(str(variant / "final/final.mp4"))
+        return
+    if variant_lifecycle(work, state) == "archived":
+        current = variant / "final/final.mp4"
+        if args.final_file and receipt.get("state") == "complete" and current.is_file() and (
+                Path(args.final_file).is_file() and file_sha256(Path(args.final_file)) == file_sha256(current)):
+            print(str(current))
+            return
+        raise HarnessError("Reopen this Variant before Finalize")
+
     if not args.final_file:
         if location == "archive":
             raise HarnessError("Reopen before Finalize")
@@ -3258,8 +3184,8 @@ def _command_finalize(root: Path, args: argparse.Namespace) -> None:
             write_json(job / "failure.json", {"error": str(exc), "at": now()})
             raise HarnessError(f"Finalize failed; inspect failure/recovery evidence at {job}: {exc}") from exc
         try:
-            removed = reclaim_final_candidates(variant, Path(render_args.output))
-            write_json(job / "cleanup.json", {"removed": removed})
+            eligible = reclaim_final_candidates(variant, Path(render_args.output), apply=False)
+            write_json(job / "cleanup.json", {"reclaimable": eligible, "removed": []})
         except (OSError, HarnessError, storage.StorageError) as exc:
             print(f"Final is complete; temporary cleanup deferred: {exc}", file=sys.stderr)
         return
@@ -3287,26 +3213,32 @@ def encoded_video_qa(candidate: Path, *, evidence: Path | None = None) -> dict[s
     return {"passed": True, "sha256": file_sha256(candidate), "probe": metadata, "full_decode": True}
 
 
+FINAL_PROMOTION_FILES = ("final/final.mp4", "final/manifest.json", "variant.yaml", ".runtime/finalize.json", ".runtime/qa/final.json")
+
+
+def recover_final_promotion(variant: Path) -> None:
+    journal = variant / ".runtime/final-promotion"
+    if not (journal / "prepared.json").is_file():
+        return
+    originals = read_json(journal / "prepared.json")
+    for name in FINAL_PROMOTION_FILES:
+        target = variant / name
+        if originals[name]:
+            temporary = target.with_name(f".{target.name}.restore-{uuid.uuid4().hex}")
+            shutil.copy2(journal / name, temporary)
+            os.replace(temporary, target)
+        else:
+            target.unlink(missing_ok=True)
+    os.replace(journal / "prepared.json", journal / "restored.json")
+
+
 def command_finalize_video(
     root: Path, args: argparse.Namespace, work: Path, location: str,
 ) -> None:
     variant, _ = selected_variant(root, work, args)
     journal = variant / ".runtime" / "final-promotion"
-    files = ("final/final.mp4", "final/manifest.json", "variant.yaml", ".runtime/finalize.json", ".runtime/qa/final.json")
-
-    def restore() -> None:
-        originals = read_json(journal / "prepared.json")
-        for name in files:
-            target = variant / name
-            if originals[name]:
-                temporary = target.with_name(f".{target.name}.restore-{uuid.uuid4().hex}")
-                shutil.copy2(journal / name, temporary)
-                os.replace(temporary, target)
-            else:
-                target.unlink(missing_ok=True)
-
-    if (journal / "prepared.json").is_file():
-        restore()
+    files = FINAL_PROMOTION_FILES
+    recover_final_promotion(variant)
     if journal.exists():
         shutil.rmtree(journal)
     journal.mkdir(parents=True)
@@ -3324,8 +3256,7 @@ def command_finalize_video(
         os.replace(journal / "prepared.json", journal / "committed.json")
     except BaseException:
         try:
-            restore()
-            os.replace(journal / "prepared.json", journal / "restored.json")
+            recover_final_promotion(variant)
         except OSError as recovery_error:
             raise HarnessError(f"Final promotion recovery pending at {journal}: {recovery_error}") from recovery_error
         raise
@@ -3334,6 +3265,8 @@ def command_finalize_video(
             shutil.rmtree(journal)
         except OSError:
             pass  # Committed recovery evidence is harmless and cleaned on the next operation.
+    complete_final_lifecycle(root, work, variant)
+    print(str(variant / "final/final.mp4"))
 
 
 def _command_finalize_video(
@@ -3351,13 +3284,6 @@ def _command_finalize_video(
     final_file = final_dir / "final.mp4"
     manifest_path = final_dir / "manifest.json"
 
-    if location == "archive":
-        if final_file.is_file() and file_sha256(final_file) == candidate_digest:
-            write_json(variant / ".runtime" / "finalize.json", {"state": "complete", "final_sha256": candidate_digest})
-            clear_current_if(root, work.name)
-            print(str(final_file))
-            return
-        raise HarnessError("Archived work has a different Final; reopen it before finalizing")
     if not args.qa_passed:
         raise HarnessError("Final QA must pass before finalize; use --qa-passed after the required checks")
     accepted = state.get("accepted_preview")
@@ -3425,22 +3351,21 @@ def _command_finalize_video(
     final_dir.mkdir(parents=True, exist_ok=True)
     (final_dir / "history").mkdir(exist_ok=True)
     current_digest = file_sha256(final_file) if final_file.is_file() else None
+    previous = read_json(manifest_path) if manifest_path.is_file() else {}
+    changed = (current_digest != candidate_digest or previous.get("source_preview") != accepted
+               or previous.get("script_revision") != state.get("script_revision")
+               or previous.get("plan_revision") != state.get("plan_revision"))
+    if changed:
+        preserve_final_history(final_dir)
     if current_digest != candidate_digest:
-        if final_file.is_file():
-            history_digests = {
-                file_sha256(path) for path in (final_dir / "history").glob("final-v[0-9][0-9][0-9].mp4")
-            }
-            if current_digest not in history_digests:
-                history_path = next_final_history_path(final_dir)
-                temporary_history = history_path.with_name(f".{history_path.name}.{uuid.uuid4().hex}")
-                shutil.copy2(final_file, temporary_history)
-                os.replace(temporary_history, history_path)
         staging = final_dir / f".final.staging-{uuid.uuid4().hex}.mp4"
-        shutil.copy2(candidate, staging)
-        if file_sha256(staging) != candidate_digest:
+        try:
+            shutil.copy2(candidate, staging)
+            if file_sha256(staging) != candidate_digest:
+                raise HarnessError("Final staging digest mismatch")
+            os.replace(staging, final_file)
+        finally:
             staging.unlink(missing_ok=True)
-            raise HarnessError("Final staging digest mismatch")
-        os.replace(staging, final_file)
 
     manifest = read_json(manifest_path) if manifest_path.is_file() else {}
     registered = (
@@ -3476,48 +3401,64 @@ def _command_finalize_video(
         compatibility_path = variant / ".runtime" / "qa" / "legacy-snapshot-compatibility.json"
         compatibility_path.parent.mkdir(parents=True, exist_ok=True)
         write_json(compatibility_path, legacy_compatibility)
-    state.update(current_final="final.mp4", status="active", wait_for="none", next_action="Finalize complete")
-    write_variant(variant, state)
-    write_json(variant / ".runtime" / "finalize.json", {"state": "promoted", "final_sha256": candidate_digest})
+    write_json(variant / ".runtime/finalize.json", {
+        "state": "promoted", "final_sha256": candidate_digest,
+        "manifest_sha256": file_sha256(manifest_path),
+    })
 
-    write_json(variant / ".runtime" / "finalize.json", {"state": "complete", "final_sha256": candidate_digest})
-    print(str(final_file))
+
+def finish_pending_final(root: Path, work: Path, variant: Path) -> None:
+    if (variant / ".runtime/final-promotion/prepared.json").exists():
+        raise HarnessError("Final promotion recovery pending; retry finalize first")
+    path = variant / ".runtime/finalize.json"
+    if path.is_file() and read_json(path).get("state") == "promoted":
+        complete_final_lifecycle(root, work, variant)
+
+
+def lifecycle_target(root: Path, work: Path, args: argparse.Namespace) -> Path | None:
+    explicit = getattr(args, "variant_id", None) or args.variant_override
+    if explicit:
+        target = work / "variants" / validate_id(explicit, "variant id")
+        if not target.is_dir():
+            raise HarnessError(f"Unknown variant: {explicit}")
+        return target
+    paths = variant_paths(work)
+    if len(paths) > 1:
+        raise HarnessError("Select --variant-id for a multi-Variant Work; siblings are not changed")
+    return paths[0] if paths else None
 
 
 def command_archive(root: Path, args: argparse.Namespace) -> None:
-    work_id = args.work_override or read_pointer(root, "current-work")
-    if not work_id:
-        raise HarnessError("No current work")
-    work, location = locate_work(root, work_id)
-    if location == "archive":
-        metadata_path = work / ".runtime" / "archive.json"
-        metadata = read_json(metadata_path) if metadata_path.is_file() else {}
-        if metadata.get("outcome") != args.outcome:
-            raise HarnessError(f"Work is already archived with outcome {metadata.get('outcome')}")
-        print(str(work))
-        return
-    archived = move_to_archive(root, work, args.outcome)
-    clear_current_if(root, work.name)
-    print(str(archived))
+    work, _ = selected_work(root, args, allow_archive=True)
+    ensure_mutable_work(root, work)
+    variant = lifecycle_target(root, work, args)
+    if variant:
+        finish_pending_final(root, work, variant)
+        materialize_legacy_lifecycle(work)
+        state = read_json(variant / "variant.yaml")
+        state.update(lifecycle="archived", archive_outcome=args.outcome, archived_at=now())
+        write_variant(variant, state)
+        sync_work_lifecycle(root, work)
+    else:
+        move_to_archive(root, work, args.outcome)
+    print(str(work))
 
 
 def command_reopen(root: Path, args: argparse.Namespace) -> None:
-    work, location = locate_work(root, args.work_id)
-    if any(work.name in record["chain"][:-1] for record in identity_state(root)["successions"].values()):
-        raise HarnessError("Succession predecessor must remain archived")
-    if location == "archive":
-        archive_path = work / ".runtime" / "archive.json"
-        record = read_json(archive_path) if archive_path.is_file() else {}
-        if not record.get("soft"):
-            raise HarnessError("Legacy physical archive remains read-only; create a new Work for further production")
-        history_path = work / ".runtime" / "archive-history.json"
-        history = read_json(history_path) if history_path.is_file() else {"entries": []}
-        history["entries"].append({**record, "reopened_at": now()})
-        write_json(history_path, history)
-        archive_path.unlink()
-        location = "parked" if work.parent.name == "parked" else "active"
-    if location == "parked":
-        work = restore_parked_work(root, work)
+    work, _ = locate_work(root, args.work_id)
+    ensure_mutable_work(root, work)
+    variant = lifecycle_target(root, work, args)
+    if variant:
+        finish_pending_final(root, work, variant)
+    materialize_legacy_lifecycle(work)
+    if variant:
+        state = read_json(variant / "variant.yaml")
+        state.update(lifecycle="active")
+        write_variant(variant, state)
+        args.variant_override = variant.name
+    sync_work_lifecycle(root, work)
+    if (work / ".runtime/parked.json").exists() or work.parent.name == "parked":
+        restore_parked_work(root, work)
     focus_work(root, work, args)
     print(str(work))
 
@@ -3816,10 +3757,19 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("current").set_defaults(handler=command_current)
     listing = commands.add_parser("list")
     listing.add_argument("--tree", action="store_true")
+    listing_scope = listing.add_mutually_exclusive_group()
+    listing_scope.add_argument("--all", action="store_true")
+    listing_scope.add_argument("--archived", action="store_true")
     listing.set_defaults(handler=command_list)
     browser = commands.add_parser("browser", help="Rebuild the disposable WorkStore directory")
     browser.add_argument("action", choices=("rebuild",))
     browser.set_defaults(handler=command_browser_rebuild)
+    storage_parser = commands.add_parser("storage", help="On-demand Work capacity and conservative candidate cleanup")
+    storage_commands = storage_parser.add_subparsers(dest="storage_command", required=True)
+    for operation in ("inspect", "cleanup"):
+        storage_command = storage_commands.add_parser(operation)
+        storage_command.add_argument("--apply", action="store_true", help="Actually reclaim eligible candidates (cleanup only)")
+        storage_command.set_defaults(handler=command_storage)
     find = commands.add_parser("find", help="Find video Variants by series number")
     find.add_argument("--series", required=True)
     find.add_argument("--number", type=int, required=True)
@@ -4159,10 +4109,12 @@ def build_parser() -> argparse.ArgumentParser:
     finalize.add_argument("--qa-passed", action="store_true")
     finalize.set_defaults(handler=command_finalize)
     archive = commands.add_parser("archive")
+    archive.add_argument("--variant-id")
     archive.add_argument("--outcome", default="stored", choices=("stored", "abandoned", "superseded", "completed"))
     archive.set_defaults(handler=command_archive)
     reopen = commands.add_parser("reopen")
     reopen.add_argument("work_id")
+    reopen.add_argument("--variant-id")
     reopen.set_defaults(handler=command_reopen)
     def json_option(command):
         command.add_argument('--json', action='store_true', default=argparse.SUPPRESS,
@@ -4210,15 +4162,15 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
                     and not os.environ.get("HYPERFRAMES_AI_ASSET_REVIEW_ROOT")
                     or args.command == "request" and args.request_command not in {"freeze", "export", "feedback"}):
                 raise HarnessError("Review forbids production acceptance, installation and lifecycle promotion")
-        if (args.command in {"archive", "reopen", "park", "resume", "plan"}
+        if (args.command in {"archive", "reopen", "park", "resume", "plan", "storage"}
                 or args.command == "preview" and args.preview_command == "render"):
             ensure_roots(target_root)
             with naming_lock(target_root):
                 args.handler(target_root, args)
         else:
             args.handler(target_root, args)
-        if (args.command in {"new", "successor", "name", "wait", "resume", "park", "archive", "reopen", "finalize"}
-                or args.command == "variant" and args.variant_command in {"add", "name"}
+        if (args.command in {"new", "successor", "name", "wait", "resume", "park", "archive", "reopen", "finalize", "storage", "use"}
+                or args.command == "variant" and args.variant_command in {"add", "name", "use"}
                 or args.command == "series" and args.operation in {"put", "move"}
                 or args.command == "account" and args.operation == "put"
                 or args.command == "preview" and args.preview_command == "accept"

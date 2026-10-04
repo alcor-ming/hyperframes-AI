@@ -1,5 +1,7 @@
 # HyperFrames AI：语义视觉对象、单 Scene 方向参考与完整 Draft PRD
 
+> 历史范围说明：本文中的播客保留 / 编号 / 包装规则属于当时版本；播客制作已在 v3.8 化繁为简退役，当前入口和生命周期见[制作工作流](../../.studio/workflow.md)。其余原设计和验证背景保留。
+
 > v3.3 当前增量见 [制作与工程合同](./hyperframes-v33-production-contract.md)。本文件保留既有设计理由与适用合同；新入口、语义时序、无 Draft/test 视频导出、独立 Finalize 与软归档以该增量为准，未取得原生证据不报告通过。
 
 - 文档版本：v3.2

@@ -4,6 +4,7 @@
   "profile": "__PROFILE__",
   "ratio": "__RATIO__",
   "subject_position": __SUBJECT_POSITION__,
+  "lifecycle": "active",
   "status": "active",
   "wait_for": "none",
   "next_action": "完善 SCRIPT.md",
