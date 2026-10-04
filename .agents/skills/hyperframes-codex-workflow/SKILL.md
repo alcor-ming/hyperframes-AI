@@ -31,4 +31,5 @@ For `podcast_quote_image`, retain its creation and selection contract: load `pla
 | Remotion integration | `.studio/spec/hyperframes-remotion.md` only when selected |
 | Podcast images | Selected planner/copy Skill; `.studio/workflow.md` podcast branch and `.studio/spec/creative.md` podcast contracts |
 
+| Content retrospective | Explicit Work/Variant/publication; `.studio/workflow.md` 内容复盘; `CONTENT_RETRO.template.md`. Use `content link/import/open/check/summary`; Opus first, Codex fallback. Write only `retro/content/` (including import originals) and `content-summary/`. No Work source, Plan, Current or acceptance edits; no network or video export. |
 | Visual retrospective | User-designated Work/Variant/Draft; `.studio/workflow.md` 画面复盘与样片记忆; `VISUAL_RETRO.template.md`. Opus first, Codex fallback. Write only retro, sample-library, known-defects and retro-summary; no source, Plan, Current or acceptance changes. User confirms memories in conversation. |

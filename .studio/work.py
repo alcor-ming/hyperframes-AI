@@ -68,6 +68,7 @@ import work_successor
 import critic
 import visual_memory
 import work_memory
+import content_retro
 import lines
 import settings as work_settings
 
@@ -3772,6 +3773,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--variant", dest="variant_override", help="temporarily select a Variant")
     commands = parser.add_subparsers(dest="command", required=True)
     work_memory.add_commands(commands, SimpleNamespace(**globals()))
+    content_retro.add_commands(commands, SimpleNamespace(**globals()))
     critic_parser = commands.add_parser('critic', help='Freeze and sample a Draft; record advisory visual review')
     critic_commands = critic_parser.add_subparsers(dest='critic_command', required=True)
     critic_round = critic_commands.add_parser('round')

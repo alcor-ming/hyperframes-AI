@@ -103,3 +103,16 @@ URL 获取只调用外部 `trendradar-media` v2.0。适配器只接受成功 env
 已知缺陷先在复盘问题行填写 `已知缺陷 ID`，用户确认后 `defect add <ID> --draft <Draft ID> --description <描述> --frame images/<帧>.png`（可重复 --frame）。`defect list` 默认本产品线；`defect retire <ID> --blocked-by <规则或诊断>` 保留证据。critic 只读本线有效缺陷，附在档案检查项后；每轮记录生效 ID。参考样片逐项评“达到 / 部分 / 未达”，按 reason 限定维度，不评相似度；`critic record` 拒绝遗漏、重复、未知引用和非法结论。
 
 `retro summary` 只读扫描已登记 Work，写生产根 `retro-summary/summary.json` 与 `SUMMARY.md`，不改 Work。资产按 Work/Variant/ref/version 去重，时间取 Variant 元数据（未知为 null）；样片按 Work/Variant/Plan revision/ID 去重，同 revision 多 Draft 不重复计数。问题按显式缺陷 ID、归因层、去向和产品线聚合；样片按显式机制 ID 分组，缺失关联记未关联。手写重复由人填写，只计数，不比对跨片代码。资产候选、规则与诊断提案不自动接受或执行。
+
+## 内容复盘
+
+生产根 Opus 优先、Codex 回退。只写 Variant 的 `retro/content/`（含导入原件）和生产根 `content-summary/`，不改 Work 源、Plan、Current、接受记录。所有单片命令显式 `--work <ID> --variant <ID>`，不取 Current；以下命令位于同根 Work CLI。
+
+1. `content link <发布 ID> --draft <登记 ID>` 或 `--final`，同时提供 `--file <已发布文件> --platform <平台> --title <标题> --cover-text <封面文字> --published-at <ISO 时间> --ratio <画幅>`。账号来自 Variant；未绑定时必填 `--account`。只计算发布文件 hash 与时长，不复制或导出视频。
+2. 本期实验变量必填：重复 `--variable '开头写法=本期取值'`，其他用 `--variable '其他:说明=取值'`；可加 `--compare <同平台账号对照发布 ID>`。同 ID 有多条时用 `Work/Variant/发布ID` 消歧。没改动显式 `--no-variable`。重新 link 同 ID 保留修改历史；文件、来源、时长、时间表等身份改变须新 ID。
+3. 可选 `--timings <JSON>` 提供冻结工程导出的 `[{scene,anchor,start,end,characters:[{char,start,end}]}]`；须包含有效 Script Anchor，区间不重叠，末端与片长误差不超过 1 秒。优先使用来源快照 `section_map.json`（相同 rows 或 `{sections,characters}`）；没有则未对齐，CLI 不解析工程脚本。字级数据缺失不推测口播。
+4. `content import <发布 ID> --dir <五份 xlsx 目录> --cutoff YYYY-MM-DD [--stage long-tail|early]`，或重复五个 `--file`。原件独立复制，sha256 留档；分段末端与片长差超过 1 秒拒绝。长尾由用户判断；不传 stage 为未标，输出 daily 供判断。导入全部保留。
+5. `content open <发布 ID> [--import <导入 ID>]` 默认最新导入，刷新 CONTENT.md 生成区并保留手填部分；`content check <发布 ID>` 校验字段与枚举。找优秀仅用户标记，已有样片机制负责登记。card / 数学不能使用 Script 开头与衔接去向。
+6. `content summary` 按平台、账号、片长分组，只计每条发布最新长尾导入；少于 5 条不报偏离；输出开头样本、选题与实验变量表。其他阶段列出但不计基线。
+
+读数依次为观看时间、2 秒与 5 秒、封面点击、完播。条件平均观看时长已从视频起点计时，平均离开点不再加 5 秒；输出取整区间和假设。无留存曲线，跳过 / 回看不等于离开；缺来源记未列出，不记 0。API 仅接口，无网络调用。原件、记录和汇总仅留生产根，不进开发仓与 Git。

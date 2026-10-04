@@ -64,7 +64,7 @@ def managed(files):
         if key in seen or not re.fullmatch(r"[0-9a-f]{64}", value):
             raise ValueError(f"Invalid or case-colliding manifest entry: {name}")
         seen.add(key)
-        if key.split("/")[0] in {"works", "assets", "asset-library", "sample-library", "known-defects", "retro-summary", "requests", "review", ".runtime", ".harness"} or key == STATE or key.startswith(STATE + "/"):
+        if key.split("/")[0] in {"works", "assets", "asset-library", "sample-library", "known-defects", "retro-summary", "content-summary", "requests", "review", ".runtime", ".harness"} or key == STATE or key.startswith(STATE + "/"):
             raise ValueError(f"Package claims user/runtime content: {name}")
 
 

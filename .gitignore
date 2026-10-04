@@ -10,6 +10,7 @@ idea.md
 /sample-library/
 /known-defects/
 /retro-summary/
+/content-summary/
 /.studio/.runtime/
 __pycache__/
 *.py[cod]
