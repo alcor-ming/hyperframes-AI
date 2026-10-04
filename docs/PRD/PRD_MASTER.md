@@ -85,7 +85,7 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 
 ## PRD 索引
 
-- [v3.7 流程优化与复盘](./hyperframes-v37-simplify-retro.md)：v3.7.0（产品线档案、导演 Brief 与按 A/B 段分镜、A/B 错相交接、静止与延续测量、可切换 critic、三层设置）已在 WSL 开发仓实现并通过隔离验证；Windows 原生、宿主指定 critic 模型与生产验收未执行；v3.7.1 画面复盘、v3.7.2 内容复盘待讨论；简化设计移到 v3.8。
+- [v3.7 流程优化与复盘](./hyperframes-v37-simplify-retro.md)：v3.7.0（产品线档案、导演 Brief 与按 A/B 段分镜、A/B 错相交接、静止与延续测量、可切换 critic、三层设置）已在 WSL 开发仓实现并通过隔离验证；Windows 原生、宿主指定 critic 模型与生产验收未执行；v3.7.1 画面复盘（单片复盘、样片记忆、已知缺陷、跨片汇总、数学诊断修正）范围已批准、待实施；v3.7.2 内容复盘待讨论；简化设计移到 v3.8。
 - [v3.6 showcase 模式、技术提炼与数学系列正式链路](./hyperframes-v36-showcase-math.md)：showcase、math-chain 与 math-kit 开发源码已落地，自动化验收见各自 Trellis 任务；未部署，Windows 原生与生产效果待验。
 - [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：已批准并由 WSL 采用的归档同号继任及取消 main 特权；保留完整设计与合成验收，不包含真实生产对象清单。实现、测试和部署结果分别报告。
 

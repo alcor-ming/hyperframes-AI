@@ -1,6 +1,6 @@
 # HyperFrames v3.7：流程优化与复盘
 
-状态：v3.7.0 最终规划已批准（2026-10-02），已在 WSL 开发仓实现并完成隔离验证；Windows 原生、宿主指定模型看图和生产验收未执行；v3.7.1、v3.7.2 待讨论；简化设计在 v3.8。本文件是 v3.7 大版本的产品真源；Trellis 任务 `hyperframes-v37-simplify-retro` 只绑定当前推进的小版本（文件名与任务 ID 沿用最初的"simplify"，不改名以免断链，简化设计已移到 v3.8）。
+状态：v3.7.0 最终规划已批准（2026-10-02），已在 WSL 开发仓实现并完成隔离验证；Windows 原生、宿主指定模型看图和生产验收未执行；v3.7.1 范围已批准（2026-10-04，第 5 节 R1–R9 与 AC1–AC10），待实施；v3.7.2 待讨论；简化设计在 v3.8。本文件是 v3.7 大版本的产品真源；Trellis 任务 `hyperframes-v37-simplify-retro` 只绑定当前推进的小版本（文件名与任务 ID 沿用最初的"simplify"，不改名以免断链，简化设计已移到 v3.8）。
 
 ## 1. 背景与目标
 
@@ -23,7 +23,7 @@ v3.7 的目标有两个：
 | 版本 | 主题 | 主要内容 | 依赖 |
 |---|---|---|---|
 | v3.7.0 | 流程优化与成本开关（只取观默文章与 MVK 中的做法） | 产品线档案（入口分流）；导演 Brief + 按 A/B 段的分镜表 Plan；取消事件表、节奏改为测量（第 2–4 层静止）；A/B 错相交接；视觉延续测量；参考机制库；评审轮次命令与 ledger；独立评审可切换且必须能看图；三层设置 | — |
-| v3.7.1 | 画面复盘 | 单片 `retro/VISUAL.md`；提炼扩展到全模式；跨片汇总（手写重复 → 资产候选与 Asset Brief，反复缺陷 → 规则/诊断提案，资产使用频率）；从复盘向参考机制库补充；A/B 交接效果（wipe/push/glitch）与时序调优；card 跨 Scene 精确延续（卡片资产合同） | v3.7.0 的 ledger |
+| v3.7.1 | 画面复盘 | 单片 `retro/VISUAL.md`（找问题 + 找优秀，提炼扩展到全模式）；样片记忆（生产根样片库、两层参考机制库、Brief 引用与 critic 对照）；已知缺陷（负面记忆）；跨片汇总（手写重复 → 资产候选与 Asset Brief，反复缺陷 → 规则/诊断提案，资产使用频率机械统计）；修正数学积木两处诊断缺陷。A/B 交接效果与 card 跨 Scene 精确延续已移出，由复盘提案立项 | v3.7.0 的 ledger 与评审包 |
 | v3.7.2 | 内容复盘 | 抖音 xlsx 导入；API 接入；逐秒留存对齐 Script Anchor / Scene / 画面事件；账号基线对比；回流到选题、Script 开头与 Plan | v3.7.0 设置；v3.7.1 可选 |
 | v3.8 | 简化设计 | 待讨论；依据 v3.7 的 ledger、设置生效值与新旧流程对照决定合并或删除哪些步骤 | v3.7 |
 
@@ -49,6 +49,21 @@ v3.7 的目标有两个：
 | 2026-10-02 | 档案默认值：card 方向批准关、critic 关；explainer 与 explainer/math-rap 方向批准开、critic 为 `codex-subagent`、最多 1 轮（到上限后仍可手动继续）；showcase/pdoom、showcase/science 方向批准开（现行）、critic 关（Opus 在 WSL 制作，宿主不是 Codex）。用户层可覆盖，用户部署在用户层把 critic 模型设为 DeepSeek Flash。 |
 | 2026-10-02 | v3.7.0 范围不砍。v3.7 当前优先完善流程优化与复盘两个功能，目标表述改为"成本可见可控、质量可测量"；简化设计放到 v3.8。v3.7.0 实施后在生产用同一份 Script 按新旧流程各做一个 test-work，比较 Plan 字数、人工确认次数与 critic 问题数，作为 v3.8 的输入；该对照属于生产观察，不进开发验收。 |
 | 2026-10-02 | 用户批准 v3.7.0 最终规划（第 4 节、Trellis 任务 `hyperframes-v37-simplify-retro` 的 REQ-001–011 与 AC1–AC9）；实施交由 Codex 在 WSL 开发仓完成。 |
+| 2026-10-02 | v3.7.1 画面复盘分两类：找问题（缺陷归因到制作执行、规则、诊断、资产能力等层，并给出系统去向）与找优秀（可复用资产、做法，乃至整片留作样片）。 |
+| 2026-10-02 | 样片用途限于两项：作为制作 Agent 的参考（Brief 可引用），以及作为 critic 的对照基准。作品集留存和工具升级回归不是样片的目标。 |
+| 2026-10-02 | "优秀"只由用户标记；Agent 与 critic 不提名。 |
+| 2026-10-02 | 找问题复盘由用户指定发起，通常在多片段返工或 Final 后整片异常时进行；不设自动触发。 |
+| 2026-10-02 | 样片以整片为单位，用户在片内标记若干好段，每段写明为什么好。 |
+| 2026-10-02 | critic 只对照 Brief 引用的样片段。样片的检索、引用与对照按 agent memory 来设计，作为 v3.7.1 的设计重点。 |
+| 2026-10-02 | 生产中两类复盘优先由生产根 Opus 执行，Codex 作为回退。 |
+| 2026-10-02 | Final 后发现的整片异常，通常是 Draft 阶段就已存在、用户审查时遗漏的问题，不单独设计 Final 与预览的对比证据。复盘证据仍取自已接受的 Draft 快照，归因层包含"用户审查遗漏"。 |
+| 2026-10-02 | 做负面记忆：找问题复盘中用户确认的缺陷模式作为"已知缺陷"加入该产品线的 critic 检查项；规则或诊断能自动拦住后退役。 |
+| 2026-10-02 | 样片段由 Agent 在写 Plan 时从索引中挑选，用户可修改。索引条目由用户与 Agent 对话创建：用户指明段与理由，Agent 起草条目，用户确认后写入。样片段作为可引用的机制条目。 |
+| 2026-10-02 | 索引默认只列本产品线的样片段，允许显式跨产品线引用。 |
+| 2026-10-02 | A/B 交接效果（wipe/push/glitch）与时序调优、card 跨 Scene 精确延续移出 v3.7.1，等复盘提出需要后单独立项；v3.7.1 只做复盘机制本身。 |
+| 2026-10-02 | 跨片汇总保留资产使用频率，只做机械统计、不做判断，作为后续开发参考。 |
+| 2026-10-02 | 两处已知工具缺陷纳入 v3.7.1：数学积木事件计入节奏诊断；`math_trailing_gap` 改为按 Scene 检查。 |
+| 2026-10-04 | 用户批准 v3.7.1 范围（第 5 节，R1–R9 与 AC1–AC10，含 5.6 中由 Agent 补定的模板取代、跨线标记、showcase 可选参考行、设置默认值与复盘写权限）；Trellis 任务 `hyperframes-v37-simplify-retro` 改绑 v3.7.1。 |
 
 ## 4. v3.7.0 边界
 
@@ -129,8 +144,8 @@ v3.7 的目标有两个：
 
    第 5 层字幕永远不是主体；第 3 层永远是次级响应。主次默认值可由档案按 A/B 角色给出，Plan 只写偏离（例如 B 媒体里该看哪一处）。
 2. **前中后景**：第 1/2/3 层已对应远/中/前景，第 1 层流动已存在且不计事件。补一条：冲击传到环境时，第 1 层响应更晚、更弱。
-3. **错相**：节奏合同只管密度、不管相位。最明显的同步点是 A/B 交接：`rolls.js` 在同一 cue 把 A 组隐藏或 `blur(8px)`、同时显示 B 媒体和 B 文字（`.studio/runtime/rolls.js:81-84`），节奏事件 `b_enter`/`a_return` 也全部记在同一时刻（`.studio/runtime/rolls.js:54-60`）；Motion 已有 transition 绑定（`.studio/spec/hyperframes-assets.md:85-92`），但 A/B 交接没有接入，Plan 也没有地方写交接方式。阅读保护期间第 2、3 层继续产生事件，按文章应定位为"次级响应"（跟随、幅度小），不与第 4 层抢主事件；IP 角色换姿势可作为对文字揭示的延迟回应。**已定**：A/B 交接改为运行时错相（S9）。Motion transition 绑定不直接复用：它让两个目标在同一 cue 同时变化，并独占两者的 opacity/visibility（`.studio/runtime/appearance.js:277-290`、`.studio/spec/hyperframes-assets.md` 属性所有权段），与错相和 `rolls.js` 自己写的 visibility/filter 冲突；wipe/push/glitch 风格的交接留给 v3.7.1 资产优化。
-4. **动量连续、一形贯穿 ↔ Scene 拉回**：项目的信息延续比文章更严格（已读不重播、A 时间续接）；缺的是视觉延续——MVK 要求被延续的对象在 A 场末帧和 B 场首帧位置一致，现行只延续信息 ID，第 2 层对象每个 Scene 重新开始。**已定**：声明 + 测量（S10），运行时精确交接留给 v3.7.1。
+3. **错相**：节奏合同只管密度、不管相位。最明显的同步点是 A/B 交接：`rolls.js` 在同一 cue 把 A 组隐藏或 `blur(8px)`、同时显示 B 媒体和 B 文字（`.studio/runtime/rolls.js:81-84`），节奏事件 `b_enter`/`a_return` 也全部记在同一时刻（`.studio/runtime/rolls.js:54-60`）；Motion 已有 transition 绑定（`.studio/spec/hyperframes-assets.md:85-92`），但 A/B 交接没有接入，Plan 也没有地方写交接方式。阅读保护期间第 2、3 层继续产生事件，按文章应定位为"次级响应"（跟随、幅度小），不与第 4 层抢主事件；IP 角色换姿势可作为对文字揭示的延迟回应。**已定**：A/B 交接改为运行时错相（S9）。Motion transition 绑定不直接复用：它让两个目标在同一 cue 同时变化，并独占两者的 opacity/visibility（`.studio/runtime/appearance.js:277-290`、`.studio/spec/hyperframes-assets.md` 属性所有权段），与错相和 `rolls.js` 自己写的 visibility/filter 冲突；wipe/push/glitch 风格的交接留给 v3.7.1 资产优化（后改为由复盘提案立项，见第 3 节 2026-10-02）。
+4. **动量连续、一形贯穿 ↔ Scene 拉回**：项目的信息延续比文章更严格（已读不重播、A 时间续接）；缺的是视觉延续——MVK 要求被延续的对象在 A 场末帧和 B 场首帧位置一致，现行只延续信息 ID，第 2 层对象每个 Scene 重新开始。**已定**：声明 + 测量（S10），运行时精确交接留给 v3.7.1（后改为由复盘提案立项，见第 3 节 2026-10-02）。
 5. **分镜 ↔ Scene + A/B 段**：Scene 由 Script 语义切分，一个 Scene 内的 A → B → A 实际是三个镜头；A → B → A 本身就是 起势（A 提出）→ 发展（B 证据）→ 收束（A 回收）。**已定**：分镜表按 A/B 段写，一段一行。
 6. **节拍 ↔ 语义 cue**：主事件落在口播语义起点 cue；次级响应按文章"微偏移"略晚。
 7. **物理与光**：card 的动作在冻结资产内（card-kit easeOut、Motion v3 back-out/spring），属于资产质量，交 v3.7.1 画面复盘；explainer 写入 Brief。
@@ -154,4 +169,118 @@ v3.7 的目标有两个：
 
 ### 4.6 不在 v3.7.0 范围
 
-画面复盘、内容复盘、抖音数据接入、Web 前端本身、部署与生产验收；规则文档"核心 + 模式差异"全面重写（只删除被 S8 档案取代的豁免段落）；MVK 的音频混音与响度测量（本项目以正式人声为主）；AI 视频生成与 3D 组件实验页；A/B 交接的 wipe/push/glitch 效果与运行时精确延续（v3.7.1）；从分镜表生成宿主 A/B 接线；critic 纯文本降级与 CLI 直接调用外部模型。
+画面复盘、内容复盘、抖音数据接入、Web 前端本身、部署与生产验收；规则文档"核心 + 模式差异"全面重写（只删除被 S8 档案取代的豁免段落）；MVK 的音频混音与响度测量（本项目以正式人声为主）；AI 视频生成与 3D 组件实验页；A/B 交接的 wipe/push/glitch 效果与运行时精确延续（由复盘提案立项）；从分镜表生成宿主 A/B 接线；critic 纯文本降级与 CLI 直接调用外部模型。
+
+## 5. v3.7.1 画面复盘
+
+状态：范围已批准（2026-10-04），待实施。已定事项见第 3 节 2026-10-02 各条；5.1–5.4 是设计，5.5–5.8 是现状证据、范围、验收与边界。
+
+### 5.1 两类复盘
+
+**找问题**
+
+- 由用户指定发起，通常在多片段返工或 Final 后整片异常时进行。Final 后的异常按 Draft 阶段遗漏处理。
+- 证据取自出问题的已登记或已接受 Draft 快照。
+- 每条缺陷记录：
+  - 现象，Scene 与时间；
+  - 发现阶段：Plan / Draft 诊断 / critic / 用户审查 / Final 后；
+  - 返工代价：单 Scene / 多片段 / 重做 Draft / 重置 Work；
+  - 归因层：制作执行 / 规则 / 诊断 / 资产能力 / critic / 用户审查遗漏；
+  - 去向：作品修复、规则提案、诊断提案、资产 Asset Brief、已知缺陷条目；不改系统的标"仅本片"。
+- 系统去向以冻结最小复现交 WSL 开发仓，不携带作品内容。
+
+**找优秀**
+
+- 只由用户标记。
+- 按四种粒度留存：
+  - 整片 → 样片，片内标若干好段，每段写明为什么好；
+  - 段或镜头 → 样片段条目（见 5.2）；
+  - 组件或动作 → 资产候选，走 `asset-library/sources` → pack → 用户 accept；
+  - 做法 → Plan 配方或规则提案。
+- 沿用 `SHOWCASE_REFINEMENT.template.md` 的分类，扩展到全部模式。
+
+**执行者**：生产根 Opus 优先，Codex 回退。
+
+### 5.2 样片记忆
+
+按 agent memory 设计：
+
+- **写入**：用户与 Agent 对话创建。用户指明段与理由，Agent 起草条目，用户确认后写入。Agent 与 critic 不自行提名。
+- **存放**：生产根，独立复制冻结快照引用和帧证据（复用 `critic round` 证据包：contact sheet、交界前后帧、A/B 帧条），不进开发仓与 Git。样片不需要视频。
+- **索引**：每段一行，含 ID（如 `<样片ID>·S03·B1`）、产品线、A/B 角色、理由、缩略帧、制作时的工具与资产版本、状态。按产品线分文件。
+- **检索**：Agent 写 Plan 时读本产品线索引，挑选样片段写入 Brief 的"参考机制"，用户可修改。默认只列本产品线，允许显式跨线引用。
+- **注入**：只加载 Brief 引用段的帧证据；制作与 critic 看同一组，随 Plan revision 冻结。Draft 阶段不做隐式检索。
+- **借鉴维度**：理由限定借鉴哪一点；critic 只评该维度是否达到，不评相似度。
+- **机制库两层**：发行内置的 `.studio/mechanisms.yaml`，加生产根的用户层（样片段条目）。Brief 引用与 `plan check` 读合并结果，数量规则沿用 v3.7.0。
+- **巩固**：多个样片段指向同一做法时提炼为机制、资产或规则。原段保留为证据，索引标"已巩固 → X"，检索优先提炼后的条目。
+- **失效**：不自动过期。引用的样片早于已知行为变化（如 v3.7.0 错相交接）时，Plan 阶段提示；由用户退役。
+- **成本**：单次最多引用段数、critic 每段帧数进入三层设置。
+
+### 5.3 已知缺陷（负面记忆）
+
+- 来源：找问题复盘中用户确认的缺陷模式，含"用户审查遗漏"类。
+- 按产品线加入 critic 检查项，附描述与证据帧。
+- 规则或诊断能自动拦住后退役，证据保留。
+
+### 5.4 跨片汇总
+
+- 手写重复 → 资产候选与 Asset Brief。
+- 反复缺陷 → 规则或诊断提案（与 5.3 退役衔接）。
+- 多个样片段同一做法 → 巩固（5.2）。
+- 资产使用频率：机械统计，只计数不判断，作为后续开发参考。
+
+### 5.5 规划时的现状证据
+
+- 参考机制库只有发行内置一份：`.studio/mechanisms.yaml` 字段固定为 `id/mechanism/lines/transfer/source`，`source` 必须是 https 链接（`.studio/lines.py:48-52`）。Brief 引用只查这一份，跨产品线引用一律报 `mechanism_line_mismatch`（`.studio/director_plan.py:17-25`）。样片段条目需要用户层和新的来源形式。
+- showcase 使用 `SHOWCASE_PLAN`，没有 Brief、参考机制字段，也没有 A/B 段；showcase 档案 critic 默认关。
+- `critic round` 证据包已有 contact sheet、逐帧页、交界帧对与 A/B 帧条（`.studio/critic.py:63` 起），存于 Variant 的 `critic/`；ledger 每轮记录 Draft、快照 hash 与生效设置（`.studio/work.py:3584-3588`）。包内 `direction.json` 只含 Brief、分镜段与例外，没有参考帧。
+- critic 检查项是档案里的固定列表（`.studio/lines.yaml` 的 `critic_checks`），没有用户层。
+- 设置清单只有方向批准与 critic 共 4 个键（`.studio/settings.yaml`）。
+- Variant 外观锁记录冻结的资产 closure（`ref`、`kind`、`package_sha256`、`version`、`vendor_path`，`.studio/appearance.py:132-134`），可直接做机械统计。
+- 提炼只有 showcase 的 `SHOWCASE_REFINEMENT.template.md`（积木 / 动作配方或规则 / 内容资产 / 仅属于本片），由 `.studio/workflow.md:59`、`.studio/spec/showcase.md:11` 与根规则模板 `.studio/templates/CLAUDE.template.md` 引用。根规则把数学系列、card 单片与未列任务定为只读，复盘写入没有授权位置。
+- work42"后半段静止"对应的三处缺口：
+  - 积木揭示后只有 0.25 秒透明度渐入，只有 `edge`、`equals` 有位移，`keep` 不产生画面动作（`.studio/runtime/math-kit.js:121-127`）。这属于资产能力。
+  - `math_reveal` / `math_remove` 不在节奏诊断允许的事件种类中（`.studio/visual_diagnostics.py:39-48`），数学 Scene 一律报整段无事件，真实的后半段空白被噪声淹没。这属于诊断。
+  - `math_trailing_gap` 只检查全片末尾（`.studio/math_chain.py:149-150`）。这属于诊断。
+
+### 5.6 范围
+
+- **R1 单片复盘记录**：新模板 `VISUAL_RETRO.template.md` 覆盖全部模式，含找问题表（5.1 的字段）与找优秀表（四种粒度，保留 `SHOWCASE_REFINEMENT` 的四类）；它取代 `SHOWCASE_REFINEMENT`，原引用处改指新模板。`retro open --work --variant <Draft ID>` 在 Variant 下建 `retro/VISUAL.md`，绑定该 Draft 的快照 hash；证据复用该 Draft 已有的 critic 证据包，没有时按同一采样另生成一份，不写 critic ledger，不导出视频。`retro check` 只校验字段与枚举，不判断归因是否正确。系统去向以文字写在记录里，交 WSL 沿用"冻结最小复现"，本版不新增导出工具。
+- **R2 样片库**：位于生产根，不进开发仓与 Git。`sample add` 从指定 Draft 快照与证据包独立复制该段帧证据（不用 hardlink / symlink），记录来源 Work / Variant / Draft、快照 hash，以及制作时的运行时与资产版本。索引按产品线分文件，每段一行（字段见 5.2）。段 ID 沿用分镜段（`<样片ID>·S03·B1`）；showcase 与旧格式 Plan 没有 A/B 段，按 Scene 标记（`<样片ID>·S03`）。`sample list` 默认只列本产品线，`--all-lines` 列全部；`sample show` 给出某段的帧与理由；`sample retire`、`sample consolidate --into <X>` 只改状态，不删证据。CLI 不设确认门禁，确认在对话中完成。
+- **R3 两层机制库与 Brief 引用**：`plan check` 读取发行层与生产根用户层（样片段条目）的合并结果，数量规则沿用 v3.7.0。跨产品线引用须显式标记（如 `跨线:<ID>`），未标记仍报 `mechanism_line_mismatch`。引用已退役条目时报告；引用已巩固条目时提示改用提炼后的条目；样片早于发行内置"行为变化清单"中的某项变化时提示（清单首条为 v3.7.0 错相交接）。`SHOWCASE_PLAN` 概念节增加可选"参考机制"行，走同一检查。
+- **R4 注入与 critic 对照**：Draft 登记时冻结 Plan 引用的样片段 ID 与帧 hash；制作 Agent 用 `sample show` 读同一组帧。`critic round` 证据包加入引用段的帧与理由（借鉴维度），帧数受设置限制；critic 对每个引用段只判该维度"达到 / 部分 / 未达"，不评相似度；ledger 记录引用 ID。发行层种子条目没有帧，只给文字。
+- **R5 已知缺陷**：生产根按产品线存条目（描述、证据帧、来源复盘、状态）。`defect add|list|retire`；`critic round` 把本产品线的有效条目附在档案检查项之后，ledger 记录当轮生效的条目 ID。退役时写明拦住它的规则或诊断，证据保留。
+- **R6 跨片汇总**：`retro summary` 只读扫描生产根，输出 JSON 与 Markdown 到生产根：
+  - 资产使用频率：按资产与版本、产品线统计各 Variant 冻结 closure 的引用次数与最近使用时间；
+  - 缺陷：按归因层、去向、产品线与已知缺陷 ID 聚合各 `VISUAL.md`；
+  - 资产候选：汇总各记录中"组件或动作"一类；
+  - 样片：各段被 Brief 引用的次数，同一机制下的样片段数（作为巩固线索）。
+
+  "手写重复"由复盘执行者写在记录里，汇总只计数，不做跨 Work 代码比对。
+- **R7 数学诊断修正**：`rhythm_diagnostics` 把 `math_reveal` / `math_remove` 计为可见事件，层由积木挂载目标决定（第 2 层或第 4 层）。`math_trailing_gap` 改为按 Scene 检查：每个 Scene 最后一个数学事件到 Scene 终点超过 2 秒即报告，并带 Scene ID。诊断不随 Variant 冻结，修正后对在制 Work 的后续诊断生效。同步修改 `.studio/spec/math-rap.md` 中"收尾"的表述。
+- **R8 设置**：`settings.yaml` 新增 `samples.max_references`（单个 Plan 最多引用的样片段数，同时受参考机制总数上限约束，默认 3）与 `samples.frames_per_reference`（制作与 critic 每段读取的帧数，默认 6），用户层与 Variant 层可覆盖，成本类型 token。
+- **R9 规则与执行者**：`.studio/workflow.md` 增加复盘一节，Router SKILL 增加复盘入口。根规则模板 `CLAUDE.template.md` 与 `WINDOWS_AGENTS.md` 增加"复盘"任务：生产根 Opus 优先，Codex 回退；可写范围只限 `retro/`、样片库与已知缺陷库，不改 Work 源、Plan、Current 与接受记录；样片与已知缺陷条目在用户对话确认后写入。
+
+### 5.7 验收
+
+开发验收在 WSL 隔离 fixture 上完成；Windows 原生与生产验收分别报告。
+
+- **AC1** `retro open` 在 fixture WorkStore 上生成绑定快照 hash 的 `VISUAL.md`；有 critic 包时复用，没有时另行采样且 ledger 不变；未登记的 Draft 报错；全程不产生视频文件。
+- **AC2** `retro check` 对非法枚举与缺字段给出报告，合法记录无发现。
+- **AC3** `sample add|list|show|retire|consolidate`：帧为独立副本（非符号链接、inode 不同）；索引按产品线分文件；默认只列本产品线；状态变化不删证据。
+- **AC4** `plan check`：用户层 ID 可引用；未标记的跨线引用报 mismatch，标记后通过；退役、已巩固、早于行为变化各给出对应发现；showcase 的可选参考行走同一检查；发行层条目的现有行为不变。
+- **AC5** Draft 登记冻结引用 ID 与帧 hash，之后退役或巩固该条目不改变已登记 Draft 的 critic 包；critic 包含引用帧与理由，帧数符合设置；ledger 记录引用 ID。
+- **AC6** 已知缺陷出现在本产品线的 critic 包检查项中，其他产品线与已退役条目不出现；ledger 记录生效条目 ID。
+- **AC7** `retro summary` 在含多个 Variant 的 fixture 上给出正确的资产引用计数、缺陷聚合与样片引用次数；运行前后 Work 文件 hash 不变。
+- **AC8** 数学 fixture：有揭示事件的 Scene 不再报整段无事件；最后一个事件距 Scene 终点超过 2 秒的 Scene 同时报 `rhythm_gap` 与带 Scene ID 的 `math_trailing_gap`；未超过的 Scene 不报。
+- **AC9** `settings show` 列出两个新键的生效值与来源层。
+- **AC10** 规则文档、Router、两份根规则模板更新后通过现有包校验；测试只用 fixture，不读取生产内容。
+
+### 5.8 不在 v3.7.1 范围
+
+- A/B 交接的 wipe/push/glitch 效果与时序调优、card 跨 Scene 精确延续：等复盘提出需要后单独立项。
+- 数学积木保持期的画面动作（资产能力缺口）：走复盘 → Asset Brief，按数学资产流程处理。
+- 自动触发复盘、Agent 或 critic 提名样片、相似度评分、样片自动过期。
+- 跨 Work 代码重复的自动检测。
+- 任何视频导出：样片与复盘只用帧证据。
+- 内容复盘与抖音数据（v3.7.2）、Web 前端、部署与生产验收。
