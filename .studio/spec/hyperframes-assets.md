@@ -4,7 +4,9 @@
 
 `asset_layer` 为 building-block（通用积木）、scene-template（场景模板）、content（内容素材）、reference（参考样例），独立于技术 kind 与画面五层。新资产在元数据声明；冻结旧包通过 `selection.json` 补充，不改包或 hash。缺分类组件显示 unclassified，不按名称猜测；media 与声明式外观/图标默认 content。`lifecycle` 为 source/candidate/accepted；推荐、历史、待补是独立选型标记，不替代接纳事实。
 
-`component list --asset-layer <分类>` 筛选；参考样例默认隐藏，用 `--include-references` 或 `--asset-layer reference` 显式查看。参考样例不能新安装，包括路径和依赖入口；已有 Work 冻结副本仍可离线校验。`.catalog-index.json` 与 `.discovery-cache.json` 是可重建派生文件，不是版本/接纳真源。README 与配方保留人工说明，不另维护平行资产总表。
+`component list --asset-layer <分类>` 筛选；参考样例默认隐藏，用 `--include-references` 或 `--asset-layer reference` 显式查看，`--kind scene-source` / `--kind recipe` 自身也表示请求对应参考项。参考样例不能新安装，包括路径和依赖入口；已有 Work 冻结副本仍可离线校验。`.catalog-index.json` 与 `.discovery-cache.json` 是普通查询可写的派生文件，不是版本/接纳真源。`list --audit`（含 --rebuild）与 `interface` 不写缓存、索引或报告；两者都不修改 Work、Current、Binding、源或接受记录。README 与配方保留人工说明，不另维护平行资产总表。
+
+列表按真实声明路径去重，保留不同来源与版本。普通列表最多显示 20 条紧凑记录，`total` / `shown` / `truncated` 说明筛选结果，`full_result` 返回同参数的完整 JSON 查询 argv；诊断也保留显示数量与总数。每条记录的 `detail.argv` 是传给本根 work 入口的准确详情参数，不是安装授权。遇到歧义按返回路径选择，不按名称合并或跳到最新版。安装仍采用原精确 ref/hash 和接纳校验。
 
 AssetStore 的 `sources/` 是托管可编辑源，packages/candidates/acceptances 保持原结构。未迁移的外部源与 legacy 根继续发现；仅完整迁移核对后由 `catalog-migration.json` 退役对应根，原文件保留，不自动改生产配置。维护命令不使用默认生产根：
 
@@ -21,15 +23,17 @@ work component archive apply --plan <计划路径>
 
 F01-F08 使用 `card-kit@v1`，插槽与接线见 [Card Kit 接口卡](card-kit.md)。`component card-kit-source <新源目录>` 只导出自有源码，之后沿用 pack/validate/accept/install。Plan 是内容真源；`cards build` 生成挂载并用冻结字体实测容量，`cards studio` 在官方 Studio 旁提供回写 Plan 的卡片编辑器。不手改生成块，不把设计源批准当作正式资产接纳。
 
-使用 `work component interface <id@vN>` 读取选中资产的接口卡（用途、画幅、层、槽/参数及声明的用例），不读实现源码；可编辑候选用 `--candidate <路径>`。普通图标用 `work icons search <名称或别名>` 获取精确引用。缺库时从本机包运行 `work icons import --from <lucide-static 包根> --source <可编辑源目录>`，再按既有 pack / accept / install 流程处理；导入不自动接纳。安装到目标工程后，`work --work <id> --variant <id> icons use lucide:plug@1.45.0 --output icons/plug.svg` 取用闭包内 SVG，不联网、不改路径，保留来源标记及主题颜色/线宽。Plan 引用同一精确版本，SVG 随工程快照冻结。
+使用 `work component interface <准确包引用、source_ref或列表返回的路径>` 读取包、场景源或配方详情，不读实现源码；候选用 `component interface <路径> --candidate`。合法 source_ref 不要求 @vN，配方可无运行 entry。详情先显示当前状态、来源、入口、检查范围和 next_step，再显示声明的用法；历史 README 或源 classification_status 不替代包接纳。长用法可通过 full_result 的 --json 读取，说明附件越界或缺失明确失败。普通图标用 `work icons search <名称或别名>` 获取精确引用。缺库时从本机包运行 `work icons import --from <lucide-static 包根> --source <可编辑源目录>`，再按既有 pack / accept / install 流程处理；导入不自动接纳。安装到目标工程后，`work --work <id> --variant <id> icons use lucide:plug@1.45.0 --output icons/plug.svg` 取用闭包内 SVG，不联网、不改路径，保留来源标记及主题颜色/线宽。Plan 引用同一精确版本，SVG 随工程快照冻结。
 
 通过现有 `component` 能力从已配置的外部资产来源检索，以资产元数据和接纳记录为准，身份冲突不静默覆盖。按 Scene 关系、真实文字及可选说明、素材形态、画幅、可用时间和状态变化核对适配；名字相近或能换标题不算适配。模块 / 媒体读匹配的 `asset.json` 与声明的用法 / 样例，组件读 `COMPONENT.md`、必要 `cases/**/CASE.md` 和边界 Fixture，Case 不扩大公共合同。已适配或能通过合同内组合 / 参数解决的能力直接复用，不重做审批样段。语义简报、精确版本、Binding 与必要差异保留在 Plan 对应 Scene 一节，不新建数据库。
 
-统一发现入口是 `work component list --query <用途或别名>`，按需使用 `--kind media|audio|module|theme|background|motion|character|component`、`--ratio`、`--tag`、`--recommendation recommended|historical|pending`；`--research-root <明确登记根>` 加入仅供参考的研究，`--rebuild` 重建派生缓存。结果区分接纳、推荐/历史/待补、可用性和检查范围；画幅未知不等于支持，metadata-only 不等于闭包已验证，候选、源和研究不冒充可安装包。新接纳但缺选型信息的包仍可发现；同 ref 不同 hash、缺文件或异常 acceptance 不得被旧缓存遮蔽。刷新失败标未同步并重试，不自动补接受、不把派生缓存变成权威。
+创作统一发现入口是 `work component list --include-references --query <用途或别名>`，按需使用 `--kind media|audio|module|theme|background|motion|character|component|scene-source|recipe`、`--ratio`、`--tag`、`--recommendation recommended|historical|pending`；`--research-root <明确登记根>` 加入仅供参考的研究，`--rebuild` 重建派生缓存。结果区分接纳、推荐/历史/待补、可用性和检查范围；画幅未知不等于支持，metadata-only 不等于闭包已验证，候选、源和研究不冒充可安装包。新接纳但缺选型信息的包仍可发现；同 ref 不同 hash、缺文件或异常 acceptance 不得被旧缓存遮蔽。刷新失败标未同步并重试，不自动补接受、不把派生缓存变成权威。
 
 按结果给出的实际取用方式处理：组件安装、外观绑定、原材料复制、依赖调用或仅供参考不能混同。采用时固定精确版本并重新校验 hash/闭包；查询、刷新、接纳新版、修改推荐和研究均不升级已有 Work。普通辅助图形的表达要求只见 `visual-design.md`；没有可用对象则在可编辑源制作，WSL 开发计划也可直接包含组件编辑。
 
-选型信息保存在已配置 AssetStore 的 `selection.json`，以精确 `id@vN` 为键；值可含 purpose、aliases、tags、examples、limitations、replacement 和 recommendation，别名/标签/示例/限制使用字符串数组。它不覆盖包身份、hash 或 acceptance，不写入冻结包；直接编辑后下次查询检查变化，不另维护第二份版本总表。
+选型信息保存在已配置 AssetStore 的 `selection.json`，以精确 `id@vN` 为键；值可含 purpose、aliases、tags、examples、limitations、replacement 和 recommendation，别名/标签/示例/限制使用字符串数组。它不覆盖包身份、hash 或 acceptance，不写入冻结包；直接编辑后下次查询检查变化，不另维护第二份版本总表。 旧包未声明画幅时可补 `ratios`（9:16、16:9、4:3、1:1 字符串数组）和非空 `ratios_basis`（可核对的既有声明或测试依据位置 / 说明），输出 ratio_source 标明来源。包声明优先，不与补充取并集；冲突或非法补充有诊断，缺依据仍为 unknown，具体画幅筛选不包含 unknown。补充不改变包、hash、安装权限或已冻结 Work；生产数据另由 Windows 按授权目标补充。
+
+`component list --audit` 按内容区分场景 manifest、源审批与包 acceptance；包 component_ref / package_sha256 记录不生成虚假的场景缺字段告警，未知审批格式单独报告。真正的场景漏字段、源审批漏 manifest、失效入口和越界路径继续告警，不按 tests/fixtures 目录名整体跳过。
 
 安装前运行 `./work component validate <component-id>@vN`，用显式 Work/Variant 和 Binding 文件运行 `./work --work <id> --variant <variant-id> component install <component-id>@vN --binding-file <binding.json>`；Plan 批准前增加 `--purpose plan`，仍要求 Script / Research 就绪与资产合格。`component verify` 校验当前 Work 的 vendor、Scene Bindings 和 `COMPONENT_LOCK.json`，不因无关库更新或来源暂不可访问让已有闭合副本失效。库级接纳固定准确版本、依赖、目标画幅及兼容条件；`migration-ready` 不是生产批准，不批量改状态或复用旧 hash。优先验证当前需要的资产，旧家族 / 全画幅清单只作 backlog，不阻塞单个兼容包。
 

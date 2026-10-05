@@ -71,15 +71,17 @@ class V352CliTests(unittest.TestCase):
         message = call(self, "icons", "use", "lucide:missing@1.45.0", "--project", str(project), "--output", "assets/missing.svg", expected=2)
         self.assertIn("outside installed closure", message)
 
-    def test_summary_path_preserves_full_machine_result(self):
+    def test_catalog_view_preserves_exact_targets_without_report(self):
         self.icons()
         full = json.loads(call(self, "component", "list", "--json"))
         summary = json.loads(call(self, "component", "list"))
-        self.assertIn("summary", summary)
-        path = Path(summary["report_path"])
-        self.assertTrue(path.is_file())
-        self.assertEqual(full, json.loads(path.read_text()))
-        self.assertLess(len(json.dumps(summary)), len(json.dumps(full)))
+        self.assertNotIn("report_path", summary)
+        self.assertEqual(len(full['assets']), summary['total'])
+        self.assertIn('--json', summary['full_result'])
+        for row in summary['assets']:
+            original = next(item for item in full['assets'] if item['path'] == row['path'])
+            self.assertEqual(original['detail'], row['detail'])
+            self.assertEqual(original['asset_type'], row['asset_type'])
 
     @unittest.skipUnless((fixture.REPO / '.studio/components/script-draft-core/16x9/v2').is_dir(),
                          'Source-checkout-only: legacy component fixtures are excluded from releases')

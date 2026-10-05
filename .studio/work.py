@@ -1620,25 +1620,49 @@ def command_component_validate(root: Path, args: argparse.Namespace) -> None:
 
 
 def command_component_interface(root: Path, args: argparse.Namespace) -> None:
-    source, acceptance = (Path(args.component), None) if args.candidate else asset_store.resolve_component(root, args.component)
-    if not source.is_absolute():
-        source = root / source
-    release = validate_component_release(source, allow_unapproved=args.candidate or acceptance is not None)
-    metadata = release['metadata']
-    keys = ('communication_goal', 'usage', 'example', 'ratio', 'compatibility', 'layers',
-            'slots', 'parameters', 'duration_range', 'motion_recipe', 'customization', 'broll')
-    card = {'component_ref': release['component_ref'], 'package_sha256': release['package_sha256'],
-            'interface': {key: metadata[key] for key in keys if key in metadata}}
-    card['interface'].setdefault('layers', 'not declared; verify the selected package before use')
-    if release.get('fixture'):
-        card['interface']['example'] = release['fixture']
-    for key in ('usage', 'example'):
-        name = metadata.get(key)
-        if isinstance(name, str):
-            path = (source / name).resolve()
-            if path.is_relative_to(source.resolve()) and path.is_file():
-                card['interface'][key] = path.read_text(encoding='utf-8')
-    print_result(root, args, card)
+    card = asset_store.component_interface(root, args.component, candidate=args.candidate)
+    if not getattr(args, 'json', False):
+        card['interface'] = dict(card['interface'])
+        for key in ('usage', 'example'):
+            value = card['interface'].get(key)
+            if isinstance(value, str) and len(value) > 1200:
+                card['interface'][key] = value[:1200] + '\n[truncated; use full_result]'
+                card['full_result'] = [*card['detail']['argv'], '--json']
+    print(json.dumps(card, ensure_ascii=False, indent=2))
+
+
+def print_asset_list(args: argparse.Namespace, result: dict) -> None:
+    if getattr(args, 'json', False):
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    fields = ('component_ref', 'source_ref', 'asset_type', 'status', 'lifecycle', 'asset_layer', 'ratio', 'ratios',
+              'ratio_source', 'purpose', 'communication_goal', 'path', 'source_directory', 'entry',
+              'installable', 'check_scope', 'conflict', 'detail', 'next_step')
+    rows = [{key: row[key] for key in fields if key in row} for row in result['assets'][:20]]
+    for row in rows:
+        for key in ('purpose', 'communication_goal'):
+            value = row.get(key)
+            if isinstance(value, str) and len(value) > 160:
+                row[key] = value[:160] + '…'
+    full = ['component', 'list']
+    for key in ('query', 'kind', 'ratio', 'tag', 'broll_role', 'recommendation', 'asset_layer', 'research_root'):
+        value = getattr(args, key, None)
+        if value:
+            full.extend(['--' + key.replace('_', '-'), str(value)])
+    for key in ('include_references', 'audit', 'rebuild'):
+        if getattr(args, key, False):
+            full.append('--' + key.replace('_', '-'))
+    output = {'assets': rows, 'total': len(result['assets']), 'shown': len(rows),
+              'truncated': len(rows) < len(result['assets']), 'full_result': [*full, '--json'],
+              'filters': result['filters']}
+    for key in ('errors', 'warnings', 'conflicts'):
+        output[key] = result.get(key, [])[:20]
+        output[key + '_total'] = len(result.get(key, []))
+    if result.get('message'):
+        output['message'] = result['message']
+    if 'research' in result:
+        output['research_total'] = len(result['research'])
+    print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
 def command_icons(root: Path, args: argparse.Namespace) -> None:
@@ -1810,6 +1834,8 @@ def command_component_store(root: Path, args: argparse.Namespace) -> None:
         result = asset_store.discover_components(root, args.query, kind=args.kind, ratio=args.ratio, tag=args.tag,
             recommendation=args.recommendation, rebuild=args.rebuild, research_root=args.research_root, audit=args.audit,
             asset_layer=args.asset_layer, include_references=args.include_references, broll_role=args.broll_role)
+        print_asset_list(args, result)
+        return
     else:
         store = asset_store.asset_store_root(root)
         from component_harness import package_write_lock
@@ -3933,9 +3959,9 @@ def build_parser() -> argparse.ArgumentParser:
     math_source = component_commands.add_parser('math-kit-source', help='Export editable math-kit source; never accept')
     math_source.add_argument('target')
     math_source.set_defaults(handler=command_math_source)
-    interface = component_commands.add_parser('interface', help='Read the selected asset interface without implementation source')
-    interface.add_argument('component')
-    interface.add_argument('--candidate', action='store_true')
+    interface = component_commands.add_parser('interface', help='Read package, scene-source or recipe details without writing; ambiguous refs require an exact listed path')
+    interface.add_argument('component', help='Exact accepted package ref, source_ref, or listed package/manifest/recipe path; no latest-version inference')
+    interface.add_argument('--candidate', action='store_true', help='Read an explicit candidate package or editable source path; never authorize installation')
     interface.set_defaults(handler=command_component_interface)
     sfx = component_commands.add_parser("import-sfx", help="Import local seed SFX into an editable AssetSource; never accept")
     sfx.add_argument("--from", dest="package", required=True)
@@ -3954,9 +3980,9 @@ def build_parser() -> argparse.ArgumentParser:
         command.set_defaults(handler=command_component_store)
     component_list = component_commands.add_parser("list", help="Discover packages from their metadata, not a Harness allowlist")
     component_list.add_argument("--query", default="")
-    component_list.add_argument("--kind", choices=("component", "module", "media", "audio", "character", "theme", "background", "motion", "icon-set", "scene-source", "recipe"))
-    component_list.add_argument("--audit", action="store_true", help="Read-only discovery metadata and file audit")
-    component_list.add_argument("--ratio")
+    component_list.add_argument("--kind", choices=("component", "module", "media", "audio", "character", "theme", "background", "motion", "icon-set", "scene-source", "recipe"), help='Explicit scene-source or recipe includes references without --include-references')
+    component_list.add_argument("--audit", action="store_true", help="Audit without writing cache, index or report, including with --rebuild; use --json for all diagnostics")
+    component_list.add_argument("--ratio", help='Declared ratio (e.g. 9:16, legacy 9x16) or unknown; evidence-backed selection fills missing declarations only')
     component_list.add_argument("--tag")
     component_list.add_argument("--broll-role", choices=("hook", "concept", "transition"))
     component_list.add_argument("--recommendation", choices=("recommended", "historical", "pending"))

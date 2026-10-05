@@ -309,14 +309,29 @@ def accept_component(store: Path, ref: str, sha256: str, note: str, *, runtime_r
     return acceptance
 
 
-def _discover_references(directory: Path) -> tuple[list[dict], list[dict]]:
+def _discover_references(directory: Path, seen: set | None = None) -> tuple[list[dict], list[dict]]:
     assets, warnings = [], []
+    seen = set() if seen is None else seen
     required = ("source_ref", "title", "purpose", "tags", "workflow_role",
                 "primary_category", "classification_status", "limits")
     candidates = {path: "scene-source" for path in directory.rglob("manifest.json")}
     candidates.update({path: "recipe" for path in directory.rglob("*.md") if path.name != "COMPONENT.md"})
+    source_approvals = set()
     for acceptance in directory.rglob("ACCEPTANCE.json"):
-        candidates.setdefault(acceptance.parent / "manifest.json", "scene-source")
+        try:
+            if not acceptance.resolve().is_relative_to(directory.resolve()):
+                raise ComponentError("Approval path escapes source root")
+            approval = _read_json(acceptance)
+            if "component_ref" in approval and "package_sha256" in approval:
+                continue  # A package receipt does not declare a scene source.
+            if not any(approval.get(key) for key in ("source_ref", "workflow_role")) and "scene-source" not in (approval.get("kind"), approval.get("asset_type")):
+                warnings.append({"path": str(acceptance.resolve()), "code": "unknown_source_approval"})
+                continue
+            manifest = acceptance.parent / "manifest.json"
+            source_approvals.add(manifest.resolve())
+            candidates.setdefault(manifest, "scene-source")
+        except (ComponentError, OSError, RuntimeError) as error:
+            warnings.append({"path": str(acceptance), "code": "invalid_source_approval", "error": str(error)})
     for path, kind in sorted(candidates.items()):
         try:
             inside = path.resolve().is_relative_to(directory.resolve())
@@ -325,6 +340,10 @@ def _discover_references(directory: Path) -> tuple[list[dict], list[dict]]:
         if not inside:
             warnings.append({"path": str(path), "code": "unsafe_reference_path"})
             continue
+        path = path.resolve()
+        if path in seen:
+            continue
+        seen.add(path)
         try:
             if kind == "recipe":
                 lines = path.read_text(encoding="utf-8-sig").splitlines()
@@ -345,7 +364,7 @@ def _discover_references(directory: Path) -> tuple[list[dict], list[dict]]:
             else:
                 metadata = _read_json(path) if path.is_file() else {}
             if not any(key in metadata for key in ("source_ref", "workflow_role", "entry")) and not (
-                    kind == "scene-source" and (path.parent / "ACCEPTANCE.json").is_file()):
+                    kind == "scene-source" and path in source_approvals):
                 continue
             fields = required + (("entry",) if kind == "scene-source" else ())
             missing = [key for key in fields if key not in metadata or
@@ -373,7 +392,7 @@ def _discover_references(directory: Path) -> tuple[list[dict], list[dict]]:
                     invalid_entry = True
             if missing or invalid_entry:
                 continue
-            assets.append({**{key: metadata[key] for key in fields},
+            assets.append({**{key: metadata[key] for key in (*fields, "entry", "usage", "example", "examples", "ratio", "compatibility") if key in metadata},
                 "component_ref": metadata["source_ref"], "package_sha256": None,
                 "path": str(path), "origin": "source", "available": False, "installable": False,
                 "reference_only": True, "status": "derivation-reference", "asset_type": kind,
@@ -381,6 +400,57 @@ def _discover_references(directory: Path) -> tuple[list[dict], list[dict]]:
         except (ComponentError, OSError, UnicodeError) as error:
             warnings.append({"path": str(path), "code": "invalid_discovery_metadata", "error": str(error)})
     return assets, warnings
+
+
+def _selection_ratios(asset: dict, extra: dict, store: Path | None) -> list[dict]:
+    """Optional selection evidence affects discovery, never installation authority."""
+    warnings = []
+    aliases = {"16x9": "16:9", "9x16": "9:16", "4x3": "4:3", "1x1": "1:1"}
+
+    def ratios(value):
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ValueError("Ratios must be an array")
+        result = list(dict.fromkeys(aliases.get(item, item) for item in value))
+        if any(item not in {"16:9", "9:16", "4:3", "1:1"} for item in result):
+            raise ValueError("Unsupported ratio")
+        return result
+
+    compatibility = asset.get("compatibility", {})
+    raw = compatibility.get("ratios", []) if isinstance(compatibility, dict) else None
+    field = "compatibility.ratios"
+    if raw == [] and asset.get("ratio") not in (None, "", "unknown"):
+        raw, field = [asset["ratio"]], "ratio"
+    valid = True
+    try:
+        declared = ratios(raw)
+    except ValueError:
+        declared, valid = [], False
+        warnings.append({"path": asset["path"], "code": "invalid_declared_ratios"})
+    effective = declared
+    origin = "source" if asset["origin"] == "source" else "package"
+    provenance = {"kind": origin, "path": asset["path"], "field": field} if declared else {"kind": "unknown"}
+    if "ratios" in extra:
+        try:
+            supplement = ratios(extra["ratios"])
+            evidence = extra.get("ratios_basis")
+            if not supplement or not isinstance(evidence, str) or not evidence.strip():
+                raise ValueError("Selection ratios require a non-empty ratios_basis")
+            if declared and set(supplement) != set(declared):
+                warnings.append({"path": str(store / "selection.json"), "component_ref": asset["component_ref"],
+                                 "code": "conflicting_selection_ratios", "declared": declared, "selection": supplement})
+            elif not declared and valid:
+                effective = supplement
+                provenance = {"kind": "selection", "path": str(store / "selection.json"), "evidence": evidence}
+        except ValueError as error:
+            warnings.append({"path": str(store / "selection.json"), "component_ref": asset["component_ref"],
+                             "code": "invalid_selection_ratios", "error": str(error)})
+    asset["ratios"], asset["ratio_source"] = effective, provenance
+    # Keep the legacy ratio spelling in its original field; filter aliases equally.
+    if not effective:
+        asset["ratio"] = "unknown"
+    elif asset.get("ratio") in (None, "", "unknown"):
+        asset["ratio"] = effective[0] if len(effective) == 1 else "unknown"
+    return warnings
 
 
 def _validate_selection(selection):
@@ -421,7 +491,7 @@ def _retired_roots(store):
 def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
                         recommendation=None, rebuild=False, research_root=None, audit=False,
                         config=None, asset_layer=None, include_references=False, broll_role=None) -> dict:
-    from asset_contract import validate_asset_layer
+    from asset_contract import KINDS, validate_asset_layer
     if asset_layer is not None and asset_layer != "unclassified":
         validate_asset_layer(asset_layer)
     if broll_role is not None and broll_role not in ("hook", "concept", "transition"):
@@ -469,14 +539,15 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
         fresh[key] = item
         return item["value"]
 
-    selection = {}
+    selection, selection_error = {}, None
     if store and (store / "selection.json").exists():
         try:
             selection = _validate_selection(read(store / "selection.json"))
         except (ComponentError, OSError, ValueError) as error:
             selection = {}
+            selection_error = str(error)
             errors.append({"path": str(store / "selection.json"), "error": str(error), "unsynchronized": True})
-    seen = set()
+    seen, reference_seen = set(), set()
     observed_hashes = {}
     for directory, origin in roots:
         if not directory.is_dir():
@@ -484,7 +555,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                 errors.append({"path": str(directory), "error": "Source is unavailable"})
             continue
         if origin == "source":
-            references, reference_warnings = _discover_references(directory)
+            references, reference_warnings = _discover_references(directory, reference_seen)
             assets.extend(references)
             warnings.extend(reference_warnings)
         for metadata_path in sorted([*directory.rglob("COMPONENT.md"), *directory.rglob("asset.json")]):
@@ -502,8 +573,10 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                 continue
             seen.add(package.resolve())
             try:
+                metadata = read(metadata_path)
+                if metadata_path.name == "asset.json" and metadata.get("kind") not in KINDS:
+                    raise ComponentError(f"Unsupported asset kind: {metadata.get('kind')!r}")
                 if origin == "source" and metadata_path.name == "asset.json" and not (package / "HASHES.json").exists():
-                    metadata = read(metadata_path)
                     ref = f"{metadata['id']}@v{metadata['version']}"
                     parse_component_ref(ref)
                     assets.append({"component_ref": ref, "package_sha256": None, "path": str(package.resolve()),
@@ -512,9 +585,8 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                                    "ratios": declared_ratios(metadata),
                                    "communication_goal": metadata.get("description", ""),
                                    "verification": "metadata-only; source is not accepted"})
-                    assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
+                    assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "entry", "compatibility", "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
                     continue
-                metadata = read(metadata_path)
                 if metadata_path.name == "asset.json":
                     metadata = {**metadata, "asset_type": metadata["kind"]}
                 hashes = read(package / "HASHES.json")
@@ -542,22 +614,29 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                     available = True
                 assets.append({"component_ref": ref, "package_sha256": report["package_sha256"],
                                "path": str(package.resolve()), "origin": origin, "available": available,
-                               "status": "accepted" if acceptance else metadata.get("status", "candidate"),
+                               "status": "accepted" if acceptance else "source" if origin == "source" else "candidate" if origin == "candidate" else metadata.get("status", "candidate"),
                                "asset_type": metadata.get("asset_type", "component"), "ratio": report["ratio"],
                                "ratios": declared_ratios(metadata),
                                "communication_goal": metadata.get("communication_goal", metadata.get("description", "")),
                                "information_shapes": metadata.get("information_shapes", []),
                                "anti_use_cases": metadata.get("anti_use_cases", []), "acceptance": acceptance,
                                "verification": "metadata-only; verified on use"})
-                assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
+                assets[-1].update({key: metadata[key] for key in ("purpose", "tags", "entry", "compatibility", "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
                 if str(metadata.get("entry", "")).lower().endswith(".mp3"):
                     assets[-1]["media_type"] = "audio"
             except (ComponentError, OSError, ValueError, KeyError, TypeError) as error:
                 errors.append({"path": str(package), "error": str(error)})
     hashes: dict[str, set[str]] = observed_hashes
     for asset in assets:
+        if selection_error and not asset.get("reference_only"):
+            asset["selection_error"] = selection_error
         if asset["package_sha256"]:
             hashes.setdefault(asset["component_ref"], set()).add(asset["package_sha256"])
+    conflicts = [{"code": "conflicting_asset_identity", "component_ref": ref,
+                  "path": str(store or root), "paths": sorted({asset["path"] for asset in assets if asset["component_ref"] == ref}),
+                  "error": "Same identity/version has different package hashes"}
+                 for ref, values in sorted(hashes.items()) if len(values) > 1]
+    errors.extend(conflicts)
     for asset in assets:
         if not asset.get("reference_only") and len(hashes.get(asset["component_ref"], set())) > 1:
             asset.update(available=False, conflict="Same identity/version has different package hashes")
@@ -580,12 +659,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
         asset.update({key: extra[key] for key in ("aliases", "tags", "purpose", "examples", "limitations", "replacement") if key in extra})
         state = extra.get("recommendation", "pending")
         asset["recommendation"] = state if state in {"recommended", "historical", "pending"} else "pending"
-        asset["ratio"] = asset.get("ratio") or "unknown"
-        asset["ratios"] = asset.get("ratios") or ([asset["ratio"]] if asset["ratio"] != "unknown" else [])
-        if not isinstance(asset["ratios"], list) or not all(isinstance(value, str) for value in asset["ratios"]):
-            asset["ratios"] = []
-        if asset["ratio"] == "unknown" and len(asset["ratios"]) == 1:
-            asset["ratio"] = asset["ratios"][0]
+        warnings.extend(_selection_ratios(asset, extra, store))
         asset["check_scope"] = asset.get("verification", "metadata-only")
         asset["group"] = asset["origin"]
         asset["match_reasons"] = [key for key in ("component_ref", "title", "communication_goal", "purpose", "aliases", "tags", "information_shapes", "workflow_role", "primary_category", "limits")
@@ -594,6 +668,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
                         else "component install with exact ref/hash") if asset["available"] else "reference only; not accepted for use"
         if asset.get("reference_only"):
             asset["use"] = "derivation reference only; not installable"
+        _describe_action(asset)
     if store and not audit:
         index_path = _target(store, ".catalog-index.json")
         index = {"schema_version": 1, "assets": [{key: value for key, value in asset.items() if key != "match_reasons"} for asset in assets], "errors": errors, "warnings": warnings}
@@ -610,24 +685,150 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
         assets = [asset for asset in assets if asset["match_reasons"]]
     assets = [asset for asset in assets if (not kind or asset["asset_type"] == kind or asset.get("media_type") == kind)
               and (not asset_layer or asset["asset_layer"] == asset_layer)
-              and (include_references or asset_layer == "reference" or asset["asset_layer"] != "reference")
-              and (not ratio or ratio in asset["ratios"] or ratio == "unknown" and not asset["ratios"])
+              and (include_references or kind in {"scene-source", "recipe"} or asset_layer == "reference" or asset["asset_layer"] != "reference")
+              and (not ratio or ratio.replace("x", ":") in asset["ratios"] or ratio == "unknown" and not asset["ratios"])
               and (not tag or tag in asset.get("tags", []))
               and (not broll_role or isinstance(asset.get("broll"), dict) and asset["broll"].get("role") == broll_role)
               and (not recommendation or asset["recommendation"] == recommendation)]
-    assets.sort(key=lambda asset: (not asset["available"], {"recommended": 0, "pending": 1, "historical": 2}[asset["recommendation"]], asset["component_ref"]))
+    assets.sort(key=lambda asset: (not asset["available"], {"recommended": 0, "pending": 1, "historical": 2}[asset["recommendation"]], asset["component_ref"], asset["path"]))
     if cache_path and fresh != cache:
         try:
             _atomic_json(cache_path, fresh)
         except (ComponentError, OSError) as error:
             errors.append({"path": str(cache_path), "error": str(error), "unsynchronized": True})
-    result = {"assets": assets, "errors": errors, "refreshed": refreshed}
+    warnings = list({json.dumps(item, sort_keys=True): item for item in warnings}.values())
+    result = {"assets": assets, "errors": errors, "warnings": warnings, "conflicts": conflicts, "refreshed": refreshed,
+              "filters": {"query": query, "kind": kind, "ratio": ratio, "tag": tag,
+                          "asset_layer": asset_layer, "recommendation": recommendation, "broll_role": broll_role,
+                          "include_references": include_references or kind in {"scene-source", "recipe"} or asset_layer == "reference"}}
+    if not assets:
+        result["message"] = "No matches for these filters; this is not a complete inventory. Reference entries are hidden unless explicitly requested."
     if audit:
         result["audit"] = {"warnings": warnings, "warning_count": len(warnings), "error_count": len(errors)}
     if research_root is not None:
         from research_catalog import query as research_query
         result["research"] = research_query(research_root, query)["documents"]
     return result
+
+
+def _describe_action(asset: dict) -> None:
+    """Selection guidance is not installation authority; installers still verify."""
+    reference = bool(asset.get("source_ref")) and asset["asset_type"] in {"scene-source", "recipe"}
+    source = Path(asset["path"])
+    asset["source_directory"] = str(source.parent if reference else source)
+    asset["entry"] = asset.get("entry") or ("component.html" if asset["asset_type"] == "component" else None)
+    asset["installable"] = bool(asset.get("available") and not asset.get("reference_only")
+                                and not asset.get("conflict") and not asset.get("selection_error"))
+    argv = ["component", "interface", asset["path"]]
+    if not reference and asset["origin"] in {"candidate", "source"}:
+        argv.append("--candidate")
+    asset["detail"] = {"argv": argv}
+    if asset.get("conflict") or asset.get("selection_error"):
+        action, instructions = "blocked", asset.get("conflict") or asset["selection_error"]
+    elif asset["installable"]:
+        action = "appearance-binding" if asset["asset_type"] in {"theme", "background", "motion"} else "install"
+        instructions = ("Use the existing appearance binding with this exact ref and package_sha256." if action == "appearance-binding"
+                        else "Use component install with this exact ref, a reviewed --binding-file and explicit --work/--variant or --project; verify package_sha256 on use.")
+    elif reference and asset["asset_type"] == "scene-source":
+        action, instructions = "derive-reference", "Read the declared source and entry for manual derivation in an authorized editable project; not installable."
+    elif asset.get("reference_only"):
+        action, instructions = "reference-only", "Read this reference and its declared usage; not installable."
+    else:
+        action, instructions = "candidate", "Not accepted for installation. Use the existing validate --candidate / pack / review workflow; acceptance is a separate authorized action."
+    asset["next_step"] = {"action": action, "instructions": instructions}
+
+
+def component_interface(root: Path, value: str, *, candidate: bool = False) -> dict:
+    """Read an exact discovered object without invoking installation resolution."""
+    inventory = discover_components(root, include_references=True, audit=True)
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    try:
+        path = path.resolve()
+    except (OSError, RuntimeError) as error:
+        raise ComponentError(f"Unsafe detail path: {value}: {error}") from error
+    matches = [row for row in inventory["assets"] if row["path"] == str(path)]
+    if not matches and not candidate:
+        matches = [row for row in inventory["assets"] if row["component_ref"] == value
+                   and (row.get("source_ref") or row["origin"] == "accepted"
+                        or row["origin"] == "legacy" and row["available"])]
+    if len(matches) > 1:
+        targets = [{key: row[key] for key in ("component_ref", "asset_type", "status", "path", "detail")} for row in matches]
+        raise ComponentError("Ambiguous asset reference; select an exact detail target: " + json.dumps(targets, ensure_ascii=False))
+    release = None
+    if matches:
+        card = dict(matches[0])
+    elif candidate:
+        release = _validate_package(path)
+        metadata = release["metadata"]
+        card = {"component_ref": release["component_ref"], "package_sha256": release["package_sha256"],
+                "path": str(path), "origin": "candidate", "status": "candidate", "lifecycle": "candidate",
+                "asset_type": metadata.get("kind", metadata.get("asset_type", "component")),
+                "available": False, "acceptance": None, "entry": metadata.get("entry"),
+                "asset_layer": _layer(metadata), "ratio": metadata.get("ratio", "unknown"),
+                "compatibility": metadata.get("compatibility", {})}
+        _selection_ratios(card, {}, None)
+    else:
+        diagnostics = [item for item in [*inventory["errors"], *inventory["warnings"]] if item["path"] == str(path)]
+        raise ComponentError(f"No discoverable asset for exact target {value!r}; candidates require an explicit path. "
+                             + json.dumps(diagnostics, ensure_ascii=False))
+    source = Path(card["path"])
+    reference = bool(card.get("source_ref")) and card["asset_type"] in {"scene-source", "recipe"}
+    if reference and candidate:
+        raise ComponentError("--candidate describes packages, not scene-source or recipe references")
+    if reference:
+        metadata = card
+        card["declaration"] = str(source)
+        card["check_scope"] = "reference metadata and entry path checked; not a package or runtime validation"
+    elif card.get("status") == "editable-source":
+        metadata = _read_json(source / "asset.json")
+        if "entry" in metadata:
+            try:
+                entry = source / _safe_relative(metadata["entry"], "source entry")
+                if not entry.resolve().is_relative_to(source.resolve()) or not entry.is_file():
+                    raise ComponentError(f"Missing or unsafe source entry: {entry}")
+            except (OSError, RuntimeError, TypeError, ValueError) as error:
+                raise ComponentError(f"Invalid source entry: {error}") from error
+        card["declaration"] = str(source / "asset.json")
+        card["check_scope"] = "metadata-only; editable source is not a frozen or accepted package"
+    else:
+        release = release or _validate_package(source, card["component_ref"])
+        metadata = release["metadata"]
+        card["declaration"] = str(source / ("asset.json" if (source / "asset.json").is_file() else "COMPONENT.md"))
+        if card.get("acceptance"):
+            validate_component_acceptance(card["acceptance"], release, runtime_root=root)
+        card["check_scope"] = "package contract and hashes checked; acceptance checked when present; no runtime or visual validation"
+    if candidate:
+        card.update(available=False, acceptance=None, lifecycle="source" if card.get("status") == "editable-source" else "candidate")
+        if card.get("status") != "editable-source":
+            card["status"] = "candidate"
+    keys = ("communication_goal", "purpose", "usage", "example", "examples", "ratio", "compatibility", "layers",
+            "slots", "parameters", "duration_range", "motion_recipe", "customization", "broll", "limits", "limitations")
+    card["interface"] = {key: metadata[key] for key in keys if key in metadata}
+    card["interface"].setdefault("layers", "not declared; verify the selected package before use")
+    if release and release.get("fixture"):
+        card["interface"]["example"] = release["fixture"]
+    for key in ("usage", "example"):
+        name = metadata.get(key)
+        if isinstance(name, str):
+            base = source.parent if reference else source
+            try:
+                attachment = base / _safe_relative(name, f"interface {key}")
+                if not attachment.resolve().is_relative_to(base.resolve()):
+                    raise ComponentError(f"Interface {key} escapes its directory")
+                if not attachment.is_file():
+                    raise ComponentError(f"Missing interface {key}: {attachment}")
+                card["interface"][key] = attachment.read_text(encoding="utf-8-sig")
+            except (OSError, RuntimeError, TypeError, ValueError) as error:
+                raise ComponentError(f"Invalid interface {key}: {error}") from error
+    card.setdefault("purpose", metadata.get("purpose", metadata.get("communication_goal", metadata.get("description", "not declared"))))
+    card.setdefault("examples", metadata.get("examples", []))
+    card.setdefault("limitations", metadata.get("limits", metadata.get("limitations", metadata.get("anti_use_cases", "not declared"))))
+    card["diagnostics"] = [item for item in [*inventory["errors"], *inventory["warnings"]]
+                           if item.get("component_ref") == card["component_ref"] or item["path"] in {card["path"], card["declaration"]}]
+    _describe_action(card)
+    return card
 
 
 def resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:

@@ -23,7 +23,7 @@ Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取�
 
 前台通过本根 `work.cmd current` 定位，无 Current 时 `work.cmd list`；后台显式绑定 Work/Variant，同一对象同时只允许一个执行者。按 [.agents/skills/hyperframes-codex-workflow/SKILL.md](.agents/skills/hyperframes-codex-workflow/SKILL.md) 加载当前阶段，生命周期和人工接受见 [.studio/workflow.md](.studio/workflow.md)。本版本只提供视频制作。Work 管一期内容，Variant 管独立制作版本；已退役或未知类型只报告，不套用视频操作。
 
-资产开发任务完成指：包已打包接纳，或场景源/配方已写发现字段，并且 `work.cmd component list --audit` 无该项告警。场景源 `manifest.json` 与配方 Markdown 的 JSON front matter（`---` 内放 JSON 对象）使用 `source_ref`、`title`、`purpose`、`tags`（数组）、`workflow_role`、`primary_category`、`classification_status`、`limits`（字符串或数组），场景源另含相对本目录的 `entry`；它们是派生参考、不可安装。字段示例见 README 的资产入口。配方目录先用 `work.cmd component source-add <目录>` 登记为 AssetSource。现有 5 个场景源与 18 条配方由 Windows 补字段，WSL 不代改。
+资产开发任务完成指：包已打包接纳，或场景源/配方已写发现字段，并且 `work.cmd component list --audit` 无该项告警。场景源 `manifest.json` 与配方 Markdown 的 JSON front matter（`---` 内放 JSON 对象）使用 `source_ref`、`title`、`purpose`、`tags`（数组）、`workflow_role`、`primary_category`、`classification_status`、`limits`（字符串或数组），场景源另含相对本目录的 `entry`；它们是派生参考、不可安装。字段示例见 README 的资产入口。配方目录先用 `work.cmd component source-add <目录>` 登记为 AssetSource。选型用 `work.cmd component list --include-references --query <用途>`；单查参考类型可直接用 `--kind scene-source` / `--kind recipe`。按结果 `detail.argv` 查看详情，冲突时选择准确路径，安装授权保持不变；`list --audit` 与 interface 不落盘。发现数量不代表已接纳数量，生产元数据只按明确目标补充，WSL 不代改生产资产。
 
 保留现有内容、Scene/Anchor ID、正式音频/对齐与冻结快照。只报告实际结果、改动、缺口和必要决定；WSL/mock、Windows 原生与生产验收分别报告，未验证不冒充通过。
 

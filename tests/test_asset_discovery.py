@@ -88,7 +88,8 @@ class DiscoveryTest(unittest.TestCase):
         self.assertEqual(before, after)
         warnings = result["audit"]["warnings"]
         codes = [item["code"] for item in warnings]
-        self.assertEqual(3, codes.count("missing_discovery_fields"))
+        self.assertEqual(2, codes.count("missing_discovery_fields"))
+        self.assertIn("unknown_source_approval", codes)
         self.assertEqual(6, codes.count("unsafe_reference_path"))
         self.assertIn("missing_reference_file", codes)
         self.assertIn("missing_selection_fields", codes)

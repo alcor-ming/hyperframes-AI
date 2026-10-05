@@ -17,6 +17,8 @@ Read effective switches with `work settings show --json`: line defaults, then us
 
 After a successful official Finalize, the target Variant is archived. Resume revisions on that same Variant with `work reopen <Work-ID> --variant-id <Variant-ID>`; preserve sibling lifecycle and frozen deliveries. Work aggregation, park/resume, history and storage rules live in `.studio/workflow.md`, not Current.
 
+For asset selection, use `work component list --include-references --query <purpose>` to search packages, scene sources and recipes together. Explicit `--kind scene-source` / `--kind recipe` needs no extra flag; plain list still hides references. Pass the returned `detail.argv` to the same root work entry for exact details; use `full_result` for untruncated JSON. Follow the current status and next_step, resolve ambiguity with the listed path, and never treat a reference or candidate as installation authority. Interface and list --audit write no cache, index or report.
+
 ## Stage Loading
 
 | Stage | Load only as needed |

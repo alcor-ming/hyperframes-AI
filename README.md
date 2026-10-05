@@ -4,7 +4,7 @@
 
 ## 快速开始
 
-资产选型使用 `work component list` 的生成式目录，可按 `--asset-layer` 筛选；参考样例默认隐藏且不可新安装，显式查看用 `--include-references`。`component migrate plan|apply` 合并明确指定的资产目录，`component archive plan|apply` 保存非破坏性归档快照；不自动接纳、不删除旧包、不修改已有 Work。接口与边界见 [.studio/spec/hyperframes-assets.md](.studio/spec/hyperframes-assets.md)。
+资产选型使用 `work component list` 的生成式目录，可按 `--asset-layer` 筛选；参考样例默认隐藏且不可新安装，显式查看用 `--include-references`，或直接指定 `--kind scene-source` / `--kind recipe`。`component migrate plan|apply` 合并明确指定的资产目录，`component archive plan|apply` 保存非破坏性归档快照；不自动接纳、不删除旧包、不修改已有 Work。接口与边界见 [.studio/spec/hyperframes-assets.md](.studio/spec/hyperframes-assets.md)。
 
 视频支持 `card` 卡片模式与 `explainer` 有声动态图解，均使用 16:9 / 9:16 五层宿主：背景、主体、强调转场、独立文字、口播字幕。`--captions on|off` 为 Variant 开关，card 默认关闭、explainer 默认开启。A/B-roll 管主画面时间切换，Plan 按 Scene 维护编排、内嵌上屏文字、素材、声音 cue 与节奏事件。声音层对两种模式开放；Finalize 渲染最终 MP4，不含平台工作流。
 
@@ -139,6 +139,8 @@ RC2 视频 Work 的全局 ID 与系列号独立递增且不封顶于 999；`name
 ./work research --root <登记根> query --kind tool
 ```
 
+创作查询用 `component list --include-references --query <用途>` 同时查包、场景源与配方；普通 list 保持参考项默认隐藏。列表 `detail.argv` 可直接传给本根 work 入口查询详情，`full_result` 可取完整 JSON；截断时保留总数和准确目标。`component interface` 区分当前状态、入口、限制与真实下一步，歧义必须按路径选择；参考项没有安装权或虚构派生命令。`list --audit` 和 interface 均不写缓存、索引或报告。
+
 发现结果支持类型、画幅、标签与推荐状态筛选；区分已接纳、候选、源和仅供参考，metadata-only 不等于完整校验。采用时仍验证精确版本/hash/闭包，缓存可用 `--rebuild` 重建；查询、推荐和研究更新都不改已有 Work。研究支持 create/register/query/update/sync/link/reference，正文为真源，修改记录使用当前 revision，摘要更新校验当前正文 hash；过期或失败不覆盖正文、不自动改 Plan 或接受状态。详见 [技术合同](.studio/spec/hyperframes.md)。
 
 本地 Theme 字体由 `await HarnessAppearance.load()` 等待加载，再同步 apply；通过 Typography CSS 变量使用隔离字体族，实例结束 dispose。MP3 使用原生 media 合同与真实 probe/decode 检查，入库不代表听感或成片声音接受。文字与辅助图形的制作默认只见 [visual-design](.studio/spec/visual-design.md)：图形内容由 Windows 制作，组件也可纳入 WSL 开发计划；WSL 负责工具和入口，不随包宣称已接纳图形预设。
@@ -164,12 +166,13 @@ RC2 视频 Work 的全局 ID 与系列号独立递增且不封顶于 999；`name
 # 导入已有冻结包时改用 component import <exact-package-directory>
 # Windows 审阅独立副本后，使用 pack/import 返回的精确摘要
 ./work component accept <component-id>@vN --sha256 <package-sha256> --note <review-result>
-./work component list --query <relationship-or-name>
+./work component list --include-references --query <relationship-or-name>
+./work component interface <列表返回的准确引用或路径> --json
 ```
 
 资产配置归属当前入口根，变更只影响后续命令，长进程固定启动时输入；Review 不修改生产配置。module/media 的 `asset.json` 与 Binding 示例见 [资产 PRD](docs/PRD/hyperframes-component-motion.md#4-m1-最小资产合同)。独立样例沿用已实现的 `component install ... --project <registered-source/sample>` 与 `component verify --project <registered-source/sample>`，不伪装正式 Work，不增加另一套播放器。
 
-Windows 资产开发任务完成指：包已打包接纳，或场景源/配方已写发现字段，并且 `component list --audit` 无该项告警。配方目录先用 `component source-add <目录>` 登记为 AssetSource。场景源和配方是派生参考、不可安装，可用 `component list --kind scene-source|recipe --query <用途>` 检索；`doctor` 显示只读漏登审计摘要。现有 5 个场景源和 18 条配方由 Windows 补字段，WSL 不代改。
+Windows 资产开发任务完成指：包已打包接纳，或场景源/配方已写发现字段，并且 `component list --audit` 无该项告警。配方目录先用 `component source-add <目录>` 登记为 AssetSource。场景源和配方是派生参考、不可安装，可用 `component list --kind scene-source|recipe --query <用途>` 检索；`doctor` 显示只读漏登审计摘要。发现数量不代表已接纳数量。生产元数据补充由 Windows 按具体授权执行，WSL 不代改生产资产，使用隔离夹具验证规则。
 
 场景源 `manifest.json` 使用以下发现字段；`entry` 为相对场景源目录的文件，`tags` 为数组，`limits` 为字符串或数组。配方 Markdown 沿用项目的 JSON front matter（`---` 内放 JSON 对象），使用相同字段但省略 `entry`：
 

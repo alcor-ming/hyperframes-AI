@@ -25,7 +25,7 @@ Research 按段落或 Anchor 记录事实与来源、B-roll 候选（可定位�
 ## 2. 整片设计
 
 Plan 模板与适用检查从冻结档案读取；形式豁免不扩大为接受豁免。
-Plan 阶段按用途运行 `work component list --query <用途>` 查包、场景源与配方，再选择复用、派生或自制。场景源与配方只作派生参考。组件可在 WSL 开发任务或 Windows 可编辑源编写；生产内容制作保持根规则边界。
+Plan 阶段按用途运行 `work component list --query <用途> --include-references` 查包、场景源与配方，按结果的 `detail.argv`（在本根 work 入口后传入参数）查看准确接口，再选择复用、派生或自制。单查场景源或配方可直接用 `--kind scene-source` / `--kind recipe`；裸 list 保留参考项默认隐藏的包目录行为。场景源与配方不可安装，按详情中的源入口或配方说明使用，不猜派生命令。组件可在 WSL 开发任务或 Windows 可编辑源编写；生产内容制作保持根规则边界。
 
 新 `plan_format=3.7.0` 按 [创作指南](spec/visual-design.md) 填导演 Brief 与按 A/B 段的分镜表，每段一个观看任务。逐 Scene 保留 `card`、`screen`、素材、声音与刻意停顿例外，不再写事件表。参考机制 ID 见 [机制目录](mechanisms.yaml)。正式声音与字词对齐仍是时间依据。CLI 冻结元信息，3.5.2 Plan 继续可读，不自动转换。拟生成素材列用途、数量、风格与 Asset Brief，权限只见根规则。
 
