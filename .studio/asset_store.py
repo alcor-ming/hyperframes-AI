@@ -711,7 +711,7 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
     return result
 
 
-def _describe_action(asset: dict) -> None:
+def _describe_action(asset: dict, *, candidate: bool = False) -> None:
     """Selection guidance is not installation authority; installers still verify."""
     reference = bool(asset.get("source_ref")) and asset["asset_type"] in {"scene-source", "recipe"}
     source = Path(asset["path"])
@@ -720,7 +720,7 @@ def _describe_action(asset: dict) -> None:
     asset["installable"] = bool(asset.get("available") and not asset.get("reference_only")
                                 and not asset.get("conflict") and not asset.get("selection_error"))
     argv = ["component", "interface", asset["path"]]
-    if not reference and asset["origin"] in {"candidate", "source"}:
+    if not reference and (candidate or asset["origin"] in {"candidate", "source"}):
         argv.append("--candidate")
     asset["detail"] = {"argv": argv}
     if asset.get("conflict") or asset.get("selection_error"):
@@ -827,7 +827,7 @@ def component_interface(root: Path, value: str, *, candidate: bool = False) -> d
     card.setdefault("limitations", metadata.get("limits", metadata.get("limitations", metadata.get("anti_use_cases", "not declared"))))
     card["diagnostics"] = [item for item in [*inventory["errors"], *inventory["warnings"]]
                            if item.get("component_ref") == card["component_ref"] or item["path"] in {card["path"], card["declaration"]}]
-    _describe_action(card)
+    _describe_action(card, candidate=candidate)
     return card
 
 

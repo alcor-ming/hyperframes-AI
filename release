@@ -99,7 +99,7 @@ def directory_sha256(root: Path) -> str:
     return digest.hexdigest()
 
 
-def release_checks(root: Path) -> None:
+def release_checks(root: Path, *, packaged: bool = False) -> None:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     parser = REPO / ".studio/.runtime/dependency-parser"
@@ -110,11 +110,14 @@ def release_checks(root: Path) -> None:
     env["NODE_PATH"] = os.pathsep.join([str(REPO / ".studio/remotion/node_modules"),
                                       str(REPO / "node_modules"), env.get("NODE_PATH", "")])
     subprocess.run(
-        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-q"],
+        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p",
+         "test_asset_entry.py" if packaged else "test_*.py", "-q"],
         cwd=root,
         env=env,
         check=True,
     )
+    if packaged:
+        return
     subprocess.run(
         [sys.executable, ".agents/skills/hyperframes-codex-workflow/scripts/validate_package.py"],
         cwd=root,
@@ -331,6 +334,7 @@ def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: li
         release_checks(staging)
         stage_windows_rules(staging)
         strip_bundled_assets(staging)
+        release_checks(staging, packaged=True)
         sources = {name: digest for name, digest in sources.items() if (staging / name).is_file()}
         manifest = {"schema_version": 3, "layout": "root-v1", "channel": channel, "release": identity,
                     "package_kind": "full" if runtime_files is None else "tools",
@@ -387,6 +391,7 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
         release_checks(staging)
         stage_windows_rules(staging)
         strip_bundled_assets(staging)
+        release_checks(staging, packaged=True)
         files = {
             path.relative_to(staging).as_posix(): sha256(path)
             for path in sorted(p for p in staging.rglob("*") if p.is_file())

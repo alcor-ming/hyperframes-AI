@@ -35,11 +35,7 @@ class AssetStoreTest(unittest.TestCase):
         self.addCleanup(self.environment.stop)
         STORE.configure_asset_store(self.harness, self.store)
         self.source = self.root / "source"
-        shutil.copytree(REPO / ".studio/components/chapter-intro/4x3/v1", self.source)
-        # A new local identity proves that discovery has no Harness asset-name list.
-        for name in ("COMPONENT.md", "component.html", "contract.schema.json", "preview.fixture.json"):
-            path = self.source / name
-            path.write_text(path.read_text(encoding="utf-8").replace("chapter-intro", "external-example"), encoding="utf-8")
+        shutil.copytree(REPO / "tests/fixtures/asset-component", self.source)
         COMPONENT.write_hashes(self.source)
         self.ref = "external-example/4x3@v1"
 

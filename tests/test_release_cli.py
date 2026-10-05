@@ -36,6 +36,10 @@ class ReleaseCliTest(unittest.TestCase):
                                 for call in run.call_args_list))
             self.assertTrue(all(call.kwargs["env"]["HYPERFRAMES_DEPENDENCY_MODULE_ROOT"] == str(parser)
                                 for call in run.call_args_list))
+            with mock.patch.object(RELEASE, "REPO", repo), mock.patch.object(RELEASE.subprocess, "run") as run:
+                RELEASE.release_checks(repo / "staging", packaged=True)
+            run.assert_called_once()
+            self.assertIn("test_asset_entry.py", run.call_args.args[0])
 
     @unittest.skipUnless(sys.platform == "linux" and os.environ.get("HF_DEPLOY_NATIVE_TEST_ROOT"),
                          "Set HF_DEPLOY_NATIVE_TEST_ROOT to a Windows-mounted isolated test parent")
@@ -141,16 +145,20 @@ class ReleaseCliTest(unittest.TestCase):
             root = Path(temporary)
             def freeze(staging, includes):
                 (staging / "windows-runtime.lock.json").write_text("locked")
+                (staging / ".studio/components").mkdir(parents=True)
                 return {"windows-runtime.lock.json": RELEASE.sha256(staging / "windows-runtime.lock.json")}
+            def checks(staging, *, packaged=False):
+                self.assertEqual(not packaged, (staging / ".studio/components").is_dir())
             runtime = {"runtime/python/python.exe": "a" * 64}
             with mock.patch.object(RELEASE, "run", side_effect=["head", "dirty"]), \
                  mock.patch.object(RELEASE, "freeze_sources", side_effect=freeze), \
                  mock.patch.object(RELEASE, "stage_skills", return_value={}), \
                  mock.patch.object(RELEASE, "stage_windows_rules"), \
-                 mock.patch.object(RELEASE, "release_checks"), \
+                 mock.patch.object(RELEASE, "release_checks", side_effect=checks) as checked, \
                  mock.patch.object(RELEASE, "stage_runtime") as stage:
                 archive = RELEASE.candidate("fixture", root / "out", root / "cache", [], channel="local", runtime_files=runtime)
             stage.assert_not_called()
+            self.assertEqual([{}, {"packaged": True}], [call.kwargs for call in checked.call_args_list])
             with zipfile.ZipFile(archive) as bundle:
                 manifest = json.loads(bundle.read("local-fixture/.release.json"))
                 self.assertEqual(manifest["package_kind"], "tools")

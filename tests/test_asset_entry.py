@@ -150,6 +150,39 @@ class AssetEntryTest(unittest.TestCase):
         message = self.call('component', 'interface', str(directory / 'manifest.json'), status=2)
         self.assertIn('unsafe_reference_path', message)
 
+    def test_accepted_package_candidate_view_roundtrips_without_writes(self):
+        source = self.root / 'long-module'
+        source.mkdir()
+        usage = 'Synthetic usage. ' * 300
+        (source / 'asset.json').write_text(json.dumps({
+            'schema_version': 1, 'id': 'long-module', 'version': 1,
+            'kind': 'module', 'entry': 'main.js', 'usage': 'USAGE.md',
+        }))
+        (source / 'main.js').write_text('window.fixture = 1;')
+        (source / 'USAGE.md').write_text(usage)
+        packed = STORE.pack_source(self.store, source)
+        ref = packed['component_ref']
+        STORE.accept_component(self.store, ref, packed['package_sha256'],
+                               'Synthetic module', runtime_root=self.harness)
+        accepted = self.call('component', 'interface', ref, '--json')
+        before = self.files()
+        with patch.object(STORE, '_atomic_json', side_effect=AssertionError('detail wrote state')), \
+             patch.object(work, 'write_json', side_effect=AssertionError('detail wrote report')):
+            compact = self.call(*accepted['detail']['argv'], '--candidate')
+            self.assertIn('--candidate', compact['detail']['argv'])
+            self.assertEqual([*compact['detail']['argv'], '--json'], compact['full_result'])
+            for argv in (compact['detail']['argv'], compact['full_result']):
+                card = self.call(*argv)
+                for key in ('component_ref', 'package_sha256', 'path', 'origin',
+                            'status', 'lifecycle', 'acceptance', 'installable', 'next_step', 'detail'):
+                    self.assertEqual(compact[key], card[key], key)
+                self.assertEqual('candidate', card['status'])
+                self.assertFalse(card['installable'])
+                self.assertIsNone(card['acceptance'])
+            self.assertEqual(usage, self.call(*compact['full_result'])['interface']['usage'])
+            self.assertEqual(accepted, self.call('component', 'interface', ref, '--json'))
+        self.assertEqual(before, self.files())
+
     def test_ratio_fallback_requires_evidence_and_does_not_expand_declarations(self):
         source = self.root / 'module-source'
         source.mkdir()
