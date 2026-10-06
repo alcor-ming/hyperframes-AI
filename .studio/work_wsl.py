@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 
-PATH_OPTIONS = {"--appearance-file", "--alignment", "--file", "--brief", "--source", "--output",
+PATH_OPTIONS = {"--config", "--appearance-file", "--alignment", "--file", "--brief", "--source", "--output",
                 "--project", "--plan", "--body-file", "--exceptions", "--manifest", "--audio",
                 "--component", "--binding", "--delivery", "--context-file", "--from", "--to",
                 "--root", "--path", "--research-root", "--mapping", "--title-overrides", "--purpose-overrides", "--classification",
@@ -47,6 +47,7 @@ def command(root, arguments):
             if isinstance(action, argparse._SubParsersAction):
                 parsers.extend(action.choices.values())
     positional_paths = set()
+    parsed = None
     if not any(value in {"--help", "-h"} for value in arguments):
         try:
             parsed = parser_root.parse_args(arguments)
@@ -58,13 +59,17 @@ def command(root, arguments):
                 keys.add("revision")
             if parsed.command == "component" and getattr(parsed, "candidate", False):
                 keys.add("component")
-            if parsed.command == "component" and parsed.component_command in {"card-kit-source", "math-kit-source"}:
+            if parsed.command == "component" and parsed.component_command in {"math-kit-source"}:
                 keys.add("target")
             positional_paths = {str(getattr(parsed, key)) for key in keys if getattr(parsed, key, None) is not None}
     root = root.resolve()
     result = [convert(root, "work.cmd")]
     previous = None
     relative_options = RELATIVE_OPTIONS | ({"--file"} if "request" in arguments and "freeze" in arguments else set())
+    if parsed is not None and parsed.command == "showcase":
+        relative_options |= {"--input", "--output"}
+    if parsed is not None and parsed.command == "tts" and parsed.tts_command == "adopt":
+        relative_options |= {"--alignment"}
     for argument in arguments:
         if not argument or any(c in argument for c in '\"%!?^&|<>\r\n\x00'):
             raise ValueError("Unsupported cmd metacharacter in argument; use a root-local input file")

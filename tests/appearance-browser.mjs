@@ -37,7 +37,7 @@ for name, kind, payload in [
  refs[name] = {'ref':candidate['component_ref'],'kind':kind,'package_sha256':candidate['package_sha256']}
 for name in ('light','dark','clear','moving'):
  project = root/('project-'+name); project.mkdir()
- account = {'id':'fixture','revision':1,'theme':refs['paper'],'background':refs['light' if name == 'moving' else name],'mode':'card','ratio':'16:9','motion':{'reveal':None,'emphasis':None,'exit':None,'transition':None}}
+ account = {'id':'fixture','revision':1,'theme':refs['paper'],'background':refs['light' if name == 'moving' else name],'mode':'explainer','ratio':'16:9','motion':{'reveal':None,'emphasis':None,'exit':None,'transition':None}}
  account['overrides'] = {'theme':{'tokens.colors.text':'#19352b'}}
  if name == 'moving':
   account['motion']['reveal'] = {'asset':refs['gentle'],'entry':'reveal'}

@@ -19,11 +19,6 @@ const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hf-visual-diagnostics-'));
 const project = path.join(root, 'fixture');
 await fs.mkdir(project);
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-await fs.cp(path.join(repo, '.studio/components/cover-title-core/16x9/v2'), path.join(project, 'card'), {recursive: true});
-const cardPath = path.join(project, 'card/component.html');
-const cardSource = await fs.readFile(cardPath);
-await fs.chmod(cardPath, 0o444);
-await fs.copyFile(path.join(repo, '.studio/runtime/card-component.js'), path.join(project, 'card-component.js'));
 await fs.copyFile(path.join(repo, '.studio/runtime/figures.js'), path.join(project, 'figures.js'));
 await fs.copyFile(process.env.GSAP_FILE || path.join(HF_PACKAGE, '../gsap/dist/gsap.min.js'), path.join(project, 'gsap.js'));
 const videoFile = 'video' + path.extname(VIDEO_FIXTURE || 'video.webm');
@@ -34,25 +29,20 @@ const cli = path.join(HF_PACKAGE, 'dist/cli.js');
 let server, log = '';
 const checks = [];
 async function source(mode) {
-  if (mode.startsWith('card')) {
+  if (mode.startsWith('text-layer') || mode === 'nested-frame') {
     await fs.writeFile(path.join(project, 'index.html'), `<!doctype html><meta charset="utf-8"><style>
 html,body{margin:0}main{position:relative;width:960px;height:540px;background:white;overflow:hidden}
-[data-hf-layer],.mount{position:absolute;inset:0}[data-hf-layer="text"]{z-index:2}
-</style><script src="gsap.js"></script><script src="card-component.js"></script>
+[data-hf-layer]{position:absolute;inset:0}article,p{position:absolute;left:40px;top:40px;font:32px Arial}
+</style><script src="gsap.js"></script>
 <main data-composition-id="fixture" data-width="960" data-height="540" data-duration="4">
-<div data-hf-layer="stage"><div id="stage" class="mount" data-scene-id="S01"></div></div>
-<div data-hf-layer="text"><div id="text" class="mount" data-scene-id="S01" data-info-id="I01"></div>
-<p id="b" data-scene-id="S01" data-info-id="I02" style="position:absolute;left:40px;top:40px;visibility:hidden">B evidence remains clear</p></div></main>
-<script>window.ready=(async()=>{
-const card=await HarnessCardComponent.mount({source:'/api/projects/fixture/preview/card/component.html',stage:document.getElementById('stage'),text:document.getElementById('text')});
-${mode === 'card-broken' ? "card.decorations.contentDocument.body.insertAdjacentHTML('beforeend','<img src=missing.png>');" : ''}
-${mode === 'card-unknown' ? "document.querySelector('main').append(document.createElement('iframe'));" : ''}
-const timeline=gsap.timeline({paused:true}).to({},{duration:4});
-timeline.eventCallback('onUpdate',()=>{const t=timeline.time();card.renderAt(t);
-card.text.style.visibility=t>=2&&t<3?'hidden':'visible';card.text.style.filter=t>=1&&t<2?'blur(6px)':'none';
-document.getElementById('b').style.visibility=t>=1&&t<3?'visible':'hidden'});
-window.__timelines={fixture:timeline};card.renderAt(0);
-})();</script>`);
+<div data-hf-layer="text" data-scene-id="S01"><article id="a" data-info-id="I01">Readable explanation</article>
+<p id="b" data-info-id="I02" style="visibility:hidden">B evidence remains clear</p></div>
+${mode === 'text-layer-broken' ? '<img src="missing.png">' : ''}
+${mode === 'nested-frame' ? '<iframe srcdoc="<p>Unverified embedded text</p>"></iframe>' : ''}</main>
+<script>window.__timelines={fixture:gsap.timeline({paused:true})
+.set('#a',{filter:'blur(6px)'},1).set('#a',{visibility:'hidden'},2)
+.set('#a',{visibility:'visible',filter:'none'},3)
+.set('#b',{visibility:'visible'},1).set('#b',{visibility:'hidden'},3).to({},{duration:1},3)};</script>`);
     return;
   }
   const video = mode.startsWith('video');
@@ -101,7 +91,7 @@ await figures.renderAt(0);})();</script>` : ''}</body></html>`);
 }
 try {
   const url = `http://127.0.0.1:${port}/#project/fixture`;
-  for (const mode of ['static', 'short', 'slow', 'periodic', 'corner', 'noise', 'transition', 'rhythm', 'transparent-overlay', 'opaque-overlay', 'broken', 'card', 'card-broken', 'card-unknown',
+  for (const mode of ['static', 'short', 'slow', 'periodic', 'corner', 'noise', 'transition', 'rhythm', 'transparent-overlay', 'opaque-overlay', 'broken', 'text-layer', 'text-layer-broken', 'nested-frame',
     ...(VIDEO_FIXTURE ? ['video', 'video-native', 'video-offset', 'video-loop', 'video-default-duration'] : [])]
     .filter(mode => !process.env.PROBE_MODES || process.env.PROBE_MODES.split(',').includes(mode))) {
     await source(mode);
@@ -123,21 +113,20 @@ try {
         : [{id: 'S01', start: 0, duration: mode.startsWith('video') ? 2.5 : 4}], parameters: {timeout_ms: mode.includes('broken') ? 300 : 10000}});
     await fs.writeFile(path.join(root, mode + '.json'), JSON.stringify(report, null, 2));
     assert.deepEqual(await fs.readFile(index), before, 'Studio must not rewrite the sampled source');
-    assert.deepEqual(await fs.readFile(cardPath), cardSource, 'Studio must not rewrite the frozen component');
     assert(!('motion' in report), 'D2 stillness output is retired');
-    if (mode.includes('broken') || mode === 'card-unknown') {
+    if (mode.includes('broken') || mode === 'nested-frame') {
       assert(report.samples.every(item => !item.ready));
     } else {
       assert(report.samples.every(item => item.ready), `${mode}: ${JSON.stringify(report.samples.filter(item => !item.ready))}`);
-      if (mode === 'card') {
+      if (mode === 'text-layer') {
         const texts = report.samples.flatMap(item => item.texts);
-        assert(texts.length > 0, 'real card projection yields D1 text');
-        assert(texts.some(item => item.info === 'I01'), 'card projection was actually sampled');
+        assert(texts.length > 0, 'visible DOM yields D1 text');
+        assert(texts.some(item => item.info === 'I01'), 'the text panel was actually sampled');
         assert(texts.every(item => item.scene === 'S01' && ['I01', 'I02'].includes(item.info) && item.layer === 'text'),
-          'card text inherits host scene/info and fourth layer');
+          'text inherits host scene/info and fourth layer');
         assert(report.samples.filter(item => item.time > 1 && item.time < 3).every(item =>
           item.texts.length > 0 && item.texts.every(text => text.info === 'I02')),
-          'hidden/blurred A projection is not sampled while clear B text remains');
+          'hidden/blurred A text is not sampled while clear B text remains');
       } else if (!mode.startsWith('video')) {
         const text = report.samples.flatMap(item => item.texts).map(item => item.text).join(' ');
         assert.equal(text.includes('Visible text'), mode !== 'opaque-overlay', 'Transparent containers do not hide painted text');
@@ -163,7 +152,7 @@ try {
     checks, realVideo: !!VIDEO_FIXTURE, evidence: root}));
 } finally {
   if (server && server.exitCode === null) { server.kill('SIGTERM'); await once(server, 'exit'); }
-  for (const file of [cardPath, path.join(project, 'index.html')]) {
+  for (const file of [path.join(project, 'index.html')]) {
     await fs.chmod(file, 0o644).catch(error => { if (error.code !== 'ENOENT') throw error; });
   }
 }

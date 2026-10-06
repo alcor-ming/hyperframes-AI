@@ -19,7 +19,7 @@
 **验收标准：** <能由准确 Draft 检查的画面结果>
 **参考机制：** persistent-anchor
 
-card 只必填核心表达、主体/次主体、禁止项；explainer（含 math-rap）全部必填并引用 1–3 个机制 ID。按冻结 line 加载规则。
+explainer 全部必填并引用 1–3 个机制 ID。按冻结 line 加载规则；数学与英语使用各自专属 Plan 模板。
 
 ## 分镜表
 
@@ -35,17 +35,10 @@ card 只必填核心表达、主体/次主体、禁止项；explainer（含 math
 
 **延续信息：** <返回 A 时列出前场已定义的信息 ID，例如 I01；不重复 screen 正文，无延续则省略>
 
-```card C1 · P001
-preset: F01
-area: left
-title: <卡片标题> @<口播词>
-- <条目> @<口播词>
-```
-
 ### I01 · SCRIPT.md#P001
 
 ```screen
-<卡片之外的独立上屏正文，实际换行，不照搬口播>
+<独立上屏正文，实际换行，不照搬口播>
 ```
 
 ### 素材与声音
@@ -72,9 +65,7 @@ title: <卡片标题> @<口播词>
 - 每段观看任务与主体明确，测量第 2–4 层节奏和静止，不“铺开再等”。
 - A 文字不照搬口播，B 素材有来源或 Brief，事实边界清楚。
 - 第 4 层阅读保护期间，第 2、3 层继续产生事件；刻意停顿写明区间和原因，talking_head 真人区间单独声明。
-卡片文字中的 @ 与 [ 必须转义；SVG 写在 cue 后的方括号中，只接受闭包内图标引用或 custom:文件.svg。exit 可写退场 cue。无卡片、独立文字、素材或声音时省略对应块。信息 ID 全片唯一，延续信息只引用 ID。screen 默认 A、第 4 层，例外才写所属画面。Plan 只记录未通过项与例外。
-
-F04 每条后可用缩进 `indexKey: 文字 @cue`，F06 用 `key: 文字 @cue [SVG]`；F07 使用 `input`、`inputLabel`、`outputLabel`，均为文字 @cue，输入与输出标签可带端点 SVG，inputLabel 不带图。F03/F05/F08 可用 `figure: custom:文件.svg @cue`；`emphasis: cue` 可对已揭示内容强调。F05/F06/F07 不接条目正文 SVG，F06 的图放 key。区域仅 full/left/right/top/bottom 或安全区内正像素尺寸。详细槽位见 `.studio/spec/card-kit.md`；条数与实际文字溢出均须通过 `cards build`，不手改生成块。
+无独立文字、素材或声音时省略对应块。信息 ID 全片唯一，延续信息只引用 ID。screen 默认 A、第 4 层，例外才写所属画面。Plan 只记录未通过项与例外。
 -->
 
 ## 唯一参考 Scene 与方向批准（开关开启时）

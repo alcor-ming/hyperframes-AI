@@ -114,17 +114,16 @@ print(json.dumps(rhythm_diagnostics(json.load(sys.stdin),[dict(id='S01',start=0,
     void request.respond({status: 200, contentType: request.url().endsWith('.svg') ? 'image/svg+xml' : 'text/html',
       body: request.url().endsWith('.svg') ? svg : `<div data-hf-layer="stage"><canvas width="24" height="24"></canvas>
         <img id="icon-file" src="/icon.svg"><span data-hf-schematic>${svg}</span>
-        <span data-card-svg-slot>${svg}</span><span style="opacity:0">${svg}</span></div>`});
+        <span style="opacity:0">${svg}</span></div>`});
   });
   await page.goto('http://localhost/isolated-fixture', {waitUntil: 'load'});
   const frame = await page.evaluate(inspectFrame, [], 0);
-  assert.equal(frame.icons.length, 3, 'external SVG, schematic and slot observed; transparent SVG excluded');
+  assert.equal(frame.icons.length, 2, 'external SVG and schematic observed; transparent SVG excluded');
   assert(frame.icons.some(icon => icon.target === '#icon-file' && icon.svg.includes('data-icon')));
   assert(frame.icons.some(icon => icon.schematic));
-  assert(frame.icons.some(icon => icon.card_slot));
   assert.equal(frame.motion_unverified[0].reason, 'media_canvas_motion_unverified');
   console.log(JSON.stringify({checks: ['nested-scaled-timeline', 'set-paint', 'target-ancestry', 'helper-dedupe',
     'hidden-offscreen-noop', 'ambient-role-layer-exclusion', 'camera-continuation-and-reversal',
-    'svg-file-provenance', 'schematic-and-slot-markers', 'canvas-unverified', 'svg-draw-and-geometry',
+    'svg-file-provenance', 'schematic-marker', 'canvas-unverified', 'svg-draw-and-geometry',
     'same-source-frame-identity'], events: report.events.length}));
 } finally { await browser.close(); }

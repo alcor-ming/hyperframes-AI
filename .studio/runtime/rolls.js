@@ -11,10 +11,8 @@
       return value;
     };
     const saved = new Map(), ids = new Map();
-    const frameOf = el => el?.ownerDocument?.defaultView?.frameElement;
     const element = (el, layer) => {
-      const frame = frameOf(el);
-      const host = el?.closest?.("[data-hf-layer]") ?? (frame?.dataset.cardLayer === layer ? frame.closest("[data-hf-layer]") : null);
+      const host = el?.closest?.("[data-hf-layer]");
       if (!el || el.nodeType !== 1 || !el.isConnected || host?.dataset.hfLayer !== layer || saved.has(el)) throw new TypeError("Roll requires a distinct mounted " + layer + " element");
       saved.set(el, { visibility: el.style.visibility, filter: el.style.filter, opacity: el.style.opacity });
       return el;

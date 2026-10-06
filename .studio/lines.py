@@ -11,12 +11,25 @@ def catalogue(name):
 
 
 def select(state):
-    mode = state.get('mode') or 'card'
-    suffix = state.get('submodule') or state.get('appearance_lock', {}).get('submodule') if mode == 'showcase' else state.get('series_binding', {}).get('spec')
+    mode = state.get('mode') or 'explainer'
+    if mode == 'card':
+        raise ValueError('Unsupported retired product line: card; choose explainer, showcase, math or english')
+    suffix = None
+    if mode == 'showcase':
+        suffix = state.get('submodule') or state.get('appearance_lock', {}).get('submodule')
+    elif mode == 'explainer':
+        suffix = state.get('series_binding', {}).get('spec')
     identity = mode + ('/' + suffix if suffix else '')
     if identity not in catalogue('lines')['lines']:
         raise ValueError('Unknown product line: ' + identity)
     return deepcopy(catalogue('lines')['lines'][identity])
+
+
+def is_math(state):
+    return (state.get('mode') == 'math'
+            or (state.get('line') or {}).get('id') in ('math', 'explainer/math-rap')
+            or state.get('mode', 'explainer') == 'explainer'
+            and state.get('series_binding', {}).get('spec') == 'math-rap')
 
 
 def frozen(state):

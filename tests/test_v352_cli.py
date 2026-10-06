@@ -83,12 +83,11 @@ class V352CliTests(unittest.TestCase):
             self.assertEqual(original['detail'], row['detail'])
             self.assertEqual(original['asset_type'], row['asset_type'])
 
-    @unittest.skipUnless((fixture.REPO / '.studio/components/script-draft-core/16x9/v2').is_dir(),
+    @unittest.skipUnless((fixture.REPO / '.studio/components/script-draft-core/16x9/v1').is_dir(),
                          'Source-checkout-only: legacy component fixtures are excluded from releases')
-    def test_existing_component_interface_has_parameters_layers_and_example(self):
-        source = fixture.REPO / '.studio/components/script-draft-core/16x9/v2'
+    def test_existing_component_interface_has_parameters_and_example(self):
+        source = fixture.REPO / '.studio/components/script-draft-core/16x9/v1'
         card = json.loads(call(self, 'component', 'interface', str(source), '--candidate', '--json'))['interface']
-        self.assertEqual(['stage', 'text'], card['layers'])
         self.assertIn('slots', card)
         self.assertIn('slots', card['example'])
         self.assertNotIn('gsap.timeline', json.dumps(card))

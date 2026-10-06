@@ -46,6 +46,16 @@
       "sha256": "fdafc9cce40277e0f7a0feabce0ee50dd2fa1800f3b38015e51296b5e814048d"
     },
     {
+      "kind": "wheel",
+      "file": "numpy-2.4.2-cp314-cp314-win_amd64.whl",
+      "sha256": "068cdb2d0d644cdb45670810894f6a0600797a69c05f1ac478e8d31670b8ee75"
+    },
+    {
+      "kind": "wheel",
+      "file": "scipy-1.17.1-cp314-cp314-win_amd64.whl",
+      "sha256": "3877ac408e14da24a6196de0ddcace62092bfc12a83823e92e49e40747e52c19"
+    },
+    {
       "kind": "zip",
       "file": "node-v22.22.2-win-x64.zip",
       "target": "runtime/node",

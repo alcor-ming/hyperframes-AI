@@ -3,7 +3,6 @@
 from pathlib import Path
 import sys
 import tempfile
-import shutil
 import unittest
 from unittest import mock
 
@@ -32,28 +31,12 @@ def samples(*parts, info='I01'):
 
 
 class ExplainerDiagnosticsTests(unittest.TestCase):
-    def test_vendor_card_projection_uses_component_contract_not_scene_host_layers(self):
-        with tempfile.TemporaryDirectory() as temp:
-            project = Path(temp)
-            component = project / 'vendor/card'
-            shutil.copytree(Path(__file__).resolve().parents[1] / '.studio/components/cover-title-core/16x9/v2', component)
-            (project / 'index.html').write_text(''.join(f'<div data-hf-layer="{layer}"></div>'
-                for layer in ('background', 'stage', 'overlay', 'text')), encoding='utf-8')
-            with mock.patch('explainer.installed_assets', return_value={}):
-                report = explainer_diagnostics(project, ['index.html', 'vendor/card/component.html'], {'mode': 'card'})
-                self.assertEqual([], report['findings'])
-                html = component / 'component.html'
-                html.write_text(html.read_text(encoding='utf-8').replace('data-card-layers="stage text"',
-                    'data-card-layers="background captions"'), encoding='utf-8')
-                report = explainer_diagnostics(project, ['index.html', 'vendor/card/component.html'], {'mode': 'card'})
-                self.assertEqual(['card_component_invalid'], [item['kind'] for item in report['findings']])
-
-    def test_card_checks_layer_and_explicit_assets_without_explainer_plan_requirements(self):
+    def test_math_checks_layer_and_explicit_assets_without_explainer_plan_requirements(self):
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp)
             (project / 'index.html').write_text('<main data-hf-layer="background">'
                 '<img data-character-ref="missing@v1"><audio src="outside.mp3"></audio></main>', encoding='utf-8')
-            report = explainer_diagnostics(project, ['index.html'], {'mode': 'card'},
+            report = explainer_diagnostics(project, ['index.html'], {'mode': 'math'},
                 '| 原 Scene ID | 使用信息 ID |\n|---|---|\n| S01 | I01 |\n')
             kinds = [item['kind'] for item in report['findings']]
             self.assertEqual(3, kinds.count('explainer_layer_missing'))
@@ -94,7 +77,7 @@ class VisualTextTests(unittest.TestCase):
 
     def test_five_layer_copy_hint_only_applies_to_text_layer(self):
         states = samples(SOURCE)
-        for mode in ('card', 'explainer'):
+        for mode in ('math', 'english', 'explainer'):
             for layer in ('captions', 'background', 'stage', 'overlay', 'text', None):
                 with self.subTest(mode=mode, layer=layer):
                     states[0]['texts'][0]['layer'] = layer
@@ -107,7 +90,7 @@ class VisualTextTests(unittest.TestCase):
 
     def test_same_information_id_in_other_layers_does_not_contaminate_text(self):
         text = '材料与结论之间的联系'
-        for mode in ('card', 'explainer'):
+        for mode in ('math', 'english', 'explainer'):
             with self.subTest(mode=mode):
                 states = samples(text)
                 states[0]['texts'][0]['layer'] = 'text'

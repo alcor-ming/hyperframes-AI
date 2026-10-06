@@ -74,13 +74,13 @@ class V352RulesTest(unittest.TestCase):
             for info in row['screens'].values():
                 self.assertIn('SCRIPT.md#P00' + sid[-1], info['信息 ID / 来源'])
         self.assertEqual(43, sum(len(row['events']) for row in rows.values()))
-        self.assertEqual(12, sum(bool(event.get('derived')) for row in rows.values() for event in row['events']))
+        self.assertEqual(0, sum(bool(event.get('derived')) for row in rows.values() for event in row['events']))
         self.assertIn('Original: 7122 characters', text)
         self.assertIn(f'Migrated: {len(text)} characters', text)
         self.assertIn('7091a8d92b1df014abf6074103bf6f0f454bbbd78a37f40484a0989d699db3e0', text)
         self.assertLess(len(text), 7122)
         for limitation in ('未绑定 Work/Variant', '无方向批准', '不代表正式音频通过', '不提前写 PASS',
-                           '不复述或重新投影文字', '阶段一已生成卡面或挂载'):
+                           '不复述或重新投影文字', '不意味着已生成画面或挂载'):
             self.assertIn(limitation, text)
 
 

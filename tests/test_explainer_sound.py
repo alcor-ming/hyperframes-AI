@@ -50,7 +50,7 @@ class ExplainerCliTests(unittest.TestCase):
         self.assertFalse(lock["selection"]["captions"])
         for option in ("on", "off"):
             lock = json.loads(self.invoke("appearance", "resolve", "--account", "a", "--captions", option))
-            self.assertEqual("card", lock["mode"])
+            self.assertEqual("explainer", lock["mode"])
             self.assertEqual(option == "on", lock["selection"]["captions"])
         with self.assertRaises(cli.appearance.AppearanceError):
             self.invoke("appearance", "resolve", "--account", "a", "--mode", "explainer", "--ratio", "4:3")
@@ -58,8 +58,8 @@ class ExplainerCliTests(unittest.TestCase):
     def test_explicit_build_from_approved_narration_and_installed_sound(self):
         self.check_sound_build("explainer")
 
-    def test_card_build_from_approved_narration_and_installed_sound(self):
-        self.check_sound_build("card")
+    def test_english_build_from_approved_narration_and_installed_sound(self):
+        self.check_sound_build("english")
 
     def check_sound_build(self, mode):
         identity = self.invoke("new", "Sound", "--workflow", "hyperframes_video", "--account", "a", "--mode", mode)

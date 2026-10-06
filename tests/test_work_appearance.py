@@ -53,7 +53,7 @@ class WorkAppearanceTest(unittest.TestCase):
 
     def test_independent_selection_freezes_and_replays_without_store(self):
         resolved = json.loads(self.invoke("appearance", "resolve", "--account", "a", "--background", "green@v1",
-                                         "--mode", "card", "--seed", "0"))
+                                         "--mode", "explainer", "--seed", "0"))
         self.assertEqual(resolved["selection"]["theme"], self.theme)
         self.assertEqual(resolved["selection"]["background"], self.green)
         self.assertFalse((self.root / "works").exists())
@@ -62,7 +62,7 @@ class WorkAppearanceTest(unittest.TestCase):
         variant = work / "variants/main"
         state = cli.read_json(variant / "variant.yaml")
         original = (variant / "variant.yaml").read_bytes()
-        cli.account_service(self.root).put("account", "a", {**self.account, "background": self.green, "mode": "card"})
+        cli.account_service(self.root).put("account", "a", {**self.account, "background": self.green, "mode": "explainer"})
         self.assertEqual(original, (variant / "variant.yaml").read_bytes())
         self.assertEqual(1, state["account_revision"])
         self.assertEqual("main", state["id"])
@@ -101,8 +101,8 @@ class WorkAppearanceTest(unittest.TestCase):
         variant = work / "variants/main"
         project = variant / "project"
         state = cli.read_json(variant / "variant.yaml")
-        (project / "index.html").write_text("<html><body>Card</body></html>")
-        (project / "DESIGN.md").write_text("Synthetic card")
+        (project / "index.html").write_text("<html><body>Diagram</body></html>")
+        (project / "DESIGN.md").write_text("Synthetic explainer")
         (project / "project-config.json").write_text('{"snapshot_dependencies":[]}')
         before = cli.snapshot_digest(project)
         snapshot = self.base / "snapshot"

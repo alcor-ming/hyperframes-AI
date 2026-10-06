@@ -11,26 +11,32 @@ import visual_diagnostics as diagnostics
 from visual_plan import plan_scene_rows, VisualPlanError
 
 
-def plan(mode='card', spec=None):
+def plan(mode='explainer', spec=None):
     line = lines.select({'mode': mode, 'series_binding': {'spec': spec} if spec else {}})
     fields = {key: '说明' for key in line['brief']['required']}
     if mode == 'explainer':
         fields['参考机制'] = 'persistent-anchor'
-    return ('---\n' + json.dumps({'plan_format': '3.7.0', 'line': {key: line[key] for key in ('id', 'version')}}) + '\n---\n## 导演 Brief\n' +
+    document = ('---\n' + json.dumps({'plan_format': '3.7.0', 'line': {key: line[key] for key in ('id', 'version')}}) + '\n---\n## 导演 Brief\n' +
             '\n'.join(f'**{key}：** {value}' for key, value in fields.items()) +
             '\n## 分镜表\n| 段 | 起点口播词 | 观众看到什么 | 本段任务 | 主体 | 交接例外 | 延续 |\n'
             '|---|---|---|---|---|---|---|\n| S01·A1 | 词 | 卡片 | 解释 | | | node |\n'
             '| S01·B1 | 证据 | 媒体 | 证明 | | cut | node |\n| S01·A2 | 所以 | 卡片 | 总结 | | | |\n## S01\n')
+    if spec == 'math-rap':
+        from test_math_chain import contract
+        intent = contract()
+        intent['cues'][0]['cue'] = '词'
+        document += '```math-plan\n' + json.dumps(intent) + '\n```\n'
+    return document
 
 
 class V370Test(unittest.TestCase):
     def test_lines_settings_and_legacy(self):
-        self.assertEqual(5, len(lines.validate_catalogues()))
-        state = {'line': lines.bind({'mode': 'card'}), 'settings': {'direction_approval': False}}
+        self.assertEqual(6, len(lines.validate_catalogues()))
+        state = {'line': lines.bind({'mode': 'explainer'}), 'settings': {'direction_approval': False}}
         self.assertEqual({'value': False, 'source': 'variant'}, settings.effective(state, {'direction_approval': True})['direction_approval'])
         del state['settings']
         self.assertEqual({'value': True, 'source': 'user'}, settings.effective(state, {'direction_approval': True})['direction_approval'])
-        self.assertFalse(settings.effective(state)['direction_approval']['value'])
+        self.assertTrue(settings.effective(state)['direction_approval']['value'])
         self.assertTrue(settings.effective({}, {'direction_approval': False})['direction_approval']['value'])
         for value in ({'unknown': True}, {'direction_approval': 1}, {'critic.max_rounds': True}, {'critic.model': 'text-only'}):
             with self.assertRaises(ValueError):
@@ -44,7 +50,7 @@ class V370Test(unittest.TestCase):
     def test_storyboard_and_legacy_parser(self):
         row = plan_scene_rows(plan())['S01']
         self.assertEqual(['A', 'B', 'A'], [segment['role'] for segment in row['segments']])
-        self.assertEqual('第4层卡片文字', row['segments'][0]['subject'])
+        self.assertEqual('第2层动态图解或第4层文字', row['segments'][0]['subject'])
         self.assertEqual('第2层媒体', row['segments'][1]['subject'])
         plan_scene_rows(plan('explainer'))
         plan_scene_rows(plan('explainer', 'math-rap'))
@@ -58,7 +64,7 @@ class V370Test(unittest.TestCase):
 
     def test_pixels_exceptions_camera_and_missing(self):
         samples = [{'time': t / 2, 'ready': True, 'still': {'from': (t - 1) / 2, 'mean_delta': 0}} for t in range(1, 7)]
-        thresholds = lines.select({'mode': 'card'})['thresholds']
+        thresholds = lines.select({'mode': 'explainer'})['thresholds']
         rhythm = {'declared_exceptions': []}
         result = diagnostics.still_diagnostics(samples, rhythm, thresholds)
         self.assertEqual(3, result['intervals'][0]['duration'])

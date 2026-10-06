@@ -1,5 +1,6 @@
 """Content CLI acceptance against isolated lifecycle and synthetic exports only."""
 import copy
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import shutil
@@ -119,7 +120,7 @@ class ContentTest(unittest.TestCase):
         path.write_text(text)
         found = json.loads(self.call('content','check','pub1'))['findings']
         self.assertTrue(any('非法归因层' in f for f in found))
-        self.assertTrue(any('card' in f for f in found))
+        self.assertFalse(any('不能使用 Script' in f for f in found))
         self.assertEqual(1,len(json.loads(self.call('content','open','pub1'))['traffic_changes']))
 
     def test_timing_validation_section_map_priority_and_unaligned(self):
@@ -144,6 +145,10 @@ class ContentTest(unittest.TestCase):
         self.assertEqual('开',result['analysis']['opening']['text_0_2'])
 
     def test_summary_groups_latest_long_tail_exclusions_and_readonly(self):
+        # The assertion concerns timestamp ordering, not the host wall clock.
+        clock = self.enterContext(patch.object(content, 'datetime', wraps=datetime))
+        clock.now.side_effect = [datetime(2026, 10, 6, tzinfo=timezone.utc) + timedelta(seconds=i)
+                                 for i in range(100)]
         for n in range(5):
             target=f'pub{n}'
             self.link(target,variables=('--variable','第一画面=实物'))
@@ -216,7 +221,8 @@ class ContentTest(unittest.TestCase):
         self.assertEqual([],content.check_text(text,'showcase/pdoom'))
         self.assertEqual([],content.check_text(text,'explainer'))
         self.assertTrue(content.check_text(text,'explainer/math-rap'))
-        self.assertTrue(content.check_text('## 找问题\n## 找优秀','card'))
+        self.assertTrue(content.check_text(text,'math'))
+        self.assertTrue(content.check_text('## 找问题\n## 找优秀','english'))
 
     def test_reject_symlinks_and_normalized_tampering(self):
         self.link(); meta=self.imported()

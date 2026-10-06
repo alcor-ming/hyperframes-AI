@@ -33,8 +33,8 @@ class AccountService:
         if kind == "series":
             from appearance import check_mode
             check_mode(data.get("mode"), "Series")
-            if "spec" in data and (data["spec"] != "math-rap" or data.get("mode") != "explainer"):
-                raise self.api.HarnessError("math-rap requires an explainer series")
+            if "spec" in data and (data["spec"] != "math-rap" or data.get("mode") not in ("math", "explainer")):
+                raise self.api.HarnessError("math-rap requires a math or legacy explainer series")
             if not isinstance(data.get("accounts", []), list):
                 raise self.api.HarnessError("Series accounts must be a list")
             for account in data.get("accounts", []):
@@ -65,7 +65,7 @@ class AccountService:
         if settings.get("captions"):
             raise self.api.HarnessError("Captions require exact Theme and Background assets")
         if settings.get("ratio") not in (None, "16:9", "9:16", "source"):
-            raise self.api.HarnessError("card and explainer only support 16:9 and 9:16")
+            raise self.api.HarnessError("Video lines only support 16:9 and 9:16")
         if settings.get("ratio") not in (None, *self.api.RATIOS):
             raise self.api.HarnessError("Unknown ratio")
         if settings.get("theme"):

@@ -21,7 +21,7 @@ class V35RulesTests(unittest.TestCase):
                      ".studio/workflow.md", ".studio/spec/creative.md", "README.md"):
             with self.subTest(path=path):
                 text = read(path)
-                tokens = ("Plan", "visual-design.md") if path == ".studio/spec/creative.md" else ("card", "explainer")
+                tokens = ("Plan", "visual-design.md") if path == ".studio/spec/creative.md" else ("math", "english", "explainer")
                 for token in tokens:
                     self.assertIn(token, text)
                 if path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
@@ -42,7 +42,7 @@ class V35RulesTests(unittest.TestCase):
 
     def test_design_and_plan_preserve_explainer_contract(self):
         design = read(".studio/spec/visual-design.md")
-        for token in ("`card`", "`explainer`",
+        for token in ("`math`", "`english`", "`explainer`",
                       "任一通道", "A1 只约束第 4 层", "第 5 层口播原文不受 A1",
                       "镜像回收", "系列声音签名", "同帧可见事件", "ducking",
                       "不设固定数量或间隔配额", "未试听", "Plan 检查", "Q1"):
@@ -55,7 +55,7 @@ class V35RulesTests(unittest.TestCase):
         spec += read(".studio/spec/runtime-interfaces.md")
         spec += read(".studio/spec/hyperframes-assets.md")
         for token in ("data-hf-layer", "`background`", "`stage`", "`overlay`", "`text`",
-                      "`captions`", "两种模式共用五层", "cue_not_found", "cue_ambiguous", "cue_unaligned",
+                      "`captions`", "共同五层宿主", "cue_not_found", "cue_ambiguous", "cue_unaligned",
                       "HarnessFigures.load(lock)", "renderAt(t)", "character.json",
                       "captions_lock_mismatch", "sound_asset_outside_closure", "精确 ref/hash",
                       "已批准 Plan 中恰好一个", "不回退读取可变的 sound.json",

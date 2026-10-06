@@ -449,8 +449,8 @@ def check_text(text, line):
                 findings.append('非法归因层：' + row.get('归因层', ''))
             if row.get('去向') not in DESTINATIONS:
                 findings.append('非法去向：' + row.get('去向', ''))
-            if row.get('去向') == 'Script 开头与衔接' and not (line == 'explainer' or line.startswith('showcase/')):
-                findings.append('card / 数学产品线不支持 Script 开头与衔接')
+            if row.get('去向') == 'Script 开头与衔接' and not (line in {'explainer', 'english'} or line.startswith('showcase/')):
+                findings.append('数学产品线不支持 Script 开头与衔接')
         elif row.get('用户标记') != '是':
             findings.append('找优秀仅接收用户标记')
     if not {'找问题', '找优秀'}.issubset(seen_tables):

@@ -21,7 +21,8 @@ class V370CliTest(unittest.TestCase):
     def setUp(self):
         legacy_fixture.VisualPlanTest.setUp(self)
         state = cli.read_json(self.variant / 'variant.yaml')
-        state['line'] = lines.bind({'mode': 'card'})
+        state['line'] = lines.bind({'mode': 'explainer'})
+        state['settings'] = {'direction_approval': False, 'critic.provider': 'off'}
         cli.write_variant(self.variant, state)
         metadata = {**cli.plan_metadata(self.variant, state), 'status': 'draft'}
         self.plan_path = self.variant / 'ANIMATION_PLAN.md'
@@ -41,7 +42,7 @@ class V370CliTest(unittest.TestCase):
         return output.getvalue().strip()
 
     def test_settings_cli_precedence_and_creation_binding(self):
-        self.assertEqual({'id': 'card', 'version': 1}, cli.read_json(self.variant / 'variant.yaml')['line'])
+        self.assertEqual({'id': 'explainer', 'version': 1}, cli.read_json(self.variant / 'variant.yaml')['line'])
         self.call('settings', 'set', '--layer', 'user', 'direction_approval', 'true')
         self.call('settings', 'set', 'direction_approval', 'false')
         values = json.loads(self.call('settings', 'show'))['values']

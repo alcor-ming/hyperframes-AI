@@ -57,7 +57,7 @@ class V351RulesTests(unittest.TestCase):
 
     def test_ab_layers_rhythm_and_hard_boundaries(self):
         design = read(".studio/spec/visual-design.md")
-        for token in ("五层管空间", "两者正交", "| 卡片 `card`", "| IP `explainer`",
+        for token in ("五层管空间", "两者正交", "| IP `explainer`",
                       "| 口播 `talking_head`", "A → B → A", "A → B", "隐藏或虚化并冻结",
                       "独立 B 文字组", "跨 Scene 返回 A", "不重播入场",
                       "A1 只约束第 4 层", "阅读保护只约束第 4 层",

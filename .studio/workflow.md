@@ -6,9 +6,9 @@
 
 先区分讨论、继续现有 Work/Variant、同内容目标的独立 Variant、临时实验和新生产目标。普通修订留在当前 Variant；同一期新账号适配建立独立 Variant；只有用户明确要求旧归档实体只读、另建同一期实体时使用继任。用途有实质歧义才询问，不从 URL、缺账号或缺 Final 推断实验。
 
-账号属于 Variant；Work 级 Script/Research 由各 Variant 共享，各 Variant 独立维护 Plan、工程与接受结果。显式内容分支按 CLI 定位。新视频显式指定 `--purpose standard|ip|test`，生产用途指定系列；账号与制作版本可以稍后确定。独立输入为叙事模式、视觉主题、背景、画幅和可选 Motion；默认 `card`，IP 推荐 `explainer`。Theme 负责字体、语义色与表面，不决定模式、布局或 cue；Variant 使用冻结外观。
+账号属于 Variant；Work 级 Script/Research 由各 Variant 共享，各 Variant 独立维护 Plan、工程与接受结果。显式内容分支按 CLI 定位。新视频显式指定 `--purpose standard|ip|test`，生产用途指定系列；账号与制作版本可以稍后确定。独立输入为叙事模式、视觉主题、背景、画幅和可选 Motion；支持 `explainer`、`showcase`、`math` 与 `english`，默认 `explainer`，IP 继续推荐 `explainer`。Theme 负责字体、语义色与表面，不决定模式、布局或 cue；Variant 使用冻结外观。
 
-产品线差异以冻结的 `line` ID/版本查 [.studio/lines.yaml](lines.yaml)：制作模型、Plan 模板、阶段规则、Brief 字段、主体默认值、资产范围与豁免只在那里维护；版本发布后保留既有档案版本，不能原地改变旧版本语义。没有 `line` 的旧 Variant 沿用原规则，不自动迁移。`talking_head` 是 Template。本版本只提供视频制作；已退役或未知 Work 不继续制作，也不阻断无关视频的定位。
+产品线差异以冻结的 `line` ID/版本查 [.studio/lines.yaml](lines.yaml)：制作模型、Plan 模板、阶段规则、Brief 字段、主体默认值、资产范围与豁免只在那里维护；版本发布后保留既有档案版本，不能原地改变旧版本语义。旧 `explainer/math-rap` 及其他仍支持链路的冻结身份按原语义读取，不自动迁移。card 已移除制作与渲染支持，历史文件、接受快照与成片保留；继续内容须显式采用到受支持的新版本，不配送兼容实现。`talking_head` 是 Template。本版本只提供视频制作；已退役或未知 Work 不继续制作，也不阻断无关视频的定位。
 
 非数学 explainer 的 Opus 主镜头按档案资产范围和获批 Asset Brief 交接，原有制作独占与用户接受边界保持；交接不改变 Current 或接受记录。WSL 开发与生产根按根规则区分，生产根通过 `work-wsl.sh` 调用 Windows CLI。
 
@@ -17,6 +17,8 @@
 ## 1. 内容准备
 
 复用合格 Script、录音、对齐与材料。Script 为空时先整理文稿/转录；`dbs` 只有实际修改正文才等待批准，`verbatim` 保留原文与原时间证据。用 `work script text` 排除 Scene 索引，避免重复 ASR。Script 稳定后通过 `work name` 补语义标题。
+
+数学沿用原片声音与人工核对歌词；英语使用原创教学稿和公共 TTS。TTS 默认火山，可配置替代脚本；先生成候选，再明确采用正式声音，最后以可信原生时间证据或既有 ASR 完成字词对齐。未对齐处不估时，候选生成不等于声音采用或内容接受。正文或声音变化仅重做受影响的新制作范围，保留旧接受快照。
 
 Research 按段落或 Anchor 记录事实与来源、B-roll 候选（可定位位置及取得状态）、比喻与例子。先理解完整段落，再定点补具体材料缺口；它不是另一份脚本或必上屏清单。事实冲突交用户判断相关表达，不擅改原音。共享输入变化只更新受影响研究及引用。
 
@@ -27,7 +29,7 @@ Research 按段落或 Anchor 记录事实与来源、B-roll 候选（可定位�
 Plan 模板与适用检查从冻结档案读取；形式豁免不扩大为接受豁免。
 Plan 阶段按用途运行 `work component list --query <用途> --include-references` 查包、场景源与配方，按结果的 `detail.argv`（在本根 work 入口后传入参数）查看准确接口，再选择复用、派生或自制。单查场景源或配方可直接用 `--kind scene-source` / `--kind recipe`；裸 list 保留参考项默认隐藏的包目录行为。场景源与配方不可安装，按详情中的源入口或配方说明使用，不猜派生命令。组件可在 WSL 开发任务或 Windows 可编辑源编写；生产内容制作保持根规则边界。
 
-新 `plan_format=3.7.0` 按 [创作指南](spec/visual-design.md) 填导演 Brief 与按 A/B 段的分镜表，每段一个观看任务。逐 Scene 保留 `card`、`screen`、素材、声音与刻意停顿例外，不再写事件表。参考机制 ID 见 [机制目录](mechanisms.yaml)。正式声音与字词对齐仍是时间依据。CLI 冻结元信息，3.5.2 Plan 继续可读，不自动转换。拟生成素材列用途、数量、风格与 Asset Brief，权限只见根规则。
+通用 explainer 的新 `plan_format=3.7.0` 按 [创作指南](spec/visual-design.md) 填导演 Brief 与按 A/B 段的分镜表，每段一个观看任务。逐 Scene 保留 `screen`、素材、声音与刻意停顿例外，不再写事件表。showcase、math 与 english 使用专属 Plan，不强加通用 Brief、角色／生图或 A/B 配额；数学保留符号和图形职责，英语保留教学要素、回忆任务与阅读停顿。参考机制 ID 见 [机制目录](mechanisms.yaml)。正式声音与字词对齐仍是时间依据。CLI 冻结元信息，3.5.2 Plan 继续可读，不自动转换。拟生成素材列用途、数量、风格与 Asset Brief，权限只见根规则。
 
 通过 `work settings show --json` 读取档案默认 → 用户 → Variant 的生效值和来源；`settings set|unset --layer user|variant` 修改后只影响后续命令。开关不冻结，每轮 critic 保存实际值。`direction_approval=true` 时完成 Plan 后制作唯一真实参考 Scene，按短自检单检查并由用户确认准确 Plan revision；关闭时直接进入完整 Draft，方向随该 Draft 接受一并确认。dbs 改正文批准和完整 Draft 接受不可关闭。
 
@@ -38,9 +40,9 @@ Plan 阶段按用途运行 `work component list --query <用途> --include-refer
 是否要求 Q1 或节奏闭环由档案 exemptions 决定；ready、seek、离线闭包、授权和准确完整 Draft 接受始终保留。
 完成当前方向批准设置要求后扩成全片 Draft。占位到素材齐备是同一阶段的准备度变化：用稳定 ID 补齐媒体，只重定时受影响范围，保持全部 Scene、A/B、动作与阅读安排。最终接受前正式声音与必需效果齐备。
 
-使用 CLI 返回的锁定官方 Studio URL。登记版本在独立审阅副本打开；依照 [hyperframes.md](spec/hyperframes.md) 验证 ready、seek、闭包与技术 QA，按创作指南 Q1 带声连续观看。阅读区域稳定，节奏事件与声音对应；Windows 原生连续播放、暂停、任意 seek、回拖和跨 Scene 证据单独报告。
+使用 CLI 返回的锁定官方 Studio URL。登记版本在独立审阅副本打开；依照 [hyperframes.md](spec/hyperframes.md) 验证 ready、seek、闭包与技术 QA，按链路适用的观看检查带声连续观看。阅读区域稳定，节奏事件与声音对应；Windows 原生连续播放、暂停、任意 seek、回拖和跨 Scene 证据单独报告。
 
-交付 Draft 前对准确版本运行 `preview diagnose`。逐项处理每个 `rhythm_gap` 与未验证区间：修正工程后重新诊断、在 Plan 写例外行并随对应方向或完整 Draft 接受确认，或在交付说明逐项解释原因。交付说明附诊断报告位置与未处理项；诊断只定位，不判通过、不替代观看，不新增审批门。默认读取摘要，确需完整结构时用 `--json`，不读取 `probe.json` 等原始采样。
+要求诊断闭环的链路在交付 Draft 前对准确版本运行 `preview diagnose`；showcase 按专属豁免处理。逐项处理适用的 `rhythm_gap` 与未验证区间：修正工程后重新诊断、在 Plan 写例外行并随对应方向或完整 Draft 接受确认，或在交付说明逐项解释原因。交付说明附诊断报告位置与未处理项；诊断只定位，不判通过、不替代观看，不新增审批门。默认读取摘要，确需完整结构时用 `--json`，不读取 `probe.json` 等原始采样。
 
 `preview register` 冻结准确 Draft，`preview open <id>` 审阅，再由用户接受准确 full Draft。技术 PASS、素材 complete 与方向确认不替代这一决定。反馈绑定版本、Scene 与时间范围：信息缺口回 Plan，证据缺口回 Research，布局或实现问题就地修复；等义、换行、easing、安全区与性能修复无需重新批准方向。新增事实或改变原意回权威来源。工程文字同步逐 Scene 的实际 `screen` 表达。
 
@@ -74,7 +76,7 @@ Windows 制作 Work 内容；WSL 负责工具与开发计划内的组件。工�
 
 ## 画面复盘与样片记忆
 
-找问题由用户指定，优秀只由用户标记。生产根 Opus 优先、Codex 回退；复盘不修改作品源、Plan、Current 和接受记录。数学、card 的复盘之外仍遵守原只读边界。只使用登记 Draft 快照与 PNG，不导出视频，不调用外部服务。
+找问题由用户指定，优秀只由用户标记。生产根 Opus 优先、Codex 回退；复盘不修改作品源、Plan、Current 和接受记录。数学的复盘之外仍遵守原只读边界。只使用登记 Draft 快照与 PNG，不导出视频，不调用外部服务。
 
 显式传 `--work <Work ID> --variant <Variant ID>` 后运行 `retro open <Draft ID>`；有匹配且 hash 完整的 critic 包时复制证据，否则加 `--hyperframes-cli` 和 `--browser` 从冻结快照采样，不写 critic ledger。记录在 `retro/<Draft ID>/VISUAL.md`，重开保留内容，不同 Draft 独立保存。`retro check <Draft ID>` 校验字段和枚举，不判断归因。
 
@@ -82,7 +84,7 @@ Windows 制作 Work 内容；WSL 负责工具与开发计划内的组件。工�
 
 制作时在 Brief（showcase 概念节）的 `**参考机制：**` 引用完整段 ID，跨线写 `跨线:<ID>`。`plan check` 读两层机制库，报告退役、巩固、已知行为变化提示；发行机制仍可引用。`plan refresh` 将有序帧、理由与 samples 设置冻结在 `reference-memory/<revision>/`，制作必须用 `sample show <ID> --plan-revision <N>` 看这组帧。引用或设置变动经 refresh 创建新 revision，Draft 继承独立副本；之后退役、巩固或设置变化不改变旧 Draft。禁止手改这些冻结文件。
 
-`samples.max_references` 默认 3，`samples.frames_per_reference` 默认 6；用户层与 Variant 层可覆盖。旧 Variant 补默认值而不重绑档案，无 line 的旧 Variant 仅允许新增 samples 设置，不改旧开关语义。explainer 总引用仍 1–3；card/showcase 可选。每段帧不足时取全部，超过时均匀选取；不补造帧。
+`samples.max_references` 默认 3，`samples.frames_per_reference` 默认 6；用户层与 Variant 层可覆盖。旧 Variant 补默认值而不重绑档案，无 line 的旧 Variant 仅允许新增 samples 设置，不改旧开关语义。通用 explainer 总引用仍 1–3；showcase、math、english 按专属档案选用，不继承通用配额。每段帧不足时取全部，超过时均匀选取；不补造帧。
 
 已知缺陷先在复盘问题行填写 `已知缺陷 ID`，用户确认后 `defect add <ID> --draft <Draft ID> --description <描述> --frame images/<帧>.png`（可重复 --frame）。`defect list` 默认本产品线；`defect retire <ID> --blocked-by <规则或诊断>` 保留证据。critic 只读本线有效缺陷，附在档案检查项后；每轮记录生效 ID。参考样片逐项评“达到 / 部分 / 未达”，按 reason 限定维度，不评相似度；`critic record` 拒绝遗漏、重复、未知引用和非法结论。
 
@@ -96,7 +98,7 @@ Windows 制作 Work 内容；WSL 负责工具与开发计划内的组件。工�
 2. 本期实验变量必填：重复 `--variable '开头写法=本期取值'`，其他用 `--variable '其他:说明=取值'`；可加 `--compare <同平台账号对照发布 ID>`。同 ID 有多条时用 `Work/Variant/发布ID` 消歧。没改动显式 `--no-variable`。重新 link 同 ID 保留修改历史；文件、来源、时长、时间表等身份改变须新 ID。
 3. 可选 `--timings <JSON>` 提供冻结工程导出的 `[{scene,anchor,start,end,characters:[{char,start,end}]}]`；须包含有效 Script Anchor，区间不重叠，末端与片长误差不超过 1 秒。优先使用来源快照 `section_map.json`（相同 rows 或 `{sections,characters}`）；没有则未对齐，CLI 不解析工程脚本。字级数据缺失不推测口播。
 4. `content import <发布 ID> --dir <五份 xlsx 目录> --cutoff YYYY-MM-DD [--stage long-tail|early]`，或重复五个 `--file`。原件独立复制，sha256 留档；分段末端与片长差超过 1 秒拒绝。长尾由用户判断；不传 stage 为未标，输出 daily 供判断。导入全部保留。
-5. `content open <发布 ID> [--import <导入 ID>]` 默认最新导入，刷新 CONTENT.md 生成区并保留手填部分；`content check <发布 ID>` 校验字段与枚举。找优秀仅用户标记，已有样片机制负责登记。card / 数学不能使用 Script 开头与衔接去向。
+5. `content open <发布 ID> [--import <导入 ID>]` 默认最新导入，刷新 CONTENT.md 生成区并保留手填部分；`content check <发布 ID>` 校验字段与枚举。找优秀仅用户标记，已有样片机制负责登记。数学不能使用 Script 开头与衔接去向。
 6. `content summary` 按平台、账号、片长分组，只计每条发布最新长尾导入；少于 5 条不报偏离；输出开头样本、选题与实验变量表。其他阶段列出但不计基线。
 
 读数依次为观看时间、2 秒与 5 秒、封面点击、完播。条件平均观看时长已从视频起点计时，平均离开点不再加 5 秒；输出取整区间和假设。无留存曲线，跳过 / 回看不等于离开；缺来源记未列出，不记 0。API 仅接口，无网络调用。原件、记录和汇总仅留生产根，不进开发仓与 Git。

@@ -48,7 +48,7 @@
       if (kind === "theme") themePackage = { asset, metadata };
       const value = await read(`${asset.vendor_path}/${metadata.entry}`);
       if (kind === "background" && value.renderer === "module") {
-        if (!["card", "explainer", "showcase"].includes(lock.mode) || !metadata.dependencies?.includes(value.entry)) throw new Error("Invalid module Background closure");
+        if (!["explainer", "showcase", "math", "english"].includes(lock.mode) || !metadata.dependencies?.includes(value.entry)) throw new Error("Invalid module Background closure");
         backgroundPackages.set(result, localURL(`${asset.vendor_path}/${value.entry}`).href);
       }
       if (kind === "motion") {
@@ -136,7 +136,7 @@
     const theme = appearance.theme ? resolved(appearance.theme, lock.parameters.theme) : { tokens: {} };
     const background = appearance.background && resolved(appearance.background, lock.parameters.background);
     const color = !background ? null : ["transparent", "module"].includes(background.renderer) ? "transparent" : background.parameters.color;
-    if (background && (!["solid", "transparent", "module"].includes(background.renderer) || background.renderer === "module" && !["card", "explainer", "showcase"].includes(lock.mode) || !CSS.supports("color", color))) throw new Error("Unsupported Background");
+    if (background && (!["solid", "transparent", "module"].includes(background.renderer) || background.renderer === "module" && !["explainer", "showcase", "math", "english"].includes(lock.mode) || !CSS.supports("color", color))) throw new Error("Unsupported Background");
     const fonts = preparedFonts.get(appearance);
     if (fonts ? fonts.disposed || fonts.declaration !== JSON.stringify(theme.fonts || []) : (theme.fonts || []).length) {
       throw new Error("Theme fonts must be prepared by load() and not disposed or changed");
@@ -549,7 +549,7 @@
       return { renderAt() {}, dispose() {} };
     }
     const entry = backgroundPackages.get(appearance);
-    if (!entry || !["card", "explainer", "showcase"].includes(appearance.lock.mode)) throw new Error("Unprepared module Background");
+    if (!entry || !["explainer", "showcase", "math", "english"].includes(appearance.lock.mode)) throw new Error("Unprepared module Background");
     const params = structuredClone(payload.parameters);
     params.moods = (params.moods || []).map(mood => ({ ...mood, cue: cues.find(mood.cue) }));
     const module = await import(entry);

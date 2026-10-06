@@ -83,7 +83,7 @@ class V36IntegrationTest(unittest.TestCase):
         self.assertTrue(state["appearance_lock"]["selection"]["captions"])
         self.assertEqual(cli.read_frontmatter(variant / "ANIMATION_PLAN.md")["series_binding"], expected)
         before = {name: (variant / name).read_bytes() for name in ("variant.yaml", "ANIMATION_PLAN.md")}
-        service.put("series", "fixture", {"name": "Changed", "mode": "card"})
+        service.put("series", "fixture", {"name": "Changed", "mode": "english"})
         for name, content in before.items():
             self.assertEqual((variant / name).read_bytes(), content)
         with self.assertRaisesRegex(appearance.AppearanceError, "captions"):
@@ -91,8 +91,8 @@ class V36IntegrationTest(unittest.TestCase):
         self.invoke("variant", "add", "next", "--account", "a")
         adopted = cli.read_json(variant.parent / "next/variant.yaml")
         self.assertEqual(adopted["series_binding"]["revision"], series["revision"] + 1)
-        self.assertEqual(adopted["mode"], "card")
-        self.assertEqual(adopted['line'], {'id': 'card', 'version': 1})
+        self.assertEqual(adopted["mode"], "english")
+        self.assertEqual(adopted['line'], {'id': 'english', 'version': 1})
 
     def test_explainer_line_is_bound_at_creation(self):
         _, variant = self.create('--mode', 'explainer')

@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from visual_plan import VisualPlanError, card_rows, markdown_structure_lines, plan_scene_rows
+from visual_plan import VisualPlanError, markdown_structure_lines, plan_scene_rows
 
 
 def normalize(text):
@@ -96,10 +96,7 @@ def rhythm_diagnostics(samples, scenes, *, plan='', cues=None, mode=None):
         if sid not in bounds:
             continue
         screens, scheduled = row.get('screens', {}), {}
-        planned = {identity: value['实际表达'] for identity, value in screens.items()
-                   if identity not in row.get('cards', {})}
-        planned.update({f'{identity}:{number}': item['text'] for identity, card in row.get('cards', {}).items()
-                        for number, item in card_rows(card)})
+        planned = {identity: value['实际表达'] for identity, value in screens.items()}
         for event in ([] if row.get('plan_format') == '3.7.0' else row.get('events', [])):
             target = str(event.get('target') or '').lstrip('#')
             location = {'scene': sid, 'target': target or None, 'cue': event['cue'], 'change': event.get('change', '')}
@@ -318,7 +315,7 @@ def static_inventory(project, dependencies):
 
 def explainer_diagnostics(project, dependencies, lock, plan=""):
     """Static five-layer hints supplement D1; they are never visual acceptance."""
-    if not lock or lock.get("mode") not in ("card", "explainer", "showcase"):
+    if not lock or lock.get("mode") not in ("math", "english", "explainer", "showcase"):
         return {"findings": [], "unverified": []}
     from visual_plan import Composition
     from explainer import installed_assets
@@ -341,12 +338,6 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
         findings.append({"kind": "captions_lock_mismatch", "enabled": enabled, "hosts": len(captions)})
     for name, entries in nodes.items():
         if name == "index.html":
-            continue
-        if any("data-card-layers" in attrs for _, attrs in entries):
-            try:
-                validate_component_release((project / name).parent, allow_unapproved=True)
-            except (ComponentError, ValueError, OSError) as exc:
-                findings.append({"kind": "card_component_invalid", "file": name, "detail": str(exc)})
             continue
         if lock["mode"] != "showcase" and any("data-composition-id" in attrs for _, attrs in entries):
             local = {attrs.get("data-hf-layer") for _, attrs in entries}
@@ -443,7 +434,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             continue
         covered.update(active)
         for item in sample.get('texts', []):
-            if mode in ('card', 'explainer') and item.get('layer') != 'text':
+            if mode in ('math', 'english', 'explainer') and item.get('layer') != 'text':
                 continue
             scene, info = item.get('scene', ''), item.get('info', '')
             if scene in outside:

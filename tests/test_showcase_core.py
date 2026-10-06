@@ -35,7 +35,7 @@ class ShowcaseCoreTest(unittest.TestCase):
             appearance.resolve(self.root, account)
 
     def test_old_locks_unchanged_and_submodule_strict(self):
-        for mode in ("card", "explainer"):
+        for mode in ("math", "english", "explainer"):
             lock = appearance.resolve(self.root, self.account, {"mode": mode})
             self.assertNotIn("submodule", lock)
             before = json.dumps(lock)
@@ -74,7 +74,7 @@ class ShowcaseCoreTest(unittest.TestCase):
         with self.assertRaisesRegex(appearance.AppearanceError, "unselected"):
             appearance.resolve(self.root, {}, {"mode": "showcase", "submodule": "pdoom",
                                                "parameters": {"background": {"color": "#000"}}})
-        for mode in ("card", "explainer"):
+        for mode in ("math", "english", "explainer"):
             with self.subTest(mode=mode), self.assertRaises(appearance.AppearanceError):
                 appearance.resolve(self.root, self.account, {"mode": mode, "theme": None})
         damaged = {**lock, "mode": "explainer"}
@@ -90,7 +90,7 @@ class ShowcaseCoreTest(unittest.TestCase):
         with mock.patch("explainer.installed_assets", return_value={}):
             report = visual_diagnostics.explainer_diagnostics(self.root, dependencies, {"mode": "showcase"})
             self.assertEqual(report["findings"], [])
-            report = visual_diagnostics.explainer_diagnostics(self.root, dependencies, {"mode": "card"})
+            report = visual_diagnostics.explainer_diagnostics(self.root, dependencies, {"mode": "explainer"})
             self.assertTrue(any(item["kind"] == "explainer_layer_missing" for item in report["findings"]))
             (self.root / "scene.html").write_text('<div data-character-ref="missing@v1"></div><audio src="https://cdn.example/sound.mp3"></audio>', encoding="utf-8")
             report = visual_diagnostics.explainer_diagnostics(self.root, dependencies, {"mode": "showcase"})

@@ -38,10 +38,9 @@
   - 属性所有权冲突时拒绝创建（`.studio/runtime/appearance.js:280`）。
   - Motion 绑定**不向节奏探针注册事件**。
   - 验证入口：`tests/motion-browser.mjs`、`tests/test_motion_contract.py`。
-- **节奏探针的事件来源**：只有宿主 GSAP timeline 的 tween 和 `window.__hfRhythmSources` 注册的事件（`.studio/visual_probe.mjs:99`）。候选事件必须满足三个条件才计数：目标在 `stage`/`overlay`/`text` 层（`.studio/visual_probe.mjs:72`）、可见、实际发生状态变化。manifest 里的声明不会被读取。`figures.js`、`rolls.js`、`card-kit.js`、`math-kit.js` 都用 `__hfRhythmSources` 注册"带目标和时间"的事件。
+- **节奏探针的事件来源**：只有宿主 GSAP timeline 的 tween 和 `window.__hfRhythmSources` 注册的事件（`.studio/visual_probe.mjs:99`）。候选事件必须满足三个条件才计数：目标在 `stage`/`overlay`/`text` 层（`.studio/visual_probe.mjs:72`）、可见、实际发生状态变化。manifest 里的声明不会被读取。`figures.js`、`rolls.js`、`math-kit.js` 都用 `__hfRhythmSources` 注册"带目标和时间"的事件。
 - **A/B 编排的接口**：`HarnessRolls.mount({cues, scenes})`（`.studio/runtime/rolls.js:5`，接口卡见 `.studio/spec/runtime-interfaces.md` 的 rolls.js 一节）。
   - 每段 B 区间提供第 2 层 `media` 和可选的第 4 层 `text`，由宿主通过 `renderAt(t)` 求值。
-  - `card-kit.js` 是先例：同时持有 stage 根与 text 根，分别占第 2、4 层。
 - **module Binding 的限制**：Binding schema 3 的 `usage` 只有 role / required / fit / focal_point，布局和动作留在 Scene 里，**不接受插槽值**（[资产规格](../../.studio/spec/hyperframes-assets.md)）。
 - **外观解析的合并规则**：`.studio/appearance.py:69` 执行 `selected = {**account, **overrides}`。`--appearance-file` 里一旦写了 Theme，就会覆盖账号的 Theme；省略 theme / background 时继承账号值；Motion 按槽合并。
 - **文字层规则**：B 的独立解释文字必须进第 4 层 B 文字组，并遵守 A1、语义 cue 和阅读保护；第 2 层只放附着标注（`.studio/spec/visual-design.md`）。
@@ -78,7 +77,7 @@
 
 ### 4.3 B-roll 镜头合同
 
-- `BROLL-REQ-006`：镜头 module 的**挂载接口**。沿用 `rolls.js` / `card-kit.js` 的做法：
+- `BROLL-REQ-006`：镜头 module 的**挂载接口**。沿用 `rolls.js` 的做法：
   - 入口 `mount({stage, text?, appearance, slots, params, startCue, endCue, cues})`，返回 `{renderAt(t), moments(), dispose()}`。
   - `stage` 是宿主提供的第 2 层元素，作为 B 区间的 `media` 交给 `HarnessRolls`；`text` 是可选的第 4 层元素，作为 B 文字组。
   - 由宿主按全片秒数调用 `renderAt(t)`；镜头不自启时钟、不拥有独立播放权，顺播、直接 seek、回拖三者结果一致。

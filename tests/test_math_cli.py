@@ -56,14 +56,14 @@ class MathCliTest(unittest.TestCase):
         with patch.object(math_build, 'check_geometry'):
             self.assertEqual(1, json.loads(self.scoped('math', 'build'))['items'])
         plan = self.plan.read_text()
-        cli.validate_project_cards(self.project, plan, cli.snapshot_items(self.project))
+        math_build.verify_generated(self.project, plan, closure=cli.snapshot_items(self.project))
         snapshot = self.base / 'snapshot'
         cli.copy_snapshot(self.project, snapshot)
         cli.validate_snapshot_closure(self.project, snapshot)
         math_build.verify_generated(snapshot, plan)
         self.assertEqual((self.project / 'assets/font.ttf').read_bytes(), (snapshot / 'assets/font.ttf').read_bytes())
         with self.assertRaisesRegex(VisualPlanError, 'differs from Plan'):
-            cli.validate_project_cards(self.project, plan.replace('"label": "x"', '"label": "xx"'), [])
+            math_build.verify_generated(self.project, plan.replace('"label": "x"', '"label": "xx"'), closure=[])
         with self.assertRaisesRegex(cli.HarnessError, 'explicit'):
             self.invoke('math', 'build')
         self.plan.write_text(plan.replace('"status": "approved"', '"status": "draft"'))

@@ -7,8 +7,8 @@ reference_mechanisms: mechanisms.yaml
 workflows:
   hyperframes_video:
     skill: ../.agents/skills/hyperframes-codex-workflow/SKILL.md
-    modes: [card, explainer]
-    default_mode: card
+    modes: [explainer, showcase, math, english]
+    default_mode: explainer
     ip_recommended_mode: explainer
 
 templates:

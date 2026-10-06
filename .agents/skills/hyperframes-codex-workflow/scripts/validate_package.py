@@ -82,7 +82,15 @@ REQUIRED_HARNESS = [
     ".studio/runtime/captions.js",
     ".studio/runtime/figures.js",
     ".studio/runtime/rolls.js",
-    ".studio/runtime/card-component.js",
+    ".studio/showcase_tools.py",
+    ".studio/stage_art.py",
+    ".studio/cast_art.py",
+    ".studio/tts.py",
+    ".studio/work_tts.py",
+    ".studio/english_plan.py",
+    ".studio/spec/english.md",
+    ".studio/templates/MATH_PLAN.template.md",
+    ".studio/templates/ENGLISH_PLAN.template.md",
 ]
 
 

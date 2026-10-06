@@ -60,7 +60,7 @@ class RhythmTests(unittest.TestCase):
             self.assertEqual([], self.gaps(report))
             self.assertEqual(2, len(report['declared_exceptions']))
             self.assertTrue(all(item['approval'] == 'not_inferred' for item in report['declared_exceptions']))
-            report = rhythm_diagnostics([dict(time=0, ready=True)], self.scenes, plan='intent', mode='card')
+            report = rhythm_diagnostics([dict(time=0, ready=True)], self.scenes, plan='intent', mode='explainer')
             self.assertEqual([(2, 6)], self.gaps(report))
             self.assertIn('rhythm_exception_unresolved', [item['reason'] for item in report['unverified']])
             rows['S01']['exceptions'][0]['kind'] = 'anything'
@@ -108,16 +108,6 @@ class RhythmTests(unittest.TestCase):
         report = rhythm_diagnostics([sample], self.scenes)
         self.assertIn('media_canvas_motion_unverified', [item['reason'] for item in report['unverified']])
         self.assertEqual('sampled_timeline_and_helpers', report['findings'][0]['coverage'])
-
-    def test_card_rows_have_independent_cues_for_early_visibility(self):
-        row = {'screens': {'C1': {'实际表达': 'first\nsecond'}},
-               'cards': {'C1': {'lines': [dict(text='first'), dict(text='second')]}},
-               'events': [dict(layer=4, cue='later', target=f'C1:{i}') for i in (1, 2)]}
-        sample = dict(time=0, ready=True, texts=[dict(scene='S01', layer='text', text='first second')])
-        with patch('visual_diagnostics.plan_scene_rows', return_value={'S01': row}), patch('explainer.find_cue', return_value=2.5):
-            report = rhythm_diagnostics([sample], self.scenes, plan='intent')
-            hit = next(item for item in report['findings'] if item['kind'] == 'suspected_lay_out_and_wait')
-            self.assertEqual(['C1:1', 'C1:2'], hit['information_ids'])
 
     def test_unbounded_motion_does_not_claim_observed_boundaries(self):
         samples = self.event(1, kind='tween')

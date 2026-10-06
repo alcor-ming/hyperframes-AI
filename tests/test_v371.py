@@ -89,8 +89,8 @@ class V371Test(unittest.TestCase):
         original = self.variant / 'retro' / round_['draft_id'] / 'evidence/images/0.000000.png'
         self.assertNotEqual(original.stat().st_ino, sample_path.stat().st_ino)
         self.assertFalse(sample_path.is_symlink())
-        self.assertEqual('card', sample['line'])
-        self.assertTrue((self.root / 'sample-library/index/card.json').is_file())
+        self.assertEqual('explainer', sample['line'])
+        self.assertTrue((self.root / 'sample-library/index/explainer.json').is_file())
         shown = json.loads(self.call('sample', 'show', sample['id']))
         self.assertEqual(str(sample_path), shown['frames'][0]['path'])
         with self.assertRaisesRegex(cli.HarnessError, 'already exists'):
@@ -148,7 +148,7 @@ class V371Test(unittest.TestCase):
 
     def test_cross_line_status_and_behavior_findings_showcase_reference(self):
         sample, _ = self.add_sample()
-        path = memory.index_path(self.root, 'sample', 'card')
+        path = memory.index_path(self.root, 'sample', 'explainer')
         records = memory.read(path); records[0]['runtime_version'] = '3.6.0'; memory.write(path, records)
         self.refs(sample['id'])
         findings = json.loads(self.call('plan', 'check'))['findings']
@@ -250,7 +250,7 @@ class V371Test(unittest.TestCase):
 
     def test_summary_multiple_variants_closure_and_explicit_links(self):
         sample, round_ = self.add_sample()
-        path = memory.index_path(self.root, 'sample', 'card')
+        path = memory.index_path(self.root, 'sample', 'explainer')
         records = memory.read(path); records[0]['mechanism_id'] = 'one-shape'; memory.write(path, records)
         self.refs(sample['id']); self.call('plan', 'refresh')
         self.round(); self.round()

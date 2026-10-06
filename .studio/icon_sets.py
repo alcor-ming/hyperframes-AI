@@ -226,7 +226,7 @@ def audit_icons(records, packages):
                     code = "icon_source_mismatch"
             except COMPONENT.ComponentError:
                 code = "icon_source_mismatch"
-        elif not (record.get("schematic") or record.get("card_slot") or root.get("data-hf-schematic") is not None):
+        elif not (record.get("schematic") or root.get("data-hf-schematic") is not None):
             # ponytail: size-only suspicion, not a pass/fail classifier; visual review decides meaning.
             if 0 < record.get("width", 0) <= 128 and 0 < record.get("height", 0) <= 128:
                 code = "unmarked_small_svg"

@@ -25,11 +25,19 @@
 - 自然口语差异继续执行；改变事实、论点、段落结构或 Scene 映射时暂停。
 - 需要重新说出口的正文修改会使对应 Recording、Section Map 与引用画面失效；仅同步受影响 Scene 及必要衔接。旧 Accepted Draft 保持不变，新 Draft / Final 仍须经过现有适用性与快照校验。
 
+## 正式 TTS
+
+公共工具从准确 Work / Variant 引用的 Script 正文及稳定 Anchor 生成声音，排除 Scene 索引和制作备注。默认提供方为火山引擎，替代提供方通过配置的脚本接入，不改变文稿或 Plan 格式。一次请求固定正文与生效参数，缓存区分提供方、模型及输入；失败不自动调用其他服务。
+
+生成音频先作为候选，记录输入和参数摘要、提供方、模型、音频摘要与实测时长；明确采用后才成为正式声音。正式声音、`section_map.json` 和 cue 使用可验证的原生字词时间或既有 ASR，不能用段落时长或字符均分冒充对齐。音频或正文修订使受影响的新制作对齐与画面失效，旧 Accepted Draft 与 Final 保持原样。凭据通过环境或受保护配置读取，不进入正文、源码、日志、缓存或发行包。云合成、Windows 原生调用和人声听校分别记录证据。
+
 ## Animation Plan
 
-`ANIMATION_PLAN.md` 以全片方向加逐 Scene 一节维护设计，元信息由 CLI 从 Variant 与 lock 生成；概览只作索引，每场的 `screen` 保留信息 ID、来源、理解目标与揭示 cue。声音使用 `sound` JSON 导出。采用 [创作指南](visual-design.md) 的 A/B-roll、五层与节奏合同，阅读区域稳定。
+`ANIMATION_PLAN.md` 以全片方向加逐 Scene 一节维护设计，元信息由 CLI 从 Variant 与 lock 生成；概览只作索引，每场的 `screen` 保留信息 ID、来源、理解目标与揭示 cue。声音使用 `sound` JSON 导出。按冻结链路选用 [创作指南](visual-design.md) 的 A/B-roll、五层与节奏合同，阅读区域稳定。
 
-`showcase` 改用精简 `SHOWCASE_PLAN.template.md`，不套用 explainer 正向方向、D14、Q1 与节奏必经闭环；硬约束见 [showcase.md](showcase.md)。`math-rap` 的 Research 使用 `MATH_RESEARCH.template.md` 登记原片、原作者、片段及声音来源，不新增账号或声音来源门禁；Plan 的数学职责、符号与歌词时间依据见 [math-rap.md](math-rap.md)。
+`showcase` 使用精简 `SHOWCASE_PLAN.template.md`，不套用 explainer 正向方向、D14、Q1 与节奏必经闭环；硬约束见 [showcase.md](showcase.md)。`math` 使用专属数学 Plan，Research 用 `MATH_RESEARCH.template.md` 登记原片、原作者、片段及声音来源，不新增账号或声音来源门禁；数学职责、符号与歌词时间依据见 [math-rap.md](math-rap.md)。旧 `explainer/math-rap` 保留冻结读取语义。
+
+`english` 使用专属教学 Plan：明确目标词、本期词义、标准发音依据、准确拼写、所采用的记忆提示、情境／例句、上屏内容、回忆任务及声音对应。谐音不得冒充准确发音或词源，虚构幽默情境不得冒充事实。按教学需要安排阅读、拼写与揭答停顿，不为填满通用节奏配额增加无关运动；更多文字 Motion 和教学方法完善留待后续，见 [英语链路](english.md)。
 
 Scene 数量、顺序、目标、Hero State、Template、整体主题、文案结构或核心内容实质变化时更新 Plan revision，只重新确认受影响 Scene 及必要衔接。精确 timing、easing、换行、安全区、性能和不改变 Hero State 的布局修复无需新的方向确认；成果与稳定 ID 保留。工程不是另一份文案真源。
 

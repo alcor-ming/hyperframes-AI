@@ -1,79 +1,6 @@
 {
   "version": 1,
   "lines": {
-    "card": {
-      "id": "card",
-      "version": 1,
-      "mode": "card",
-      "author_model": "codex",
-      "plan_template": "ANIMATION_PLAN.template.md",
-      "brief": {
-        "required": [
-          "核心表达",
-          "主体/次主体",
-          "禁止项"
-        ],
-        "optional": [
-          "错相",
-          "运动语言",
-          "物理",
-          "光",
-          "节拍与声音",
-          "验收标准",
-          "参考机制"
-        ]
-      },
-      "subjects": {
-        "A": {
-          "primary": "第4层卡片文字",
-          "secondary": "第2层卡内图标/简图"
-        },
-        "B": {
-          "primary": "第2层媒体",
-          "secondary": "第4层B文字组与第3层指示"
-        }
-      },
-      "stages": {
-        "plan": [
-          ".studio/spec/visual-design.md"
-        ],
-        "draft": [
-          ".studio/spec/visual-design.md",
-          ".studio/spec/hyperframes.md"
-        ],
-        "final": [
-          ".studio/spec/hyperframes-final.md"
-        ]
-      },
-      "thresholds": {
-        "event_gap_seconds": 2,
-        "still_seconds": 0.6,
-        "pixel_mean_delta": 0.5
-      },
-      "critic_checks": [
-        "主体与次级响应",
-        "错相与交接",
-        "阅读保护",
-        "静止区间",
-        "视觉延续",
-        "声音未验证范围"
-      ],
-      "defaults": {
-        "direction_approval": false,
-        "critic.provider": "off",
-        "critic.model": "gpt-6.1-sol",
-        "critic.max_rounds": 1
-      },
-      "assets": {
-        "scope": "frozen-library",
-        "opus_heroes": 0,
-        "motion_broll_optional": true
-      },
-      "exemptions": [
-        "opus-authoring",
-        "motion-broll-quota"
-      ]
-    },
     "explainer": {
       "id": "explainer",
       "version": 1,
@@ -277,7 +204,6 @@
         "positive-direction",
         "D14",
         "five-layer-ab",
-        "card-form",
         "Q1",
         "draft-rhythm-loop"
       ]
@@ -342,9 +268,131 @@
         "positive-direction",
         "D14",
         "five-layer-ab",
-        "card-form",
         "Q1",
         "draft-rhythm-loop"
+      ]
+    },
+    "math": {
+      "id": "math",
+      "version": 1,
+      "mode": "math",
+      "author_model": "codex",
+      "plan_template": "MATH_PLAN.template.md",
+      "brief": {
+        "required": [],
+        "optional": []
+      },
+      "subjects": {
+        "A": {
+          "primary": "数学关系与图形",
+          "secondary": "与教学任务有关的强调与提示"
+        },
+        "B": {
+          "primary": "数学关系与图形",
+          "secondary": "与教学任务有关的强调与提示"
+        }
+      },
+      "stages": {
+        "plan": [
+          ".studio/spec/math-rap.md"
+        ],
+        "draft": [
+          ".studio/spec/math-rap.md",
+          ".studio/spec/hyperframes.md"
+        ],
+        "final": [
+          ".studio/spec/hyperframes-final.md"
+        ]
+      },
+      "thresholds": {
+        "event_gap_seconds": 2,
+        "still_seconds": 0.6,
+        "pixel_mean_delta": 0.5
+      },
+      "critic_checks": [
+        "符号一致性",
+        "图形职责",
+        "歌词与 cue 对齐",
+        "数学关系可见性",
+        "声音未验证范围"
+      ],
+      "defaults": {
+        "direction_approval": true,
+        "critic.provider": "codex-subagent",
+        "critic.model": "gpt-6.1-sol",
+        "critic.max_rounds": 1
+      },
+      "assets": {
+        "scope": "frozen-library",
+        "opus_heroes": 0,
+        "motion_broll_optional": true
+      },
+      "exemptions": [
+        "D14-character-images",
+        "five-layer-ab",
+        "reference-quota"
+      ]
+    },
+    "english": {
+      "id": "english",
+      "version": 1,
+      "mode": "english",
+      "author_model": "codex",
+      "plan_template": "ENGLISH_PLAN.template.md",
+      "brief": {
+        "required": [],
+        "optional": []
+      },
+      "subjects": {
+        "A": {
+          "primary": "目标词、拼写与词义",
+          "secondary": "与教学任务有关的强调与提示"
+        },
+        "B": {
+          "primary": "目标词、拼写与词义",
+          "secondary": "与教学任务有关的强调与提示"
+        }
+      },
+      "stages": {
+        "plan": [
+          ".studio/spec/english.md"
+        ],
+        "draft": [
+          ".studio/spec/english.md",
+          ".studio/spec/hyperframes.md"
+        ],
+        "final": [
+          ".studio/spec/hyperframes-final.md"
+        ]
+      },
+      "thresholds": {
+        "event_gap_seconds": 2,
+        "still_seconds": 0.6,
+        "pixel_mean_delta": 0.5
+      },
+      "critic_checks": [
+        "标准发音依据",
+        "准确拼写与本期词义",
+        "声画 cue 对应",
+        "回忆与阅读停顿",
+        "声音未验证范围"
+      ],
+      "defaults": {
+        "direction_approval": false,
+        "critic.provider": "off",
+        "critic.model": "gpt-6.1-sol",
+        "critic.max_rounds": 1
+      },
+      "assets": {
+        "scope": "frozen-library",
+        "opus_heroes": 0,
+        "motion_broll_optional": true
+      },
+      "exemptions": [
+        "D14-character-images",
+        "five-layer-ab",
+        "reference-quota",
+        "declared-reading-and-recall-pauses"
       ]
     }
   }

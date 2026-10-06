@@ -7,9 +7,9 @@
 - 安装包、已接纳 AssetStore、冻结 vendor 与 Accepted Snapshot 不原地覆盖；变更在可编辑源完成，复用时冻结新版本。WSL 开发仓会话不修改生产 Work、Current、Binding、接受状态或 Final；工具复现只在冻结最小私有副本中调试。
 - 生产 WorkStore 为 `D:\\AI\\AI+hyperframes`（WSL `/mnt/d/AI/AI+hyperframes`），作品文案、媒体、工程、Draft、Final 与运行状态不得进入开发仓或公开 Git。开发任务不读取生产 Current、Work、资产或默认配置。
 
-视频模式为 `card`、`explainer` 与 `showcase`，默认 `card`，`purpose=ip` 推荐 `explainer`。Codex 不接 `showcase` 制作，仅 Opus 5.5 制作；创建时显式选择并冻结 `pdoom` / `science` 子模块。五层、A/B-roll、字幕与声音层见 [.studio/spec/visual-design.md](.studio/spec/visual-design.md)，showcase 的豁免与硬约束见 [.studio/spec/showcase.md](.studio/spec/showcase.md)。生产 Finalize 渲染出最终 MP4。
+视频模式为 `explainer`、`showcase`、`math` 与 `english`，默认 `explainer`；card 制作链路已删除，旧历史仅可查看/归档，`purpose=ip` 推荐 `explainer`。Codex 不接 `showcase` 制作，仅 Opus 5.5 制作；创建时显式选择并冻结 `pdoom` / `science` 子模块。五层、A/B-roll、字幕与声音层见 [.studio/spec/visual-design.md](.studio/spec/visual-design.md)，showcase 的豁免与硬约束见 [.studio/spec/showcase.md](.studio/spec/showcase.md)。生产 Finalize 渲染出最终 MP4。
 
-card 与数学单片只复用冻结库资产，不调用 Opus；card 的新 Motion / B-roll 可选、无配额。生产根 Opus 可按 [.studio/spec/broll-assets.md](.studio/spec/broll-assets.md) 在 `asset-library/sources` 创作源和 pack 候选，接纳仍由用户执行。非数学 explainer 可在方向批准后交由 Opus 独占制作指定 Work/Scene 的 1–2 个主镜头，其余由 Codex 完成；主镜头遵守完整 explainer 规则，不享受 showcase 豁免，不直接入通用库。
+数学单片只复用冻结库资产，不调用 Opus；生产根 Opus 可按 [.studio/spec/broll-assets.md](.studio/spec/broll-assets.md) 在 `asset-library/sources` 创作源和 pack 候选，接纳仍由用户执行。非数学 explainer 可在方向批准后交由 Opus 独占制作指定 Work/Scene 的 1–2 个主镜头，其余由 Codex 完成；主镜头遵守完整 explainer 规则，不享受 showcase 豁免，不直接入通用库。
 
 按会话工作目录区分 WSL 职责：`/home/jym/workspace/hyperframes+AI` 是开发仓；Claude Code 在 `/mnt/d/AI/AI+hyperframes` 的会话是生产执行者，读取根 `CLAUDE.md`。生产 CLI 只经同根 `work-wsl.sh` 调用 Windows `work.cmd`；可直接编辑当前授权 Work 的文稿、Plan 与工程源，不手改 Current、Binding、接受记录或工具配置。作品与输出留在唯一生产根，不另起 WSL Studio 或渲染器；画面证据使用 CLI 截图与诊断。数学系列与未列任务只读审查，不授予制作或修改权。
 

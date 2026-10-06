@@ -84,7 +84,7 @@ class ProductionRulesTests(unittest.TestCase):
                 if "--variant-id " in line:
                     self.assertIn("--account ", line)
         self.assertIn("shared_inputs", read(ROUTER))
-        self.assertIn("card", read(ROUTER))
+        self.assertIn("english", read(ROUTER))
 
 
 if __name__ == "__main__":

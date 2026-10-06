@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 SLOTS = ("reveal", "emphasis", "exit", "transition")
-MODES = ("card", "explainer", "showcase")
+MODES = ("explainer", "showcase", "math", "english")
 SHOWCASE_SUBMODULES = ("pdoom", "science")
 LEGACY_MODES = ("text-led", "animation-led")
 RATIOS = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080), "4:3": (1440, 1080), "3:4": (1080, 1440), "4:5": (1080, 1350)}
@@ -18,10 +18,10 @@ class AppearanceError(ValueError):
 
 
 def check_mode(mode, source="Settings"):
-    if mode in LEGACY_MODES:
-        raise AppearanceError(f"{source} uses retired mode {mode}; update settings to card first")
+    if mode in (*LEGACY_MODES, "card"):
+        raise AppearanceError(f"{source} uses retired mode {mode}; choose explainer, showcase, math or english")
     if mode is not None and mode not in MODES:
-        raise AppearanceError("Unknown narrative mode; choose card, explainer or showcase")
+        raise AppearanceError("Unknown narrative mode; choose explainer, showcase, math or english")
 
 
 def digest(value: dict) -> str:
@@ -68,7 +68,7 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
         raise AppearanceError("Unknown appearance selection override")
     check_mode(account.get("mode"), "Account")
     check_mode(overrides.get("mode"), "Appearance selection")
-    mode = {**account, **overrides}.get("mode", "card")
+    mode = {**account, **overrides}.get("mode", "explainer")
     # Showcase binds no appearance by default: account looks are not inherited, only explicit picks are frozen.
     inherited = {key: value for key, value in account.items() if key not in ("theme", "background", "motion", "overrides")} if mode == "showcase" else account
     selected = {**inherited, **overrides}
@@ -94,12 +94,14 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
             value = {"asset": _reference(value["asset"], "motion"), "entry": value["entry"]}
             refs.append(value["asset"])
         selections["motion"][slot] = value
-    mode = selected.get("mode", "card")
+    mode = selected.get("mode", "explainer")
     if mode not in MODES:
         raise AppearanceError("Unknown narrative mode")
-    captions = selected.get("captions", mode == "explainer")
+    captions = selected.get("captions", mode in ("explainer", "math", "english"))
     if type(captions) is not bool:
         raise AppearanceError("captions require a boolean value")
+    if mode == "math" and not captions:
+        raise AppearanceError("math requires lyric captions enabled")
     selections["captions"] = captions
     ratio = selected.get("ratio", "16:9")
     if not isinstance(ratio, str):
@@ -147,7 +149,7 @@ def _closure_version(closure):
     return max((item["metadata"].get("contract_version", 1) for item in closure if item["kind"] == "motion"), default=1)
 
 
-def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="card"):
+def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="explainer"):
     from asset_contract import validate_declaration
     by_ref = {item["ref"]: item for item in closure}
     for _, layer in parameter_layers:
@@ -250,6 +252,8 @@ def _check_lock(lock: dict) -> None:
         raise AppearanceError("Invalid frozen appearance selections")
     if type(selection.get("captions", False)) is not bool or selection.get("captions", False) and lock["mode"] not in MODES:
         raise AppearanceError("Invalid frozen captions selection")
+    if lock["mode"] == "math" and not selection.get("captions"):
+        raise AppearanceError("math requires lyric captions enabled")
     references = [(selection[kind], kind) for kind in ("theme", "background") if selection[kind] is not None or lock["mode"] != "showcase"]
     for value in selection["motion"].values():
         if value is not None:
@@ -272,7 +276,7 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
     _check_lock(lock)
     runtime_names = ["appearance.js"]
     if lock["mode"] in MODES:
-        runtime_names += ["cues.js", "captions.js", "figures.js", "scene-binding.js", "rolls.js", "card-component.js", "broll.js"]
+        runtime_names += ["cues.js", "captions.js", "figures.js", "scene-binding.js", "rolls.js", "broll.js"]
     for name in runtime_names:
         runtime = safe(project, f"runtime/{name}")
         source = Path(__file__).parent / "runtime" / name

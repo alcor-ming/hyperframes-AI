@@ -2,13 +2,13 @@
 
 若根目录存在 `AGENTS.local.md`，同时读取其中本机提供方与用户规则。用户直接在 Codex App 打开本目录；Agent 使用本根 `work.cmd` 的绝对路径，运行同根 `runtime/` 与 `.studio/`，配置读取 `.studio/.runtime/local.json`。`work.cmd doctor` 查看实际身份与 Review 范围。
 
-视频模式为 `card`、`explainer` 与 `showcase`，默认 `card`，`purpose=ip` 推荐 `explainer`。Codex 不接 `showcase` 制作，仅 Opus 5.5 制作；创建时显式选择并冻结 `pdoom` / `science` 子模块。五层、A/B-roll、字幕与声音层见 [.studio/spec/visual-design.md](.studio/spec/visual-design.md)，showcase 见 [.studio/spec/showcase.md](.studio/spec/showcase.md)。生产 Finalize 渲染出最终 MP4。
+视频模式为 `explainer`、`showcase`、`math` 与 `english`，默认 `explainer`；card 制作链路已删除，旧历史仅可查看/归档，`purpose=ip` 推荐 `explainer`。Codex 不接 `showcase` 制作，仅 Opus 5.5 制作；创建时显式选择并冻结 `pdoom` / `science` 子模块。五层、A/B-roll、字幕与声音层见 [.studio/spec/visual-design.md](.studio/spec/visual-design.md)，showcase 见 [.studio/spec/showcase.md](.studio/spec/showcase.md)。生产 Finalize 渲染出最终 MP4。
 
 ## 工作边界
 
 WSL 与 Windows 均可编写组件，WSL 开发计划可以包含组件编辑。Windows 在 Work-local 或登记 AssetSource 制作 Scene、GSAP、Three.js、shader、SVG、模型与内容脚本；工具、宿主、合同、依赖和安装器缺陷交 WSL 冻结最小复现。按会话工作目录区分：WSL 开发仓会话不修改生产 Work、Current、Binding、接受状态或 Final，生产根会话按下段执行。
 
-Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取根 `CLAUDE.md`，按任务类型制作 showcase、在 `asset-library/sources` 创作库资产，或独占制作已批准的非数学 explainer 1–2 个主镜头；card 单片、数学与未列出的系列只读。card 和数学单片只复用冻结库资产，不调用 Opus。库候选由 CLI pack，接纳仍由用户执行；主镜头遵守完整 explainer 规则，不享受 showcase 豁免。生产 CLI 只通过同根 `work-wsl.sh` 调用 `work.cmd`；准确授权 Work 的工程源可直接编辑，Current、Binding、接受状态与配置仍由 CLI 管理。作品、Draft、Final 留在唯一生产根；不在 WSL 另起 Studio 或渲染器，画面证据使用 CLI 截图与诊断。同一 Work/Variant 同时只允许一个执行者。
+Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取根 `CLAUDE.md`，按任务类型制作 showcase、在 `asset-library/sources` 创作库资产，或独占制作已批准的非数学 explainer 1–2 个主镜头；数学与未列出的系列只读。数学单片只复用冻结库资产，不调用 Opus。库候选由 CLI pack，接纳仍由用户执行；主镜头遵守完整 explainer 规则，不享受 showcase 豁免。生产 CLI 只通过同根 `work-wsl.sh` 调用 `work.cmd`；准确授权 Work 的工程源可直接编辑，Current、Binding、接受状态与配置仍由 CLI 管理。作品、Draft、Final 留在唯一生产根；不在 WSL 另起 Studio 或渲染器，画面证据使用 CLI 截图与诊断。同一 Work/Variant 同时只允许一个执行者。
 
 安装工具、runtime、受管理规则、已接纳 AssetStore、vendor 与 Accepted Snapshot 只读；变更在可编辑源完成，复用时冻结新版本。更新保留未管理的用户 Skill 与未知文件；修改过的受管理退役文件保存到不会被发现为 Skill 的保留位置并报告，可回滚。继续管理文件的修改仍拒绝覆盖。停止相关进程后使用安装器及恢复机制；不热换运行中的工具。Review 使用独立根配置、WorkStore、AssetStore 与必要 source-copy。
 
@@ -29,7 +29,7 @@ Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取�
 
 ## 画面复盘
 
-用户指定找问题或标记优秀后，生产根 Opus 优先执行，Codex 回退。显式绑定 Work/Variant 和登记 Draft，使用 `retro open <Draft ID>`，按 `VISUAL_RETRO.template.md` 填写，再 `retro check <Draft ID>`。复盘可写范围仅 `retro/`、生产根 `sample-library/`、`known-defects/` 与 `retro-summary/`；不改 Work 工程源、Plan、Current 或接受记录。采样所需可回收 Studio 记录由 CLI 管理。数学系列、card 单片的其余部分仍只读。
+用户指定找问题或标记优秀后，生产根 Opus 优先执行，Codex 回退。显式绑定 Work/Variant 和登记 Draft，使用 `retro open <Draft ID>`，按 `VISUAL_RETRO.template.md` 填写，再 `retro check <Draft ID>`。复盘可写范围仅 `retro/`、生产根 `sample-library/`、`known-defects/` 与 `retro-summary/`；不改 Work 工程源、Plan、Current 或接受记录。采样所需可回收 Studio 记录由 CLI 管理。数学系列、英语的其余部分仍只读。
 
 样片与已知缺陷在用户对话确认后经 `sample add` / `defect add` 写入，不由 Agent 或 critic 自行提名。作品修复与资产制作另按原授权边界执行。样片、帧与记录留在生产根，开发仓只收无作品内容的最小复现。具体命令与冻结参考方式见 [.studio/workflow.md](.studio/workflow.md)。
 
@@ -37,4 +37,4 @@ Claude Code 在本生产根（WSL `/mnt/d/AI/AI+hyperframes`）的会话读取�
 
 用户指定内容复盘后，生产根 Opus 优先执行，Codex 回退。显式绑定 Work / Variant，使用 `content link|import|open|check`，根汇总使用 `content summary`，流程见 `.studio/workflow.md`。只读已有发布文件与登记来源（Final / Draft / 预览）；只导入本地五份 xlsx，不联网、不导出视频、不自动判断长尾或优秀。
 
-可写范围仅 Variant 的 `retro/content/`（含 `imports/` 导入原件目录）与生产根 `content-summary/`；不改 Work 源、Plan、Current 与接受记录。原件、记录与汇总仅留生产根，不进开发仓或 Git。card / 数学只回流选题、Plan / 画面；Script 开头与衔接仅限非数学 showcase / explainer，不改变 dbs 路由。
+可写范围仅 Variant 的 `retro/content/`（含 `imports/` 导入原件目录）与生产根 `content-summary/`；不改 Work 源、Plan、Current 与接受记录。原件、记录与汇总仅留生产根，不进开发仓或 Git。数学只回流选题、Plan / 画面；Script 开头与衔接仅限非数学 showcase / explainer / english，不改变 dbs 路由。

@@ -1,97 +1,77 @@
-"""Synthetic new-format Plan checks; no production inputs."""
+"""Synthetic scene-local Plan checks; no production inputs."""
 import sys
 from pathlib import Path
-import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '.studio'))
-from visual_plan import VisualPlanError, plan_cue, plan_scene_rows, validate_plan_cards
+from visual_plan import VisualPlanError, plan_cue, plan_scene_rows
 from visual_diagnostics import plan_information, source_sections
+from explainer import ExplainerError, find_cue
 
 
 HEADER = '---\n{"plan_format":"3.5.2"}\n---\n'
-CARD = r'''## S01
+PLAN = '''## S01
 One sentence.
-```card C1 · P001
-preset: F01
-area: 800x600
-title: Contact \@home \[today] @hello#2 [test:plug@1]
-- First row @hello
-note: Remember @hello
-exit: hello#2
-```
 | cue | 层 | 目标 | 变化 |
 |---|---|---|---|
-| hello | 3 | emphasis | highlight |
-| hello | 2 | | pan |
-| 例外 | hello | hello#2 | pause | reading |
+| hello#1 | 3 | emphasis | highlight |
+| hello#2 | 2 | | pan |
+| 例外 | hello#1 | hello#2 | pause | reading |
 ### I01 · P001
+```screen
+Contact @home [today]
+```
+### I02 · P001
 ```screen
 Independent text
 ```
 ## S02
-**延续信息：** C1, I01
+**延续信息：** I01, I02
 '''
 
 
 class PlanV352Test(unittest.TestCase):
-    def test_cards_events_information_and_continuation(self):
-        rows = plan_scene_rows(HEADER + CARD)
+    def test_events_information_and_continuation(self):
+        rows = plan_scene_rows(HEADER + PLAN)
         self.assertEqual(rows['S01']['screens'], rows['S02']['screens'])
-        card = rows['S01']['cards']['C1']
-        self.assertEqual('Contact @home [today]', card['title']['text'])
-        self.assertEqual({'token': 'hello', 'nth': 2}, card['title']['cue'])
-        self.assertEqual(['C1:title', 'C1:1', 'C1:note', 'C1', 'emphasis', ''],
-                         [event['target'] for event in rows['S01']['events']])
+        self.assertEqual('Contact @home [today]', rows['S01']['screens']['I01']['实际表达'])
+        self.assertEqual({'token': 'hello', 'nth': 1}, rows['S01']['events'][0]['cue'])
+        self.assertEqual(['emphasis', ''], [event['target'] for event in rows['S01']['events']])
         self.assertEqual('pause', rows['S01']['exceptions'][0]['kind'])
-        information, _ = plan_information(HEADER + CARD)
-        self.assertIn('First row', information['C1']['实际表达'])
+        information, _ = plan_information(HEADER + PLAN)
+        self.assertEqual('Independent text', information['I02']['实际表达'])
         sources = source_sections('<!-- P001 -->Source narration', '', information)
-        for identity in ('I01', 'C1'):
+        for identity in ('I01', 'I02'):
             self.assertEqual('Source narration', sources[information[identity]['信息 ID / 来源']])
         self.assertEqual(['S01'], list(plan_scene_rows(HEADER + '## S01\nMedia only.')))
 
-    def test_invalid_version_and_card_syntax(self):
+    def test_invalid_version_and_scene_syntax(self):
         self.assertEqual({'token': 'hello', 'edge': 'end', 'within': [0, 2]},
                          plan_cue('{"token":"hello","edge":"end","within":[0,2]}'))
         with self.assertRaisesRegex(VisualPlanError, 'invalid cue query'):
             plan_cue('{"token":"hello","unknown":1}')
-        for plan in [CARD, HEADER.replace('3.5.2', '3.5.1') + CARD,
-                     HEADER + CARD.replace('F01', 'F09'),
-                     HEADER + CARD.replace('800x600', '0x600'),
-                     HEADER + CARD.replace(r'\@home', '@home'),
-                     HEADER + CARD.replace('## S02', '```card C1 · P002\npreset: F02\narea: left\n- again @hello\n```\n## S02'),
-                     HEADER + CARD.replace('### I01 · P001', '### I01 · P001\n```rhythm\n{}\n```'),
-                     HEADER + CARD.replace('C1, I01', 'C9')]:
+        for plan in [PLAN, HEADER.replace('3.5.2', '3.5.1') + PLAN,
+                     HEADER + PLAN.replace('### I02', '### I01'),
+                     HEADER + PLAN.replace('hello#1 | 3', 'hello#1 | 5'),
+                     HEADER + PLAN.replace('## S02', '## S01'),
+                     HEADER + PLAN.replace('### I01 · P001', '### I01 · P001\n```rhythm\n{}\n```'),
+                     HEADER + PLAN.replace('I01, I02', 'I99')]:
             with self.subTest(plan=plan), self.assertRaises(VisualPlanError):
                 plan_scene_rows(plan)
 
-    def test_cue_resolution_and_svg_closure(self):
+    def test_repeated_cues_resolve_from_formal_alignment_only(self):
         text = 'hello hello'
         cues = {'text': text, 'characters': [{'char': char, 'start': i / 10, 'end': (i + 1) / 10, 'aligned': True}
                                             for i, char in enumerate(text)]}
-        plan = (HEADER + CARD).replace('@hello\n', '@hello#1\n')
-        with tempfile.TemporaryDirectory() as folder:
-            project = Path(folder)
-            validate_plan_cards(plan, cues, project=project, closure=[], icon_refs=['test:plug@1'])
-            validate_plan_cards(plan.replace('test:plug@1', 'test:plug'), cues,
-                                project=project, closure=[], icon_refs=['test:plug@1'])
-            with self.assertRaisesRegex(VisualPlanError, 'SVG icon reference outside'):
-                validate_plan_cards(plan.replace('test:plug@1', 'test:plug'), cues,
-                                    project=project, closure=[], icon_refs=['test:plug@1', 'test:plug@2'])
-            validate_plan_cards(plan, None, project=project, closure=[], scene_ids=['S02'])
-            with self.assertRaisesRegex(VisualPlanError, 'cue resolution failed'):
-                validate_plan_cards(plan.replace('@hello#1', '@absent'), cues, project=project, closure=[], icon_refs=['test:plug@1'])
-            with self.assertRaisesRegex(VisualPlanError, 'SVG icon reference outside'):
-                validate_plan_cards(plan, cues, project=project, closure=[])
-            (project / 'diagram.svg').write_text('<svg/>')
-            custom = plan.replace('test:plug@1', 'custom:diagram.svg')
-            with self.assertRaisesRegex(VisualPlanError, 'SVG reference outside'):
-                validate_plan_cards(custom, cues, project=project, closure=[])
-            validate_plan_cards(custom, cues, project=project, closure=['diagram.svg'])
-            with self.assertRaisesRegex(VisualPlanError, 'SVG reference outside'):
-                validate_plan_cards(custom.replace('custom:diagram.svg', 'custom:../diagram.svg'), cues,
-                                    project=project, closure=['../diagram.svg'])
+        events = plan_scene_rows(HEADER + PLAN)['S01']['events']
+        self.assertEqual([0, .6], [find_cue(cues, event['cue']) for event in events])
+        with self.assertRaisesRegex(ExplainerError, 'cue_ambiguous'):
+            find_cue(cues, plan_cue('hello'))
+        with self.assertRaisesRegex(ExplainerError, 'cue_not_found'):
+            find_cue(cues, plan_cue('absent'))
+        cues['characters'][6]['aligned'] = False
+        with self.assertRaisesRegex(ExplainerError, 'cue_unaligned'):
+            find_cue(cues, events[1]['cue'])
 
 
 if __name__ == '__main__':

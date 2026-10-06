@@ -1,6 +1,6 @@
 # 动效 B-roll 与风格资产创作
 
-本指南适用于生产根 Opus 在 `asset-library/sources` 的库创作，不授予 Work 修改、接纳、发布或部署权限。任务需求使用 [BROLL Brief](../templates/BROLL_BRIEF.template.md)。card 与数学单片只用冻结资产；非数学 explainer 的定制主镜头另走已批准 Work/Scene 的独占交接，不直接入库。
+本指南适用于生产根 Opus 在 `asset-library/sources` 的库创作，不授予 Work 修改、接纳、发布或部署权限。任务需求使用 [BROLL Brief](../templates/BROLL_BRIEF.template.md)。数学单片只用冻结资产；非数学 explainer 的定制主镜头另走已批准 Work/Scene 的独占交接，不直接入库。
 
 ## 创作与接纳
 

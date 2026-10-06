@@ -11,6 +11,9 @@ def parse(text, metadata, scenes):
     line = lines.frozen({'line': metadata.get('line')})
     if line is None:
         raise ValueError('New Plan requires a frozen line')
+    if line['mode'] in ('math', 'english'):
+        # Teaching units and their cues own the sequence for these lines.
+        return {'brief': {}, 'segments': {sid: [] for sid in scenes}, 'findings': []}
     brief_section = re.search(r'^## 导演 Brief\s*\n(.*?)(?=^## |\Z)', text, re.M | re.S)
     brief = dict(re.findall(r'^\*\*(.+?)[：:]\*\*\s*([^\n]*)', brief_section[1] if brief_section else '', re.M))
     findings = [{'kind': 'missing_brief_field', 'field': key} for key in line['brief']['required'] if not brief.get(key, '').strip()]

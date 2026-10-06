@@ -3,11 +3,21 @@
     {
       "version": "3.7.0",
       "lines": [
-        "card",
         "explainer",
         "explainer/math-rap"
       ],
       "summary": "A/B 交接由同时变化改为错相交接"
+    },
+    {
+      "version": "3.8.2",
+      "lines": [
+        "explainer",
+        "math",
+        "english",
+        "showcase/pdoom",
+        "showcase/science"
+      ],
+      "summary": "默认 explainer；数学与英语使用专属 Plan 和检查；退役 card 制作链路。"
     }
   ]
 }

@@ -15,8 +15,8 @@ work --work <id> --variant <id> math build --browser <chromium>
 ```
 
 For registered AssetSource samples, `math build --project <sample> --plan <plan>`
-replaces Work selectors. Build requires approved Plan and frozen
-`explainer` / `math-rap` appearance and series metadata. It only replaces its
+replaces Work selectors. Build requires approved Plan and frozen `math` line metadata, or an existing
+`explainer` / `math-rap` frozen identity. It only replaces its
 `hf-math` block; edit Plan, never generated HTML. Repeated builds are stable.
 Changed cues, font, module, runtime or Scene timing require rebuilding before
 preview registration. Build measures a staged copy before writing and rejects
@@ -96,7 +96,8 @@ scrubbing. The instance exposes `items`, `text`, `decorations`, `renderAt`,
 `retime`, `rhythm`, `getState`, and `dispose`. Rhythm sources are automatically
 registered and removed on disposal. Use generated `HarnessMathProject` for
 Scene clocks, `scene(id)` A-group access, `setRolls(scenes)` B-roll wiring,
-global-time `renderAt`, and disposal, following the card-project contract.
+global-time `renderAt`, and disposal. The math runtime and builder operate
+independently of the retired card chain.
 
 WSL isolated Chromium tests do not establish Windows-native compatibility or
 zero-basics educational effectiveness. Deployment and the user's Studio viewing

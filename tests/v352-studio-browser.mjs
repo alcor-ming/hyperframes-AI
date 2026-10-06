@@ -54,7 +54,7 @@ await fs.writeFile(path.join(project, 'index.html'), `<!doctype html><html><head
 <main data-composition-id="fixture" data-width="960" data-height="540" data-duration="2">
 <img id="img-original" src="icons/original.svg"><img id="img-tampered" src="icons/tampered.svg">
 ${inline('inline-original')}${inline('inline-tampered', true)}${small('handwritten')}
-<span data-hf-schematic>${small('schematic')}</span><span data-card-svg-slot>${small('slot')}</span></main>
+<span data-hf-schematic>${small('schematic')}</span></main>
 <script>window.__timelines={fixture:gsap.timeline({paused:true}).to({},{duration:2})};
 HarnessCues.load().then(cues=>window.cueResult={start:cues.find('A'),end:cues.find('A',{edge:'end'})})
 .catch(error=>window.cueResult={error:error.message});</script></body></html>`);
@@ -100,7 +100,7 @@ try {
   assert(state.source.startsWith('data:image/svg+xml;base64,'), 'real Studio converts local SVG into data URL');
   assert(state.stampedRoot && state.stampedPath, 'real Studio injects root and path editing IDs');
   const observed = await page.evaluate(inspectFrame, [], 0);
-  assert.equal(observed.icons.length, 7);
+  assert.equal(observed.icons.length, 6);
   const findings = runPython(`import json,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(sys.argv[1])/'.studio'))
@@ -112,7 +112,7 @@ print(json.dumps(icon_sets.audit_icons(json.load(sys.stdin),icon_sets.project_pa
   assert.deepEqual(findings.filter(item => item.code === 'unmarked_small_svg').map(item => item.target), ['#handwritten']);
   const evidence = {platform: process.platform, actualStudio: '0.8.27', routeOnly: true,
     state, observed, findings, checks: ['default-cue-base-uri', 'studio-data-svg', 'studio-editor-ids',
-      'normal-icons-clean', 'tampered-icons-detected', 'small-svg', 'schematic-slot-exempt']};
+      'normal-icons-clean', 'tampered-icons-detected', 'small-svg', 'schematic-exempt']};
   await fs.writeFile(path.join(root, 'evidence.json'), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({platform: process.platform, actualStudio: '0.8.27', routeOnly: true,
     checks: evidence.checks, findings: findings.length, evidence: root}));

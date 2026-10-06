@@ -1,6 +1,7 @@
 """Transactional Plan-owned mathematical mounts from installed frozen assets."""
 
 from html import escape
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -9,7 +10,6 @@ import shutil
 import subprocess
 import tempfile
 
-from card_build import digest, script_json
 import component_harness as components
 import explainer
 import math_chain
@@ -20,6 +20,14 @@ from visual_plan import VisualPlanError, scene_projection
 START = '<!-- hf-math:start -->'
 END = '<!-- hf-math:end -->'
 MANIFEST = 'runtime/math-build.json'
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def script_json(value):
+    return json.dumps(value, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
 
 
 def math_digest(plan):

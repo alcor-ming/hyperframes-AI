@@ -143,7 +143,6 @@ class IconSetTest(unittest.TestCase):
         svg = '<svg><path d="M0 0 L1 1"/></svg>'
         records = [{"svg": svg, "width": 24, "height": 24, "target": "small"},
                    {"svg": svg, "width": 24, "height": 24, "schematic": True},
-                   {"svg": svg, "width": 24, "height": 24, "card_slot": True},
                    {"svg": svg, "width": 500, "height": 500}]
         issues = ICONS.audit_icons(records, packages)
         self.assertEqual(["small"], [issue["target"] for issue in issues])

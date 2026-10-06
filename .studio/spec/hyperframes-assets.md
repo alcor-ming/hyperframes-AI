@@ -21,8 +21,6 @@ work component archive apply --plan <计划路径>
 
 归档是带逐文件 hash 清单的非破坏性快照：原目录保留，`reclaimed_bytes` 为 0，不自动回收磁盘，避免破坏外部 Studio 的使用。仅接受完整且未改 review 的工具候选，或 workspaces/<名称> 中含 `{"owner":"hyperframes.asset-maintenance/v1","active":false}` 的 `.asset-workspace.json`。未知目录、Work、已安装 vendor 与已接纳包拒绝。物理清理需另行定义占用检测与授权。本版不新增 IconPark；24 个单图标包按明确映射保留 historical，20 个旧卡片家族按已确认归层填写分类表，未知列 pending，不自动重写视觉。真实迁移、归档和 Windows 验收另行执行。
 
-F01-F08 使用 `card-kit@v1`，插槽与接线见 [Card Kit 接口卡](card-kit.md)。`component card-kit-source <新源目录>` 只导出自有源码，之后沿用 pack/validate/accept/install。Plan 是内容真源；`cards build` 生成挂载并用冻结字体实测容量，`cards studio` 在官方 Studio 旁提供回写 Plan 的卡片编辑器。不手改生成块，不把设计源批准当作正式资产接纳。
-
 使用 `work component interface <准确包引用、source_ref或列表返回的路径>` 读取包、场景源或配方详情，不读实现源码；候选用 `component interface <路径> --candidate`。合法 source_ref 不要求 @vN，配方可无运行 entry。详情先显示当前状态、来源、入口、检查范围和 next_step，再显示声明的用法；历史 README 或源 classification_status 不替代包接纳。长用法可通过 full_result 的 --json 读取，说明附件越界或缺失明确失败。普通图标用 `work icons search <名称或别名>` 获取精确引用。缺库时从本机包运行 `work icons import --from <lucide-static 包根> --source <可编辑源目录>`，再按既有 pack / accept / install 流程处理；导入不自动接纳。安装到目标工程后，`work --work <id> --variant <id> icons use lucide:plug@1.45.0 --output icons/plug.svg` 取用闭包内 SVG，不联网、不改路径，保留来源标记及主题颜色/线宽。Plan 引用同一精确版本，SVG 随工程快照冻结。
 
 通过现有 `component` 能力从已配置的外部资产来源检索，以资产元数据和接纳记录为准，身份冲突不静默覆盖。按 Scene 关系、真实文字及可选说明、素材形态、画幅、可用时间和状态变化核对适配；名字相近或能换标题不算适配。模块 / 媒体读匹配的 `asset.json` 与声明的用法 / 样例，组件读 `COMPONENT.md`、必要 `cases/**/CASE.md` 和边界 Fixture，Case 不扩大公共合同。已适配或能通过合同内组合 / 参数解决的能力直接复用，不重做审批样段。语义简报、精确版本、Binding 与必要差异保留在 Plan 对应 Scene 一节，不新建数据库。
@@ -55,7 +53,7 @@ module/media 使用 Binding schema 3 的 `component_ref`、`scene` 和 `usage`�
 
 load 默认以当前页面目录为 project；显式 projectURL 必须是同源项目目录并保留末尾 `/`，例如 `await HarnessAppearance.load("./project/")`，不能传外部 URL 或把文件 URL 当目录。
 
-两种模式均支持 solid/transparent/module 背景。四槽 Motion 资产采用 manifest `contract_version:2` 和 entry `capability_version:2`，精确 ref/hash 不可覆盖。含 v2 Motion 的闭包生成 appearance lock schema/contract 2、resolver 1，旧宿主明确拒绝。工具安装不升级旧 Work 的冻结 runtime；明确目标的更新仍用上文 rebind/upgrade-runtime，不修改历史快照或自动接纳资产。
+受支持链路共用 solid/transparent/module 背景合同。四槽 Motion 资产采用 manifest `contract_version:2` 和 entry `capability_version:2`，精确 ref/hash 不可覆盖。含 v2 Motion 的闭包生成 appearance lock schema/contract 2、resolver 1，旧宿主明确拒绝。工具安装不升级旧 Work 的冻结 runtime；明确目标的更新仍用上文 rebind/upgrade-runtime，不修改历史快照或自动接纳资产。
 
 Motion v2 的 `slots` 与 `reduced_motion` 均须完整声明四槽，选择的 entry 必须等于槽名。公共字段为 duration（非负秒）、easing（none/linear/ease-in/ease-out/ease-in-out）。下例是 entry JSON；资产 manifest 仍按既有 schema 2 包装，只有声明在 parameters 的叶子可覆盖，effect/color_token 不可覆盖，0/false 保留原义：
 

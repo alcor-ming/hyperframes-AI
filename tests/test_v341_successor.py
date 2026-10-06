@@ -44,9 +44,9 @@ class SuccessorTest(unittest.TestCase):
         series = cli.read_json(series_path)
         before = cli.identity_state(self.root)
         source_before = cli.snapshot_tree_manifest(source)
-        for mode in ('text-led', 'animation-led'):
+        for mode in ('card', 'text-led', 'animation-led'):
             cli.write_json(series_path, {**series, 'mode': mode})
-            self.assertIn('update settings to card', self.run_cli(*self.successor_args(source.name), expected=2))
+            self.assertIn('choose explainer, showcase, math or english', self.run_cli(*self.successor_args(source.name), expected=2))
             self.assertEqual(before, cli.identity_state(self.root))
             self.assertEqual(source_before, cli.snapshot_tree_manifest(source))
             self.assertEqual(1, len(cli.list_work_rows(self.root)))

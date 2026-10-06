@@ -129,8 +129,8 @@ def rebind(root, work, variant, state, args, api):
         choices.update(overrides)
         overrides = choices
     lock = appearance.resolve(root, account, overrides)
-    if state.get("series_binding", {}).get("spec") == "math-rap" and (lock["mode"] != "explainer" or not lock["selection"].get("captions")):
-        raise appearance.AppearanceError("math-rap requires explainer with lyric captions enabled")
+    if (state.get("mode") == "math" or state.get("series_binding", {}).get("spec") == "math-rap") and (lock["mode"] not in {"math", "explainer"} or not lock["selection"].get("captions")):
+        raise appearance.AppearanceError("Mathematics requires lyric captions enabled")
     project = safe(variant, "project")
     runtime_updates = {}
     for name, known in (("appearance.js", KNOWN_RUNTIMES), ("cues.js", KNOWN_CUE_RUNTIMES)):

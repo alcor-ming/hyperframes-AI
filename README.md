@@ -1,14 +1,22 @@
 # HyperFrames AI Harness
 
-面向本地视频创作的轻量 Harness。v3.8 化繁为简：Work 管一期内容，Variant 管独立账号版本或测试批次；普通修改保留在原 Variant，Draft、接受快照与历次导出记录其迭代。当前只提供 `hyperframes_video` 制作。
+面向本地视频创作的轻量 Harness。v3.8.2 独立制作链路、正式 TTS 与 card 删除已在开发仓实现；部署、Windows 原生与真实语音验收另记。v3.8 生命周期保持：Work 管一期内容，Variant 管独立账号版本或测试批次；普通修改保留在原 Variant，Draft、接受快照与历次导出记录其迭代。当前只提供 `hyperframes_video` 制作。
 
 ## 快速开始
 
 资产选型使用 `work component list` 的生成式目录，可按 `--asset-layer` 筛选；参考样例默认隐藏且不可新安装，显式查看用 `--include-references`，或直接指定 `--kind scene-source` / `--kind recipe`。`component migrate plan|apply` 合并明确指定的资产目录，`component archive plan|apply` 保存非破坏性归档快照；不自动接纳、不删除旧包、不修改已有 Work。接口与边界见 [.studio/spec/hyperframes-assets.md](.studio/spec/hyperframes-assets.md)。
 
-视频支持 `card` 卡片模式与 `explainer` 有声动态图解，均使用 16:9 / 9:16 五层宿主：背景、主体、强调转场、独立文字、口播字幕。`--captions on|off` 为 Variant 开关，card 默认关闭、explainer 默认开启。A/B-roll 管主画面时间切换，Plan 按 Scene 维护编排、内嵌上屏文字、素材、声音 cue 与节奏事件。声音层对两种模式开放；Finalize 渲染最终 MP4，不含平台工作流。
+视频提供 `explainer`、`showcase`、`math` 与 `english` 四条独立链路，默认 `explainer`，各自加载规则、Plan 与检查，共用 Work / Variant、Studio、资产和 Finalize。五层宿主用于背景、主体、强调转场、独立文字和口播字幕；showcase 可按创作需要取用。字幕按链路冻结，数学必须显示歌词。A/B-roll 管主画面时间切换，是否采用及检查范围以所选链路为准；Finalize 渲染最终 MP4，不含平台工作流。
 
-另有 `showcase` 模式，仅 Opus 5.5 制作，Codex 不接制作；创建时显式冻结 `pdoom` / `science` 子模块，使用精简 Plan 与接受后提炼模板。不强制 explainer 正向方向、D14、Q1 或 Draft 前节奏闭环，事实、授权、seek 与离线闭包等硬约束不变，见 [showcase 合同](.studio/spec/showcase.md)。`explainer` 系列可声明 `spec=math-rap`，以数学图解替代角色/生图、字幕显示歌词；Research 记录原片与声音来源，不新增账号或声音来源拦截，见 [数学系列合同](.studio/spec/math-rap.md)。
+`showcase` 仅 Opus 5.5 制作，Codex 不接制作；创建时显式冻结 `pdoom` / `science` 子模块，使用精简 Plan 与接受后提炼模板。不强制 explainer 正向方向、D14、Q1 或 Draft 前节奏闭环，事实、授权、seek 与离线闭包等硬约束不变，见 [showcase 合同](.studio/spec/showcase.md)。舞台与白底角色处理为可选工具，源码随 Harness 管理，显式指定本期输入和输出，不依赖某个 Work；纸剧场不是必选风格。
+
+数学新制作直接选择 `math`，沿用原片声音／说唱、人工核对歌词与数学图解；Research 记录原片与声音来源，不新增声音来源拦截。旧 `explainer/math-rap` 按冻结语义读取，不静默重写，见 [数学链路合同](.studio/spec/math-rap.md)。
+
+`english` 使用原创教学＋TTS，专属 Plan 记录准确发音、拼写、本期词义、情境、可选记忆提示、回忆任务和声画对应。阅读与拼写回忆保留合理停顿，谐音只作为记忆提示。更多文字 Motion、幽默例句与拼写记忆方法是后续完善方向，当前不交付固定教学模板或新动作库，见 [英语链路合同](.studio/spec/english.md)。
+
+公共 TTS 默认火山引擎，可配置替代脚本；切换提供方不改 Script / Plan。候选音频、正式声音采用与字词对齐分开记录，只采用可信原生时间证据或既有 ASR，不按字数估时。凭据不进入源码、日志、缓存与发行包，服务失败不自动换供应商。真实合成与听校须有各自证据。
+
+card 链路从 repo 和产品配送中删除，不保留制作、编辑或渲染兼容实现。旧作品、接受快照和成片保留；继续内容须显式采用到受支持的新版本。显式或配置中的旧 card 值报告来源，不静默改为 explainer；普通卡片式画面仍可用于其他链路。
 
 数学链路复用 `cues build --alignment <文件>` 的歌词逐字对齐，不对未对齐字插值。正式声音已有且 cue 已建立后，使用 `./work --work <id> --variant <id> beats build --audio <Work相对音频路径> --beats-per-bar <每小节拍数> --first-downbeat <零基拍点索引>`；锁定上游提取拍点，拍号和首个强拍须人工明确，弱起不猜测，生成的网格绑定音频摘要。`plan check` 报告数学职责、符号一致性和收尾空档，不替代观看或接受。
 
@@ -48,7 +56,7 @@ Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话�
 
 视频沿用现有 Script、Research、音频与 M2–M3 画面，先完成整片 Plan，再选一个真实 Scene 动态参考。一次方向批准后直接生成完整 planned-placeholder Draft，素材齐备后生成最终 Draft，沿用原完整接受和 Final 流程。不逐 Scene 审批，不新建 Shotbook，不把样段或占位 Draft 当成具备 Finalize 权限的 full Draft。
 
-复用优先选择承担明确含义的视觉对象，保留内部联动和既有 helper。Plan 列清逐 Scene 的 A/B 职责、语义对象、素材占位 ID 与人声 cue 意图；音乐分析可选，已有 timestamps/section_map 优先复用。最终 Draft 必需素材齐备，计划内占位不阻塞此前全片预览。新登记参数只在实现并验证后加入帮助；旧 reference/layout 记录保持原含义。具体约定见 [创作工作流](.studio/workflow.md)。
+复用优先选择承担明确含义的视觉对象，保留内部联动和既有 helper。Plan 按所选链路列清逐 Scene 的叙事职责、语义对象、素材占位 ID 与人声 cue 意图；音乐分析可选，已有 timestamps/section_map 优先复用。最终 Draft 必需素材齐备，计划内占位不阻塞此前全片预览。新登记参数只在实现并验证后加入帮助；旧 reference/layout 记录保持原含义。具体约定见 [创作工作流](.studio/workflow.md)。
 
 日常预览默认启动锁定版本的官方 HyperFrames Studio，返回实际项目 URL；当前工程可编辑，登记版本只在隔离副本打开：
 
@@ -62,8 +70,6 @@ Windows 用户在 Codex App 直接打开 `D:\AI\AI+hyperframes`，新建对话�
 ```
 
 Studio 对 current 的修改同步原文案真源或暂停对应再生成，旧 MP4 / QA 不继续代表新源码。登记版本的独立审阅副本文件只读，不支持 Studio 保存；打开时先校验，副本变化则新建目录并保留旧副本，不放宽诊断完整性检查。`reference` Plan 没有虚构的可播放工程，直接审阅其资产引用。
-
-F01-F08 卡片使用 Plan `card` 块作为唯一内容源。安装已接纳的 `card-kit@v1` 后运行 `./work --work <id> --variant <id> cards build --browser <Chromium路径>`，先实测容量再更新生成挂载，保留其他手写内容。`cards studio` 提供官方 Studio 旁的 Plan 回写编辑器；保存使方向批准和旧接受失效，不拦截原生 Studio 的任意源码编辑。导出源、槽位及 A/B 接线见 [卡片接口卡](.studio/spec/card-kit.md)。
 
 数学首批积木使用同 Scene 的 `math-plan` 定义单元与 cue，`math` 块只定义对应布局和冻结字体。安装已接纳的 `math-kit@v1` 后运行 `./work --work <id> --variant <id> math build --browser <Chromium路径>`；构建检查真实字形、系统字体回退和文本容量，再更新受保护挂载。接口、九种积木、导出与闭包约定见 [数学积木接口卡](.studio/spec/math-kit.md)。开发仓只做隔离验证，Windows 原生和部署后带声效果验收另报。
 
@@ -105,13 +111,13 @@ Draft 与 Final 生命周期：
 
 ## 账号、系列与制作版本
 
-系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series`，但可无账号、零 Variant 先准备共享内容；明确账号时用 `--account <id> --variant-id <id>` 一步创建 Work 与版本，新生产 Variant 仍须已登记账号，可另指定 `--batch`、`--theme`、`--mode card|explainer|showcase` 与 `--ratio`，showcase 必须同时指定 `--submodule pdoom|science`，Theme/Background/Motion 可选且不继承账号外观；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。无显式、账号或系列模式时默认 `card`，不再默认填 Profile。系列身份/版本/规格、账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；`purpose=ip` 推荐 `explainer`，但不改默认值。
+系列、用途、账号默认值、主题与批次通过 Work CLI 管理，命令以当前部署帮助为准。提供 `theme|account|series put <id> --file <json>`、`get <id>`、`list`；视频 `new` 必须显式指定 `--purpose standard|ip|test`，生产视频还须 `--series`，但可无账号、零 Variant 先准备共享内容；明确账号时用 `--account <id> --variant-id <id>` 一步创建 Work 与版本，新生产 Variant 仍须已登记账号，可另指定 `--batch`、`--theme`、`--mode explainer|showcase|math|english` 与 `--ratio`，showcase 必须同时指定 `--submodule pdoom|science`，Theme/Background/Motion 可选且不继承账号外观；test Work 不绑定账号。`variant add` 可为同一账号创建不同版本，按准确 Variant ID 选择，`variant name` 修改可读名称。无显式、账号或系列模式时默认 `explainer`，不再默认填 Profile。旧 card 默认值须明确改选，错误包含其配置来源。系列身份/版本/规格、账号设置和主题版本/参数在创建 Variant 时冻结，修改默认值不追改已有工程；`purpose=ip` 继续推荐 `explainer`。
 
 静态外观支持 schema 2 Theme/Background/Motion 资产，沿用 `component pack/import/accept`，不另建主题库。新账号以 `{ref,kind,package_sha256}` 保存 theme/background，motion 槽位可显式设 null。`appearance resolve --account <id> --appearance-file <json>` 只读展示最终选择；`new`/`variant add` 同样接受 `--appearance-file`、独立 `--background <id@vN>`、`--fps` 和 `--seed`。锁与真实 vendor 一起冻结并纳入 preview，不依赖源库在线。字段及参数结构见 [资产合同](.studio/spec/hyperframes.md)。候选能力不等于已部署；选择 UI、真实 Paper 拆分和 Windows 原生换配效果不由这些合同证明。
 
 Motion v3 增加风格入退场、一次性强调与转场、back-out/spring 及 cue 相位 hold_fps；允许不同槽混用 v2/v3，新 lock 采用最高能力版本，旧冻结 Work 不自动升级。完整账号外观指定 Theme/Background/Motion；跨账号风格叠加省略 theme，保留各自账号 Theme。B-roll module 可通过 `component list --broll-role hook|concept|transition --tag <style>` 查询，接口卡显示完整挂载示例和插槽；Scene 手动接既有 A/B 编排，Binding schema 不变。合同与生产源自检见 [镜头创作指南](.studio/spec/broll-assets.md)。
 
-card 与数学单片只复用冻结库资产，不调用 Opus；card 镜头可选、无配额。生产根 Claude 可创作库源/pack 候选（用户接纳），或在方向批准后独占制作非数学 explainer 的 1–2 个指定主镜头，再交回 Codex；主镜头不享受 showcase 豁免。首次库制作、主镜头交接工具化和真实生产内容验收不随开发或工具部署自动执行。
+数学单片只复用冻结库资产，不调用 Opus；英语沿用 Codex 制作。生产根 Claude 可创作库源/pack 候选（用户接纳），或在方向批准后独占制作非数学 explainer 的 1–2 个指定主镜头，再交回 Codex；主镜头不享受 showcase 豁免。首次库制作、主镜头交接工具化和真实生产内容验收不随开发或工具部署自动执行。
 
 所有新视频 Work 默认把 Script/Research 放在 `shared/`，各 Variant 通过 `shared_inputs` 引用同一源，Plan/工程/接受/Final 各自独立。`variant add --from <variant-id>` 显式创建内容分支，不是仅为了新增账号而必需；旧 Variant 内文稿仍按原位置读取。创建隔离测试可用 `work new "联动测试" --workflow hyperframes_video --purpose test --batch <batch-id>`，只进行 Studio 验证，不导出视频。
 
@@ -126,6 +132,24 @@ RC2 视频 Work 的全局 ID 与系列号独立递增且不封顶于 999；`name
 继任入口为 `work successor <source-work> --source-variant <id> --source-version draft-vNNN --account <id> [--variant-id <id>] [--title <title>] [--detached]`。它从准确归档源的接受版本建立新实体与自有内容，不继承接受或 Final，保留原系列号且不改变高水位。`work find --series <id> --number <n>` 定位当前对象，`--history` 查看完整链；旧 ID/别名仍定位旧实体。普通新一期继续递增，归档或删除继任不使查询回退旧对象。日常修订或账号适配仍使用现有活动 Work，不以继任替代。文档不代表已部署或真实作品已变更。
 
 继任采用的文稿进入 `shared/`；冻结工程、媒体和原 Plan 留在新 Work 的 `materials/predecessor/`，新 Variant 按目标账号冻结配置并重新制作 Plan，不把原账号工程冒充新账号接受。源版本缺少冻结文稿或媒体依赖不闭合时拒绝创建。中断后重试原 `successor` 命令完成恢复，不手删 `.runtime/work-successor.json`。
+
+## Showcase 补充工具与正式配音
+
+以下命令在获授权的创作根执行，必须明确 Work / Variant。舞台仅首批 16:9；抠图只支持近白底三视角色图（`sheet`）或已有透明动作图（`pose`）。输入路径相对 Work，输出目录相对当前 Variant 的 project；已有输出需换目录，或显式 `--overwrite` 替换完整且未被修改的同工具产物。源码随工具配送，不依赖 Work 50。
+
+```bash
+./work --work <work-id> --variant <variant-id> showcase stage --output assets/stage
+./work --work <work-id> --variant <variant-id> showcase cast --input materials/actor.png --kind sheet --output assets/cast/actor
+./work --work <work-id> --variant <variant-id> tts generate
+./work --work <work-id> --variant <variant-id> tts generate --config <provider.json> --anchor P001
+./work --work <work-id> --variant <variant-id> tts adopt <candidate-sha256> --alignment materials/alignment.json
+```
+
+TTS 读取已批准或无需批准的当前 Script 正文与稳定 Anchor，排除 Scene 索引。默认火山 `seed-audio-1.0`，凭据只从 `VOLCENGINE_TTS_API_KEY` 环境变量读取。配置 JSON 可含 `provider`、`model`、`options`、`anchors` 和环境变量名 `key_env`，不能包含凭据值；`anchors` 按 P001 等 ID 覆盖本段选项。火山选项为 `instruction`、`speaker`、`speech_rate`、`pitch_rate`、`loudness_rate`、`sample_rate`，按[官方接口](https://docs.volcengine.com/docs/DoubaoVoice/audio-generation-http?lang=zh)校验。中英文可分 Anchor 指定发音意图；谐音提示不替代标准发音。调用云服务仍需已有的内容及费用授权。
+
+替代提供方配置示例：`{"provider":"script","model":"your-model","command":["/absolute/python","/absolute/adapter.py"],"options":{}}`。命令为程序或解释器＋脚本的参数数组；宿主追加 `--request <json> --result <json>`，不经过 shell。请求含 `schema_version:1`、`anchor`、`text`、`model`、`options`、`output:"audio.wav"`，工作目录为本次临时段目录；脚本写入 PCM WAV，并在结果文件返回 `{"audio":"audio.wav","model":"your-model","options":{}}`，实际模型与参数须等于请求（不同则拒绝采用）。越界路径、软／硬链接、坏音频、混合采样格式或非零退出都失败，不切换其他服务。凭据由脚本从环境读取；本期不安装其他语音引擎。
+
+候选仅保存在 Variant 的 `materials/tts/<hash>/`，按提供方、模型、正文与生效参数区分。单 Anchor 可试听；正式采用须覆盖当前全稿，并提供实测对齐 JSON，顶层 `audio_sha256` 必须等于候选音频 hash，`method` 为 `asr`、`forced-alignment`、`manual-measured` 或 `provider-native`；`characters[]` 含单字符 `text`/`char`、以全片秒数记录的 `start`、`end`；不能均分时长伪造。采用会接入 voice 音轨、cues 与 section_map，将 Plan 退回待检查状态并清空当前接受关联；旧快照不变。Script、正式音频或时间数据变化须重新采用和检查。坏请求、合成失败与采用失败保留已有结果。
 
 ## 外观、资产与研究入口
 

@@ -18,11 +18,11 @@ CLI 只用同根 `./work-wsl.sh` 调用 Windows `work.cmd`。先确定任务类�
 
 ## 只读审查
 
-除下述用户指定画面复盘的限定写入外，数学系列、card 单片及未列出的系列一律只读，不修改 Work。数学审查包采用 [.studio/spec/math-rap.md](.studio/spec/math-rap.md) 的固定输出：证据【图】【码】【未实现】、严重度表、推荐分镜表。读取范围限声明文件，不代替用户观看或接受。
+除下述用户指定画面复盘的限定写入外，数学系列、英语及未列出的系列一律只读，不修改 Work。数学审查包采用 [.studio/spec/math-rap.md](.studio/spec/math-rap.md) 的固定输出：证据【图】【码】【未实现】、严重度表、推荐分镜表。读取范围限声明文件，不代替用户观看或接受。
 
 ## 画面复盘
 
-用户指定找问题或标记优秀后，生产根 Opus 优先执行，Codex 回退。显式绑定 Work/Variant 和登记 Draft，使用 `retro open <Draft ID>`，按 `VISUAL_RETRO.template.md` 填写，再 `retro check <Draft ID>`。复盘可写范围仅 `retro/`、生产根 `sample-library/`、`known-defects/` 与 `retro-summary/`；不改 Work 工程源、Plan、Current 或接受记录。采样所需可回收 Studio 记录由 CLI 管理。数学系列、card 单片的其余部分仍只读。
+用户指定找问题或标记优秀后，生产根 Opus 优先执行，Codex 回退。显式绑定 Work/Variant 和登记 Draft，使用 `retro open <Draft ID>`，按 `VISUAL_RETRO.template.md` 填写，再 `retro check <Draft ID>`。复盘可写范围仅 `retro/`、生产根 `sample-library/`、`known-defects/` 与 `retro-summary/`；不改 Work 工程源、Plan、Current 或接受记录。采样所需可回收 Studio 记录由 CLI 管理。数学系列、英语的其余部分仍只读。
 
 样片与已知缺陷在用户对话确认后经 `sample add` / `defect add` 写入，不由 Agent 或 critic 自行提名。作品修复与资产制作另按原授权边界执行。样片、帧与记录留在生产根，开发仓只收无作品内容的最小复现。具体命令与冻结参考方式见 [.studio/workflow.md](.studio/workflow.md)。
 
@@ -30,4 +30,4 @@ CLI 只用同根 `./work-wsl.sh` 调用 Windows `work.cmd`。先确定任务类�
 
 用户指定内容复盘后，生产根 Opus 优先执行，Codex 回退。显式绑定 Work / Variant，使用 `content link|import|open|check`，根汇总使用 `content summary`，流程见 `.studio/workflow.md`。只读已有发布文件与登记来源（Final / Draft / 预览）；只导入本地五份 xlsx，不联网、不导出视频、不自动判断长尾或优秀。
 
-可写范围仅 Variant 的 `retro/content/`（含 `imports/` 导入原件目录）与生产根 `content-summary/`；不改 Work 源、Plan、Current 与接受记录。原件、记录与汇总仅留生产根，不进开发仓或 Git。card / 数学只回流选题、Plan / 画面；Script 开头与衔接仅限非数学 showcase / explainer，不改变 dbs 路由。
+可写范围仅 Variant 的 `retro/content/`（含 `imports/` 导入原件目录）与生产根 `content-summary/`；不改 Work 源、Plan、Current 与接受记录。原件、记录与汇总仅留生产根，不进开发仓或 Git。数学只回流选题、Plan / 画面；Script 开头与衔接仅限非数学 showcase / explainer / english，不改变 dbs 路由。

@@ -50,10 +50,12 @@ class ControlPlaneTest(unittest.TestCase):
         self.assertEqual(cli.input_path(a, "RESEARCH.md"), cli.input_path(b, "RESEARCH.md"))
         self.assertNotEqual(a / "ANIMATION_PLAN.md", b / "ANIMATION_PLAN.md")
         self.assertFalse((b / "SCRIPT.md").exists())
-        self.put("account", "b", name="New B", theme="clean", ratio="16:9", mode="card")
+        self.put("account", "b", name="New B", theme="clean", ratio="16:9")
         self.assertEqual(1, cli.read_json(b / "variant.yaml")["account_revision"])
+        self.assertEqual("B", cli.read_json(b / "variant.yaml")["account_settings"]["name"])
         self.run_cli("variant", "add", "duplicate", "--account", "b")
         self.assertEqual("b", cli.read_json(work / "variants/duplicate/variant.yaml")["account"])
+        self.assertEqual("New B", cli.read_json(work / "variants/duplicate/variant.yaml")["account_settings"]["name"])
         with self.assertRaisesRegex(cli.HarnessError, "does not support"):
             self.run_cli("variant", "add", "portrait", "--account", "main", "--theme", "clean", "--ratio", "9:16")
         self.put("account", "branch", name="Branch")

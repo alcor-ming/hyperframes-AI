@@ -128,7 +128,7 @@ export function inspectRhythmFrame() {
     const target = event.target;
     if (!target?.ownerDocument || target.closest('[data-hf-ambient], [data-hf-motion="idle"], [data-hf-motion="talk"]')) return;
     const host = target.ownerDocument.defaultView.frameElement;
-    const layer = target.closest('[data-hf-layer]')?.dataset.hfLayer || host?.dataset.cardLayer;
+    const layer = target.closest('[data-hf-layer]')?.dataset.hfLayer || host?.closest('[data-hf-layer]')?.dataset.hfLayer;
     if (!['stage', 'overlay', 'text'].includes(layer)) return;
     const targets = [];
     const address = [];
@@ -141,13 +141,10 @@ export function inspectRhythmFrame() {
     }
     const frameKey = frames.join('/') || 'host';
     for (let el = target; el; el = el.parentElement || el.ownerDocument.defaultView.frameElement) {
-      for (const key of ['id', 'data-info-id', 'data-card-id', 'data-b-id', 'data-hf-math-id']) {
+      for (const key of ['id', 'data-info-id', 'data-b-id', 'data-hf-math-id']) {
         const value = el.getAttribute(key);
         if (value) targets.push(value);
       }
-      const row = el.getAttribute('data-card-row');
-      const card = el.closest('[data-card-id], [data-info-id]');
-      if (row && card) targets.push(`${card.dataset.cardId || card.dataset.infoId}:${row}`);
     }
     candidates.push({id: `${location.href}#${frameKey}:${id}`, time: event.time, before: event.before, after: event.after,
       duration: event.duration, kind: event.kind, targets: [...new Set(targets)], target_node: `${frameKey}:${address.join('.')}`,
@@ -232,7 +229,7 @@ export function frameResourcesReady(time) {
     });
 }
 
-export async function inspectFrame(scenes, time, projection = {}) {
+export async function inspectFrame(scenes, time) {
   const visible = element => {
     const rect = element.getBoundingClientRect();
     if (!rect.width || !rect.height || rect.bottom <= 0 || rect.right <= 0 ||
@@ -286,10 +283,9 @@ export async function inspectFrame(scenes, time, projection = {}) {
       });
     });
     if (!exposed) continue;
-    const info = element.closest('[data-info-id]')?.getAttribute('data-info-id') || projection.info || null;
+    const info = element.closest('[data-info-id]')?.getAttribute('data-info-id') || null;
     const owner = element.closest('[data-scene-id]') || element.closest('[id]');
     let scene = owner?.getAttribute('data-scene-id');
-    scene ||= projection.scene;
     if (!scene) {
       let parent = element;
       while (parent) {
@@ -302,8 +298,8 @@ export async function inspectFrame(scenes, time, projection = {}) {
       if (active.length === 1) scene = active[0].id;
     }
     texts.push({scene: scene || null, info, text: node.textContent.trim(),
-      selector: (projection.selector ? projection.selector + ' :: ' : '') + selector(element), frame: location.href,
-      layer: projection.layer || element.closest('[data-hf-layer]')?.getAttribute('data-hf-layer') || null});
+      selector: selector(element), frame: location.href,
+      layer: element.closest('[data-hf-layer]')?.getAttribute('data-hf-layer') || null});
   }
   for (const element of document.querySelectorAll('*')) {
     if (!visible(element)) continue;
@@ -336,8 +332,7 @@ export async function inspectFrame(scenes, time, projection = {}) {
   const icons = [...document.querySelectorAll('svg')].filter(exposedIcon).map(element => {
     const rect = element.getBoundingClientRect();
     return {svg: element.outerHTML, width: rect.width, height: rect.height, target: selector(element),
-      schematic: !!element.closest('[data-hf-schematic]'),
-      card_slot: !!element.closest('[data-card-svg-slot], [data-card-slot="svg"]')};
+      schematic: !!element.closest('[data-hf-schematic]')};
   });
   for (const element of [...document.images].filter(exposedIcon)) {
     try {
@@ -355,63 +350,13 @@ export async function inspectFrame(scenes, time, projection = {}) {
         throw new Error('SVG resource is invalid');
       const rect = element.getBoundingClientRect();
       icons.push({svg, width: rect.width, height: rect.height, target: selector(element),
-        schematic: !!element.closest('[data-hf-schematic]'),
-        card_slot: !!element.closest('[data-card-svg-slot], [data-card-slot="svg"]')});
+        schematic: !!element.closest('[data-hf-schematic]')});
     } catch { unverified.add('SVG image provenance could not be sampled: ' + selector(element)); }
   }
   const motion_unverified = [...document.querySelectorAll('canvas,video')].filter(visible)
     .filter(element => ['stage', 'overlay', 'text'].includes(element.closest('[data-hf-layer]')?.dataset.hfLayer))
     .map(element => ({reason: 'media_canvas_motion_unverified', target: selector(element), time}));
   return {texts, unverified: [...unverified], timeline, icons, motion_unverified};
-}
-
-export async function inspectCardFrames(frame, scenes, time, remaining) {
-  const result = {ready: true, texts: [], unverified: [], timeline: [], icons: [], motion_unverified: []};
-  for (const child of frame.childFrames()) {
-    const projection = await child.evaluate(scenes => {
-      const host = window.frameElement;
-      const layer = host?.dataset.cardLayer;
-      const root = document.querySelector('[data-composition-id]');
-      if (!host?.hasAttribute('srcdoc') || !['stage', 'text'].includes(layer) ||
-          document.documentElement.dataset.cardLayer !== layer || root?.dataset.cardLayers !== 'stage text') return null;
-      let visible = true, scene = host.closest('[data-scene-id]')?.dataset.sceneId;
-      for (let element = host; element; element = element.parentElement) {
-        const style = parent.getComputedStyle(element);
-        if (style.display === 'none' || style.visibility !== 'visible' || +style.opacity < 0.02) visible = false;
-        if ([...style.filter.matchAll(/blur\(([\d.]+)px\)/g)].some(match => +match[1] > 0)) visible = false;
-        if (!scene && scenes.some(item => item.id === element.id)) scene = element.id;
-      }
-      const bounds = host.getBoundingClientRect();
-      visible &&= bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0 &&
-        bounds.left < parent.innerWidth && bounds.top < parent.innerHeight;
-      return {layer, scene, info: host.closest('[data-info-id]')?.dataset.infoId,
-        selector: `[data-card-layer="${layer}"]`, visible};
-    }, scenes);
-    if (!projection || child.childFrames().length) {
-      result.ready = false;
-      result.unverified.push('Nested frame text/resources/time mapping is not verified');
-      continue;
-    }
-    await child.waitForFunction(() => {
-      const root = document.querySelector('[data-composition-id]');
-      const track = window.__timelines?.[root?.dataset.compositionId];
-      const declared = window.frameElement.dataset.cardTime;
-      const expected = Number(declared);
-      return declared != null && Number.isFinite(expected) && track &&
-        Math.abs(track.time() - Math.min(expected, track.duration())) < 0.04;
-    }, remaining());
-    const localTime = await child.evaluate(() => Number(window.frameElement.dataset.cardTime));
-    await child.waitForFunction(frameResourcesReady, remaining(), localTime);
-    if (projection.visible) {
-      const info = await child.evaluate(inspectFrame, scenes, time, projection);
-      if (projection.layer === 'text') result.texts.push(...info.texts);
-      result.icons.push(...info.icons);
-      result.motion_unverified.push(...info.motion_unverified);
-      result.unverified.push(...info.unverified);
-      result.timeline.push(...info.timeline);
-    }
-  }
-  return result;
 }
 
 export async function probe(input) {
@@ -526,20 +471,21 @@ export async function probe(input) {
               document.elementFromPoint(box.x + box.width * x, box.y + box.height * y) === player);
           }, box)) throw new Error('Studio controls obscure the composition viewport');
           const info = await frame.evaluate(inspectFrame, input.scenes || [], time);
-          const cards = await inspectCardFrames(frame, input.scenes || [], time, remaining);
+          const nestedFrames = frame.childFrames().length > 0;
           value.rhythm_candidates = await frame.evaluate(inspectRhythmFrame);
           for (const candidate of value.rhythm_candidates) {
             candidate.before = Math.min(duration - .001, Math.max(0, candidate.before ?? candidate.time - .001));
             candidate.after = Math.min(duration - .001, candidate.after ?? candidate.time + (candidate.duration / 2 || .001));
           }
-          value.icons = [...info.icons, ...cards.icons];
-          value.motion_unverified = [...info.motion_unverified, ...cards.motion_unverified];
+          value.icons = info.icons;
+          value.motion_unverified = info.motion_unverified;
           if (before !== navigation || !await iframe.evaluate(element => getComputedStyle(element).visibility === 'visible'))
             throw new Error('Studio frame reloaded during sampling');
-          value.texts.push(...info.texts, ...cards.texts);
-          value.unverified.push(...info.unverified, ...cards.unverified);
-          result.timeline.push(...info.timeline, ...cards.timeline);
-          value.ready = cards.ready;
+          value.texts.push(...info.texts);
+          value.unverified.push(...info.unverified);
+          result.timeline.push(...info.timeline);
+          value.ready = !nestedFrames;
+          if (nestedFrames) value.unverified.push('Nested frame text/resources/time mapping is not verified');
           if (input.measurements) {
             value.carry = await frame.evaluate(inspectCarry);
             const shot = () => page.screenshot({type: 'png', clip: box});
