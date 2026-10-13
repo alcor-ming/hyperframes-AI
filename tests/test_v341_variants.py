@@ -17,7 +17,7 @@ class PeerVariantTest(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         shutil.copytree(REPO / ".studio/templates", self.root / ".studio/templates")
-        cli.account_service(self.root).put("series", "one", {"name": "One"})
+        cli.account_service(self.root).put("series", "one", {"name": "One", "design": "stage-full"})
         for account in ("a", "b"):
             cli.account_service(self.root).put("account", account, {"name": account, "ratio": "16:9"})
 
@@ -29,8 +29,14 @@ class PeerVariantTest(unittest.TestCase):
         return output.getvalue().strip() or error.getvalue().strip()
 
     def new(self, title="Content", *options):
-        identity = self.run_cli("new", title, "--workflow", "hyperframes_video", "--purpose", "standard",
-                                "--series", "one", *options)
+        arguments = ["new", title, "--workflow", "hyperframes_video", "--purpose", "standard",
+                     "--series", "one", *options]
+        if "--account" in arguments:
+            if "--design" not in arguments and "--mode" not in arguments:
+                arguments += ["--design", "stage-full"]
+            if "--variant-id" not in arguments:
+                arguments += ["--variant-id", "main"]
+        identity = self.run_cli(*arguments)
         return cli.locate_work(self.root, identity)[0]
 
     def test_zero_variant_content_lifecycle_and_production_guard(self):
@@ -44,8 +50,13 @@ class PeerVariantTest(unittest.TestCase):
         self.assertEqual(1, cli.read_frontmatter(work / "shared/RESEARCH.md")["script_revision"])
         self.run_cli("script", "text")
         self.assertIn("No current variant", self.run_cli("wait", "script_approval", expected=2))
-        self.assertIn("requires --account", self.run_cli("variant", "add", "b", expected=2))
-        self.assertIn("requires --account", self.run_cli(
+        # A new Work inherits the unique prior account in its series; a brand-new
+        # Work created directly with a Variant still needs an explicit account.
+        self.run_cli("variant", "add", "b")
+        self.assertEqual("a", cli.read_json(work / "variants/b/variant.yaml")["account"])
+        shutil.rmtree(work / "variants/b")
+        cli.clear_pointer(self.root, "current-variant")
+        self.assertIn("Account is not selected", self.run_cli(
             "new", "Invalid", "--workflow", "hyperframes_video", "--purpose", "standard", "--series", "one",
             "--variant-id", "b", expected=2))
         self.run_cli("park")

@@ -1,5 +1,6 @@
 """WSL argv adapter for the same physical root's Windows launcher."""
 from pathlib import Path
+import os
 import re
 import shutil
 import subprocess
@@ -88,6 +89,8 @@ def command(root, arguments):
             raise ValueError("Drive-relative paths are not supported")
         reference = (option if path_option else previous) in {"--source", "--from"} and (
             re.fullmatch(r"[A-Za-z0-9_.-]+@v[0-9]+", candidate)
+            or parsed is not None and parsed.command == 'design' and parsed.design_command == 'new'
+                and (option if path_option else previous) == '--from'
             or "variant" in arguments and "add" in arguments and (option if path_option else previous) == "--from")
         path_like = Path(candidate).is_absolute() or re.match(r"^[A-Za-z]:[\\/]", candidate) or candidate.startswith("\\")
         if ".." in Path(candidate.replace("\\", "/")).parts:
@@ -108,9 +111,16 @@ def main(arguments=None):
     try:
         root = Path(__file__).resolve().parent.parent
         argv = command(root, sys.argv[1:] if arguments is None else arguments)
-        if not shutil.which(argv[0]) and Path('/mnt/c/Windows/System32/cmd.exe').is_file():
-            argv[0] = '/mnt/c/Windows/System32/cmd.exe'
-        return subprocess.run(argv, cwd=root).returncode
+        if not shutil.which(argv[0]):
+            fallback = subprocess.check_output(['wslpath', '-u', r'C:\Windows\System32\cmd.exe'], text=True).strip()
+            if Path(fallback).is_file():
+                argv[0] = fallback
+        env = os.environ.copy()
+        env['HYPERFRAMES_INVOCATION'] = 'wsl-forwarded'
+        forwarded = [entry for entry in env.get('WSLENV', '').split(':')
+                     if entry and entry.split('/')[0] != 'HYPERFRAMES_INVOCATION']
+        env['WSLENV'] = ':'.join([*forwarded, 'HYPERFRAMES_INVOCATION'])
+        return subprocess.run(argv, cwd=root, env=env).returncode
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"work-wsl: {error}", file=sys.stderr)
         return 2

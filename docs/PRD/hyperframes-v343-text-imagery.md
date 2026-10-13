@@ -32,7 +32,7 @@ Work032 / account-b（text-led，等待方向确认，仅有 S06 样段）：
 | O3 | Plan 模板用多列表格承载上屏正文 | `.studio/templates/ANIMATION_PLAN.template.md` §3 把“实际表达”放在 6 列表格单元格中，表格天然诱导短语；§2 共 9 列、§4 共 7 列、§5 共 8 列 |
 | O4 | 默认零图 | `AGENTS.md:11` 默认不生成 AI 图片；`.studio/spec/creative.md`「排除项」不默认调用图片生成；`.studio/workflow.md` 内容准备“不强制配图”；Plan 模板 §5“不生成则写无” |
 | O5 | 派工 brief 自造更严禁止项 | workflow 派工段只规定摘取内容，未限制 brief 附加约束；Router:43 只附图文互补段与组件查询 |
-| O6 | 旧 Profile 包与视频文案默认链 | `capabilities.yaml` 仍登记 design-profile-pack v0.1.0 三个 profile，copywriting default 含 dbs-hook / dbs-script-flow，视频流程实际只用 `dbs` / `verbatim`；`validate_package.py:55` 校验 profiles；Plan 模板 frontmatter 有 `profile` |
+| O6 | 旧 Profile 包与视频文案默认链 | `capabilities.yaml` 仍登记 design-profile-pack v0.1.0 三个 profile，copywriting default 含 dbs-hook / dbs-script-flow，视频流程实际只用旧文案模式；`validate_package.py:55` 校验 profiles；Plan 模板 frontmatter 有 `profile` |
 | O7a | 查库发生在派工而非 Plan | Router:43、workflow 派工段；Work032 的命令窗口、合同全部自制，而库有 AI 流式对话、手机浏览、卡片家族（8 款卡片）等已批准场景源 |
 | O7b | 场景源与配方无法被 CLI 检索 | `work component list`（`.studio/asset_store.py:304`）只覆盖包与登记研究；Windows 手工维护的 `reuse-index.json` 字段异构（`accepted_scenes` 为 9 个 Scene 编号），场景源实际登记在 `asset-library/README.md#参考登记`；`sources/` 77 项混有请求/修复 JSON；`card-family-v1/manifest.json` 已有 `source_ref`、`workflow_role`、`primary_category`、`classification_status`、`entry`，`ai-chat-stream-v6/manifest.json` 只有文件清单 |
 | O7c | Three.js / Remotion 表述偏限制 | workflow“Remotion/Blender 仅在确有镜头需要时接入”；visual-design“Three.js 只用于确有必要的空间表达”；库的开发方向正是增加卡片、Three.js 与 Remotion 模板 |

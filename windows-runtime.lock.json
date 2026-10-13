@@ -4,14 +4,15 @@
   "python": "3.14.0",
   "versions": {
     "node": "22.22.2",
-    "hyperframes": "0.8.27",
+    "hyperframes": "0.8.150",
     "gsap": "3.14.2",
     "three": "0.160.0",
     "acorn": "8.15.0",
     "koffi": "3.3.2",
     "chromium": "152.0.7977.30",
     "ffmpeg": "7.1.1",
-    "ffprobe": "7.1.1"
+    "ffprobe": "7.1.1",
+    "onnxruntime-node": "1.21.1"
   },
   "required_files": [
     "runtime/node/node.exe",
@@ -81,10 +82,10 @@
     },
     {
       "kind": "npm-tree",
-      "file": "hyperframes-0.8.27-windows-npm.zip",
+      "file": "hyperframes-0.8.150-windows-npm.zip",
       "target": "runtime/npm",
-      "sha256": "b3367cf17892bb38014ae4453609b4c1832125130e7633140232db091856de0d",
-      "package_lock_sha256": "df6df1753d43d94a8de073549e4b276ebc2f526d13fa97d6c8696e2c4704c19c"
+      "sha256": "4a6875edfab5de5ac6568e3945749c8cc00247000e0b7aec18f79c5521ec9482",
+      "package_lock_sha256": "615ae8272875b6b08ad512db4caa4fca680073dd66256e891432fcb441235b16"
     }
   ]
 }

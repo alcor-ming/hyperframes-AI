@@ -121,7 +121,7 @@ def package(directory, report, direction, previous, entry):
     (directory / 'index.html').write_text('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>Draft 逐帧评审</title><style>body{font:16px sans-serif;margin:24px}main{display:flex;flex-wrap:wrap;gap:12px}figure{margin:0}img{width:320px;height:auto}</style><h1>Draft 逐帧评审</h1><p>只读证据；不代表接受。时间标记单位为秒。</p><a href="contact-sheet.png">Contact sheet</a><main>' + figures + '</main></html>', encoding='utf-8')
     if entry['settings']['critic.provider']['value'] != 'off':
         prompt = ('只读本包的 direction.json、measurements.json、previous.json、strips.json 与全部相关 PNG，'
-                  '不得读取制作过程或修改源。必须实际看图，不能用文本检查代替；宿主无法以指定模型读取图像时报告未验证，不降级。'
+                  '不得读取制作过程或修改源。必须实际看图，不能用文本检查代替；模型名只记录来源，不证明看图能力；缺实际图像读取或人工观看证据时报告未验证，不用自述代替。'
                   '核对主体与次级响应、阅读保护、错相、静止及延续；帧图不能证明声音或完整动态。'
                   '对 previous.json 每个问题逐项给 FIXED / PARTLY / STILL 和证据。结论只作建议，不代替用户接受。\n'
                   '输出严格 JSON：' + json.dumps({key: entry[key] for key in ('round', 'draft_id', 'snapshot_sha256')}, ensure_ascii=False)[:-1]

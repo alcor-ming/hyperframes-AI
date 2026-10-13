@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+import designs
 from pathlib import Path
 
 SLOTS = ("reveal", "emphasis", "exit", "transition")
@@ -63,21 +64,28 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
     from asset_store import resolve_asset_closure
     from component_harness import parse_component_ref
     overrides = {} if overrides is None else overrides
-    allowed = {"theme", "background", "motion", "mode", "submodule", "ratio", "width", "height", "fps", "seed", "parameters", "captions"}
+    allowed = {"theme", "background", "motion", "mode", "submodule", "ratio", "width", "height", "fps", "seed", "parameters", "captions", "capabilities", "card_fonts"}
     if not isinstance(overrides, dict) or set(overrides) - allowed:
         raise AppearanceError("Unknown appearance selection override")
-    check_mode(account.get("mode"), "Account")
-    check_mode(overrides.get("mode"), "Appearance selection")
-    mode = {**account, **overrides}.get("mode", "explainer")
+    modern = "capabilities" in overrides
+    if not modern:
+        check_mode(account.get("mode"), "Account")
+        check_mode(overrides.get("mode"), "Appearance selection")
+    mode = None if modern else {**account, **overrides}.get("mode", "explainer")
+    caps = designs.capabilities(overrides if modern else {"mode": mode})
     # Showcase binds no appearance by default: account looks are not inherited, only explicit picks are frozen.
-    inherited = {key: value for key, value in account.items() if key not in ("theme", "background", "motion", "overrides")} if mode == "showcase" else account
+    inherited = {key: value for key, value in account.items()
+                 if key not in caps["bindings"] or caps["bindings"][key] != "none"}
+    if "overrides" in inherited:
+        inherited["overrides"] = {key: value for key, value in inherited["overrides"].items()
+                                  if caps["bindings"].get(key) != "none"}
     selected = {**inherited, **overrides}
-    if mode == "showcase":
+    if not modern and mode == "showcase":
         if overrides.get("submodule") not in SHOWCASE_SUBMODULES:
             raise AppearanceError("showcase requires an explicit submodule: pdoom or science")
     elif "submodule" in selected:
         raise AppearanceError("submodule is only supported by showcase")
-    selections = {kind: None if mode == "showcase" and selected.get(kind) is None else _reference(selected.get(kind), kind)
+    selections = {kind: None if caps["bindings"][kind] != "required" and selected.get(kind) is None else _reference(selected.get(kind), kind)
                   for kind in ("theme", "background")}
     motion = inherited.get("motion", {})
     explicit_motion = overrides.get("motion", {})
@@ -94,14 +102,14 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
             value = {"asset": _reference(value["asset"], "motion"), "entry": value["entry"]}
             refs.append(value["asset"])
         selections["motion"][slot] = value
-    mode = selected.get("mode", "explainer")
-    if mode not in MODES:
+    if caps["bindings"]["motion"] == "required" and not any(selections["motion"].values()):
+        raise AppearanceError("Required motion needs at least one configured slot")
+    mode = None if modern else selected.get("mode", "explainer")
+    if not modern and mode not in MODES:
         raise AppearanceError("Unknown narrative mode")
-    captions = selected.get("captions", mode in ("explainer", "math", "english"))
+    captions = selected.get("captions", False if modern else mode in ("explainer", "math", "english"))
     if type(captions) is not bool:
         raise AppearanceError("captions require a boolean value")
-    if mode == "math" and not captions:
-        raise AppearanceError("math requires lyric captions enabled")
     selections["captions"] = captions
     ratio = selected.get("ratio", "16:9")
     if not isinstance(ratio, str):
@@ -123,13 +131,13 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
     else:
         raise AppearanceError("Unknown ratio")
     if width * 9 != height * 16 and width * 16 != height * 9:
-        raise AppearanceError(f"{mode} only supports 16:9 and 9:16")
+        raise AppearanceError("Video only supports 16:9 and 9:16")
     fps, seed = selected.get("fps", 30), selected.get("seed", 0)
     if type(fps) is not int or not 1 <= fps <= 240 or type(seed) is not int:
         raise AppearanceError("fps must be an integer in 1..240 and seed an integer")
     closure = resolve_asset_closure(root, refs)
     parameter_layers = [("account", inherited.get("overrides", {})), ("explicit", overrides.get("parameters", {}))]
-    values, sources = _resolve_parameters(closure, selections, ratio, parameter_layers, mode)
+    values, sources = _resolve_parameters(closure, selections, ratio, parameter_layers, modern or mode in MODES)
     frozen = []
     for item in closure:
         identity, version = parse_component_ref(item["ref"])
@@ -139,8 +147,14 @@ def resolve(root: Path, account: dict, overrides: dict | None = None) -> dict:
             "hash_algorithm": "sha256-canonical-json-utf8-v1", "account": {"id": account.get("id"), "revision": account.get("revision"), "sha256": digest(account)},
             "selection": selections, "assets": frozen, "mode": mode, "ratio": ratio, "width": width, "height": height, "fps": fps, "seed": seed, "time_unit": "seconds",
             "overrides": {"account": deepcopy(inherited.get("overrides", {})), "explicit": deepcopy(overrides.get("parameters", {}))}, "parameters": values, "sources": sources}
-    if mode == "showcase":
+    if not modern and mode == "showcase":
         lock["submodule"] = overrides["submodule"]
+    if modern:
+        lock.pop("mode")
+        lock["capabilities"] = caps
+        lock["capabilities_sha256"] = digest(caps)
+    if overrides.get('card_fonts'):
+        lock['card_fonts'] = deepcopy(overrides['card_fonts'])
     lock["sha256"] = digest(lock)
     return lock
 
@@ -149,7 +163,7 @@ def _closure_version(closure):
     return max((item["metadata"].get("contract_version", 1) for item in closure if item["kind"] == "motion"), default=1)
 
 
-def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="explainer"):
+def _resolve_parameters(closure, selections, ratio, parameter_layers, allow_module=True):
     from asset_contract import validate_declaration
     by_ref = {item["ref"]: item for item in closure}
     for _, layer in parameter_layers:
@@ -172,7 +186,7 @@ def _resolve_parameters(closure, selections, ratio, parameter_layers, mode="expl
         if ratios and ratio not in ratios:
             raise AppearanceError(f"Asset {item['ref']} does not support ratio {ratio}")
         payload = json.loads((Path(item["path"]) / metadata["entry"]).read_text(encoding="utf-8-sig"))
-        if role == "background" and payload.get("renderer") not in (("solid", "transparent", "module") if mode in MODES else ("solid", "transparent")):
+        if role == "background" and payload.get("renderer") not in (("solid", "transparent", "module") if allow_module else ("solid", "transparent")):
             raise AppearanceError("Dynamic background is not supported by this resolver")
         if role in SLOTS:
             if selections["motion"][role]["entry"] not in payload.get("slots", {}):
@@ -218,19 +232,41 @@ def _check_lock(lock: dict) -> None:
     from component_harness import parse_component_ref
     import re
     required = {"schema_version", "resolver_version", "contract_version", "hash_algorithm", "account", "selection", "assets", "mode", "ratio", "width", "height", "fps", "seed", "time_unit", "overrides", "parameters", "sources", "sha256"}
+    if isinstance(lock, dict) and 'card_fonts' in lock:
+        required.add('card_fonts')
+        fonts = lock['card_fonts']
+        if not isinstance(fonts, dict) or set(fonts) != {'card', 'fonts'} or not isinstance(fonts['fonts'], list):
+            raise AppearanceError('Invalid frozen card fonts')
+        designs._check_identity(fonts['card'])
+        for font in fonts['fonts']:
+            if not isinstance(font, dict) or set(font) != {'family', 'path', 'license', 'style', 'weight', 'path_source', 'license_source', 'path_sha256', 'license_sha256'}:
+                raise AppearanceError('Invalid frozen card font')
+            if not isinstance(font['family'], str) or not font['family'].strip() or font['style'] not in ('normal','italic','oblique') or type(font['weight']) is not int or not 1 <= font['weight'] <= 1000:
+                raise AppearanceError('Invalid frozen card font family/style/weight')
+            for key in ('path', 'license'):
+                designs._safe_child(Path('/font'), font[key + '_source'])
+                if not re.fullmatch(r'runtime/card-fonts/[0-9a-f]{64}\.[a-z0-9]+', font[key]) or not re.fullmatch('[0-9a-f]{64}', font[key + '_sha256']):
+                    raise AppearanceError('Invalid frozen card font path/hash')
+    modern = isinstance(lock, dict) and "capabilities" in lock
+    if modern:
+        required.remove("mode")
+        required.update({"capabilities", "capabilities_sha256"})
+        designs.validate_capabilities(lock["capabilities"])
+        if digest(lock["capabilities"]) != lock.get("capabilities_sha256"):
+            raise AppearanceError("Capabilities digest mismatch")
     if isinstance(lock, dict) and lock.get("mode") == "showcase":
         required.add("submodule")
     if not isinstance(lock, dict) or set(lock) != required or any(type(lock[key]) is not int for key in ("schema_version", "resolver_version", "contract_version")) or lock["resolver_version"] != 1 or lock["schema_version"] not in (1, 2, 3) or lock["contract_version"] != lock["schema_version"] or digest({key: value for key, value in lock.items() if key != "sha256"}) != lock.get("sha256"):
         raise AppearanceError("Appearance lock schema or hash mismatch")
-    if lock["mode"] == "showcase" and lock["submodule"] not in SHOWCASE_SUBMODULES:
+    if lock.get("mode") == "showcase" and lock["submodule"] not in SHOWCASE_SUBMODULES:
         raise AppearanceError("Invalid frozen showcase submodule")
-    if lock["hash_algorithm"] != "sha256-canonical-json-utf8-v1" or lock["time_unit"] != "seconds" or lock["mode"] not in (*MODES, *LEGACY_MODES):
+    if lock["hash_algorithm"] != "sha256-canonical-json-utf8-v1" or lock["time_unit"] != "seconds" or not modern and lock.get("mode") not in (*MODES, *LEGACY_MODES):
         raise AppearanceError("Invalid frozen appearance contract")
     if not isinstance(lock["ratio"], str) or not re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*", lock["ratio"]):
         raise AppearanceError("Invalid frozen ratio")
     a, b = map(int, lock["ratio"].split(":"))
-    if lock["mode"] in MODES and a * 9 != b * 16 and a * 16 != b * 9:
-        raise AppearanceError(f"{lock['mode']} only supports 16:9 and 9:16")
+    if (modern or lock.get("mode") in MODES) and a * 9 != b * 16 and a * 16 != b * 9:
+        raise AppearanceError("Video only supports 16:9 and 9:16")
     if any(type(lock[key]) is not int or lock[key] <= 0 for key in ("width", "height", "fps")) or lock["fps"] > 240 or type(lock["seed"]) is not int or lock["width"] * b != lock["height"] * a:
         raise AppearanceError("Invalid frozen dimensions, fps or seed")
     account = lock["account"]
@@ -250,11 +286,11 @@ def _check_lock(lock: dict) -> None:
     selection = lock["selection"]
     if not isinstance(selection, dict) or set(selection) not in ({"theme", "background", "motion"}, {"theme", "background", "motion", "captions"}) or not isinstance(selection["motion"], dict) or set(selection["motion"]) != set(SLOTS):
         raise AppearanceError("Invalid frozen appearance selections")
-    if type(selection.get("captions", False)) is not bool or selection.get("captions", False) and lock["mode"] not in MODES:
+    if type(selection.get("captions", False)) is not bool or selection.get("captions", False) and not modern and lock.get("mode") not in MODES:
         raise AppearanceError("Invalid frozen captions selection")
-    if lock["mode"] == "math" and not selection.get("captions"):
-        raise AppearanceError("math requires lyric captions enabled")
-    references = [(selection[kind], kind) for kind in ("theme", "background") if selection[kind] is not None or lock["mode"] != "showcase"]
+    references = [(selection[kind], kind) for kind in ("theme", "background") if selection[kind] is not None or (designs.capabilities(lock)["bindings"][kind] == "required" if modern else lock["mode"] != "showcase")]
+    if modern and lock["capabilities"]["bindings"]["motion"] == "required" and not any(selection["motion"].values()):
+        raise AppearanceError("Required motion needs at least one configured slot")
     for value in selection["motion"].values():
         if value is not None:
             if not isinstance(value, dict) or set(value) != {"asset", "entry"} or not isinstance(value["entry"], str) or not value["entry"]:
@@ -275,8 +311,10 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
     import shutil
     _check_lock(lock)
     runtime_names = ["appearance.js"]
-    if lock["mode"] in MODES:
-        runtime_names += ["cues.js", "captions.js", "figures.js", "scene-binding.js", "rolls.js", "broll.js"]
+    if "capabilities" in lock or lock.get("mode") in MODES:
+        runtime_names += ["cues.js", "captions.js", "figures.js", "scene-binding.js"]
+        if designs.capabilities(lock)["rolls"]:
+            runtime_names += ["rolls.js", "broll.js"]
     for name in runtime_names:
         runtime = safe(project, f"runtime/{name}")
         source = Path(__file__).parent / "runtime" / name
@@ -302,9 +340,23 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
         else:
             binding["scope"] = "dependency"
         identity, version = parse_component_ref(item["ref"])
-        install_component(Path(item["path"]), project, binding,
-                          binding_path=f"component-bindings/appearance.{identity}.v{version}.json",
-                          expected_ref=item["ref"], acceptance=item["acceptance"])
+        if item.get('card_ref'):
+            import tempfile
+            from asset_contract import freeze_source
+            with tempfile.TemporaryDirectory(prefix='card-appearance-') as temporary:
+                source = Path(temporary) / 'asset'
+                report = freeze_source(Path(item['path']), source, card_ref=item['card_ref'])
+                if report['package_sha256'] != item['package_sha256']:
+                    raise AppearanceError('Card asset changed during installation')
+                install_component(source, project, binding,
+                                  binding_path=f"component-bindings/appearance.{identity}.v{version}.json",
+                                  expected_ref=item['ref'])
+        else:
+            install_component(Path(item["path"]), project, binding,
+                              binding_path=f"component-bindings/appearance.{identity}.v{version}.json",
+                              expected_ref=item["ref"], acceptance=item["acceptance"])
+    if lock.get('card_fonts'):
+        designs.install_fonts(project, lock['card_fonts'])
     _atomic_json(project / "appearance-lock.json", lock)
     for name in runtime_names:
         runtime = safe(project, f"runtime/{name}")
@@ -315,6 +367,7 @@ def materialize(root: Path, project: Path, lock: dict) -> dict:
     declared = set(config.get("snapshot_dependencies", []))
     declared.update(("appearance-lock.json", "runtime/appearance.js", *(("COMPONENT_LOCK.json",) if lock["assets"] else ())))
     declared.update(f"runtime/{name}" for name in runtime_names)
+    declared.update(font[key] for font in lock.get('card_fonts', {}).get('fonts', []) for key in ('path', 'license'))
     for item in lock["assets"]:
         identity, version = parse_component_ref(item["ref"])
         declared.add(f"component-bindings/appearance.{identity}.v{version}.json")
@@ -330,6 +383,11 @@ def verify(project: Path, lock: dict, *, check_mounts: bool = True) -> dict:
     disk = safe(project, "appearance-lock.json")
     if not disk.is_file() or digest(json.loads(disk.read_text(encoding="utf-8"))) != digest(lock):
         raise AppearanceError("Frozen appearance lock differs from Variant")
+    for font in lock.get('card_fonts', {}).get('fonts', []):
+        for key in ('path', 'license'):
+            path = safe(project, font[key])
+            if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != font[key + '_sha256']:
+                raise AppearanceError('Frozen card font differs from installed bytes')
     if not lock["assets"] and not (project / "COMPONENT_LOCK.json").is_file():
         # A showcase that selected no appearance assets has no closure to install.
         return {"components": []}
@@ -346,7 +404,7 @@ def verify(project: Path, lock: dict, *, check_mounts: bool = True) -> dict:
         closure.append({**item, "path": path, "metadata": metadata})
     if lock["schema_version"] != _closure_version(closure):
         raise AppearanceError("Appearance lock capability differs from asset closure")
-    values, sources = _resolve_parameters(closure, lock["selection"], lock["ratio"], list(lock["overrides"].items()), lock["mode"])
+    values, sources = _resolve_parameters(closure, lock["selection"], lock["ratio"], list(lock["overrides"].items()), "capabilities" in lock or lock.get("mode") in MODES)
     if digest(values) != digest(lock["parameters"]) or digest(sources) != digest(lock["sources"]):
         raise AppearanceError("Frozen effective parameters differ from accepted assets and overrides")
     return report

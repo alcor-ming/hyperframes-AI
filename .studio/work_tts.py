@@ -1,6 +1,7 @@
 """Explicit Variant speech generation and transactional adoption into the existing project."""
 from html import escape
 import json
+import os
 import re
 from pathlib import Path
 
@@ -8,6 +9,25 @@ import explainer
 import storage
 import tts
 from component_harness import package_write_lock
+
+
+def generation_config(state, explicit=None):
+    local = json.loads(os.environ.get('HYPERFRAMES_AI_RESOLVED_CONFIG', '{}'))
+    tools = local.get('tools', {})
+    config = dict(explicit if explicit is not None else tools.get('tts', {}))
+    values = state.get('design_values', {})
+    defaults = {}
+    voice = values.get('voice.ref')
+    if voice:
+        voices = tools.get('voices', {})
+        if voice not in voices or not isinstance(voices[voice], dict):
+            raise ValueError('TTS voice is not mapped in local tools.voices: ' + voice)
+        defaults.update(voices[voice])
+    if 'voice.duration_factor' in values:
+        defaults['duration_factor'] = values['voice.duration_factor']
+    config['options'] = ({**config.get('options', {}), **defaults} if explicit is None
+                         else {**defaults, **config.get('options', {})})
+    return tts.configuration(config)
 
 
 def verify(variant, api):
@@ -65,15 +85,17 @@ def command(root, args, api):
     api.require_workflow(work, 'hyperframes_video')
     variant, state = api.selected_variant(root, work, args)
     script = api.input_path(variant, 'SCRIPT.md')
-    if api.read_frontmatter(script).get('approval') not in {'approved', 'not_required'}:
+    if (api.script_confirmation(variant, state)
+            and api.read_frontmatter(script).get('approval') not in {'approved', 'not_required'}):
         raise ValueError('SCRIPT.md still requires approval')
     text = api.script_text(script)
     script_hash = tts.digest(text.encode())
     rows = tts.segments(api.script_text(script, anchors=True))
-    if args.tts_command == 'generate':
-        config = api.read_json(Path(args.config)) if args.config else {}
-        selected = tts.segments(api.script_text(script, anchors=True), args.anchor or ())
-        report = tts.generate(variant, selected, config, script_hash)
+    if args.tts_command in {'generate', 'import-batch'}:
+        config = generation_config(state, api.read_json(Path(args.config)) if args.config else None)
+        selected = tts.segments(api.script_text(script, anchors=True), getattr(args, 'anchor', None) or ())
+        report = (tts.import_batch(variant, selected, config, script_hash, args.batch)
+                  if args.tts_command == 'import-batch' else tts.generate(variant, selected, config, script_hash))
         if tts.digest(api.script_text(script).encode()) != script_hash:
             raise ValueError('Script changed during synthesis; candidate retained but not adopted')
         api.print_result(root, args, {key: report[key] for key in ('id', 'path', 'duration', 'status', 'alignment')})

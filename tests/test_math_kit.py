@@ -78,6 +78,7 @@ class MathKitTest(unittest.TestCase):
         with self.assertRaises(visual_plan.VisualPlanError):
             visual_plan.plan_scene_rows(plan.replace('math-rap', 'other'))
 
+    @unittest.skipUnless((Path(__file__).resolve().parents[1] / '.studio/designs/math/design.json').is_file(), 'Personal card resources; checked in personal assembly')
     def test_export_pack_exact_accept_and_offline_install(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -1,0 +1,27 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "e03562df4d63321b6f15d717637013af44a610befe4a38619fbfb256fcb696a0"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "bb555e197a20ec0d7889ab1a11fdc34dc76a4f8463091e7acae65bb929bae923"
+    },
+    {
+      "path": "component.html",
+      "sha256": "689dc8ae05537fc0fdcadd5221fe3c1553327d027b34ec0312685eb2a97075ee"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "8e3fbdd5fc2977280d6da22b085e42340b61cb0e1e6a1b927574f9b7a975469b"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "c7e14ccebd83f69fafc934cc3c549b6092c497211db91e2bb937747b7a66f043"
+    }
+  ],
+  "package_sha256": "404c0667ba44cbabbd2afe11228b6dedb4024df6fe0ecb1c2582f5a055c6e314",
+  "asset_ref": "capability-convergence/4x3@v1"
+}

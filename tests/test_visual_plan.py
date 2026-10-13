@@ -31,12 +31,13 @@ class VisualPlanTest(unittest.TestCase):
         repo = Path(__file__).resolve().parents[1]
         shutil.copytree(repo / ".studio" / "templates", self.root / ".studio" / "templates")
         WORK_CLI.account_service(self.root).put("account", "main", {"name": "Fixture"})
-        WORK_CLI.account_service(self.root).put("series", "fixture", {"name": "Fixture"})
+        WORK_CLI.account_service(self.root).put("series", "fixture", {"name": "Fixture", "design": "stage-full"})
         self.run_cli("new", "Visual test", "--workflow", "hyperframes_video", "--account", "main")
         self.variant = next((self.root / "works" / "active").iterdir()) / "variants" / "main"
         # This suite protects existing 3.5.2 Variant behavior.
         state = WORK_CLI.read_json(self.variant / "variant.yaml")
         state.pop("line", None)
+        state.pop("design_live", None)
         WORK_CLI.write_variant(self.variant, state)
         self.update("ANIMATION_PLAN.md", plan_format="3.5.2", line=None)
         self.project = self.variant / "project"
@@ -54,6 +55,8 @@ class VisualPlanTest(unittest.TestCase):
     def run_cli(self, *args):
         if "new" in args and "hyperframes_video" in args:
             args += ("--purpose", "standard", "--series", "fixture")
+            if "--variant-id" not in args:
+                args += ("--variant-id", "main")
         parsed = WORK_CLI.build_parser().parse_args(args)
         return parsed.handler(self.root, parsed)
 
@@ -128,7 +131,7 @@ class VisualPlanTest(unittest.TestCase):
             self.run_cli("finalize", str(final), "--qa-passed")
             renderer.assert_called_once()
         archived = self.variant
-        self.assertEqual("archive", WORK_CLI.locate_work(self.root, self.variant.parent.parent.name)[1])
+        self.assertEqual("active", WORK_CLI.locate_work(self.root, self.variant.parent.parent.name)[1])
         self.assertEqual(final.read_bytes(), (archived / "final/final.mp4").read_bytes())
         self.assertEqual(original, (archived / "previews/draft-v002/source-snapshot/compositions/S01.html").read_bytes())
 

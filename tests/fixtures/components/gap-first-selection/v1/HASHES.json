@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "algorithm": "component-package-sha256-v1",
+  "component_ref": "gap-first-selection@v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "fa6ec1b559a7ec0f5d36e9258c1c09d9439dca20451e5824a89048e1f89188a6"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "bb555e197a20ec0d7889ab1a11fdc34dc76a4f8463091e7acae65bb929bae923"
+    },
+    {
+      "path": "component.html",
+      "sha256": "d52cc6861dbdc25f645b0ae9bd324f3d40fdc5753b81bc36f089e79e5201639f"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "838ecfdfbedc42114c32540a7fe697b5a6955c5d2a9c9710097073a295f31607"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "9cdf359118427309f0acdc0248f74ed4fa5765d202d27298ead64692cd99e660"
+    }
+  ],
+  "package_sha256": "9e437cf588c011c3a268d406fa633e42d03df96ae1d9e930f37a9509233a68b3"
+}

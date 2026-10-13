@@ -22,8 +22,8 @@ class AssetCatalogTest(unittest.TestCase):
         package, _ = STORE.resolve_component(self.harness, self.ref)
         original = (package / "HASHES.json").read_bytes()
         self.selection({"asset_layer": "reference", "recommendation": "historical"})
-        self.assertFalse(STORE.discover_components(self.harness)["assets"])
-        assets = STORE.discover_components(self.harness, asset_layer="reference")["assets"]
+        self.assertFalse(STORE.legacy_discover_components(self.harness)["assets"])
+        assets = STORE.legacy_discover_components(self.harness, asset_layer="reference")["assets"]
         accepted = next(item for item in assets if item["origin"] == "accepted")
         self.assertEqual(accepted["lifecycle"], "accepted")
         self.assertEqual(accepted["acceptance"], record)
@@ -41,17 +41,17 @@ class AssetCatalogTest(unittest.TestCase):
     def test_complete_index_does_not_depend_on_filter(self):
         self.accept()
         self.selection({"asset_layer": "building-block", "recommendation": "recommended"})
-        self.assertFalse(STORE.discover_components(self.harness, query="not-a-match")["assets"])
+        self.assertFalse(STORE.legacy_discover_components(self.harness, query="not-a-match")["assets"])
         index = json.loads((self.store / ".catalog-index.json").read_text())
         self.assertEqual({self.ref}, {item["component_ref"] for item in index["assets"]})
         self.assertTrue(all(item["asset_layer"] == "building-block" for item in index["assets"]))
         before = (self.store / ".catalog-index.json").read_bytes()
-        STORE.discover_components(self.harness, rebuild=True)
+        STORE.legacy_discover_components(self.harness, rebuild=True)
         self.assertEqual(before, (self.store / ".catalog-index.json").read_bytes())
 
     def test_unknown_legacy_not_classified_by_name(self):
         self.accept()
-        report = STORE.discover_components(self.harness, audit=True)
+        report = STORE.legacy_discover_components(self.harness, audit=True)
         self.assertEqual({"unclassified"}, {item["asset_layer"] for item in report["assets"]})
         self.assertTrue(any(item["code"] == "unclassified_asset" for item in report["audit"]["warnings"]))
 
@@ -59,7 +59,7 @@ class AssetCatalogTest(unittest.TestCase):
         self.accept()
         index = self.store / ".catalog-index.json"
         index.write_text("{broken")
-        result = STORE.discover_components(self.harness, rebuild=True)
+        result = STORE.legacy_discover_components(self.harness, rebuild=True)
         self.assertFalse(result["errors"])
         self.assertTrue(json.loads(index.read_text())["assets"])
 
@@ -70,7 +70,7 @@ class AssetCatalogTest(unittest.TestCase):
         managed.symlink_to(outside, target_is_directory=True)
         for operation in (lambda: STORE.register_source(self.store, managed),
                           lambda: STORE.authoring_project(self.harness, managed),
-                          lambda: STORE.discover_components(self.harness)):
+                          lambda: STORE.legacy_discover_components(self.harness)):
             with self.assertRaisesRegex(COMPONENT.ComponentError, "Linked path"):
                 operation()
         managed.unlink()
@@ -91,12 +91,12 @@ class AssetCatalogTest(unittest.TestCase):
         STORE.register_source(self.store, managed)
         self.assertEqual(STORE.authoring_project(self.harness, managed), managed)
         (self.store / "catalog-migration.json").write_text(json.dumps({"schema_version": 1, "retired_roots": [str(legacy.parent), str(managed)]}))
-        report = STORE.discover_components(self.harness)
+        report = STORE.legacy_discover_components(self.harness)
         self.assertEqual(["managed@v1"], [item["component_ref"] for item in report["assets"]])
         self.assertEqual("scene-template", report["assets"][0]["asset_layer"])
         (self.store / "catalog-migration.json").write_text('{"retired_roots":["relative"]}')
         with self.assertRaisesRegex(COMPONENT.ComponentError, "retired_roots"):
-            STORE.discover_components(self.harness)
+            STORE.legacy_discover_components(self.harness)
 
     def test_module_metadata_and_dependency_install_guard(self):
         source = self.store / "sources/module"

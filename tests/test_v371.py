@@ -114,7 +114,7 @@ class V371Test(unittest.TestCase):
         revision = refresh['revision']
         shown = json.loads(self.call('sample', 'show', sample['id'], '--plan-revision', str(revision)))
         self.assertEqual(6, len(shown['frames']))
-        self.call('settings', 'set', 'critic.provider', 'codex-subagent')
+        self.call('settings', 'set', 'critic.provider', 'external')
         round_ = self.round()
         package = Path(round_['package'])
         frozen = memory.frozen(package / 'reference-memory')
@@ -146,6 +146,7 @@ class V371Test(unittest.TestCase):
         with self.assertRaises((cli.HarnessError, ValueError)):
             self.round(round_['draft_id'])
 
+    @unittest.skipUnless((Path(__file__).resolve().parents[1] / '.studio/designs/math/design.json').is_file(), 'Personal card resources; checked in personal assembly')
     def test_cross_line_status_and_behavior_findings_showcase_reference(self):
         sample, _ = self.add_sample()
         path = memory.index_path(self.root, 'sample', 'explainer')
@@ -176,6 +177,7 @@ class V371Test(unittest.TestCase):
         self.plan_path.write_text(self.plan_path.read_text().replace('跨线:', ''))
         self.assertIn('mechanism_line_mismatch', [v['kind'] for v in json.loads(self.call('plan', 'check'))['findings']])
 
+    @unittest.skipUnless((Path(__file__).resolve().parents[1] / '.studio/designs/math/design.json').is_file(), 'Personal card resources; checked in personal assembly')
     def test_known_defects_and_summary_leave_work_unchanged(self):
         sample, round_ = self.add_sample()
         path = self.variant / 'retro' / round_['draft_id'] / 'VISUAL.md'

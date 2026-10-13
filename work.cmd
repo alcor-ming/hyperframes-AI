@@ -1,7 +1,7 @@
 @echo off
 setlocal DisableDelayedExpansion
 if "%~1"=="" (
-  echo Open this folder in Codex App and start a conversation.
+  echo Start a production session in this folder and read AGENTS.md.
   echo This command-line tool is used by the Agent. Examples: work.cmd doctor / work.cmd --help
   pause
   exit /b 0

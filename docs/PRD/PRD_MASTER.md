@@ -1,4 +1,16 @@
-# HyperFrames AI vNext PRD Master
+# HyperFrames AI v4.2 PRD Master
+
+状态：v4.2 开放设计卡与卡内资产脚手架；开发实现与验证以当前任务记录为准，未打包、未部署，Windows 原生和生产验收另记。
+
+当前设计：内置卡＋用户卡双根 Catalog、设计卡/素材卡、跨卡引用与本地化、Draft 文件快照与按 Variant 更新。更新保留工程副本并报告待重新安装资产。现行使用合同见 [README](../../README.md)、[工作流](../../.studio/workflow.md) 和 [资产合同](../../.studio/spec/hyperframes-assets.md)。
+
+开发设计记录（本地、不配送）：[本任务 PRD](../../.trellis/tasks/10-10-hyperframes-docs-discipline-extension/prd.md) 与 [脚手架细则](../../.trellis/tasks/10-10-hyperframes-docs-discipline-extension/scaffold-design.md)。P9 卡片迁移、P10 历史清理另行授权。
+
+现行生产入口与恢复协议见 [生产会话接口](production-session-interface.md)。历史 ledger（含 `component-authoring-m0-m1.md` D8）、v3.x Skill 旧名及客户端/模型分工已被该接口取代；历史原文仅保留背景，不构成现行入口或执行限制。
+
+## 历史版本索引
+
+以下 v3.x 说明保留当时背景；v4.0/v4.1 的设计身份、工作流开关与声线增量继续适用，其旧自用包装配规则由 v4.2 替代。
 
 状态：v3.8.2 独立制作链路、正式 TTS 与 card 删除已在开发仓实现；v3.3 为其余既有制作/工程基线。部署、真实数据迁移、Windows 原生、云合成和听校分别记录，不以开发实现替代。
 
@@ -6,7 +18,7 @@
 
 日期：2026-09-22；当前范围更新：2026-10-06
 
-v3.8.2 支持 `explainer`（默认）、`showcase`、`math` 与 `english` 四条专属入口、规则、Plan 和检查，共用 Work / Variant、Studio、资产及导出。showcase 舞台／白底角色处理是脱离单期作品的可选工具；数学保留原声／说唱与图解；英语采用原创教学＋TTS，更多文字 Motion、幽默例句、谐音与拼写记忆方法保留为后续方向。公共 TTS 默认火山，提供替代脚本入口，候选生成、正式声音采用与可信对齐各自记录；本期不宣称已接通未选定的本地或其他云引擎。card 专属代码、路由、模板、文档与配送内容删除，不保留兼容实现；生产历史文件和快照不删除，继续内容须显式采用到受支持的新版本。旧配置中的 card 不静默回退。当前合同见 [README](../../README.md#快速开始)、[创作契约](../../.studio/spec/creative.md)、[数学链路](../../.studio/spec/math-rap.md)和[英语链路](../../.studio/spec/english.md)。
+v3.8.2 支持 `explainer`（默认）、`showcase`、`math` 与 `english` 四条专属入口、规则、Plan 和检查，共用 Work / Variant、Studio、资产及导出。showcase 舞台／白底角色处理是脱离单期作品的可选工具；数学保留原声／说唱与图解；英语采用原创教学＋TTS，更多文字 Motion、幽默例句、谐音与拼写记忆方法保留为后续方向。公共 TTS 默认火山，提供替代脚本入口，候选生成、正式声音采用与可信对齐各自记录；本期不宣称已接通未选定的本地或其他云引擎。card 专属代码、路由、模板、文档与配送内容删除，不保留兼容实现；生产历史文件和快照不删除，继续内容须显式采用到受支持的新版本。旧配置中的 card 不静默回退。当前合同见 [README](../../README.md#快速开始)、[创作契约](../../.studio/spec/creative.md)、数学链路（仅自用包）和英语链路（仅自用包）。
 
 v3.8 化繁为简的生命周期合同见[制作工作流](../../.studio/workflow.md#归档恢复与停放)、[Final 合同](../../.studio/spec/hyperframes-final.md)及 [README](../../README.md#归档反悔与导航)。本版退出播客制作，保留 Work / Variant 两层；正式导出归档准确版本，全部非空版本集合归档后汇总 Work，可在原版本取消归档。历史成片与收据共同保留；停放保持路径和会话稳定；容量与缓存清理按需执行。退役更新保留用户修改并退出活动入口，运行时按实际消费者裁剪。部署与生产结果仍单独记录。
 
@@ -18,15 +30,15 @@ v3.4.2 基线见 [上屏提炼与持续视觉变化](./hyperframes-v342-visual-o
 
 既有增量合同见 [v3.4.1 补充方案](./hyperframes-v341-supplement.md)：归档同号继任、零 Variant 内容准备与平级账号版本；覆盖 RC2 中必须先绑定账号及 main 优先的旧假设。[RC2 执行方案](./hyperframes-rc2-execution-plan.md) 与 v3.3 制作工程合同仍为其余既有基线。下方 R0–R5 保留 v3.2 实施路径与理由，不重启历史阶段；新制作仍采用三项入口、四阶段与独立 Finalize，归档和恢复按 v3.8 当前合同执行。Remotion 原生验证与生产闭环不得由规则或 mock 测试代替。
 
-## 当前路径
+## 历史 v3.x 路径
 
 Windows 在 Work-local Scene 安排本期叙事，优先复用带意义且内部联动完整的视觉对象与媒体；既有 helper 和完整 Scene 均可保留，不强制拆解、合并或迁库。内容复杂度不改变 Windows 归属。
 
-Script / Research 就绪后先整片 Plan，再一个真实 Scene 动态参考，一次方向批准后扩成完整 planned-placeholder Draft，素材齐备后生成最终 Draft。局部布局不自动推广全片，不逐 Scene 审批，不增加占位 Draft 强制接受；单 Scene 参考不授予 full Draft 的 Finalize 权限。
+Research 记录素材可供性与带强度（锁定 / 倾向 / 灵感）的导演意图，不写布局；Plan 由编排方决定呈现并逐条意图回应。Script / Research 就绪后先整片 Plan，再一个真实 Scene 动态参考，一次方向批准后扩成完整 planned-placeholder Draft，素材齐备后生成最终 Draft。局部布局不自动推广全片，不逐 Scene 审批，不增加占位 Draft 强制接受；单 Scene 参考不授予 full Draft 的 Finalize 权限。
 
 官方 HyperFrames Studio 继续负责预览和渲染；Work 管理身份、版本、反馈和接受。Plan、正式音频 / section_map、Draft、Final 的职责与已有内容权限不变，不新增播放器、内容数据库或审批层。本文件是产品索引，不增加日常必读材料。
 
-## 本轮范围
+## 历史 v3.x 范围
 
 接续本地 M2–M3 源码和画面，不回退公开 HEAD，不重跑 M0–M1。先与 Windows 对齐所选 Work、已有对象和真实工具缺口，在现有任务记录保存保留/轻量封装/延后/局部修复分类，不建设资产数据库。
 
@@ -89,7 +101,7 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 
 ## PRD 索引
 
-- v3.8.2 独立链路、正式 TTS 与 card 删除：[入口与制作范围](../../README.md#快速开始)、[声音与 Plan 合同](../../.studio/spec/creative.md)、[数学链路](../../.studio/spec/math-rap.md)、[英语链路](../../.studio/spec/english.md)。开发仓实现；开发计划留在本地 Trellis，不随产品配送，未声明部署、云合成或原生验收。
+- v3.8.2 独立链路、正式 TTS 与 card 删除：[入口与制作范围](../../README.md#快速开始)、[声音与 Plan 合同](../../.studio/spec/creative.md)、数学链路（仅自用包）、英语链路（仅自用包）。开发仓实现；开发计划留在本地 Trellis，不随产品配送，未声明部署、云合成或原生验收。
 
 - v3.8 化繁为简：[Work / Variant 生命周期与导航](../../.studio/workflow.md#归档恢复与停放)、[Final 与历史收据](../../.studio/spec/hyperframes-final.md)。开发任务计划留在本地 Trellis，不作为产品配送内容。
 
@@ -106,3 +118,18 @@ Work 沿用 vendor / Binding / `COMPONENT_LOCK.json`，schema 2 扩展通用资�
 - [rnskill 动效分层研究](./_research/rnskill-motion-layering.md)：仅按当前问题读取，不作为强制制作公式。
 
 本 PRD 不扩大生产 Work、资产源、Open Design、Git 或外部发布授权；资产、Plan 与 Draft 分开记录，一句明确回复可以覆盖多个准确对象。
+
+
+### v4.2 能力与外部来源补充
+
+设计卡以 capabilities 声明所需层、A/B、绑定和专属检查；旧 mode 只读兼容。上游绘制代码固定 commit 后进入独立只读来源区，许可逐文件核对；适配产物是普通用户卡，不引入第三方系统或提示词库。外部 borrowed 来源只能比较，不能自动同步。
+
+非 DOM module 提供完整 texts()；独立 embedded 文字按资产声明的 text_type 授权。字体由卡声明并闭合，第 4/5 层与引擎统一使用；缺字不能接受。Draft 保存文字清单，embedded 文字逐 Scene 人工确认，排版检查标为已委托而非通过。可执行字段与参数以 [.studio/spec/broll-assets.md](../../.studio/spec/broll-assets.md#非-dom-文字与字体) 为准。
+
+### v4.2 personal 包的卡片锁（任务 card-repo-deploy，2026-10-13）
+
+自用版本不再在生产侧编辑卡片：私有来源的 `cards` 锁定私有卡仓的完整 commit 与卡片 ID，personal 包从该 commit 把卡片装进 `.studio/designs/` 作为受管理文件，生产改动在下次部署时拒绝覆盖。首次部署把 `design_root` 中逐字节一致的同 ID 旧副本移到 `designs-retired-<日期>/`，不一致则拒绝。public 包与下述用户卡版本控制根的合同不变。
+
+### v4.2 用户卡的版本控制根（任务 personal-card-source，2026-10-12）
+
+用户卡与工具分三层：公共工具包、自用工具覆盖、用户卡内容。两种工具包都不再配送用户卡；`design_root` 可以直接是一个版本控制工作树（如嵌套在 `asset-library/designs` 内的 Git 仓库），工具发布不触碰它。Catalog、`validate` 与 Draft 快照忽略 `.git/`、卡内 `study/` 与根级 `studies/`，参考视频的拆解笔记可随卡入库而不进入作品。`design root` 与 `doctor` 只读报告该目录的分支、未提交数与远端差异；`design compare <card> --since <rev>` 列出自某修订以来的卡片变化并指出 `design.json.version` 是否递增；受版本控制的卡缺 `CHANGELOG.md` 只警告。工具不执行任何 Git 写操作：提交、推送、拉取由使用者逐次授权执行，拉取只允许快进，脏或分叉的工作树只报告不合并。既有 Work 仍按 Draft 快照与 `variant design-update` 跟随卡片；首次把现有用户卡目录纳入版本控制是使用者单独授权的一次性操作。

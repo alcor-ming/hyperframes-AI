@@ -1,0 +1,7 @@
+{
+  "schema_version": 2,
+  "component_ref": "chapter-intro/16x9@v1",
+  "slots": {"title": "Synthetic chapter", "kicker": "P001"},
+  "timing": {"time_scale": 1},
+  "key_times_seconds": [0, 0.8, 1.6]
+}

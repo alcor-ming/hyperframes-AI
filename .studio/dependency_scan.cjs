@@ -10,7 +10,7 @@ function dependency(name) {
       ? [path.join(process.env.HYPERFRAMES_DEPENDENCY_MODULE_ROOT, 'package.json')]
     : fs.existsSync(runtime) ? [runtime]
       : [path.join(__dirname, '.runtime/dependency-parser/package.json'),
-        path.join(__dirname, 'package.json'), path.join(__dirname, 'remotion/package.json')];
+        path.join(__dirname, 'package.json'), path.join(__dirname, 'parser/package.json')];
   for (const base of bases) {
     try { return createRequire(base)(path.join(path.dirname(base), 'node_modules', name)); }
     catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }

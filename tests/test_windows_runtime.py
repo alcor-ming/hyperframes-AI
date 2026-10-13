@@ -1,10 +1,12 @@
 import importlib.util
+import io
 import json
 from pathlib import Path
 import os
 import sys
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 from subprocess import CompletedProcess
 
@@ -25,8 +27,7 @@ class WindowsRootTest(unittest.TestCase):
         (root / ".release.json").write_text(json.dumps({"release": "candidate-test" if review else "local-test",
                                                        "channel": "candidate" if review else "local"}))
         (root / "windows-runtime.lock.json").write_text("{}")
-        for name in ("active", "parked", "archive"):
-            (root / "works" / name).mkdir(parents=True)
+        (root / "works/active").mkdir(parents=True)
         for name in ("store", "sources"):
             (root / "asset-library" / name).mkdir(parents=True)
         config = {"work_root": str(root), "asset_root": str(root / "asset-library/store"),
@@ -39,6 +40,52 @@ class WindowsRootTest(unittest.TestCase):
         path = root / ".studio/.runtime/local.json"
         path.write_text(json.dumps(config))
         return root, config, path
+
+    def test_work_store_requires_active_but_not_legacy_lifecycle_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, config, _ = self.make_root(Path(temporary))
+            self.assertEqual(config["work_root"], runtime.resolved_config(root)["work_root"])
+            self.assertFalse((root / "works/parked").exists())
+            self.assertFalse((root / "works/archive").exists())
+            (root / "works/active").rmdir()
+            with self.assertRaisesRegex(ValueError, "WorkStore missing works/active"):
+                runtime.resolved_config(root)
+
+    def test_doctor_reports_identity_and_invocation_separately(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, _, _ = self.make_root(Path(temporary))
+            env = runtime.environment(root)
+            inherited = dict(os.environ)
+            with patch.object(runtime.subprocess, 'run', return_value=CompletedProcess([], 0, 'libx264 aac', '')):
+                native = runtime.doctor(root, env)
+                forwarded = runtime.doctor(root, {**env, 'HYPERFRAMES_INVOCATION': 'wsl-forwarded'})
+            self.assertEqual(inherited, dict(os.environ))
+            self.assertEqual('windows-native', native['invocation'])
+            self.assertEqual('wsl-forwarded', forwarded['invocation'])
+            for key in ('backend', 'release', 'runtime', 'work_root', 'release_manifest_sha256'):
+                self.assertEqual(native[key], forwarded[key])
+            self.assertEqual('pending-native-render-verification', forwarded['gpu'])
+            self.assertEqual({'warning_count': 0, 'error_count': 0}, forwarded['asset_audit'])
+
+    def test_design_root_defaults_and_protected_locations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, config, path = self.make_root(Path(temporary))
+            self.assertEqual(str(root / "asset-library/designs"), runtime.resolved_config(root)["design_root"])
+            for invalid in ("relative", str(root / "works/active/cards"), str(root / ".studio/cards"),
+                            config["asset_root"], str(root)):
+                path.write_text(json.dumps({**config, "design_root": invalid}))
+                with self.subTest(path=invalid), self.assertRaisesRegex(ValueError, "design_root"):
+                    runtime.resolved_config(root)
+            external = Path(temporary) / "my-cards"
+            path.write_text(json.dumps({**config, "design_root": str(external)}))
+            self.assertEqual(str(external), runtime.resolved_config(root)["design_root"])
+
+    def test_review_design_root_cannot_escape(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, config, path = self.make_root(Path(temporary), review=True)
+            path.write_text(json.dumps({**config, "design_root": str(Path(temporary) / "production/cards")}))
+            with self.assertRaisesRegex(ValueError, "Review"):
+                runtime.resolved_config(root)
 
     def test_physical_root_ignores_inherited_identity_and_freezes_config(self):
         import asset_store
@@ -97,13 +144,39 @@ class WindowsRootTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "incomplete"):
                     runtime.main(["list"])
 
+    def test_local_acceptance_requires_physical_isolation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, config, path = self.make_root(Path(temporary))
+            config['acceptance_protected_roots'] = [str(Path(temporary) / 'production')]
+            path.write_text(json.dumps(config))
+            self.assertFalse(runtime.resolved_config(root)['review'])
+            with patch.dict(os.environ, {'SESSION_DIR': 'old-session'}):
+                with self.assertRaisesRegex(ValueError, 'session'):
+                    runtime.resolved_config(root)
+            for invalid in ([str(root.parent)], [], [str(root / 'nested-production')]):
+                path.write_text(json.dumps({**config, 'acceptance_protected_roots': invalid}))
+                with self.subTest(protected=invalid), self.assertRaises(ValueError):
+                    runtime.resolved_config(root)
+            path.write_text(json.dumps({**config, 'export_root': str(root.parent / 'exports')}))
+            with self.assertRaisesRegex(ValueError, 'escapes'):
+                runtime.resolved_config(root)
+            path.write_text(json.dumps(config))
+            linked = root / 'linked'
+            linked.symlink_to(Path(temporary) / 'outside')
+            with self.assertRaisesRegex(ValueError, 'links'):
+                runtime.resolved_config(root)
+            linked.unlink()
+            os.link(path, linked)
+            with self.assertRaisesRegex(ValueError, 'links'):
+                runtime.resolved_config(root)
+
     @unittest.skipUnless(os.name == "nt", "Native Windows CMD")
     def test_no_argument_cmd_explains_its_purpose(self):
         result = runtime.subprocess.run([os.environ["COMSPEC"], "/d", "/c",
                                          str(Path(__file__).resolve().parents[1] / "work.cmd")],
                                         input="\n", capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Codex App", result.stdout)
+        self.assertIn("production session", result.stdout)
 
     def test_launcher_loads_siblings_under_isolated_python(self):
         code = ("import importlib.util,sys; "
@@ -128,6 +201,34 @@ class WindowsRootTest(unittest.TestCase):
             asset.write_bytes(b"changed")
             with self.assertRaisesRegex(ValueError, "SHA256"):
                 seed.download("", asset, expected)
+
+    def test_prepare_updates_versions_and_verifies_archive_closure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            npm_lock = base / "npm.json"
+            npm_lock.write_text("{}")
+            archive = base / "npm.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("node_modules/hyperframes/bin/hyperframes.mjs", "// fixture")
+            required = "runtime/npm/node_modules/hyperframes/bin/hyperframes.mjs"
+            definition = {"python": "3.14.0", "versions": {"hyperframes": "old"},
+                          "assets": [], "required_files": [required]}
+            source, output = base / "windows-runtime.lock.json", base / "prepared.json"
+            source.write_text(json.dumps(definition))
+            with patch.object(seed, "REPO", base), patch.object(seed, "ARCHIVES", []), \
+                    patch.object(seed, "urlopen", side_effect=lambda *a, **k: io.BytesIO(b"")), \
+                    patch.object(seed, "npm_archive", return_value=archive):
+                seed.prepare(base, npm_lock, output)
+                result = seed.read(output)
+                self.assertEqual(result["versions"]["hyperframes"], seed.VERSIONS["hyperframes"])
+                self.assertEqual(result["versions"]["onnxruntime-node"], "1.21.1")
+                self.assertEqual(result["assets"][0]["sha256"], seed.digest(archive))
+                self.assertEqual(result["assets"][0]["package_lock_sha256"], seed.digest(npm_lock))
+                definition["required_files"].append("runtime/npm/missing.dll")
+                source.write_text(json.dumps(definition))
+                with self.assertRaisesRegex(ValueError, "missing.dll"):
+                    seed.prepare(base, npm_lock, output)
+                self.assertEqual(seed.read(output), result)
 
     def test_seed_preserves_pinned_loader_native_dependencies(self):
         lock = seed.read(Path(__file__).resolve().parents[1] / "windows-npm.lock.json")

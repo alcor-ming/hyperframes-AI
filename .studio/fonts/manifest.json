@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "source-han-sans/SourceHanSansCN-Bold.otf",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-han-sans/a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2/SubsetOTF/CN/SourceHanSansCN-Bold.otf",
+      "revision": "a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2",
+      "sha256": "62383707c086a32f3afd5e293f34c7eff64c7fea31f579fdc6cbe34d920519a6",
+      "bytes": 8569308,
+      "license": [
+        "source-han-sans/LICENSE.txt"
+      ]
+    },
+    {
+      "path": "source-han-sans/SourceHanSansCN-Regular.otf",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-han-sans/a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2/SubsetOTF/CN/SourceHanSansCN-Regular.otf",
+      "revision": "a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2",
+      "sha256": "e2bc8a2e7f37474b774fff8db758681ece40bb6947a90d571bce9dd60671a8e4",
+      "bytes": 8429224,
+      "license": [
+        "source-han-sans/LICENSE.txt"
+      ]
+    },
+    {
+      "path": "source-han-sans/LICENSE.txt",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-han-sans/a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2/LICENSE.txt",
+      "revision": "a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2",
+      "sha256": "fcac737e761ec63dbfbdce11030a1780161920d80315edba9c8beff1c2bac5a2",
+      "bytes": 4463,
+      "license": [
+        "source-han-sans/LICENSE.txt"
+      ]
+    }
+  ]
+}

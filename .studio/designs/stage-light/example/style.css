@@ -1,0 +1,178 @@
+/* stage-light · 可编辑示例皮肤
+ * 与 stage-full 共用 runtime/stage-rig.js 的折叠机制，但外观明显更轻：
+ * 无剧场边框、无吊灯与焦点光，只有两页式布景、纸卡与一条读行。
+ * 无网络字体、无位图；字体由宿主放在 media/ 下。
+ */
+@font-face {
+  font-family: "SourceHanSansCN";
+  src: url("media/SourceHanSansCN-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 1920px;
+  height: 1080px;
+  margin: 0;
+  overflow: hidden;
+  background: #eef4f7;
+}
+
+#stage-light-example {
+  --leaf-ink: #5f7d95;
+  --leaf-accent: #4bbf9a;
+  --prop-face: #eaf3f7;
+  --prop-ink: #5f7d95;
+
+  position: absolute;
+  inset: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  color: #29394a;
+  font-family: "SourceHanSansCN", "Noto Sans CJK SC", sans-serif;
+  background: #eef4f7;
+}
+
+.layer { position: absolute; inset: 0; }
+.layer-background { z-index: 1; }
+.layer-stage { z-index: 2; }
+.layer-overlay { z-index: 3; }
+.layer-text { z-index: 4; }
+.cover { position: absolute; inset: 0; z-index: 5; }
+
+/* ---------- 第 1 层：明亮纸面 ---------- */
+.paper-bg { position: absolute; inset: 0; background: linear-gradient(180deg, #f4f9fc 0%, #e7f0f6 62%, #dde9f0 100%); }
+.grid-dots {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(95, 125, 149, 0.22) 2px, rgba(0, 0, 0, 0) 2px);
+  background-size: 48px 48px;
+}
+
+/* ---------- 两页式布景：共享 rig 的轻量皮肤 ---------- */
+.rig-mount { position: absolute; inset: 0; transform-origin: 50% 62%; }
+
+.hf-rig-wall {
+  background-image: linear-gradient(180deg, #ffffff, #eef5f9);
+  box-shadow: inset 0 0 0 6px var(--leaf-ink), 10px 12px 0 rgba(41, 57, 74, 0.16);
+}
+.hf-rig-wall-inner-left, .hf-rig-wall-inner-right { border-radius: 8px; }
+
+.hf-rig-floor {
+  background-image: repeating-linear-gradient(90deg, rgba(95, 125, 149, 0.16) 0 2px, rgba(0, 0, 0, 0) 2px 110px), linear-gradient(180deg, #e2eef4, #cfe0ea);
+  clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%);
+  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.85);
+}
+/* 轻量卡只覆盖中间宽度，避免大而平的满幅布景 */
+#stage-light-example .hf-rig-floor { left: 400px; width: 1120px; }
+
+/* 重建时在折叠态换成偏冷的纸面 */
+#stage-light-example.is-rebuilt .hf-rig-wall { background-image: linear-gradient(180deg, #f4f2fd, #e3e0f6); }
+#stage-light-example.is-rebuilt .hf-rig-floor { background-image: repeating-linear-gradient(90deg, rgba(95, 105, 160, 0.16) 0 2px, rgba(0, 0, 0, 0) 2px 110px), linear-gradient(180deg, #e1e3f6, #c9cdea); }
+
+.leaf-card {
+  position: absolute; left: 50%; top: 296px; width: 200px; margin-left: -100px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.leaf-cap { font-size: 28px; letter-spacing: 5px; color: var(--leaf-ink); }
+.leaf-card-b { opacity: 0; }
+
+/* ---------- 六个纸卡 ---------- */
+.tokens { position: absolute; inset: 0; }
+.token {
+  position: absolute; left: 0; top: 0; width: 128px; height: 128px;
+  filter: drop-shadow(7px 9px 0 rgba(41, 57, 74, 0.20));
+  transform-origin: 50% 92%;
+}
+
+/* ---------- 两格托盘 ---------- */
+.tray {
+  position: absolute; top: 770px; width: 460px; height: 210px; border-radius: 22px; opacity: 0;
+  background: rgba(255, 255, 255, 0.72);
+  border: 4px dashed rgba(95, 125, 149, 0.55);
+}
+.tray-round { left: 560px; }
+.tray-block { left: 1080px; }
+.tray-shape { position: absolute; left: 26px; top: 20px; width: 90px; height: 20px; border-radius: 10px; background: rgba(75, 191, 154, 0.35); }
+.tray-shape-round { border-radius: 20px; }
+.tray-shape-block { border-radius: 4px; }
+.tray-label { position: absolute; right: 26px; top: 12px; font-size: 30px; letter-spacing: 3px; color: var(--leaf-ink); }
+
+/* ---------- 立牌道具：脚部由 rig 的旋转铰链立起 ---------- */
+.prop-mini { position: absolute; left: 1560px; top: 322px; width: 180px; height: 120px; }
+.prop-foot { width: 100%; height: 100%; }
+.prop-foot svg { display: block; filter: drop-shadow(7px 9px 0 rgba(41, 57, 74, 0.18)); }
+
+.rule-tag {
+  position: absolute; left: 1052px; top: 812px; padding: 10px 24px; font-size: 32px; letter-spacing: 4px;
+  color: #ffffff; background: var(--leaf-accent); border-radius: 999px; opacity: 0;
+  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.9), 7px 9px 0 rgba(41, 57, 74, 0.18);
+}
+
+/* ---------- 第 3 层：读行与指示 ---------- */
+.leaders { position: absolute; inset: 0; width: 100%; height: 100%; }
+.leader { fill: none; stroke: var(--leaf-accent); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 14 12; opacity: 0; }
+.readbar {
+  position: absolute; left: -200px; top: -7px; width: 400px; height: 14px; border-radius: 7px;
+  background: linear-gradient(90deg, rgba(75, 191, 154, 0), var(--leaf-accent), rgba(75, 191, 154, 0));
+  opacity: 0; pointer-events: none;
+}
+
+/* ---------- 第 4 层：文字 ---------- */
+.header { position: absolute; left: 96px; top: 92px; display: flex; align-items: center; gap: 18px; }
+.step { font-size: 40px; letter-spacing: 6px; color: #ffffff; background: var(--leaf-ink); border-radius: 999px; padding: 8px 30px; }
+.sub { font-size: 24px; letter-spacing: 3px; color: rgba(41, 57, 74, 0.6); }
+
+.callout {
+  position: absolute; left: 0; right: 0; top: 138px; margin: 0; text-align: center;
+  font-size: 44px; letter-spacing: 4px; color: #29394a;
+}
+.recap { position: absolute; left: 0; right: 0; top: 132px; display: flex; justify-content: center; align-items: center; gap: 22px; opacity: 0; }
+.recap .chip {
+  font-size: 40px; letter-spacing: 4px; color: #29394a; background: #ffffff; border-radius: 999px; padding: 12px 34px;
+  box-shadow: inset 0 0 0 5px rgba(95, 125, 149, 0.5), 7px 9px 0 rgba(41, 57, 74, 0.16);
+}
+.recap .arrow { font-size: 40px; color: var(--leaf-accent); }
+
+/* ---------- 纸质封面（只做开场与收尾） ---------- */
+.cover-sheet {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  background: linear-gradient(180deg, #fbfdff, #e8f1f6);
+  box-shadow: inset 0 0 0 18px #ffffff, inset 0 0 0 24px var(--leaf-ink);
+}
+.cover-sheet strong { font-size: 60px; letter-spacing: 10px; color: #29394a; }
+.cover-sheet span { font-size: 28px; letter-spacing: 6px; color: var(--leaf-ink); }
+
+/* ---------- 纸艺角色：左侧讲解者、右侧学习者（group / body / head / face / arm 独立 DOM） ---------- */
+/* 克制相机：同样只作用于既有场景组 .layer-stage，幅度明显更小 */
+#stage-light-example .layer-stage { transform-origin: 62% 82%; }
+.figures { position: absolute; inset: 0; }
+.figure { position: absolute; filter: drop-shadow(7px 9px 0 rgba(41, 57, 74, 0.22)); }
+.figure svg { display: block; overflow: visible; }
+.figure-host {
+  left: 200px; top: 487px;
+  --fig-skin: #f1d2ab; --fig-cloth: #3f4a70; --fig-cloth-2: #323d5c; --fig-hair: #2b2b33; --fig-leg: #2f3a52; --fig-shoe: #1f2531;
+}
+.figure-learner {
+  left: 1560px; top: 529px;
+  --fig-skin: #f4d8b3; --fig-cloth: #a0566a; --fig-cloth-2: #87485b; --fig-hair: #4a2f26; --fig-leg: #6b3c4b; --fig-shoe: #452a33;
+}
+.fig-shadow { fill: rgba(41, 57, 74, 0.16); }
+.fig-face { fill: var(--fig-skin); stroke: #fff; stroke-width: 6; }
+.fig-neck rect { fill: var(--fig-skin); stroke: #fff; stroke-width: 6; }
+.fig-hair-back, .fig-hair-front, .fig-hair-bun circle { fill: var(--fig-hair); stroke: #fff; stroke-width: 5; }
+.fig-eye { fill: #fff; }
+.fig-pupil { fill: #2a2320; }
+.fig-mouth { fill: none; stroke: #2a2320; stroke-width: 5; stroke-linecap: round; }
+.fig-mouth-open { fill: #8f3a3a; stroke: #2a2320; stroke-width: 4; stroke-linejoin: round; }
+.fig-torso, .fig-dress { fill: var(--fig-cloth); stroke: #fff; stroke-width: 6; }
+.fig-apron { fill: var(--fig-cloth-2); opacity: .92; }
+.fig-collar { fill: var(--fig-cloth-2); stroke: #fff; stroke-width: 5; }
+.fig-sleeve { fill: none; stroke: var(--fig-cloth); stroke-width: 26; stroke-linecap: round; }
+.fig-hand { fill: var(--fig-skin); stroke: #fff; stroke-width: 5; }
+.fig-leg { fill: var(--fig-leg); stroke: #fff; stroke-width: 5; }
+.fig-shoe { fill: var(--fig-shoe); stroke: #fff; stroke-width: 5; }

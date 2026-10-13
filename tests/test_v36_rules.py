@@ -11,6 +11,7 @@ from math_chain import parse_plan
 from visual_plan import plan_scene_rows
 
 
+@unittest.skipUnless((Path(__file__).resolve().parents[1] / '.studio/designs/math/design.json').is_file(), 'Personal card contract; checked in personal assembly')
 class V36RulesTest(unittest.TestCase):
     def test_templates_and_production_boundaries(self):
         template = (ROOT / '.studio/templates/SHOWCASE_PLAN.template.md').read_text()
@@ -26,10 +27,17 @@ class V36RulesTest(unittest.TestCase):
         research = (ROOT / '.studio/templates/MATH_RESEARCH.template.md').read_text()
         for term in ('原片出处', '原作者', '所用片段', '声音来源', '不插值'):
             self.assertIn(term, research)
-        for name in ('AGENTS.md', '.studio/templates/WINDOWS_AGENTS.md', '.studio/templates/CLAUDE.template.md'):
+        for name in ('.studio/templates/STUDIO_AGENTS.md',
+                     '.studio/templates/WINDOWS_AGENTS.md',
+                     '.studio/templates/CLAUDE.template.md'):
             text = (ROOT / name).read_text()
-            for term in ('开发仓', '/mnt/d/AI/AI+hyperframes', 'work-wsl.sh', 'Opus 5.5'):
-                self.assertIn(term, text)
+            for term in ('开发仓', '/mnt/', 'Opus 5.5',
+                         '/home/', 'D:\\', 'Codex'):
+                self.assertNotIn(term, text)
+        for name in ('.studio/templates/WINDOWS_AGENTS.md',
+                     '.studio/templates/CLAUDE.template.md'):
+            self.assertIn('[.studio/AGENTS.md](.studio/AGENTS.md)',
+                          (ROOT / name).read_text())
         refinement = (ROOT / '.studio/templates/VISUAL_RETRO.template.md').read_text()
         for term in ('积木', '动作配方或规则', '内容资产', '仅属于本片', 'pack / validate / accept'):
             self.assertIn(term, refinement)

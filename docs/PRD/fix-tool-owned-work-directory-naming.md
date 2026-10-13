@@ -18,7 +18,7 @@
 - 编号在创建目录前完成，并在同一锁内检查冲突，保证并发创建不会重复。
 - `WORK.md.id` 必须与目录名保持一致；创建后仍不可改名。
 - `./work name` 只补充显示标题中的语义部分，并复用创建时的数字编号，不再承担首次编号职责。
-- `podcast_quote_image` 创建后立即拥有编号；转录完成后只补充“嘉宾名-核心主题”。
+- `podcast_quote_image` 创建后立即拥有编号；用户文稿就绪后只补充“嘉宾名-核心主题”。
 - 更新与旧规则冲突的工作流文档和测试。
 
 ## 验收标准
@@ -26,7 +26,7 @@
 1. 连续新建两个 `podcast_quote_image` Work 时，CLI 自动生成两个递增且唯一的数字目录名，传入标题不影响目录名。
 2. 相同输入标题、不同输入标题及并发创建都不会产生重复 Work ID。
 3. 新 Work 的目录名、`WORK.md.id` 和 CLI 返回的 Work ID 完全一致。
-4. 新 Work 在转录前已经有稳定编号；执行 `./work name` 后编号保持不变，只更新显示标题。
+4. 新 Work 在用户文稿就绪前已经有稳定编号；执行 `./work name` 后编号保持不变，只更新显示标题。
 5. LLM 无法通过 `work new` 的标题参数指定、覆盖或推导目录 slug。
 6. `./work list`、`use`、`park`、`reopen`、`archive` 与显式 `--work` 仍能处理新编号；旧格式 Work 继续可读。
 7. 不自动迁移、重命名或删除现有 WorkStore 中的任何目录。
@@ -34,7 +34,7 @@
 ## 不在范围
 
 - 不修复或批量重命名当前 4 个未编号的 active XHS Work。
-- 不改变 Variant ID、发布权限、媒体获取、转录或文章生成逻辑。
+- 不改变 Variant ID、发布权限、媒体导入、文稿处理或文章生成逻辑。
 - 不引入新的数据库、服务或第三方依赖。
 
 ## 最小验证闭环
@@ -48,7 +48,7 @@ python3 -m unittest tests.test_work_cli -q
 ## 技术备注
 
 - 修复前的异常入口位于 `.studio/work.py::command_new`：目录 ID 由 `slugify(args.title)` 生成。
-- 修复前 `.studio/work.py::command_name` 到转录后才分配三位显示编号，职责发生得过晚。
+- 修复前 `.studio/work.py::command_name` 到文稿就绪后才分配三位显示编号，职责发生得过晚。
 - 编号分配应复用 WorkStore `.runtime/naming.lock`，不新增锁或依赖。
 - 实现格式为 `work-<workflow>-<三位序号>`；编号按 Workflow 递增，Workflow 名隔离目录命名空间。
 

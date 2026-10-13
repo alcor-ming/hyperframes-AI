@@ -24,4 +24,4 @@ Draft：__DRAFT__
 分类保留 showcase：积木 / 动作配方或规则 / 内容资产 / 仅属于本片。
 手写重复：是 / 否；机制 ID 可空，不推断归属。理由写明借鉴维度，去向写最小接口、参数、Asset Brief 或规则提案。
 
-组件或动作只记录资产候选，另行获授权后从 Work 复制最小源到 `asset-library/sources`，再走 pack / validate / accept；不交付整页代码、不引用 Work 路径。系统提案以文字记录，冻结最小复现交 WSL 开发仓，不携带作品内容。
+组件或动作只记录资产候选，另行获授权后从 Work 复制最小源到用户卡 `assets/<asset-id>/`，按单资产合同与 `design validate` 校验；不交付整页代码、不引用 Work 路径。系统提案以文字记录，冻结最小复现交 WSL 开发仓，不携带作品内容。

@@ -7,8 +7,10 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import subprocess
 import sys
+import time
 import uuid
 
 # Embedded CPython does not add this script's directory to sys.path.
@@ -37,8 +39,15 @@ def digest(path):
 
 
 def safe(root, name):
+    def linked(path):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            return False
+        return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 1024)
+
     for parent in (root, *root.parents):
-        if parent.is_symlink() or (parent.exists() and getattr(parent.lstat(), "st_file_attributes", 0) & 1024):
+        if linked(parent):
             raise ValueError(f"Links are not allowed: {parent}")
     parts = PurePosixPath(name).parts
     if not parts or name != "/".join(parts) or any(p in {".", ".."} or any(ord(c) < 32 or c in ':\\<>"|?*' for c in p) or p.endswith((" ", ".")) for p in parts) or name.startswith("/"):
@@ -48,7 +57,7 @@ def safe(root, name):
     path = root
     for part in parts:
         path /= part
-        if path.is_symlink() or (path.exists() and getattr(path.lstat(), "st_file_attributes", 0) & 1024):
+        if linked(path):
             raise ValueError(f"Links are not allowed: {path}")
     return path
 
@@ -64,7 +73,7 @@ def managed(files):
         if key in seen or not re.fullmatch(r"[0-9a-f]{64}", value):
             raise ValueError(f"Invalid or case-colliding manifest entry: {name}")
         seen.add(key)
-        if key.split("/")[0] in {"works", "assets", "asset-library", "sample-library", "known-defects", "retro-summary", "content-summary", "requests", "review", ".runtime", ".harness"} or key == STATE or key.startswith(STATE + "/"):
+        if key.split("/")[0] in {"exports", "works", "assets", "asset-library", "sample-library", "known-defects", "retro-summary", "content-summary", "requests", "review", ".runtime", ".harness"} or key == STATE or key.startswith(STATE + "/"):
             raise ValueError(f"Package claims user/runtime content: {name}")
 
 
@@ -101,16 +110,19 @@ def verify_package(root):
     return manifest
 
 
-def verify_root(root, *, retained=None):
+def verify_root(root, *, retained=None, expected=None):
     if safe(root, PENDING).exists():
         raise ValueError("Interrupted deployment; run recover before work")
     state = read(safe(root, MANIFEST))
     managed(state["files"])
+    if expected is not None:
+        managed(expected)
     for name, value in state["files"].items():
         path = safe(root, name)
         if retained is not None and name not in retained:
             continue
-        if digest(path) != value:
+        current = digest(path)
+        if current != value and (expected is None or current != expected.get(name)):
             raise ValueError(f"Locally modified managed file: {name}")
     return state
 
@@ -146,9 +158,8 @@ def validate_config(root, config, candidate):
         if not Path(config[key]).is_absolute():
             raise ValueError(f"{key} must be absolute")
     work = Path(config["work_root"])
-    for name in ("active", "parked", "archive"):
-        if not (work / "works" / name).is_dir():
-            raise ValueError(f"Missing WorkStore directory: {name}")
+    if not (work / "works/active").is_dir():
+        raise ValueError("Missing WorkStore directory: active")
     if candidate or config.get("review"):
         if config.get("review") is not True or not config.get("review_protected_roots"):
             raise ValueError("Candidate requires review=true and explicit review_protected_roots")
@@ -214,10 +225,10 @@ def restore(root, transaction, check_only=False):
     safe(root, PENDING).unlink(missing_ok=True)
 
 
-def prune_backups(root, keep=2):
+def prune_backups(root, keep=1):
     """Under command_lock; only completed, owned backups beyond the rollback chain."""
-    if keep < 2:
-        raise ValueError("Keep at least two rollback backups")
+    if type(keep) is not int or keep < 1:
+        raise ValueError("Keep at least one rollback backup")
     state = verify_root(root)
     protected = set()
     name = state.get("backup")
@@ -269,9 +280,98 @@ def prune_backups(root, keep=2):
     return {"removed": removed, "retained": retained}
 
 
-def deploy(package, root, config_path, keep=2):
-    if keep < 2:
-        raise ValueError("Keep at least two rollback backups")
+def design_root(config):
+    value = config.get("design_root")
+    return Path(value) if isinstance(value, str) else Path(config["work_root"]) / "asset-library" / "designs"
+
+
+def card_retirements(config, manifest):
+    """User-root copies of cards this package now ships; refuse unless byte-identical to the package."""
+    cards = ((manifest.get("personal_source") or {}).get("cards") or {}).get("ids", [])
+    base = design_root(config)
+    plan = []
+    for card in cards:
+        directory = base / card
+        if not directory.exists():
+            continue
+        if directory.is_symlink() or not directory.is_dir() or getattr(directory.lstat(), "st_file_attributes", 0) & 1024:
+            raise ValueError(f"User card path is not a plain directory: {directory}")
+        prefix = f".studio/designs/{card}/"
+        shipped = {name[len(prefix):]: value for name, value in manifest["files"].items() if name.startswith(prefix)}
+        local = {}
+        for path in directory.rglob("*"):
+            relative = path.relative_to(directory).as_posix()
+            if relative.split("/")[0] in {"study", ".git"}:
+                continue
+            if path.is_symlink() or getattr(path.lstat(), "st_file_attributes", 0) & 1024:
+                raise ValueError(f"Links are not allowed in user card: {path}")
+            if path.is_file():
+                local[relative] = digest(path)
+        differences = sorted(name for name in shipped.keys() | local.keys() if shipped.get(name) != local.get(name))
+        if differences:
+            raise ValueError(f"design_root/{card} differs from the deployed card; import it into the card repository "
+                             f"or move it away first: {', '.join(differences[:10])}"
+                             + (f" (+{len(differences) - 10} more)" if len(differences) > 10 else ""))
+        plan.append((card, directory))
+    return plan
+
+
+def retire_cards(plan):
+    """Move verified duplicates out of design_root so the catalog sees only the managed copy."""
+    retired, failed = [], []
+    for card, directory in plan:
+        parent = directory.parent.parent / ("designs-retired-" + time.strftime("%Y%m%d"))
+        target = parent / card
+        suffix = 1
+        while target.exists():
+            suffix += 1
+            target = parent / f"{card}-{suffix}"
+        try:
+            parent.mkdir(parents=True, exist_ok=True)
+            os.replace(directory, target)
+            retired.append({"card": card, "from": str(directory), "to": str(target)})
+        except OSError as error:
+            failed.append({"card": card, "from": str(directory), "error": str(error)})
+    return {"retired": retired, "failed": failed}
+
+
+def preflight(root, config_path=None, *, retained=None, expected=None, recover_pending=False):
+    root = Path(root).absolute()
+    safe(root.parent, root.name)
+    recovered = False
+    if safe(root, PENDING).exists():
+        if not recover_pending:
+            raise ValueError('Interrupted deployment; run recover')
+        recover(root)
+        recovered = True
+    from windows_runtime import command_lock
+    with command_lock(root):
+        idle(root)
+        prior = verify_root(root, retained=retained, expected=expected) if safe(root, MANIFEST).exists() else {'files': {}}
+        config_file = safe(root, CONFIG)
+        if not config_file.exists() and not config_path:
+            raise ValueError('Initial deployment requires explicit local configuration')
+        config = read(config_file if config_file.exists() else config_path)
+        if config_file.exists() and config_path and read(config_path) != config:
+            raise ValueError('Deployment cannot overwrite existing local configuration')
+        validate_config(root, config, False)
+        if 'acceptance_protected_roots' in config:
+            from windows_runtime import validate_acceptance_root
+            validate_acceptance_root(root, config, {'channel': 'local'})
+        if retained is not None:
+            for name in retained:
+                path = safe(root, name)
+                # Bytes already identical to the proposed file are adopted; anything else stays the user's.
+                if path.exists() and name not in prior['files'] and not (
+                        expected is not None and path.is_file() and digest(path) == expected.get(name)):
+                    raise ValueError('Unmanaged file conflict: ' + name)
+    return {'status': 'ready', 'recovered': recovered, 'managed_count': len(prior['files'])}
+
+
+def deploy(package, root, config_path, keep=1):
+    started = time.monotonic()
+    if type(keep) is not int or keep < 1:
+        raise ValueError("Keep at least one rollback backup")
     package = package.resolve()
     root = root.absolute()
     if inside(package, root) or inside(root, package):
@@ -288,12 +388,16 @@ def deploy(package, root, config_path, keep=2):
         if manifest.get("package_kind") == "tools":
             # Tools-only updates continue managing the installed runtime unchanged.
             retained.update(name for name in read(safe(root, MANIFEST))["files"] if name.startswith("runtime/"))
-        prior = verify_root(root, retained=retained) if safe(root, MANIFEST).exists() else {"files": {}}
+        prior = verify_root(root, retained=retained, expected=manifest['files']) if safe(root, MANIFEST).exists() else {"files": {}}
         config_file = safe(root, CONFIG)
         config = read(config_file if config_file.exists() else config_path)
         if config_file.exists() and config_path and read(config_path) != config:
             raise ValueError("Deployment cannot overwrite existing local configuration")
         validate_config(root, config, manifest["channel"] == "candidate")
+        if 'acceptance_protected_roots' in config:
+            from windows_runtime import validate_acceptance_root
+            validate_acceptance_root(root, config, manifest)
+        retirements = card_retirements(config, manifest)
         files = dict(manifest["files"])
         if manifest.get("package_kind") == "tools":
             required = manifest["runtime_files"]
@@ -303,8 +407,13 @@ def deploy(package, root, config_path, keep=2):
             files.update(required)
         files[".release.json"] = digest(package / ".release.json")
         for name in files:
-            if safe(root, name).exists() and name not in prior["files"]:
+            path = safe(root, name)
+            if path.exists() and name not in prior["files"] and not (path.is_file() and digest(path) == files[name]):
                 raise ValueError(f"Unmanaged file conflict: {name}")
+        if files == prior['files'] and config_file.exists():
+            return dict(prior, status='unchanged', changed_count=0, removed_count=0,
+                        backup_bytes=0, written_bytes=0, elapsed_seconds=time.monotonic() - started,
+                        cleanup={'unchanged': True}, user_cards=retire_cards(retirements))
         changed = {name for name, value in files.items() if prior["files"].get(name) != value}
         writes = {name: safe(package, name) for name in changed}
         extras = {}
@@ -355,6 +464,8 @@ def deploy(package, root, config_path, keep=2):
         after.update({name: hashlib.sha256(data).hexdigest() for name, data in extras.items()})
         transaction = {"backup": backup_name, "before": before, "after": after,
                        "retention": "managed-v1", "retired_preserved": preserved,
+                       "preexisting_changes": [name for name in before if name in prior['files']
+                                               and before[name] != prior['files'][name]],
                        "config_sha256": digest(config_file) if config_file.exists() else after[CONFIG]}
         write_json(backup / "transaction.json", transaction)
         write_json(safe(root, PENDING), transaction)
@@ -373,7 +484,10 @@ def deploy(package, root, config_path, keep=2):
                 write_json(safe(root, PENDING), transaction)
             restore(root, transaction)
             raise
-        result = dict(state, changed_count=len(changed), removed_count=len(set(prior["files"]) - set(files)),
+        # Only after the managed copy is complete; a rollback leaves retired cards where reported.
+        result = dict(state, user_cards=retire_cards(retirements), changed_count=len(changed), removed_count=len(set(prior["files"]) - set(files)),
+                      elapsed_seconds=time.monotonic() - started,
+                      written_bytes=sum(path.stat().st_size for path in writes.values()) + sum(len(data) for data in extras.values()),
                       backup_bytes=sum(safe(backup, name).stat().st_size for name, value in before.items() if value is not None))
         try:
             write_json(backup / "completed.json", {"transaction_sha256": digest(backup / "transaction.json")})
@@ -397,7 +511,8 @@ def recover(root, rollback=False):
         else:
             transaction = read(safe(root, PENDING))
         restore(root, transaction)
-    modifications = [item["original"] for item in transaction.get("retired_preserved", [])]
+    modifications = sorted(set(transaction.get('preexisting_changes', []))
+                           | {item["original"] for item in transaction.get("retired_preserved", [])})
     return {"restored": True, "restored_modified_files": modifications,
             "integrity": "restored_with_local_modifications" if modifications else "restored",
             "note": "Original local edits restored; verify-root remains strict. Review edits before using this release." if modifications else None}
@@ -405,11 +520,14 @@ def recover(root, rollback=False):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("verify", "verify-root", "status", "deploy", "rollback", "recover"))
+    parser.add_argument("command", choices=("verify", "verify-root", "status", "preflight", "deploy", "rollback", "recover"))
     parser.add_argument("--package", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--root", type=Path)
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--keep", type=int, default=2)
+    parser.add_argument("--keep", type=int, default=1)
+    parser.add_argument('--retained', type=Path, help='JSON list of proposed managed paths for preflight')
+    parser.add_argument('--expected', type=Path, help='Proposed file hashes; accept only already-identical managed bytes')
+    parser.add_argument('--recover-once', action='store_true')
     args = parser.parse_args()
     try:
         if args.command == "verify":
@@ -420,6 +538,12 @@ def main():
             result = verify_root(args.root.absolute())
         elif args.command == "deploy":
             result = deploy(args.package, args.root, args.config, args.keep)
+        elif args.command == 'preflight':
+            retained = read(args.retained) if args.retained else None
+            if retained is not None and (not isinstance(retained, list) or any(not isinstance(name, str) for name in retained)):
+                raise ValueError('Retained paths must be a JSON string list')
+            result = preflight(args.root, args.config, retained=retained,
+                               expected=read(args.expected) if args.expected else None, recover_pending=args.recover_once)
         else:
             result = recover(args.root.absolute(), args.command == "rollback")
         if "files" in result:

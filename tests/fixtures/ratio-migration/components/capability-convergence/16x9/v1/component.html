@@ -1,0 +1,33 @@
+<template>
+  <style>
+    :host { background: transparent; }
+    .convergence-field { color: var(--color-text-primary); background: var(--color-surface, transparent); }
+    .slot { font-family: var(--font-body); color: var(--color-text-secondary); }
+  </style>
+  <main id="capability-convergence" data-composition-id="capability-convergence"
+        data-width="1920" data-height="1080" data-duration="12.7"
+        data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1},{"id":"context","type":"string","label":"context","default":""},{"id":"items","type":"string","label":"items","default":""},{"id":"proposition","type":"string","label":"proposition","default":""},{"id":"core_name","type":"string","label":"core_name","default":""},{"id":"summary_emphasis","type":"string","label":"summary_emphasis","default":""},{"id":"summary_suffix","type":"string","label":"summary_suffix","default":""},{"id":"handoff_label","type":"string","label":"handoff_label","default":""}]'>
+    <div data-visual-surface="convergence_field" data-surface-kind="active_media_card" data-surface-modes="none" data-surface-fallback="programmatic"></div>
+    <p class="slot" data-slot="context"></p>
+    <p class="slot" data-slot="proposition"></p>
+    <p class="slot" data-slot="core_name"></p>
+    <p class="slot" data-slot="summary_emphasis"></p>
+    <p class="slot" data-slot="summary_suffix"></p>
+    <p class="slot" data-slot="handoff_label"></p>
+  </main>
+  <script>
+    (function () {
+      var RUNTIME_VALUES = JSON.parse(document.getElementById("capability-convergence").dataset.compositionVariables || "{}");
+      function textSlot(name, value) { return { name: name, value: value }; }
+      var timeline = gsap.timeline({ paused: true });
+      textSlot("context", RUNTIME_VALUES.context);
+      textSlot("proposition", RUNTIME_VALUES.proposition);
+      textSlot("core_name", RUNTIME_VALUES.core_name);
+      textSlot("summary_emphasis", RUNTIME_VALUES.summary_emphasis);
+      textSlot("summary_suffix", RUNTIME_VALUES.summary_suffix);
+      textSlot("handoff_label", RUNTIME_VALUES.handoff_label);
+      RUNTIME_VALUES.items.forEach(function (item) { timeline.to(item, { opacity: 1 }); });
+      timeline.to(".convergence-field", { opacity: 1 }, 0);
+    })();
+  </script>
+</template>

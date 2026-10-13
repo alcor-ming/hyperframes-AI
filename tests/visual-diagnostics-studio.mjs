@@ -14,7 +14,7 @@ import {probe} from '../.studio/visual_probe.mjs';
 
 const {HF_PACKAGE, CHROME_PATH, VIDEO_FIXTURE} = process.env;
 assert(HF_PACKAGE && CHROME_PATH, 'Set HF_PACKAGE and CHROME_PATH');
-assert.equal(JSON.parse(await fs.readFile(path.join(HF_PACKAGE, 'package.json'))).version, '0.8.27');
+assert.equal(JSON.parse(await fs.readFile(path.join(HF_PACKAGE, 'package.json'))).version, '0.8.150');
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hf-visual-diagnostics-'));
 const project = path.join(root, 'fixture');
 await fs.mkdir(project);
@@ -148,7 +148,7 @@ try {
     server.kill('SIGTERM'); await once(server, 'exit'); server = null;
     await fs.chmod(index, 0o644);
   }
-  console.log(JSON.stringify({platform: process.platform, actualStudio: '0.8.27', viewport: {width: 960, height: 540},
+  console.log(JSON.stringify({platform: process.platform, actualStudio: '0.8.150', viewport: {width: 960, height: 540},
     checks, realVideo: !!VIDEO_FIXTURE, evidence: root}));
 } finally {
   if (server && server.exitCode === null) { server.kill('SIGTERM'); await once(server, 'exit'); }

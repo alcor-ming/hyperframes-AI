@@ -15,7 +15,7 @@ def alignment(text, step=0.2):
 
 
 class CuesTests(unittest.TestCase):
-    def test_shared_asr_text_field_and_explicit_unaligned_character(self):
+    def test_imported_text_field_and_explicit_unaligned_character(self):
         raw = json.dumps({"characters": [
             {"text": "你", "start": 0.1, "end": 0.2, "aligned": True},
             {"text": "，", "start": None, "end": None, "aligned": False},

@@ -1,0 +1,214 @@
+{
+  "design": "stage-light",
+  "version": 1,
+  "files": [
+    {
+      "source": ".studio/designs/stage-light/example/DESIGN.md",
+      "target": "DESIGN.md",
+      "sha256": "36b15d156463e78a183b1354f63b45496f0819c02ce00afcce97871e6719c147",
+      "origin": "Project authored editable stage-light example",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Dynamic example source",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/example/index.html",
+      "target": "index.html",
+      "sha256": "e5c4a079112db2ee93d9d514fbab73a8e5327754ed747f9d882da491440ac334",
+      "origin": "Project authored editable stage-light example",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Dynamic example source",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/example/project-config.json",
+      "target": "project-config.json",
+      "sha256": "e8a7f57fe015657c6a4da84b9f56f3b469bf5daaefd0c55bb7678a9bbc3d39f1",
+      "origin": "Project authored editable stage-light example",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Dynamic example source",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/example/scene.js",
+      "target": "scene.js",
+      "sha256": "f81ed8c2b6835532324a9aadc145dee8d7ed8803a074993300bb093f9d7fd38f",
+      "origin": "Project authored editable stage-light example",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Dynamic example source",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/example/style.css",
+      "target": "style.css",
+      "sha256": "cb99b6e4b9d88b1150b9a4d232136d526cf448db47c80b7ce6c538038ef97ef5",
+      "origin": "Project authored editable stage-light example",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Dynamic example source",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/GUIDE.md",
+      "target": "GUIDE.md",
+      "sha256": "30c36c8e5ac3e724dea492b6dce034fd786a171059c6b481656923dcd0cf6811",
+      "origin": "Project authored source extraction guide",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Stage guidance and provenance",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/stages/draft.md",
+      "target": "stages/draft.md",
+      "sha256": "9444643169a9554c6a1addfa3173599e3606fe442af223e087350eae63517f23",
+      "origin": "Project authored phase-specific guidance",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Only load the current stage",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/stages/export.md",
+      "target": "stages/export.md",
+      "sha256": "c30ddbda61bb5b5cbdb9bd6c2526ac1150fd7827afe482681cfaa293cc7fd179",
+      "origin": "Project authored phase-specific guidance",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Only load the current stage",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/stages/plan.md",
+      "target": "stages/plan.md",
+      "sha256": "359bc8a12c6a9832243815cc871637ca8440a683c0ba0ea6ba2a580be4d7ca01",
+      "origin": "Project authored phase-specific guidance",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Only load the current stage",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/stages/research.md",
+      "target": "stages/research.md",
+      "sha256": "28e1392fc248803f6047bc1e2a3090ba9850af1602b24217abcb1f676a9bdb4c",
+      "origin": "Project authored phase-specific guidance",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Only load the current stage",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-light/stages/script.md",
+      "target": "stages/script.md",
+      "sha256": "4aa0befbc81e41f359ff823e276384369c4da2b03a619f2b9071b53bf77805e4",
+      "origin": "Project authored phase-specific guidance",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Only load the current stage",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": "LICENSE",
+      "target": "licenses/PROJECT.txt",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "origin": "Project license",
+      "version": "2.0",
+      "license": "Apache-2.0",
+      "purpose": "Project license text",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/runtime/scene-binding.js",
+      "target": "runtime/scene-binding.js",
+      "sha256": "de9dc9f91581702f9920d95d39c2027fa25f13583b53bda3273b404fce0e1311",
+      "origin": "HyperFrames project scene lifecycle adapter",
+      "version": "4.0.0",
+      "license": "Apache-2.0",
+      "purpose": "External seek lifecycle",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/fonts/source-han-sans/SourceHanSansCN-Regular.otf",
+      "target": "media/SourceHanSansCN-Regular.otf",
+      "sha256": "e2bc8a2e7f37474b774fff8db758681ece40bb6947a90d571bce9dd60671a8e4",
+      "origin": "https://raw.githubusercontent.com/adobe-fonts/source-han-sans/a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2/SubsetOTF/CN/SourceHanSansCN-Regular.otf",
+      "version": "a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2",
+      "license": "SIL OFL 1.1",
+      "purpose": "Local typography and licensing",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/fonts/source-han-sans/LICENSE.txt",
+      "target": "licenses/SourceHanSans.txt",
+      "sha256": "fcac737e761ec63dbfbdce11030a1780161920d80315edba9c8beff1c2bac5a2",
+      "origin": "https://raw.githubusercontent.com/adobe-fonts/source-han-sans/a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2/LICENSE.txt",
+      "version": "a4f7cf94edfb9d7ffbdfc4841de276358bd7e0f2",
+      "license": "SIL OFL 1.1",
+      "purpose": "Local typography and licensing",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    },
+    {
+      "source": ".studio/designs/stage-full/assets/stage-rig/stage-rig.js",
+      "target": "runtime/stage-rig.js",
+      "sha256": "772802d3d12157638cc0070f04d88e6a11c34f774438cf9d2a008731e5b1c3eb",
+      "origin": "Project authored stage folding mechanism; metadata in the asset manifest",
+      "version": "1",
+      "license": "Apache-2.0",
+      "purpose": "Editable stage folding mechanism owned by the stage-full card",
+      "packages": [
+        "public",
+        "personal"
+      ]
+    }
+  ]
+}

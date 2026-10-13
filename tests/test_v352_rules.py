@@ -26,8 +26,8 @@ class V352RulesTest(unittest.TestCase):
             self.assertIn(term, design)
 
     def test_stage_links_and_runtime_cards(self):
-        router = read('.agents/skills/hyperframes-codex-workflow/SKILL.md')
-        for name in ('hyperframes-assets', 'hyperframes-final', 'hyperframes-research', 'hyperframes-remotion', 'runtime-interfaces'):
+        router = read('.agents/skills/hyperframes-production-workflow/SKILL.md')
+        for name in ('hyperframes-assets', 'hyperframes-final', 'hyperframes-research', 'runtime-interfaces'):
             self.assertIn(name + '.md', router)
             self.assertTrue((ROOT / '.studio/spec' / (name + '.md')).is_file())
         interfaces = read('.studio/spec/runtime-interfaces.md')

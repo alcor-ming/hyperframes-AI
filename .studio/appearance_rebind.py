@@ -10,13 +10,16 @@ import appearance
 from component_harness import package_write_lock
 from work_requests import safe
 
-KNOWN_RUNTIMES = {"b6b0a69411f48d9f777a7e8fdf342a89e866b51d7d734d760b431ee9524908f0",
+KNOWN_RUNTIMES = {"97fcc24496ec1fddf5e86747125bcb5afc56495f3defc0ca666f8245f06695bb",
+                  "b6b0a69411f48d9f777a7e8fdf342a89e866b51d7d734d760b431ee9524908f0",
                   "9c4519762a2c926f99b9baf473fa02fcdf978443c22b252965b87c1c7e0429af",
                   "deb8ea501f19f0b5ebaf5c7a2b126f700127fc739e0a497b928cb82ddc620676",
                   "e80354186ac34db5d94a79febf4d1f4d84763f142f2b72465ff7150a0c35ff9b",
                   "51c9496479b3111f876a412cbf7133be7b7e203e517ea6d00390e92f8a622d9b",
                   "afd9b56dfc6340605385f11383d9e97d9ffd7e96e4e800d5a10daebe00891d81",
                   "77cf4869f89604a42b1e7cfa3f09fda7c4b5ad4d593f7a6aece18a3e02f29abe"}
+KNOWN_BROLL_RUNTIMES = {"0682adbdfb929555e5a190dfffb2f474f20569f0c8a94d8b46c8389cfcf123b9"}
+KNOWN_FIGURE_RUNTIMES = {"e962423082e665b21ffef628e1da6faa77eb99a3dd9b55c6e4b70d721eb6dfc5"}
 FILES = ("ANIMATION_PLAN.md", "variant.yaml")
 KNOWN_CUE_RUNTIMES = {"c5b93f0bec6b8b675d59a9fc5cc4bd14492f86144245ae907b9cae25c05b9be8"}
 
@@ -83,23 +86,25 @@ def recover(variant, api):
 def rebind(root, work, variant, state, args, api):
     if journal_path(variant).exists():
         raise appearance.AppearanceError("Appearance recovery pending; run appearance recover for this Work/Variant")
+    import lines
     current = state.get("appearance_lock")
     account = api.account_service(root).get("account", args.account) if args.account else state.get("account_settings", {})
     overrides = api.appearance_options(root, args)
-    if current and current.get("mode") != "showcase" and ("submodule" in overrides or overrides.get("mode", account.get("mode")) == "showcase"):
+    modern = "capabilities" in state or "capabilities" in (current or {})
+    if not modern and current and current.get("mode") != "showcase" and ("submodule" in overrides or overrides.get("mode", account.get("mode")) == "showcase"):
         raise appearance.AppearanceError("Showcase mode requires a new Variant with an explicit submodule")
-    if current and current.get("mode") == "showcase":
+    if not modern and current and current.get("mode") == "showcase":
         if overrides.get("submodule", current["submodule"]) != current["submodule"] or overrides.get("mode", "showcase") != "showcase":
             raise appearance.AppearanceError("Showcase submodule and mode are frozen; create a new Variant")
         overrides["submodule"] = current["submodule"]
         overrides.setdefault("mode", "showcase")
     effective_mode = overrides.get("mode", account.get("mode") if args.account else (current or {}).get("mode", account.get("mode")))
-    if getattr(args, "captions", None) is not None:
+    if not modern and getattr(args, "captions", None) is not None:
         appearance.check_mode(effective_mode)
     if current and not args.account:
-        choices = {**current["selection"], **{key: current[key] for key in ("mode", "ratio", "width", "height", "fps", "seed")},
+        choices = {**current["selection"], **{key: current[key] for key in ("mode", "ratio", "width", "height", "fps", "seed") if key in current},
                    "parameters": deepcopy(current["overrides"]["explicit"])}
-        if "mode" in overrides and overrides["mode"] != current["mode"] and "captions" not in overrides:
+        if not modern and "mode" in overrides and overrides["mode"] != current.get("mode") and "captions" not in overrides:
             choices["captions"] = overrides["mode"] == "explainer"
         if choices["ratio"] not in appearance.RATIOS:
             choices["ratio"] = "source"
@@ -128,12 +133,18 @@ def rebind(root, work, variant, state, args, api):
             overrides["parameters"] = parameters
         choices.update(overrides)
         overrides = choices
+    if "capabilities" in state or current and "capabilities" in current:
+        overrides["capabilities"] = lines.capabilities(state)
+        overrides.pop("mode", None)
+        overrides.setdefault("captions", state.get("captions", False))
+    if (current or {}).get('card_fonts'):
+        overrides['card_fonts'] = current['card_fonts']
     lock = appearance.resolve(root, account, overrides)
-    if (state.get("mode") == "math" or state.get("series_binding", {}).get("spec") == "math-rap") and (lock["mode"] not in {"math", "explainer"} or not lock["selection"].get("captions")):
+    if lines.is_math(state) and (not lock["selection"].get("captions") or not modern and lock.get("mode") not in {"math", "explainer"}):
         raise appearance.AppearanceError("Mathematics requires lyric captions enabled")
     project = safe(variant, "project")
     runtime_updates = {}
-    for name, known in (("appearance.js", KNOWN_RUNTIMES), ("cues.js", KNOWN_CUE_RUNTIMES)):
+    for name, known in (("appearance.js", KNOWN_RUNTIMES), ("cues.js", KNOWN_CUE_RUNTIMES), ("broll.js", KNOWN_BROLL_RUNTIMES), ("figures.js", KNOWN_FIGURE_RUNTIMES)):
         runtime = safe(project, "runtime/" + name)
         source = Path(appearance.__file__).parent / "runtime" / name
         if runtime.exists() and runtime.read_bytes() != source.read_bytes():
@@ -177,7 +188,7 @@ def rebind(root, work, variant, state, args, api):
         for name in FILES:
             shutil.copy2(variant / name, history / name)
         new_state = {**state, "theme": lock["selection"]["theme"], "background": lock["selection"]["background"],
-                     "motion": lock["selection"]["motion"], "appearance_lock": lock, "mode": lock["mode"], "ratio": lock["ratio"],
+                     "motion": lock["selection"]["motion"], "appearance_lock": lock, **({"mode": lock["mode"]} if "mode" in lock else {}), "ratio": lock["ratio"],
                      "profile": None, "account": account.get("id", state.get("account")), "account_settings": account,
                      "account_revision": account.get("revision"), "revision": state.get("revision", 1) + 1,
                      "plan_revision": state.get("plan_revision", 1) + 1, "accepted_visual_plan": None,
@@ -191,7 +202,7 @@ def rebind(root, work, variant, state, args, api):
             "after_sha256": lock["sha256"], "at": api.now(), "accepted_visual_plan": state.get("accepted_visual_plan"),
             "accepted_preview": state.get("accepted_preview"), "current_final": state.get("current_final")}]
         plan = api.read_frontmatter(variant / "ANIMATION_PLAN.md")
-        plan.update(theme=new_state["theme"], mode=new_state["mode"], ratio=new_state["ratio"], profile=None,
+        plan.update(theme=new_state["theme"], ratio=new_state["ratio"], profile=None,
                     status="draft", revision=new_state["plan_revision"])
         plan.update(api.plan_metadata(variant, new_state))
         plan.pop("visual_plan", None)

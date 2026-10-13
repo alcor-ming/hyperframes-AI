@@ -30,7 +30,7 @@ class WorkAppearanceTest(unittest.TestCase):
         self.green = self.asset("green", "background", {"renderer": "solid", "parameters": {"color": "#c0e0d0"}})
         self.account = {"name": "Fixture", "theme": self.theme, "background": self.white}
         cli.account_service(self.root).put("account", "a", self.account)
-        cli.account_service(self.root).put("series", "fixture", {"name": "Fixture"})
+        cli.account_service(self.root).put("series", "fixture", {"name": "Fixture", "design": "stage-full"})
 
     def asset(self, identity, kind, payload):
         source = self.base / identity
@@ -46,6 +46,8 @@ class WorkAppearanceTest(unittest.TestCase):
     def invoke(self, *arguments):
         if "new" in arguments and "hyperframes_video" in arguments:
             arguments += ("--purpose", "standard", "--series", "fixture")
+            if "--variant-id" not in arguments:
+                arguments += ("--variant-id", "main")
         args = cli.build_parser().parse_args(['--json', *arguments])
         with redirect_stdout(io.StringIO()) as output:
             args.handler(self.root, args)

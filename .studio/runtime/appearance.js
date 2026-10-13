@@ -22,6 +22,9 @@
     }
     return result;
   }
+  function supportsLayers(lock) {
+    return lock.capabilities !== undefined || ["explainer", "showcase", "math", "english"].includes(lock.mode);
+  }
   async function load(projectURL = new URL(".", location.href)) {
     const base = new URL(projectURL, location.href);
     if (base.origin !== location.origin) throw new Error("Appearance requires a project-local URL");
@@ -44,11 +47,17 @@
       const asset = lock.assets.find(item => item.ref === selected.ref);
       if (!asset || asset.kind !== kind || asset.package_sha256 !== selected.package_sha256) throw new Error("Appearance selection differs from frozen closure");
       const metadata = await read(`${asset.vendor_path}/asset.json`);
-      if (metadata.kind !== kind || `${metadata.id}@v${metadata.version}` !== selected.ref) throw new Error("Appearance package identity mismatch");
+      let identity = metadata.id;
+      if (selected.ref.includes('/')) {
+        const hashes = await read(`${asset.vendor_path}/HASHES.json`);
+        if (hashes.card_ref?.split('/').length !== 2 || hashes.card_ref.split('/')[1] !== metadata.id || hashes.component_ref !== selected.ref || hashes.package_sha256 !== selected.package_sha256) throw new Error("Appearance card identity mismatch");
+        identity = hashes.card_ref;
+      }
+      if (metadata.kind !== kind || `${identity}@v${metadata.version}` !== selected.ref) throw new Error("Appearance package identity mismatch");
       if (kind === "theme") themePackage = { asset, metadata };
       const value = await read(`${asset.vendor_path}/${metadata.entry}`);
       if (kind === "background" && value.renderer === "module") {
-        if (!["explainer", "showcase", "math", "english"].includes(lock.mode) || !metadata.dependencies?.includes(value.entry)) throw new Error("Invalid module Background closure");
+        if (!supportsLayers(lock) || !metadata.dependencies?.includes(value.entry)) throw new Error("Invalid module Background closure");
         backgroundPackages.set(result, localURL(`${asset.vendor_path}/${value.entry}`).href);
       }
       if (kind === "motion") {
@@ -57,9 +66,9 @@
       } else if (metadata.contract_version !== 1) throw new Error("Unsupported appearance capability");
       return value;
     }
-    // Only showcase may leave Theme/Background unselected (null); the host then owns those looks.
+    // Optional bindings may be null; the host owns the corresponding look.
     for (const kind of ["theme", "background"]) {
-      if (lock.selection[kind] === null && lock.mode !== "showcase") throw new Error(`Appearance requires a ${kind}`);
+      if (lock.selection[kind] === null && (lock.capabilities ? lock.capabilities.bindings[kind] === "required" : lock.mode !== "showcase")) throw new Error(`Appearance requires a ${kind}`);
       result[kind] = lock.selection[kind] === null ? null : await payload(kind, lock.selection[kind]);
     }
     for (const [slot, selection] of Object.entries(lock.selection.motion)) {
@@ -72,7 +81,7 @@
         if (capability >= 2) for (const group of [motion.slots, motion.reduced_motion]) if (group?.emphasis && typeof group.emphasis.color_token === "string") emphasisColor(group.emphasis, result);
       }
     }
-    const fonts = result.theme ? resolved(result.theme, lock.parameters.theme).fonts || [] : [];
+    const fonts = lock.card_fonts?.fonts || (result.theme ? resolved(result.theme, lock.parameters.theme).fonts || [] : []);
     if (!Array.isArray(fonts)) throw new Error("Theme fonts must be an array");
     const state = { faces: [], families: new Map(), declaration: JSON.stringify(fonts), disposed: false, reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches };
     const instance = ++fontInstance;
@@ -89,10 +98,10 @@
               || weights.some(value => value < 1 || value > 1000) || weights.length === 2 && weights[0] > weights[1]))) {
           throw new Error("Invalid Theme font family/style/weight");
         }
-        if (![font.path, font.license].every(value => themePackage.metadata.dependencies?.includes(value))) {
+        if (!lock.card_fonts && ![font.path, font.license].every(value => themePackage.metadata.dependencies?.includes(value))) {
           throw new Error("Theme font and license must belong to the frozen dependency closure");
         }
-        const url = localURL(`${themePackage.asset.vendor_path}/${font.path}`);
+        const url = localURL(lock.card_fonts ? font.path : `${themePackage.asset.vendor_path}/${font.path}`);
         let family = state.families.get(font.family);
         if (!family) {
           family = `HarnessFont_${instance}_${state.families.size}`;
@@ -109,6 +118,7 @@
           throw new Error(`Cannot load frozen Theme font ${font.family} (${font.path}): ${error.message}`);
         }
       }
+      result.fontFamily = [...state.families.values()].map(family => `"${family}"`).join(", ");
       preparedFonts.set(result, state);
     } catch (error) {
       result.dispose();
@@ -136,9 +146,9 @@
     const theme = appearance.theme ? resolved(appearance.theme, lock.parameters.theme) : { tokens: {} };
     const background = appearance.background && resolved(appearance.background, lock.parameters.background);
     const color = !background ? null : ["transparent", "module"].includes(background.renderer) ? "transparent" : background.parameters.color;
-    if (background && (!["solid", "transparent", "module"].includes(background.renderer) || background.renderer === "module" && !["explainer", "showcase", "math", "english"].includes(lock.mode) || !CSS.supports("color", color))) throw new Error("Unsupported Background");
+    if (background && (!["solid", "transparent", "module"].includes(background.renderer) || background.renderer === "module" && !supportsLayers(lock) || !CSS.supports("color", color))) throw new Error("Unsupported Background");
     const fonts = preparedFonts.get(appearance);
-    if (fonts ? fonts.disposed || fonts.declaration !== JSON.stringify(theme.fonts || []) : (theme.fonts || []).length) {
+    if (fonts ? fonts.disposed || fonts.declaration !== JSON.stringify(lock.card_fonts?.fonts || theme.fonts || []) : (theme.fonts || []).length) {
       throw new Error("Theme fonts must be prepared by load() and not disposed or changed");
     }
     const variables = [];
@@ -150,7 +160,7 @@
         }
       } else if (typeof value === "string" || typeof value === "number") {
         const text = typeof value === "string" && parts[0] === "typography" && fonts
-          ? fontStack(value, fonts.families) : String(value);
+          ? (lock.card_fonts ? appearance.fontFamily : fontStack(value, fonts.families)) : String(value);
         variables.push([`--appearance-${parts.join("-")}`, text]);
       } else throw new Error("Unsupported Theme token value");
     }
@@ -158,6 +168,11 @@
     for (const name of [...stage.style]) if (name.startsWith("--appearance-")) stage.style.removeProperty(name);
     for (const [name, value] of variables) stage.style.setProperty(name, value);
     if (color !== null) stage.style.backgroundColor = color;
+    if (lock.card_fonts?.fonts.length) {
+      stage.style.fontFamily = appearance.fontFamily;
+      stage.style.setProperty('--appearance-typography-body', appearance.fontFamily);
+      for (const node of stage.querySelectorAll('[data-hf-layer="text"], [data-hf-layer="captions"], [data-appearance-text]')) node.style.fontFamily = appearance.fontFamily;
+    }
     // Explicit opt-in selectors prevent the adapter from redesigning a Scene.
     if (!appearance.theme) return appearance;
     for (const element of stage.querySelectorAll("[data-appearance-text]")) element.style.color = "var(--appearance-colors-text)";
@@ -549,7 +564,7 @@
       return { renderAt() {}, dispose() {} };
     }
     const entry = backgroundPackages.get(appearance);
-    if (!entry || !["explainer", "showcase", "math", "english"].includes(appearance.lock.mode)) throw new Error("Unprepared module Background");
+    if (!entry || !supportsLayers(appearance.lock)) throw new Error("Unprepared module Background");
     const params = structuredClone(payload.parameters);
     params.moods = (params.moods || []).map(mood => ({ ...mood, cue: cues.find(mood.cue) }));
     const module = await import(entry);

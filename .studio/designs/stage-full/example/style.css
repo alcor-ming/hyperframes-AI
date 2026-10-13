@@ -1,0 +1,246 @@
+/* stage-full · 可编辑示例皮肤
+ * 只提供纸艺外观；折叠几何与铰链角度由 runtime/stage-rig.js 统一负责。
+ * 无网络字体、无位图；字体由宿主放在 media/ 下。
+ */
+@font-face {
+  font-family: "SourceHanSansCN";
+  src: url("media/SourceHanSansCN-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 1920px;
+  height: 1080px;
+  margin: 0;
+  overflow: hidden;
+  background: #05070d;
+}
+
+#stage-full-example {
+  --paper-warm-a: #f7ecd8;
+  --paper-warm-b: #e6cfa8;
+  --floor-warm-a: #dcbd8e;
+  --floor-warm-b: #c49a63;
+  --ink: #2a2018;
+  --ink-soft: rgba(42, 32, 24, 0.62);
+  --rim: rgba(255, 255, 255, 0.94);
+  --wall-card-ink: #6f4a22;
+  --wall-card-accent: #e0563c;
+  --prop-face: #f2e2c4;
+  --prop-ink: #7a5730;
+
+  position: absolute;
+  inset: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: "SourceHanSansCN", "Noto Sans CJK SC", sans-serif;
+  background: #05070d;
+}
+
+.layer { position: absolute; inset: 0; }
+.layer-background { z-index: 1; }
+.layer-stage { z-index: 2; }
+.layer-overlay { z-index: 3; }
+.layer-text { z-index: 4; }
+.proscenium { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+
+/* ---------- 第 1 层：剧场氛围 ---------- */
+.theatre-bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 12%, #1b2233 0%, #0a0d16 58%, #05070d 100%);
+}
+.theatre-vignette {
+  position: absolute; inset: 0;
+  background: radial-gradient(70% 60% at 50% 52%, rgba(255, 236, 196, 0.10), rgba(0, 0, 0, 0) 70%);
+}
+
+/* ---------- 舞台折叠装置：共享 rig 的纸艺皮肤 ---------- */
+.rig-mount { position: absolute; inset: 0; transform-origin: 50% 62%; }
+
+.hf-rig-wall {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.34) 0 3px, rgba(0, 0, 0, 0) 3px 64px),
+    linear-gradient(180deg, var(--paper-warm-a), var(--paper-warm-b));
+  box-shadow:
+    inset 0 0 0 7px var(--rim),
+    inset 0 -46px 66px rgba(122, 82, 38, 0.16),
+    12px 14px 0 rgba(45, 28, 12, 0.22);
+}
+.hf-rig-wall-outer-left, .hf-rig-wall-outer-right { filter: brightness(0.95); }
+
+.hf-rig-floor {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(90, 62, 30, 0.16) 0 2px, rgba(0, 0, 0, 0) 2px 120px),
+    linear-gradient(180deg, var(--floor-warm-a), var(--floor-warm-b));
+  clip-path: polygon(7% 0, 93% 0, 100% 100%, 0 100%);
+  box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.55);
+}
+
+/* 重建时在折叠状态下换成冷色布景；切换发生在折叠态，不是用淡入淡出替代折叠 */
+#stage-full-example.is-cool .hf-rig-wall {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.4) 0 3px, rgba(0, 0, 0, 0) 3px 64px),
+    linear-gradient(180deg, #dcebf5, #a9c6dd);
+}
+#stage-full-example.is-cool .hf-rig-floor {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(40, 70, 100, 0.18) 0 2px, rgba(0, 0, 0, 0) 2px 120px),
+    linear-gradient(180deg, #b9d3e6, #8fb2cd);
+}
+#stage-full-example.is-cool .wall-card-a { opacity: 0; }
+
+/* ---------- 墙面标识卡（两个布景的语义差异） ---------- */
+.wall-card {
+  position: absolute; left: 50%; top: 268px; width: 260px; margin-left: -130px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.wall-card-cap {
+  font-size: 30px; letter-spacing: 6px; color: var(--wall-card-ink);
+  background: rgba(255, 255, 255, 0.72); padding: 4px 18px; border-radius: 999px;
+}
+.wall-card-b { opacity: 0; }
+
+/* ---------- 六个物件（纸盒剪贴） ---------- */
+.objects { position: absolute; inset: 0; }
+.obj {
+  position: absolute; left: 0; top: 0; width: 120px; height: 120px;
+  filter: drop-shadow(8px 10px 0 rgba(45, 28, 12, 0.28));
+  transform-origin: 50% 92%;
+}
+
+/* ---------- 分组托盘 ---------- */
+.tray {
+  position: absolute; top: 770px; width: 430px; height: 210px;
+  border-radius: 26px; opacity: 0;
+  box-shadow: inset 0 0 0 7px rgba(255, 255, 255, 0.9), 10px 12px 0 rgba(45, 28, 12, 0.18);
+}
+.tray-warm { left: 560px; background: linear-gradient(180deg, #fbe6cf, #f0c39c); }
+.tray-cool { left: 1040px; background: linear-gradient(180deg, #d6e9f4, #a9c9e2); }
+.tray-hue {
+  position: absolute; left: 24px; top: 22px; width: 120px; height: 16px; border-radius: 8px;
+}
+.tray-hue-warm { background: linear-gradient(90deg, #e0563c, #e59a2e, #e8c53a); }
+.tray-hue-cool { background: linear-gradient(90deg, #3aa39b, #4f8fd6, #8a6fd0); }
+.tray-label {
+  position: absolute; right: 26px; top: 14px; font-size: 30px; color: var(--ink);
+  letter-spacing: 2px;
+}
+
+/* ---------- 立牌道具：脚部由 rig 的旋转铰链立起 ---------- */
+.prop-sign { position: absolute; left: 1500px; top: 306px; width: 220px; height: 150px; }
+.prop-foot { width: 100%; height: 100%; }
+.prop-foot svg { display: block; filter: drop-shadow(8px 10px 0 rgba(45, 28, 12, 0.24)); }
+
+/* ---------- 解释场景的小标签 ---------- */
+.explain-tag {
+  position: absolute; left: 1052px; top: 812px; padding: 12px 26px;
+  font-size: 34px; letter-spacing: 4px; color: #6f4a22;
+  background: #fdf3dd; border-radius: 999px; opacity: 0;
+  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.9), 8px 10px 0 rgba(45, 28, 12, 0.2);
+}
+
+/* ---------- 第 3 层：指示与焦点光 ---------- */
+.leaders { position: absolute; inset: 0; width: 100%; height: 100%; }
+.leader { fill: none; stroke: #ffd48a; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 16 14; opacity: 0; }
+
+.spot {
+  position: absolute; left: -500px; top: -500px; width: 1000px; height: 1000px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 236, 196, 0.42) 0%, rgba(255, 236, 196, 0.16) 42%, rgba(255, 236, 196, 0) 66%);
+  opacity: 0; pointer-events: none;
+}
+.spot-b { left: -380px; top: -380px; width: 760px; height: 760px; }
+
+.flybar { position: absolute; left: 0; top: 66px; width: 100%; height: 0; }
+.flybar-rail { position: absolute; left: 320px; right: 320px; top: 0; height: 8px; background: #3b4152; border-radius: 4px; }
+.lamp { position: absolute; top: 6px; width: 56px; height: 46px; margin-left: -28px; }
+.lamp::before { content: ""; position: absolute; left: 24px; top: 0; width: 8px; height: 20px; background: #3b4152; }
+.lamp::after {
+  content: ""; position: absolute; left: 0; top: 20px; width: 56px; height: 26px;
+  background: #2c3140; border-radius: 0 0 26px 26px;
+  box-shadow: inset 0 -8px 12px rgba(255, 214, 140, 0.5);
+}
+.lamp-a { left: 700px; }
+.lamp-b { left: 1220px; }
+
+/* ---------- 第 4 层：文字 ---------- */
+.header { position: absolute; left: 96px; top: 92px; display: flex; align-items: center; gap: 20px; }
+.step {
+  font-size: 40px; letter-spacing: 6px; color: #fbe8c4;
+  background: rgba(20, 14, 8, 0.55); border-radius: 999px; padding: 8px 30px;
+}
+.sub { font-size: 24px; letter-spacing: 3px; color: rgba(251, 232, 196, 0.66); }
+
+.callout {
+  position: absolute; left: 0; right: 0; top: 134px; margin: 0; text-align: center;
+  font-size: 44px; letter-spacing: 4px; color: #fdf3dd;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+.recap {
+  position: absolute; left: 0; right: 0; top: 128px; display: flex; justify-content: center;
+  align-items: center; gap: 22px; opacity: 0;
+}
+.recap .chip {
+  font-size: 40px; letter-spacing: 4px; color: #2a2018; background: #fdf3dd;
+  border-radius: 999px; padding: 12px 34px;
+  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.9), 8px 10px 0 rgba(0, 0, 0, 0.28);
+}
+.recap .arrow { font-size: 40px; color: #ffd48a; }
+
+/* ---------- 幕布与台口（只做开场与收尾） ---------- */
+.curtain-half {
+  position: absolute; top: 0; width: 960px; height: 1080px;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.42) 0 26px, rgba(0, 0, 0, 0) 26px 78px),
+    linear-gradient(90deg, #7a1320, #b1202f 46%, #7a1320);
+}
+.curtain-left { left: 0; }
+.curtain-right { left: 960px; }
+.title-card {
+  position: absolute; left: 50%; top: 50%;
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  padding: 46px 64px; border-radius: 20px;
+  background: rgba(24, 12, 10, 0.55); box-shadow: inset 0 0 0 6px rgba(255, 214, 150, 0.5);
+}
+.title-card strong { font-size: 62px; letter-spacing: 10px; color: #ffe6b8; }
+.title-card span { font-size: 28px; letter-spacing: 6px; color: rgba(255, 230, 184, 0.72); }
+
+.frame-border { position: absolute; left: 0; width: 100%; height: 60px; background: linear-gradient(180deg, #5c0f19, #3a0a11); }
+.frame-top { top: 0; border-bottom: 6px solid #d9a441; }
+.frame-bottom { bottom: 0; border-top: 6px solid #d9a441; }
+
+/* ---------- 纸艺角色：左侧讲解者、右侧学习者（group / body / head / face / arm 独立 DOM） ---------- */
+/* 相机强调只作用于既有场景组 .layer-stage，不缩放整篇文档 */
+#stage-full-example .layer-stage { transform-origin: 62% 82%; }
+.figures { position: absolute; inset: 0; }
+.figure { position: absolute; filter: drop-shadow(9px 11px 0 rgba(24, 16, 8, 0.28)); }
+.figure svg { display: block; overflow: visible; }
+.figure-host {
+  left: 200px; top: 487px;
+  --fig-skin: #f1d2ab; --fig-cloth: #3f4a70; --fig-cloth-2: #323d5c; --fig-hair: #2b2b33; --fig-leg: #2f3a52; --fig-shoe: #1f2531;
+}
+.figure-learner {
+  left: 1560px; top: 529px;
+  --fig-skin: #f4d8b3; --fig-cloth: #a0566a; --fig-cloth-2: #87485b; --fig-hair: #4a2f26; --fig-leg: #6b3c4b; --fig-shoe: #452a33;
+}
+.fig-shadow { fill: rgba(28, 18, 8, 0.20); }
+.fig-face { fill: var(--fig-skin); stroke: #fff; stroke-width: 6; }
+.fig-neck rect { fill: var(--fig-skin); stroke: #fff; stroke-width: 6; }
+.fig-hair-back, .fig-hair-front, .fig-hair-bun circle { fill: var(--fig-hair); stroke: #fff; stroke-width: 5; }
+.fig-eye { fill: #fff; }
+.fig-pupil { fill: #2a2320; }
+.fig-mouth { fill: none; stroke: #2a2320; stroke-width: 5; stroke-linecap: round; }
+.fig-mouth-open { fill: #8f3a3a; stroke: #2a2320; stroke-width: 4; stroke-linejoin: round; }
+.fig-torso, .fig-dress { fill: var(--fig-cloth); stroke: #fff; stroke-width: 6; }
+.fig-apron { fill: var(--fig-cloth-2); opacity: .92; }
+.fig-collar { fill: var(--fig-cloth-2); stroke: #fff; stroke-width: 5; }
+.fig-sleeve { fill: none; stroke: var(--fig-cloth); stroke-width: 26; stroke-linecap: round; }
+.fig-hand { fill: var(--fig-skin); stroke: #fff; stroke-width: 5; }
+.fig-leg { fill: var(--fig-leg); stroke: #fff; stroke-width: 5; }
+.fig-shoe { fill: var(--fig-shoe); stroke: #fff; stroke-width: 5; }

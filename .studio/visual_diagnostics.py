@@ -315,7 +315,7 @@ def static_inventory(project, dependencies):
 
 def explainer_diagnostics(project, dependencies, lock, plan=""):
     """Static five-layer hints supplement D1; they are never visual acceptance."""
-    if not lock or lock.get("mode") not in ("math", "english", "explainer", "showcase"):
+    if not lock or "capabilities" not in lock and lock.get("mode") not in ("math", "english", "explainer", "showcase"):
         return {"findings": [], "unverified": []}
     from visual_plan import Composition
     from explainer import installed_assets
@@ -328,7 +328,8 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
             nodes[name] = Composition((project / name).read_text(encoding="utf-8-sig")).nodes
     root = nodes.get("index.html", [])
     layers = [attrs.get("data-hf-layer") for _, attrs in root]
-    expected = {"background", "stage", "overlay", "text"} if lock["mode"] != "showcase" else set()
+    import designs
+    expected = set(designs.capabilities(lock)["layers"]["required"])
     for layer in sorted(expected - set(layers)):
         findings.append({"kind": "explainer_layer_missing", "file": "index.html", "layer": layer})
     captions = [(name, attrs) for name, entries in nodes.items() for _, attrs in entries
@@ -339,9 +340,9 @@ def explainer_diagnostics(project, dependencies, lock, plan=""):
     for name, entries in nodes.items():
         if name == "index.html":
             continue
-        if lock["mode"] != "showcase" and any("data-composition-id" in attrs for _, attrs in entries):
+        if expected and any("data-composition-id" in attrs for _, attrs in entries):
             local = {attrs.get("data-hf-layer") for _, attrs in entries}
-            for layer in sorted({"stage", "overlay", "text"} - local):
+            for layer in sorted((expected - {"background"}) - local):
                 findings.append({"kind": "explainer_layer_missing", "file": name, "layer": layer})
     try:
         assets = installed_assets(project)
@@ -414,7 +415,7 @@ def resolve_information(text, choices, information):
 
 
 def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=0.8, exceptions=None, scenes=None,
-                     scene_ids=None, mode=None):
+                     scene_ids=None, mode=None, capabilities=None):
     information, mapping = plan_information(plan)
     outside = {sid: ids for sid, ids in mapping.items() if scene_ids is not None and sid not in scene_ids}
     if scene_ids is not None:
@@ -434,7 +435,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             continue
         covered.update(active)
         for item in sample.get('texts', []):
-            if mode in ('math', 'english', 'explainer') and item.get('layer') != 'text':
+            if ('text' in capabilities['layers']['required'] if capabilities is not None else mode in ('math', 'english', 'explainer')) and item.get('layer') != 'text' and not item.get('embedded'):
                 continue
             scene, info = item.get('scene', ''), item.get('info', '')
             if scene in outside:
@@ -461,7 +462,7 @@ def text_diagnostics(samples, script, research, plan, *, minimum=20, similarity=
             location = item.get('selector', '')
             if location not in group['locations']:
                 group['locations'].append(location)
-            group['times'].append(sample['time'])
+            group['times'].extend([item['start'], item['end']] if item.get('embedded') else [sample['time']])
     for (scene, info, _), group in groups.items():
         parts = group['parts']
         if info:

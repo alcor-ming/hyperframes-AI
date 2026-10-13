@@ -14,7 +14,7 @@ assert(HF_PACKAGE, 'Set HF_PACKAGE to an existing local runtime');
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hf-v370-studio-'));
 const project = path.join(root, 'fixture'); await fs.mkdir(project);
 const cli = path.join(HF_PACKAGE, 'dist/cli.js');
-await fs.copyFile(path.join(repo, '.studio/components/script-draft-core/16x9/v1/assets/vendor/gsap/gsap.min.js'), path.join(project, 'gsap.js'));
+await fs.copyFile(process.env.GSAP_FILE || path.join(repo, 'runtime/npm/node_modules/gsap/dist/gsap.min.js'), path.join(project, 'gsap.js'));
 await fs.writeFile(path.join(project, 'index.html'), `<!doctype html><meta charset="utf-8"><style>
 body{margin:0}main{width:640px;height:360px;position:relative;background:white;overflow:hidden}[data-hf-layer]{position:absolute;inset:0}#bg{background:#def}#ip{position:absolute;width:30px;height:30px;left:400px;top:100px;background:orange}.carry{position:absolute;left:40px;top:120px;width:80px;height:80px;background:black}#next{left:80px;opacity:0}#caption{position:absolute;bottom:8px;font:22px sans-serif}
 </style><main data-composition-id="fixture" data-width="640" data-height="360" data-duration="4">

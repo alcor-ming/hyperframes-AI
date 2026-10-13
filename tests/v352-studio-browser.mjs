@@ -12,7 +12,7 @@ import {inspectFrame} from '../.studio/visual_probe.mjs';
 
 const {HF_PACKAGE, CHROME_PATH, GSAP_FILE} = process.env;
 assert(HF_PACKAGE && CHROME_PATH && GSAP_FILE, 'Set HF_PACKAGE, CHROME_PATH, GSAP_FILE');
-assert.equal(JSON.parse(await fs.readFile(path.join(HF_PACKAGE, 'package.json'))).version, '0.8.27');
+assert.equal(JSON.parse(await fs.readFile(path.join(HF_PACKAGE, 'package.json'))).version, '0.8.150');
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hf-v352-studio-'));
 const project = path.join(root, 'fixture');
@@ -110,11 +110,11 @@ print(json.dumps(icon_sets.audit_icons(json.load(sys.stdin),icon_sets.project_pa
   assert.deepEqual(findings.filter(item => item.code === 'icon_source_mismatch').map(item => item.target).sort(),
     ['#img-tampered', '#inline-tampered']);
   assert.deepEqual(findings.filter(item => item.code === 'unmarked_small_svg').map(item => item.target), ['#handwritten']);
-  const evidence = {platform: process.platform, actualStudio: '0.8.27', routeOnly: true,
+  const evidence = {platform: process.platform, actualStudio: '0.8.150', routeOnly: true,
     state, observed, findings, checks: ['default-cue-base-uri', 'studio-data-svg', 'studio-editor-ids',
       'normal-icons-clean', 'tampered-icons-detected', 'small-svg', 'schematic-exempt']};
   await fs.writeFile(path.join(root, 'evidence.json'), JSON.stringify(evidence, null, 2));
-  console.log(JSON.stringify({platform: process.platform, actualStudio: '0.8.27', routeOnly: true,
+  console.log(JSON.stringify({platform: process.platform, actualStudio: '0.8.150', routeOnly: true,
     checks: evidence.checks, findings: findings.length, evidence: root}));
 } finally {
   if (browser) await browser.close();

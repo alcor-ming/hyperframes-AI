@@ -30,16 +30,17 @@ def script_json(value):
     return json.dumps(value, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
 
 
-def math_digest(plan):
+def math_digest(plan, scene_ids=None):
     rows = math_kit.parse_plan(plan)
     intent = math_chain.parse_plan(plan) if rows else {}
-    return digest(script_json({sid: {'math': row, 'intent': intent[sid]} for sid, row in rows.items()}).encode())
+    return digest(script_json({sid: {'math': row, 'intent': intent[sid]} for sid, row in rows.items()
+                               if scene_ids is None or sid in scene_ids}).encode())
 
 
-def math_scenes(project, plan):
+def math_scenes(project, plan, scene_ids=None):
     rows = math_kit.parse_plan(plan)
     return [{key: scene[key] for key in ('id', 'start', 'duration', 'source')}
-            for scene in scene_projection(project, plan) if scene['id'] in rows]
+            for scene in scene_projection(project, plan, scene_ids) if scene['id'] in rows]
 
 
 def verify_generated(project, plan, scene_ids=None, *, closure=None):
@@ -51,9 +52,11 @@ def verify_generated(project, plan, scene_ids=None, *, closure=None):
             return
         raise VisualPlanError('Plan math requires math build before preview registration')
     manifest = json.loads(path.read_text(encoding='utf-8'))
-    if manifest.get('math_sha256') != math_digest(plan):
+    if manifest.get('scene_ids') is not None and manifest['scene_ids'] != scene_ids:
+        raise VisualPlanError('Generated math Scene scope differs; run math build')
+    if manifest.get('math_sha256') != math_digest(plan, scene_ids):
         raise VisualPlanError('Generated math differs from Plan; run math build')
-    if manifest.get('scenes') != math_scenes(project, plan):
+    if manifest.get('scenes') != math_scenes(project, plan, scene_ids):
         raise VisualPlanError('Generated math Scene timing/source changed; run math build')
     for name, expected in manifest['documents'].items():
         source = scoped_path(project, name).read_text(encoding='utf-8')
@@ -89,7 +92,7 @@ def replace_block(text, content):
     return text[:position] + block + '\n' + text[position:]
 
 
-def prepare(project, plan, runtime_root, ratio, *, inputs=None):
+def prepare(project, plan, runtime_root, ratio, *, inputs=None, scene_ids=None):
     project = Path(project).resolve()
     inputs = {} if inputs is None else inputs
 
@@ -100,12 +103,14 @@ def prepare(project, plan, runtime_root, ratio, *, inputs=None):
         return inputs[path]
 
     rows = math_kit.parse_plan(plan, ratio=ratio)
+    if scene_ids is not None:
+        rows = {sid: row for sid, row in rows.items() if sid in scene_ids}
     old = read(MANIFEST)
     previous = json.loads(old) if old is not None else {}
-    if not rows and not previous:
+    if not rows and not previous and scene_ids is None:
         return {}, {'items': 0, 'scenes': [], 'files': []}
     read('index.html')
-    scenes = scene_projection(project, plan)
+    scenes = scene_projection(project, plan, scene_ids)
     for scene in scenes:
         read(scene['source'])
     if set(rows) - {scene['id'] for scene in scenes}:
@@ -122,9 +127,9 @@ def prepare(project, plan, runtime_root, ratio, *, inputs=None):
             frozen.update(path.relative_to(project).as_posix() for path in vendor.rglob('*') if path.is_file())
             frozen.update(binding['path'] for binding in component['bindings'])
         matches = [item for item in lock['components']
-                   if item['component_ref'] == 'math-kit@v1' and item.get('asset_kind') == 'module']
+                   if item['component_ref'].split('/')[-1] == 'math-kit@v1' and item.get('asset_kind') == 'module']
         if len(matches) != 1:
-            raise VisualPlanError('Install accepted math-kit@v1 before math build')
+            raise VisualPlanError('Install exactly one math-kit@v1 (legacy or card asset) before math build')
         package = scoped_path(project, matches[0]['vendor_path'])
         release = components.validate_component_release(package, allow_unapproved=True)
         bound = set()
@@ -139,7 +144,8 @@ def prepare(project, plan, runtime_root, ratio, *, inputs=None):
         frozen.update([entry, css, 'runtime/cues.json', 'appearance-lock.json', 'COMPONENT_LOCK.json'])
         for name in ('cues.js', 'appearance.js', 'rolls.js', 'scene-binding.js', 'math-project.js'):
             relative = 'runtime/' + name
-            data = (Path(runtime_root) / '.studio/runtime' / name).read_bytes()
+            source = package / name if name == 'math-project.js' and '/' in matches[0]['component_ref'] else Path(runtime_root) / '.studio/runtime' / name
+            data = source.read_bytes()
             old = read(relative)
             if old is not None and old != data:
                 raise VisualPlanError(f'Frozen runtime differs; explicitly refresh it before math build: {relative}')
@@ -200,11 +206,13 @@ def prepare(project, plan, runtime_root, ratio, *, inputs=None):
     owned = (old_owned & dependencies) | (dependencies - existing)
     config['snapshot_dependencies'] = sorted((existing - old_owned) | dependencies)
     files['project-config.json'] = (json.dumps(config, ensure_ascii=False, indent=2) + '\n').encode()
-    manifest = {'math_sha256': math_digest(plan), 'scenes': math_scenes(project, plan),
+    manifest = {'math_sha256': math_digest(plan, scene_ids), 'scenes': math_scenes(project, plan, scene_ids),
                 'inputs': {name: digest(files[name] if name in files else read(name)) for name in frozen},
                 'owned_dependencies': sorted(owned), 'documents': {
                     source: digest(files[source].decode().split(START, 1)[1].split(END, 1)[0].encode())
                     for source in grouped}}
+    if scene_ids is not None:
+        manifest['scene_ids'] = scene_ids
     files[MANIFEST] = (json.dumps(manifest, indent=2) + '\n').encode()
     return files, {'items': sum(len(row['items']) for row in rows.values()),
                    'scenes': list(grouped), 'files': sorted(files)}
@@ -222,10 +230,11 @@ def check_geometry(project, sources, runtime_root, browser=None):
         raise VisualPlanError('Math browser check failed: ' + (result.stderr or result.stdout)[-3000:])
 
 
-def build(project, plan, runtime_root, ratio, *, browser=None, extra_files=None, expected_before=None):
+def build(project, plan, runtime_root, ratio, *, browser=None, extra_files=None, expected_before=None,
+          scene_ids=None):
     project = Path(project).resolve()
     inputs = {}
-    files, report = prepare(project, plan, runtime_root, ratio, inputs=inputs)
+    files, report = prepare(project, plan, runtime_root, ratio, inputs=inputs, scene_ids=scene_ids)
     changes = {scoped_path(project, relative): data for relative, data in files.items()}
     changes.update(extra_files or {})
     before = {path: path.read_bytes() if path.exists() else None for path in changes}

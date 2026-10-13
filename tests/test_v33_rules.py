@@ -6,11 +6,13 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ROUTER = ".agents/skills/hyperframes-codex-workflow/SKILL.md"
+ROUTER = ".agents/skills/hyperframes-production-workflow/SKILL.md"
 PROFILE = (
-    ".agents/skills/hyperframes-codex-workflow/references/"
+    ".agents/skills/hyperframes-production-workflow/references/"
     "hyperframes-design-profile-pack-v0.1.0/SKILL.md"
 )
+ROOT_TEMPLATE = ".studio/templates/WINDOWS_AGENTS.md"
+STUDIO_TEMPLATE = ".studio/templates/STUDIO_AGENTS.md"
 
 
 def read(path):
@@ -58,21 +60,20 @@ class ProductionRulesTests(unittest.TestCase):
         self.assertIn("PACKAGE.md", workflow)
         self.assertIn("不是视频设计、制作或接受的前置", workflow)
         self.assertIn("test-work 不进入任何视频导出链", workflow)
-        self.assertIn("Finalize 不包含上传/发布", workflow)
-        self.assertIn("归档准确 Variant", workflow)
-        self.assertIn("全部已归档时才自动归档 Work", workflow)
+        self.assertIn("导出与归档不包含上传/发布", workflow)
+        self.assertIn("Variant 保持 active", workflow)
         self.assertIn("work reopen <Work-ID> --variant-id <Variant-ID>", workflow)
         self.assertIn("不改等待事项或兄弟版本的归档状态", workflow)
         for path in (ROUTER, ".studio/capabilities.yaml", ".studio/workflow.md",
-                     ".studio/spec/creative.md", "README.md", "AGENTS.md",
-                     ".studio/templates/WINDOWS_AGENTS.md"):
+                     ".studio/spec/creative.md", "README.md", STUDIO_TEMPLATE,
+                     ROOT_TEMPLATE):
             with self.subTest(path=path):
                 content = read(path)
                 for retired in ("podcast_quote_image", "podcast-quote-image",
                                 "xiaohongshu-article-copy", "native-subtitle-quote-image",
                                 "planner_skill", "copy_skill"):
                     self.assertNotIn(retired, content)
-        for path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
+        for path in (STUDIO_TEMPLATE, "README.md"):
             self.assertIn("Draft 与 test-work 不导出视频", read(path))
 
     def test_new_video_examples_separate_work_and_variant_accounts(self):

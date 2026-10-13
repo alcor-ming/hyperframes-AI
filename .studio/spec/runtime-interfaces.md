@@ -59,7 +59,7 @@ motion.seek(at);
 
 ## math-kit.js
 
-用途：固定槽位公式与首批数学图解；画幅：16:9、9:16；占层：图形 2、文字 4。参数：`mount({stage,text,math,intent,cues,ratio,start,end,appearance,fontURL})`；返回 `items/renderAt/retime/rhythm/dispose`。从已安装的 `math-kit@v1` 加载，字体须通过真实字形检查，不回退系统字体，见 [接口卡](math-kit.md)。
+用途：固定槽位公式与首批数学图解；画幅：16:9、9:16；占层：图形 2、文字 4。参数：`mount({stage,text,math,intent,cues,ratio,start,end,appearance,fontURL})`；返回 `items/renderAt/retime/rhythm/dispose`。从已安装的 `math-kit@v1` 加载，字体须通过真实字形检查，不回退系统字体，见 接口卡（仅自用包）。
 
 ```js
 const diagram = await HarnessMathKit.mount({stage, text, math, intent, cues,
@@ -137,7 +137,7 @@ A/B 接线使用冻结到工程的 `runtime/rolls.js`：`HarnessRolls.mount({cue
 
 `captions.js` 按标点与画幅最大字数分组，以 `renderAt(t)` 直接求当前字幕与逐字高亮。未对齐字跟随下一个已对齐字的起点，不捏造时间；主题 `--appearance-*` token 控制样式，安全区位于各画幅 title-safe 底部。通过 `scene-binding.js` 的 `hf-seek` 驱动，关闭开关时不创建 captions 宿主，不能另挂播放时钟。
 
-`work --work <id> --variant <id> sound build` 必须从已批准 Plan 中恰好一个 `sound` JSON 代码块导出 `project/sound.json`；缺失、重复或未批准均失败，不回退读取可变的 sound.json。结构为 `bgm: {ref,start_cue,end_cue,gain}` 与 `sfx: [{ref,cue,event,tier,gain}]`，cue 为字符串或 `{token,nth,within,edge}`。构建器更新 index.html 中命名标记包围的音轨与 audio group，SFX `data-start = cue - hit_offset`，负起点明确失败，需调整素材/计划而非静默裁切。BGM 利用锁定 0.8.27 的 `hf-audio-group` / automation 在人声区间 ducking；只引用 appearance lock 或已安装 Binding 的本地 media 闭包，越界报 `sound_asset_outside_closure`，预览与 Final 共用输入。
+`work --work <id> --variant <id> sound build` 必须从已批准 Plan 中恰好一个 `sound` JSON 代码块导出 `project/sound.json`；缺失、重复或未批准均失败，不回退读取可变的 sound.json。结构为 `bgm: {ref,start_cue,end_cue,gain}` 与 `sfx: [{ref,cue,event,tier,gain}]`，cue 为字符串或 `{token,nth,within,edge}`。构建器更新 index.html 中命名标记包围的音轨与 audio group，SFX `data-start = cue - hit_offset`，负起点明确失败，需调整素材/计划而非静默裁切。BGM 利用锁定 0.8.150 的 `hf-audio-group` / automation 在人声区间 ducking；只引用 appearance lock 或已安装 Binding 的本地 media 闭包，越界报 `sound_asset_outside_closure`，预览与 Final 共用输入。
 
 Background 的 `renderer:"module"` 供受支持链路共用，声明包内 JS `entry` 与 `parameters`（可含 `moods:[{cue,tint}]`）。`HarnessAppearance.mountBackground(stage, appearance, cues)` 加载导出的 `create(el, params, {seed,width,height})`，返回 `renderAt(t)` / `dispose()`；背景由时间纯函数求值、按 cue 变色，经 scene-binding 接宿主，不依赖历史帧或自行 RAF。文件与参数进入冻结闭包。
 
@@ -151,7 +151,7 @@ Background 的 `renderer:"module"` 供受支持链路共用，声明包内 JS `e
 
 文字新增按所对应短句或核心词的实际起点快速揭示，不能等整句结束或提前透露后文；非文字视觉事件再按语义选择动作开始、完成或结果可读。SFX 按内部 hit offset 反算起点，负起点明确 preroll/裁切/替换。Preview 和 render 共用 cue/mix 输入，不以 seek 回调即时播放音轨；关键画面同样可按目标时间重建。音乐分析只在需要时按 hash/参数离线缓存，不依赖实时 WebAudio；缺 BGM 或 Blender 不阻塞非依赖场景。
 
-在 Studio 验证源声音、工程映射、命中前后帧及连续播放；未试听明确说明，计算误差不冒充 ASR 声学精度。已有音轨不重复 ASR。
+在 Studio 验证源声音、工程映射、命中前后帧及连续播放；未试听明确说明，计算误差不冒充声学测量精度。已有音轨不重复对齐。
 
 ## Work 语音与 showcase 素材工具
 

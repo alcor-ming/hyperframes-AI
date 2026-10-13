@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '.studio'))
+import designs
 import lines
 import settings
 import visual_diagnostics as diagnostics
@@ -31,21 +32,35 @@ def plan(mode='explainer', spec=None):
 
 class V370Test(unittest.TestCase):
     def test_lines_settings_and_legacy(self):
-        self.assertEqual(6, len(lines.validate_catalogues()))
+        self.assertIn(len(lines.validate_catalogues()), (2, len(designs.DESIGN_IDS)))
         state = {'line': lines.bind({'mode': 'explainer'}), 'settings': {'direction_approval': False}}
         self.assertEqual({'value': False, 'source': 'variant'}, settings.effective(state, {'direction_approval': True})['direction_approval'])
         del state['settings']
         self.assertEqual({'value': True, 'source': 'user'}, settings.effective(state, {'direction_approval': True})['direction_approval'])
         self.assertTrue(settings.effective(state)['direction_approval']['value'])
         self.assertTrue(settings.effective({}, {'direction_approval': False})['direction_approval']['value'])
-        for value in ({'unknown': True}, {'direction_approval': 1}, {'critic.max_rounds': True}, {'critic.model': 'text-only'}):
+        for value in ({'unknown': True}, {'direction_approval': 1}, {'critic.max_rounds': True}, {'critic.model': '   '}):
             with self.assertRaises(ValueError):
                 settings.validate(value, 'user')
         for mode, suffix in (('explainer', None), ('explainer', 'math-rap'), ('showcase', 'pdoom'), ('showcase', 'science')):
             state = {'mode': mode, 'submodule': suffix, 'series_binding': {'spec': suffix} if mode == 'explainer' and suffix else {}}
+            if mode == 'showcase' and not (Path(lines.__file__).with_name('designs') / 'pdoom/design.json').is_file():
+                continue
             values = settings.effective({'line': lines.bind(state)})
             self.assertTrue(values['direction_approval']['value'])
-            self.assertEqual('codex-subagent' if mode == 'explainer' else 'off', values['critic.provider']['value'])
+            self.assertEqual('external' if mode == 'explainer' else 'off', values['critic.provider']['value'])
+
+    def test_neutral_critic_provenance_and_frozen_compatibility(self):
+        import copy
+        settings.validate({'critic.provider': 'external', 'critic.model': 'text-only'}, 'variant')
+        state = {'line': lines.bind({'mode': 'explainer'}),
+                 'settings': {'critic.provider': 'codex-subagent', 'critic.model': 'old-model'}}
+        before = copy.deepcopy(state)
+        self.assertEqual('codex-subagent', settings.effective(state)['critic.provider']['value'])
+        self.assertEqual(state, before)
+        with self.assertRaises(ValueError):
+            settings.validate(state['settings'], 'variant')
+        self.assertEqual('', settings.effective({'line': state['line']})['critic.model']['value'])
 
     def test_storyboard_and_legacy_parser(self):
         row = plan_scene_rows(plan())['S01']

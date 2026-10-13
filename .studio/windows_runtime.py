@@ -63,34 +63,52 @@ def runtime_paths(root: Path) -> dict[str, Path]:
 
 
 @contextmanager
-def command_lock(root: Path):
-    """Coordinate commands and updates; detached Studio remains upstream-managed."""
-    path = root / ".studio/.runtime/tool.lock"
+def file_lock(path: Path, *, shared: bool = False):
+    """Native shared reads / exclusive writes; closing the handle releases the lock."""
     validate_review_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+b") as handle:
-        handle.seek(0)
-        if os.name == "nt":
+    if path.exists() and path.stat().st_nlink != 1:
+        raise ValueError('Lock file cannot be hardlinked')
+    with path.open('a+b') as handle:
+        if os.name == 'nt':
+            import ctypes
+            from ctypes import wintypes
             import msvcrt
-            try:
-                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-            except OSError as error:
-                raise ValueError("This root is busy; finish the running command before updating or retrying") from error
+            class OVERLAPPED(ctypes.Structure):
+                _fields_ = [('Internal', ctypes.c_size_t), ('InternalHigh', ctypes.c_size_t),
+                            ('Offset', wintypes.DWORD), ('OffsetHigh', wintypes.DWORD), ('hEvent', wintypes.HANDLE)]
+            kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+            lock = kernel.LockFileEx
+            unlock = kernel.UnlockFileEx
+            lock.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+                             wintypes.DWORD, ctypes.POINTER(OVERLAPPED)]
+            unlock.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD,
+                               wintypes.DWORD, ctypes.POINTER(OVERLAPPED)]
+            lock.restype = unlock.restype = wintypes.BOOL
+            overlapped = OVERLAPPED()
+            native = msvcrt.get_osfhandle(handle.fileno())
+            if not lock(native, 1 | (0 if shared else 2), 0, 1, 0, ctypes.byref(overlapped)):
+                raise ValueError('Object is busy: ' + str(path)) from ctypes.WinError(ctypes.get_last_error())
         else:
             import fcntl
             try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(handle, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
             except OSError as error:
-                raise ValueError("This root is busy; finish the running command before updating or retrying") from error
+                raise ValueError('Object is busy: ' + str(path)) from error
         try:
-            # ponytail: one root command at a time; split read locks only if real contention matters.
             yield
         finally:
-            handle.seek(0)
-            if os.name == "nt":
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            if os.name == 'nt':
+                if not unlock(native, 0, 1, 0, ctypes.byref(overlapped)):
+                    raise ctypes.WinError(ctypes.get_last_error())
             else:
                 fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+@contextmanager
+def command_lock(root: Path, *, shared: bool = False):
+    with file_lock(root / '.studio/.runtime/tool.lock', shared=shared):
+        yield
 
 
 def resolved_config(root: Path) -> dict:
@@ -99,16 +117,26 @@ def resolved_config(root: Path) -> dict:
     validate_review_path(config_path)
     config = read_json(config_path)
     for key in ("work_root", "asset_root"):
-        value = config.get(key)
+        value = config.get(key, str(Path(config["work_root"]) / "asset-library/store") if key == "asset_root" else None)
         if not isinstance(value, str) or not Path(value).is_absolute():
             raise ValueError(f"Root configuration requires absolute {key}")
         config[key] = str(Path(value).resolve())
-    for name in ("active", "parked", "archive"):
-        if not (Path(config["work_root"]) / "works" / name).is_dir():
-            raise ValueError(f"WorkStore missing works/{name}")
-    # Resolve the existing registry once, not again during a running command.
-    registry = Path(config["asset_root"]) / "sources.json"
-    sources = read_json(registry).get("sources", []) if registry.is_file() else config.get("asset_source_roots", [])
+    design_root = config.get("design_root", str(Path(config["work_root"]) / "asset-library/designs"))
+    if not isinstance(design_root, str) or not Path(design_root).is_absolute():
+        raise ValueError("Root configuration requires absolute design_root")
+    directory = Path(design_root)
+    validate_review_path(directory)
+    directory = directory.resolve()
+    work_root = Path(config["work_root"])
+    if (any(paths_overlap(directory, root / name) for name in (".studio", "runtime", ".agents"))
+            or paths_overlap(directory, work_root) and not directory.is_relative_to(work_root / "asset-library")
+            or paths_overlap(directory, Path(config["asset_root"]))):
+        raise ValueError("design_root must be outside tool, Work and legacy AssetStore directories")
+    config["design_root"] = str(directory)
+    if not (work_root / "works/active").is_dir():
+        raise ValueError("WorkStore missing works/active")
+    # Retain explicit legacy settings without consulting a retired AssetStore.
+    sources = config.get("asset_source_roots", [])
     if not isinstance(sources, list) or not all(isinstance(p, str) and Path(p).is_absolute() for p in sources):
         raise ValueError("Asset source roots must be an array of absolute directories")
     config["asset_source_roots"] = [str(Path(p).resolve()) for p in sources]
@@ -123,7 +151,7 @@ def resolved_config(root: Path) -> dict:
         if (not asset_review.is_absolute() or not isinstance(protected, list) or not protected
                 or not all(isinstance(p, str) and Path(p).is_absolute() for p in protected)):
             raise ValueError("Review requires explicit isolated assets and protected production roots")
-        allowed = [Path(config["work_root"]), Path(config["asset_root"]), asset_review,
+        allowed = [Path(config["work_root"]), Path(config["asset_root"]), Path(config["design_root"]), asset_review,
                    *[Path(p) for p in config["asset_source_roots"]]]
         for path in [root, *allowed]:
             validate_review_path(path)
@@ -133,7 +161,29 @@ def resolved_config(root: Path) -> dict:
             raise ValueError("Review AssetStore must be asset_review_root/store")
         if any(not Path(p).is_relative_to(asset_review / "sources") for p in config["asset_source_roots"]):
             raise ValueError("Review sources must be isolated source copies")
+    if "acceptance_protected_roots" in config:
+        validate_acceptance_root(root, config, manifest)
     return config
+
+
+def validate_acceptance_root(root: Path, config: dict, manifest: dict) -> None:
+    """Normal local delivery is allowed only after proving physical isolation."""
+    protected = config.get("acceptance_protected_roots")
+    if (manifest.get("channel") != "local" or config.get("review")
+            or not isinstance(protected, list) or not protected
+            or any(not isinstance(p, str) or not Path(p).is_absolute() for p in protected)):
+        raise ValueError("Acceptance requires a local package and explicit protected roots")
+    if any(os.environ.get(key) for key in ("HYPERFRAMES_AI_SESSION", "SESSION_DIR")):
+        raise ValueError("Acceptance refuses inherited session configuration")
+    paths = [root, Path(config["work_root"]), Path(config["asset_root"]), Path(config["design_root"]),
+             *[Path(p) for p in config["asset_source_roots"]],
+             Path(config.get("export_root", root / "exports")), root / ".studio/.runtime/cache"]
+    for path in paths:
+        validate_review_path(path)
+        if (not path.is_absolute() or not path.resolve().is_relative_to(root.resolve())
+                or any(paths_overlap(path, Path(p)) for p in protected)):
+            raise ValueError(f"Acceptance path escapes isolated root or overlaps a protected root: {path}")
+    validate_review_tree(root)
 
 
 def environment(root: Path, config: dict | None = None) -> dict[str, str]:
@@ -179,6 +229,7 @@ def doctor(root: Path, env: dict[str, str]) -> dict:
     lock = read_json(root / "windows-runtime.lock.json")
     config = json.loads(env["HYPERFRAMES_AI_RESOLVED_CONFIG"])
     result = {"release": read_json(root / ".release.json")["release"], "backend": "windows-native",
+              "invocation": "wsl-forwarded" if env.get("HYPERFRAMES_INVOCATION") == "wsl-forwarded" else "windows-native",
               "review": env["HYPERFRAMES_AI_REVIEW"] == "1", "runtime": str(root),
               "rules_root": str(root / "AGENTS.md"),
               "skills_root": str(root / ".agents/skills"), "runtime_lock": str(root / "windows-runtime.lock.json"),
@@ -186,6 +237,7 @@ def doctor(root: Path, env: dict[str, str]) -> dict:
               "config": env["HYPERFRAMES_AI_CONFIG"], "asset_config": env["HYPERFRAMES_AI_ASSET_CONFIG"],
               "work_root": config.get("work_root", "not-configured"),
               "asset_root": config.get("asset_root", "not-configured"),
+              "design_root": config.get("design_root", "not-configured"),
               "asset_source_roots": config.get("asset_source_roots", []),
               "asset_review_root": config.get("asset_review_root"), "cache_root": env["TEMP"], "checks": {}}
     commands = {"node": [env["HYPERFRAMES_NODE"], "--version"],
@@ -219,13 +271,25 @@ def doctor(root: Path, env: dict[str, str]) -> dict:
     result["fonts"] = "system-fonts; validate actual Work line breaks and glyph coverage"
     if config.get("asset_root"):
         from asset_store import ComponentError, discover_components
+        inherited = os.environ.copy()
         try:
+            # In-process audit must use the same resolved context as Work subprocesses.
+            os.environ.clear()
+            os.environ.update(env)
             audit = discover_components(root, audit=True, config=config)["audit"]
             result["asset_audit"] = {key: audit[key] for key in ("warning_count", "error_count")}
         except (ComponentError, OSError, ValueError) as error:
             result["asset_audit"] = {"status": "unavailable", "error": str(error)}
+        finally:
+            os.environ.clear()
+            os.environ.update(inherited)
     else:
         result["asset_audit"] = {"status": "not-configured"}
+    try:
+        import designs
+        result["design_root_vcs"] = designs.root_report(root, config=config)
+    except Exception as error:  # doctor must keep reporting the rest
+        result["design_root_vcs"] = {"status": "unavailable", "error": str(error)}
     return result
 
 
@@ -233,7 +297,7 @@ def doctor(root: Path, env: dict[str, str]) -> dict:
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     root = Path(__file__).resolve().parent.parent
-    with command_lock(root):
+    with command_lock(root, shared=True):
         if (root / ".studio/.runtime/deploy-pending.json").exists():
             raise ValueError("An update is incomplete; recover it with the verified package installer before running tools")
         env = environment(root)

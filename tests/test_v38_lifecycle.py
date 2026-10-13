@@ -1,8 +1,11 @@
 """v3.8 lifecycle regressions; all content lives in isolated fixtures."""
 import json
 from pathlib import Path
+import sys
 from unittest import mock
 import test_work_cli as fixtures
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '.studio'))
+import exports
 api = fixtures.WORK_CLI
 
 
@@ -19,7 +22,7 @@ class LifecycleTest(fixtures.WorkCliTest):
         self.assertEqual(before, (work / 'variants/main/variant.yaml').read_bytes())
         self.assertFalse((work / '.runtime/parked.json').exists())
 
-    def test_v38_export_archives_and_reopen_preserves_sibling(self):
+    def test_v38_export_then_archive_and_reopen_preserves_sibling(self):
         work_id, work = self.new_work()
         self.invoke('variant', 'add', 'wide')
         self.invoke('variant', 'use', 'main')
@@ -30,8 +33,9 @@ class LifecycleTest(fixtures.WorkCliTest):
         final.write_bytes(b'encoded-one')
         self.invoke('finalize', str(final), '--qa-passed')
         state = api.read_json(work / 'variants/main/variant.yaml')
-        self.assertEqual('archived', state.get('lifecycle'))
+        self.assertEqual('active', state.get('lifecycle'))
         self.assertEqual('active', api.locate_work(self.root, work_id)[1])
+        self.invoke('--variant', 'main', 'archive', '--outcome', 'stored')
         self.invoke('--variant', 'wide', 'archive', '--outcome', 'abandoned')
         self.assertEqual('archive', api.locate_work(self.root, work_id)[1])
         self.invoke('reopen', work_id, '--variant-id', 'main')
@@ -46,13 +50,17 @@ class LifecycleTest(fixtures.WorkCliTest):
         self.invoke('preview', 'accept', 'draft-v001')
         final = self.root / 'final.mp4'
         final.write_bytes(b'encoded-one')
-        with mock.patch.object(api, 'move_to_archive', side_effect=OSError('archive write failed')):
-            with self.assertRaises(OSError):
-                self.invoke('finalize', str(final), '--qa-passed')
+        with mock.patch.object(exports, 'publish', side_effect=OSError('copy full')):
+            result = self.invoke('finalize', str(final), '--qa-passed', expected=2)
+        self.assertIn('export copy failed', result)
         self.assertEqual(b'encoded-one', (work / 'variants/main/final/final.mp4').read_bytes())
+        self.assertEqual('active', api.locate_work(self.root, work_id)[1])
+        receipt = api.read_json(work / 'variants/main/.runtime/finalize.json')
+        self.assertEqual('promoted', receipt['state'])
         with mock.patch.object(api, 'command_preview_render', side_effect=AssertionError('must not render')):
             self.invoke('--work', work_id, 'finalize')
-        self.assertEqual('archive', api.locate_work(self.root, work_id)[1])
+        self.assertEqual('complete', api.read_json(work / 'variants/main/.runtime/finalize.json')['state'])
+        self.assertEqual('active', api.locate_work(self.root, work_id)[1])
 
     def export(self, work, marker=b'one'):
         draft = self.prepare_preview(work, content=marker)
@@ -68,7 +76,6 @@ class LifecycleTest(fixtures.WorkCliTest):
         first, _ = self.export(work)
         variant = work / 'variants/main'
         manifest = (variant / 'final/manifest.json').read_bytes()
-        self.invoke('reopen', work_id)
         second, final = self.export(work, b'two')
         history = list((variant / 'final/history').glob('*/manifest.json'))
         self.assertEqual(1, len(history))
@@ -85,7 +92,6 @@ class LifecycleTest(fixtures.WorkCliTest):
         self.export(work)
         variant = work / 'variants/main'
         old_manifest = (variant / 'final/manifest.json').read_bytes()
-        self.invoke('reopen', work_id)
         final = self.root / 'export.mp4'
         final.write_bytes(b'two')
         original = api.write_json
@@ -101,11 +107,17 @@ class LifecycleTest(fixtures.WorkCliTest):
         self.invoke('finalize', str(final), '--qa-passed')
         self.assertEqual(1, len(list((variant / 'final/history').glob('*/manifest.json'))))
 
-    def test_v38_pending_archive_cannot_swallow_a_new_export(self):
+    def test_v38_pending_export_cannot_swallow_a_new_export(self):
         work_id, work = self.new_work()
-        with mock.patch.object(api, 'move_to_archive', side_effect=OSError('archive failure')):
-            with self.assertRaises(OSError):
-                self.export(work)
+        draft = self.prepare_preview(work, content=b'one')
+        preview = self.invoke('preview', 'register', str(draft))
+        self.invoke('preview', 'accept', preview)
+        first = self.root / 'export.mp4'
+        first.write_bytes(b'one')
+        with mock.patch.object(exports, 'publish', side_effect=OSError('copy full')):
+            result = self.invoke('finalize', str(first), '--qa-passed', expected=2)
+        self.assertIn('export copy failed', result)
+        self.assertEqual(b'one', (work / 'variants/main/final/final.mp4').read_bytes())
         different = self.root / 'different.mp4'
         different.write_bytes(b'different')
         result = self.invoke('finalize', str(different), '--qa-passed', expected=2)
@@ -117,6 +129,7 @@ class LifecycleTest(fixtures.WorkCliTest):
     def test_v38_archived_preview_is_readable_current_is_not(self):
         work_id, work = self.new_work()
         preview, _ = self.export(work)
+        self.invoke('--variant', 'main', 'archive')
         args = api.build_parser().parse_args(['--work', work_id, 'preview', 'open', preview])
         path, state = api.selected_variant(self.root, work, args)
         self.assertEqual('archived', state['lifecycle'])
@@ -127,6 +140,7 @@ class LifecycleTest(fixtures.WorkCliTest):
     def test_v38_add_to_archived_work_and_navigation(self):
         work_id, work = self.new_work()
         self.export(work)
+        self.invoke('--variant', 'main', 'archive')
         self.assertEqual([], json.loads(self.invoke('list')))
         self.assertEqual(work_id, json.loads(self.invoke('list', '--archived'))[0]['id'])
         self.invoke('--work', work_id, 'variant', 'add', 'wide', '--account', 'wide')
@@ -201,7 +215,6 @@ class LifecycleTest(fixtures.WorkCliTest):
         api.write_json(api.studio_record(variant, 'current'), {'pid': os.getpid()})
         self.assertEqual(0, json.loads(self.invoke('storage', 'inspect'))['reclaimable_bytes'])
         api.studio_record(variant, 'current').unlink()
-        self.invoke('reopen', work_id)
         self.export(work, b'two')
         old_video = next((variant / 'final/history').glob('*/final.mp4'))
         old_video.write_bytes(b'corrupt')
@@ -230,6 +243,7 @@ class LifecycleTest(fixtures.WorkCliTest):
             state.update(status='parked', wait_for='none')
             api.write_variant(path, state)
         legacy = self.root / 'works/parked' / work_id
+        legacy.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(work, legacy)
         writer = api.write_variant
         def fail(path, state):

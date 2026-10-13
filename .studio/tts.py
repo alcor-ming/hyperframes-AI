@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -39,11 +40,11 @@ def digest(data):
 
 
 def json_bytes(data):
-    return (json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode('utf-8')
+    return (json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + '\n').encode('utf-8')
 
 
 def configuration(value):
-    if not isinstance(value, dict) or set(value) - {'provider', 'model', 'command', 'options', 'anchors', 'key_env'}:
+    if not isinstance(value, dict) or set(value) - {'provider', 'model', 'command', 'options', 'anchors', 'key_env', 'versions'}:
         raise ValueError('Invalid TTS configuration fields')
     result = {'provider': 'volcengine', 'model': 'seed-audio-1.0', 'options': {}, 'anchors': {}, **value}
     if result['provider'] not in {'volcengine', 'script'}:
@@ -76,6 +77,15 @@ def configuration(value):
                 clean(child)
     clean(result['options'])
     clean(result['anchors'])
+    versions = result.get('versions', {})
+    if (not isinstance(versions, dict) or set(versions) - {'tool', 'model'}
+            or any(not isinstance(v, str) or not v.strip() for v in versions.values())):
+        raise ValueError('TTS versions require nonempty tool/model versions')
+    for options in (result['options'], *result['anchors'].values()):
+        if 'duration_factor' in options:
+            factor = options['duration_factor']
+            if type(factor) not in (int, float) or not math.isfinite(factor) or factor <= 0:
+                raise ValueError('TTS duration_factor must be finite and positive')
     return result
 
 
@@ -176,7 +186,68 @@ def script_provider(request, command, directory):
     return scoped_path(directory, result['audio'])
 
 
-def generate(variant, rows, config, script_sha256):
+def generation_basis(config, options):
+    basis = {key: config[key] for key in ('provider', 'model')}
+    basis['versions'] = config.get('versions', {})
+    if config['provider'] == 'script':
+        basis['command'] = config['command']
+        basis['command_sha256'] = []
+        for part in config['command']:
+            path = Path(shutil.which(part) or part)
+            if not path.is_file():
+                raise ValueError('TTS command file is unavailable')
+            basis['command_sha256'].append(digest(path.read_bytes()))
+    if 'reference_audio' in options:
+        value = options['reference_audio']
+        if not isinstance(value, str) or not Path(value).is_absolute():
+            raise ValueError('TTS reference_audio requires an absolute file path')
+        path = Path(value)
+        # Reference decoding belongs to the provider; generated output remains PCM WAV.
+        if (path.is_symlink() or not path.is_file() or path.stat().st_nlink != 1
+                or not 0 < path.stat().st_size <= 128 * 1024 * 1024):
+            raise ValueError('TTS reference_audio requires a regular nonempty file up to 128 MiB')
+        basis['reference_sha256'] = digest(path.read_bytes())
+    return basis
+
+
+def cached_segment(variant, row, config, basis):
+    from component_harness import package_write_lock
+    request = {**row, 'basis': basis}
+    identity = digest(json_bytes(request))
+    parent = scoped_path(variant, 'materials/tts-segments')
+    parent.mkdir(parents=True, exist_ok=True)
+    with package_write_lock(scoped_path(parent, identity + '.lock')):
+        target = scoped_path(parent, identity)
+        if not target.exists():
+            with tempfile.TemporaryDirectory(prefix='.generating-', dir=parent) as temp:
+                directory = Path(temp)
+                if config['provider'] == 'volcengine':
+                    path = directory / 'audio.wav'
+                    volcengine(row['text'], config['model'], row['options'], path, config.get('key_env', 'VOLCENGINE_TTS_API_KEY'))
+                else:
+                    path = script_provider({'text': row['text'], 'anchor': row['anchor'], 'model': config['model'],
+                                            'options': row['options']}, config['command'], directory)
+                info = wav_info(path)
+                if generation_basis(config, row['options']) != basis:
+                    raise ValueError('TTS tool or reference changed during synthesis')
+                if path != directory / 'audio.wav':
+                    shutil.copyfile(path, directory / 'audio.wav')
+                manifest = {'request': request, 'sha256': digest(path.read_bytes()), **info}
+                (directory / 'manifest.json').write_bytes(json_bytes(manifest))
+                directory.rename(target)
+        manifest_path = scoped_path(target, 'manifest.json')
+        if manifest_path.stat().st_nlink != 1:
+            raise ValueError('Linked TTS segment manifest')
+        manifest = json.loads(manifest_path.read_bytes())
+        audio = scoped_path(target, 'audio.wav')
+        info = wav_info(audio)
+        if (manifest.get('request') != request or manifest.get('sha256') != digest(audio.read_bytes())
+                or any(manifest.get(k) != v for k, v in info.items())):
+            raise ValueError('TTS segment cache changed')
+        return audio, identity
+
+
+def generation_request(rows, config, script_sha256):
     config = configuration(config)
     if (not rows or any(not isinstance(row, dict) or set(row) != {'anchor', 'text'}
                         or not isinstance(row['anchor'], str) or not re.fullmatch(r'P[0-9]+', row['anchor'])
@@ -190,6 +261,64 @@ def generate(variant, rows, config, script_sha256):
                'script_sha256': script_sha256}
     if config['provider'] == 'script':
         request['command'] = config['command']
+    request['generation_basis'] = [generation_basis(config, row['options']) for row in request['segments']]
+    return request
+
+
+def import_batch(variant, rows, config, script_sha256, batch_path):
+    """Verify every external result before caching segments and composing a candidate."""
+    from component_harness import package_write_lock
+    config = configuration(config)
+    request = generation_request(rows, config, script_sha256)
+    batch_path = Path(batch_path).absolute()
+    from windows_runtime import validate_review_path
+    validate_review_path(batch_path)
+    if not batch_path.is_file() or batch_path.stat().st_nlink != 1:
+        raise ValueError('TTS batch requires an unlinked manifest')
+    batch = json.loads(batch_path.read_bytes())
+    if (not isinstance(batch, dict) or set(batch) != {'version', 'script_sha256', 'segments'}
+            or batch['version'] != 1 or batch['script_sha256'] != script_sha256
+            or not isinstance(batch['segments'], list) or len(batch['segments']) != len(rows)):
+        raise ValueError('TTS batch is incomplete or belongs to a different Script')
+    entries = batch['segments']
+    if any(not isinstance(entry, dict) or set(entry) != {'anchor', 'text', 'model', 'options', 'basis', 'audio', 'sha256'}
+           for entry in entries):
+        raise ValueError('Invalid TTS batch result fields')
+    if [entry['anchor'] for entry in entries] != [row['anchor'] for row in rows]:
+        raise ValueError('TTS batch anchors must exactly match Script order')
+    checked = []
+    for row, basis, entry in zip(request['segments'], request['generation_basis'], entries):
+        if (any(entry[key] != row[key] for key in ('anchor', 'text', 'options'))
+                or entry['model'] != config['model'] or entry['basis'] != basis):
+            raise ValueError('TTS batch text, model, options or generation basis mismatch')
+        audio = scoped_path(batch_path.parent, entry['audio'])
+        info = wav_info(audio)
+        if digest(audio.read_bytes()) != entry['sha256']:
+            raise ValueError('TTS batch audio hash mismatch')
+        checked.append((row, basis, entry, audio, info))
+    for row, basis, entry, audio, info in checked:
+        segment_request = {**row, 'basis': basis}
+        identity = digest(json_bytes(segment_request))
+        parent = scoped_path(variant, 'materials/tts-segments')
+        parent.mkdir(parents=True, exist_ok=True)
+        with package_write_lock(scoped_path(parent, identity + '.lock')):
+            target = scoped_path(parent, identity)
+            if not target.exists():
+                with tempfile.TemporaryDirectory(prefix='.importing-', dir=parent) as temporary:
+                    stage = Path(temporary)
+                    shutil.copyfile(audio, stage / 'audio.wav')
+                    if digest((stage / 'audio.wav').read_bytes()) != entry['sha256']:
+                        raise ValueError('TTS batch audio changed while copying')
+                    manifest = {'request': segment_request, 'sha256': entry['sha256'], **info}
+                    (stage / 'manifest.json').write_bytes(json_bytes(manifest))
+                    stage.rename(target)
+        cached_segment(variant, row, config, basis)
+    return generate(variant, rows, config, script_sha256)
+
+
+def generate(variant, rows, config, script_sha256):
+    config = configuration(config)
+    request = generation_request(rows, config, script_sha256)
     identity = digest(json_bytes(request))
     parent = scoped_path(variant, 'materials/tts')
     parent.mkdir(parents=True, exist_ok=True)
@@ -203,15 +332,12 @@ def generate(variant, rows, config, script_sha256):
         with wave.open(str(combined), 'wb') as writer:
             writer.setparams((1, 2, 48000, 0, 'NONE', 'not compressed'))
             format_key = None
-            for row in request['segments']:
+            for row, basis in zip(request['segments'], request['generation_basis']):
                 directory = staging / row['anchor']
                 directory.mkdir()
-                if config['provider'] == 'volcengine':
-                    path = directory / 'audio.wav'
-                    volcengine(row['text'], config['model'], row['options'], path, config.get('key_env', 'VOLCENGINE_TTS_API_KEY'))
-                else:
-                    path = script_provider({'text': row['text'], 'anchor': row['anchor'], 'model': config['model'],
-                                            'options': row['options']}, config['command'], directory)
+                cached, segment_id = cached_segment(variant, row, config, basis)
+                path = directory / 'audio.wav'
+                shutil.copyfile(cached, path)
                 info = wav_info(path)
                 key = tuple(info[k] for k in ('channels', 'sample_width', 'sample_rate'))
                 if format_key is None:
@@ -222,9 +348,9 @@ def generate(variant, rows, config, script_sha256):
                 with wave.open(str(path), 'rb') as reader:
                     writer.writeframes(reader.readframes(reader.getnframes()))
                 entries.append({'anchor': row['anchor'], 'start': offset, 'end': offset + info['duration'],
-                                'text_sha256': digest(row['text'].encode())})
+                                'text_sha256': digest(row['text'].encode()), 'segment_id': segment_id})
                 offset += info['duration']
-                shutil.rmtree(directory)
+                files[row['anchor'] + '/audio.wav'] = digest(path.read_bytes())
         info = wav_info(combined)
         files['audio.wav'] = digest(combined.read_bytes())
         manifest = {'id': identity, 'request': request, 'segments': entries, 'files': files,
@@ -247,9 +373,19 @@ def candidate(variant, identity):
     data = json.loads(path.read_bytes())
     if (not isinstance(data, dict) or data.get('id') != identity
             or digest(json_bytes(data.get('request'))) != identity
-            or not isinstance(data.get('files'), dict) or set(data['files']) != {'audio.wav'}
+            or not isinstance(data.get('files'), dict) or 'audio.wav' not in data['files']
             or data.get('status') != 'generated' or data.get('alignment') is not None):
         raise ValueError('TTS candidate manifest changed')
+    expected = {'audio.wav'}
+    if 'generation_basis' in data['request']:
+        expected.update(row['anchor'] + '/audio.wav' for row in data['request']['segments'])
+    if set(data['files']) != expected:
+        raise ValueError('TTS candidate segment files changed')
+    for name, sha in data['files'].items():
+        path = scoped_path(directory, name)
+        wav_info(path)
+        if digest(path.read_bytes()) != sha:
+            raise ValueError('TTS candidate audio changed')
     audio = scoped_path(directory, 'audio.wav')
     info = wav_info(audio)
     if digest(audio.read_bytes()) != data['files']['audio.wav'] or any(data.get(k) != v for k, v in info.items()):
@@ -261,7 +397,7 @@ def aligned_sections(text, rows, alignment_bytes, duration):
     cues = explainer.validate_cues(explainer.build_cues(text, alignment_bytes))
     if (any(c['char'].isalnum() and (not c['aligned'] or c['end'] <= c['start']) for c in cues['characters'])
             or any(any(c.isalnum() for c in m['script'] + m['alignment']) for m in cues['mismatches'])):
-        raise ValueError('Formal TTS requires aligned spoken characters; use the existing ASR alignment workflow')
+        raise ValueError('Formal TTS requires aligned spoken characters; provider-native timing is missing or does not match the Script')
     if any(c['aligned'] and c['end'] > duration + 0.02 for c in cues['characters']):
         raise ValueError('Alignment extends beyond candidate audio')
     sections, offset = [], 0

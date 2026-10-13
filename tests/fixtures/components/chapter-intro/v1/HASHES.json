@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "algorithm": "component-package-sha256-v1",
+  "component_ref": "chapter-intro@v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "4fe68a6d0e6c709d546ef36fcd2f94811591c439eafe8032cf53ebf29d3586d9"
+    },
+    {
+      "path": "assets/fallback.mp4",
+      "sha256": "f4de5015619d26a29fb59aa8f6e3844f6e4e2bc7a8f9add709bfbe231f8dea17"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "bb555e197a20ec0d7889ab1a11fdc34dc76a4f8463091e7acae65bb929bae923"
+    },
+    {
+      "path": "component.html",
+      "sha256": "6608097a1bf9d678a6aa96526aa6786b39f6879f523916d0660826f3e3ee44e5"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "aeae0be382520406a009dc48f2fe195245d3bbd1c1865020852a26e6ae4e7008"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "f37771095d6b98741df1c7fa94a505b7308061a1936683fb088149bfd96578ae"
+    }
+  ],
+  "package_sha256": "5acaf8c875aa7f9dbd12f25e8bb0fea0f85e5079a3ab6b125312caee51b99e8e"
+}

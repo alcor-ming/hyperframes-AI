@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, height=1080">
+  <title>stage-light · 可编辑示例 · 观察 → 分组 → 解释</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="stage-light-example"
+      data-composition-id="stage-light-example"
+      data-width="1920" data-height="1080" data-start="0" data-duration="16" data-fps="30">
+
+  <!-- 第 1 层 · background：明亮纸面，不承载信息 -->
+  <section class="layer layer-background" data-hf-layer="background" aria-hidden="true">
+    <div class="paper-bg"></div>
+    <div class="grid-dots"></div>
+  </section>
+
+  <!-- 第 2 层 · stage：两页式折叠布景、六个纸卡与两格托盘 -->
+  <section class="layer layer-stage" data-hf-layer="stage">
+    <div class="rig-mount" id="rig"></div>
+
+    <!-- 纸艺角色：左侧讲解者、右侧学习者；group / body / head / face / arm 各自独立 DOM，便于逐段检查动作 -->
+    <div class="figures" id="figures">
+      <div class="figure figure-host" id="fig-host">
+        <svg class="figure-svg" viewBox="0 0 260 520" width="260" height="520" aria-hidden="true" focusable="false">
+          <ellipse class="fig-shadow" cx="130" cy="502" rx="88" ry="16"/>
+          <g class="fig-root" data-fig-part="group">
+            <g class="fig-neck" data-fig-part="neck"><rect x="116" y="164" width="28" height="42" rx="12"/></g>
+            <g class="fig-arm fig-arm-far" data-fig-part="arm-far">
+              <path class="fig-sleeve" d="M104 202 C 80 216 68 250 65 286"/>
+              <circle class="fig-hand" cx="64" cy="296" r="15"/>
+            </g>
+            <g class="fig-legs" data-fig-part="legs">
+              <rect class="fig-leg" x="98" y="348" width="28" height="140" rx="11"/>
+              <rect class="fig-leg" x="134" y="348" width="28" height="140" rx="11"/>
+              <ellipse class="fig-shoe" cx="110" cy="494" rx="30" ry="14"/>
+              <ellipse class="fig-shoe" cx="150" cy="494" rx="30" ry="14"/>
+            </g>
+            <g class="fig-body" data-fig-part="body">
+              <path class="fig-torso" d="M86 194 Q130 172 174 194 L168 356 Q130 372 92 356 Z"/>
+              <rect class="fig-apron" x="112" y="216" width="36" height="122" rx="10"/>
+              <rect class="fig-collar" x="114" y="184" width="32" height="18" rx="9"/>
+            </g>
+            <g class="fig-head" data-fig-part="head">
+              <path class="fig-hair-back" d="M70 120 Q66 52 130 50 Q194 52 190 120 Q182 92 164 88 Q148 84 130 84 Q112 84 96 88 Q78 92 70 120 Z"/>
+              <circle class="fig-face" cx="130" cy="126" r="58"/>
+              <circle class="fig-eye" cx="110" cy="118" r="10"/>
+              <circle class="fig-eye" cx="150" cy="118" r="10"/>
+              <g class="fig-gaze" data-fig-part="gaze">
+                <circle class="fig-pupil" cx="110" cy="119" r="4.2"/>
+                <circle class="fig-pupil" cx="150" cy="119" r="4.2"/>
+              </g>
+              <path class="fig-mouth fig-mouth-smile" d="M114 148 Q130 160 146 148"/>
+              <path class="fig-mouth fig-mouth-open" d="M118 146 Q130 168 142 146 Q130 176 118 146 Z"/>
+              <path class="fig-hair-front" d="M74 106 Q84 64 130 64 Q176 64 186 106 Q160 90 130 90 Q100 90 74 106 Z"/>
+            </g>
+            <g class="fig-arm fig-arm-near" data-fig-part="arm-near">
+              <path class="fig-sleeve" d="M156 202 C 180 216 192 250 195 286"/>
+              <circle class="fig-hand" cx="196" cy="296" r="15"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="figure figure-learner" id="fig-learner">
+        <svg class="figure-svg" viewBox="0 0 240 480" width="240" height="480" aria-hidden="true" focusable="false">
+          <ellipse class="fig-shadow" cx="120" cy="462" rx="80" ry="15"/>
+          <g class="fig-root" data-fig-part="group">
+            <g class="fig-hair-bun" data-fig-part="hair"><circle cx="120" cy="42" r="24"/></g>
+            <g class="fig-neck" data-fig-part="neck"><rect x="108" y="150" width="24" height="40" rx="11"/></g>
+            <g class="fig-arm fig-arm-far" data-fig-part="arm-far">
+              <path class="fig-sleeve" d="M158 188 C 182 202 194 236 196 268"/>
+              <circle class="fig-hand" cx="197" cy="276" r="14"/>
+            </g>
+            <g class="fig-legs" data-fig-part="legs">
+              <rect class="fig-leg" x="92" y="318" width="24" height="132" rx="10"/>
+              <rect class="fig-leg" x="124" y="318" width="24" height="132" rx="10"/>
+              <ellipse class="fig-shoe" cx="101" cy="456" rx="27" ry="12"/>
+              <ellipse class="fig-shoe" cx="139" cy="456" rx="27" ry="12"/>
+            </g>
+            <g class="fig-body" data-fig-part="body">
+              <path class="fig-dress" d="M80 176 Q120 156 160 176 L172 330 Q120 350 68 330 Z"/>
+              <rect class="fig-collar" x="106" y="164" width="28" height="16" rx="8"/>
+            </g>
+            <g class="fig-head" data-fig-part="head">
+              <circle class="fig-face" cx="120" cy="112" r="54"/>
+              <circle class="fig-eye" cx="102" cy="105" r="9"/>
+              <circle class="fig-eye" cx="138" cy="105" r="9"/>
+              <g class="fig-gaze" data-fig-part="gaze">
+                <circle class="fig-pupil" cx="102" cy="106" r="3.8"/>
+                <circle class="fig-pupil" cx="138" cy="106" r="3.8"/>
+              </g>
+              <path class="fig-mouth fig-mouth-smile" d="M106 132 Q120 144 134 132"/>
+              <path class="fig-mouth fig-mouth-open" d="M110 130 Q120 152 130 130 Q120 158 110 130 Z"/>
+              <path class="fig-hair-front" d="M68 100 Q74 54 120 54 Q166 54 172 100 Q150 82 120 82 Q90 82 68 100 Z"/>
+            </g>
+            <g class="fig-arm fig-arm-near" data-fig-part="arm-near">
+              <path class="fig-sleeve" d="M84 188 C 60 202 48 236 46 268"/>
+              <circle class="fig-hand" cx="45" cy="276" r="14"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="leaf-card leaf-card-a" id="leaf-card-a" aria-hidden="true">
+      <svg viewBox="0 0 200 150" width="200" height="150">
+        <circle cx="62" cy="76" r="34" fill="none" stroke="var(--leaf-ink)" stroke-width="7"/>
+        <rect x="112" y="42" width="68" height="68" rx="12" fill="none" stroke="var(--leaf-ink)" stroke-width="7"/>
+        <circle cx="62" cy="76" r="12" fill="var(--leaf-accent)"/>
+        <rect x="132" y="62" width="28" height="28" rx="6" fill="var(--leaf-accent)"/>
+      </svg>
+      <span class="leaf-cap">形状不同</span>
+    </div>
+    <div class="leaf-card leaf-card-b" id="leaf-card-b" aria-hidden="true">
+      <svg viewBox="0 0 200 150" width="200" height="150">
+        <circle cx="60" cy="80" r="30" fill="var(--leaf-accent)"/>
+        <rect x="108" y="50" width="60" height="60" rx="12" fill="var(--leaf-accent)"/>
+        <path d="M160 34l8 18 20 3-15 14 4 20-17-10-17 10 4-20-15-14 20-3z" fill="var(--leaf-ink)" opacity=".8"/>
+        <rect x="40" y="128" width="120" height="8" rx="4" fill="var(--leaf-ink)" opacity=".5"/>
+      </svg>
+      <span class="leaf-cap">同一条规则</span>
+    </div>
+
+    <div class="tray tray-round" id="tray-round">
+      <span class="tray-shape tray-shape-round" aria-hidden="true"></span>
+      <span class="tray-label">圆 · 3</span>
+    </div>
+    <div class="tray tray-block" id="tray-block">
+      <span class="tray-shape tray-shape-block" aria-hidden="true"></span>
+      <span class="tray-label">方 · 3</span>
+    </div>
+
+    <div class="tokens" id="tokens">
+      <div class="token" id="tok-0" style="--tok:#e8766a">
+        <svg viewBox="0 0 128 128" width="128" height="128" aria-hidden="true">
+          <circle cx="64" cy="64" r="45" fill="var(--tok)" stroke="#ffffff" stroke-width="7"/>
+          <circle cx="64" cy="64" r="15" fill="#ffffff" opacity=".85"/>
+        </svg>
+      </div>
+      <div class="token" id="tok-1" style="--tok:#5f7d95">
+        <svg viewBox="0 0 128 128" width="128" height="128" aria-hidden="true">
+          <rect x="19" y="19" width="90" height="90" rx="18" fill="var(--tok)" stroke="#ffffff" stroke-width="7"/>
+          <rect x="49" y="49" width="30" height="30" rx="7" fill="#ffffff" opacity=".85"/>
+        </svg>
+      </div>
+      <div class="token" id="tok-2" style="--tok:#4bbf9a">
+        <svg viewBox="0 0 128 128" width="128" height="128" aria-hidden="true">
+          <circle cx="64" cy="64" r="45" fill="var(--tok)" stroke="#ffffff" stroke-width="7"/>
+          <circle cx="64" cy="64" r="15" fill="#ffffff" opacity=".85"/>
+        </svg>
+      </div>
+      <div class="token" id="tok-3" style="--tok:#e2a33c">
+        <svg viewBox="0 0 128 128" width="128" height="128" aria-hidden="true">
+          <rect x="19" y="19" width="90" height="90" rx="18" fill="var(--tok)" stroke="#ffffff" stroke-width="7"/>
+          <rect x="49" y="49" width="30" height="30" rx="7" fill="#ffffff" opacity=".85"/>
+        </svg>
+      </div>
+      <div class="token" id="tok-4" style="--tok:#8f7fd6">
+        <svg viewBox="0 0 128 128" width="128" height="128" aria-hidden="true">
+          <circle cx="64" cy="64" r="45" fill="var(--tok)" stroke="#ffffff" stroke-width="7"/>
+          <circle cx="64" cy="64" r="15" fill="#ffffff" opacity=".85"/>
+        </svg>
+      </div>
+      <div class="token" id="tok-5" style="--tok:#3f9fae">
+        <svg viewBox="0 0 128 128" width="128" height="128" aria-hidden="true">
+          <rect x="19" y="19" width="90" height="90" rx="18" fill="var(--tok)" stroke="#ffffff" stroke-width="7"/>
+          <rect x="49" y="49" width="30" height="30" rx="7" fill="#ffffff" opacity=".85"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="prop-mini" id="prop-mini">
+      <div class="prop-foot" data-hf-prop-foot>
+        <svg viewBox="0 0 180 120" width="180" height="120" aria-hidden="true">
+          <rect x="6" y="6" width="168" height="92" rx="12" fill="var(--prop-face)"/>
+          <rect x="16" y="16" width="148" height="72" rx="8" fill="none" stroke="#ffffff" stroke-width="6"/>
+          <rect x="34" y="40" width="112" height="12" rx="6" fill="var(--prop-ink)" opacity=".65"/>
+          <rect x="34" y="62" width="72" height="12" rx="6" fill="var(--prop-ink)" opacity=".4"/>
+          <rect x="70" y="98" width="40" height="10" rx="5" fill="var(--prop-ink)"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="rule-tag" id="rule-tag">同一条规则</div>
+  </section>
+
+  <!-- 第 3 层 · overlay：读行与指示，不独立承载信息 -->
+  <section class="layer layer-overlay" data-hf-layer="overlay" aria-hidden="true">
+    <svg class="leaders" id="leaders" viewBox="0 0 1920 1080" preserveAspectRatio="none">
+      <path class="leader" id="lead-0" d="M0 0"/>
+      <path class="leader" id="lead-1" d="M0 0"/>
+      <path class="leader" id="lead-2" d="M0 0"/>
+      <path class="leader" id="lead-3" d="M0 0"/>
+      <path class="leader" id="lead-4" d="M0 0"/>
+      <path class="leader" id="lead-5" d="M0 0"/>
+    </svg>
+    <div class="readbar" id="readbar"></div>
+  </section>
+
+  <!-- 第 4 层 · text -->
+  <section class="layer layer-text" data-hf-layer="text">
+    <header class="header">
+      <span class="step" id="step">① 观察</span>
+      <span class="sub">纸卡书页 · 16s 无声编排示例</span>
+    </header>
+    <p class="callout" id="callout">观察：先看清每一张纸卡</p>
+    <div class="recap" id="recap">
+      <span class="chip">① 观察</span><span class="arrow">→</span>
+      <span class="chip">② 分组</span><span class="arrow">→</span>
+      <span class="chip">③ 解释</span>
+    </div>
+  </section>
+
+  <!-- 纸质封面只在开场与收尾开合 -->
+  <div class="cover" id="cover" aria-hidden="true">
+    <div class="cover-sheet" id="cover-sheet">
+      <strong>观察 → 分组 → 解释</strong>
+      <span>一张纸上的三步</span>
+    </div>
+  </div>
+</main>
+<script src="runtime/gsap.min.js"></script>
+    <script src="runtime/MotionPathPlugin.min.js"></script>
+<script src="runtime/scene-binding.js"></script>
+<script src="runtime/stage-rig.js"></script>
+<script src="scene.js"></script>
+</body>
+</html>

@@ -13,6 +13,68 @@ from windows_runtime import command_lock
 
 
 class RootDeploymentTests(unittest.TestCase):
+    def test_personal_pruning_adopts_only_matching_files_and_rollback_keeps_deletions(self):
+        old = self.package('public')
+        skill = '.agents/skills/drop/SKILL.md'
+        self.add_files(old, {skill: 'removed locally', 'AGENTS.md': 'public rules', 'skills-lock.json': 'full'})
+        deploy.deploy(old, self.root, self.config)
+        (self.root / skill).unlink()
+        (self.root / 'AGENTS.md').write_text('personal rules')
+        (self.root / 'skills-lock.json').write_text('pruned')
+        new = self.package('personal')
+        self.add_files(new, {'AGENTS.md': 'personal rules', 'skills-lock.json': 'pruned'})
+        proposed = deploy.read(new / '.release.json')['files']
+        retained = set(proposed) | {'.release.json'}
+        with self.assertRaisesRegex(ValueError, 'Locally modified'):
+            deploy.preflight(self.root, retained=retained)
+        self.assertEqual('ready', deploy.preflight(self.root, retained=retained, expected=proposed)['status'])
+        (self.root / 'AGENTS.md').write_text('unrelated local edit')
+        with self.assertRaisesRegex(ValueError, 'Locally modified'):
+            deploy.preflight(self.root, retained=retained, expected=proposed)
+        with self.assertRaisesRegex(ValueError, 'Locally modified'):
+            deploy.deploy(new, self.root, None)
+        (self.root / 'AGENTS.md').write_text('personal rules')
+        result = deploy.deploy(new, self.root, None)
+        self.assertNotIn(skill, result['files'])
+        self.assertFalse((self.root / skill).exists())
+        deploy.verify_root(self.root)
+        restored = deploy.recover(self.root, rollback=True)
+        self.assertFalse((self.root / skill).exists())
+        self.assertEqual('personal rules', (self.root / 'AGENTS.md').read_text())
+        self.assertEqual('pruned', (self.root / 'skills-lock.json').read_text())
+        self.assertEqual('restored_with_local_modifications', restored['integrity'])
+        self.assertIn(skill, restored['restored_modified_files'])
+
+    def test_personal_cards_retire_identical_user_copies_and_refuse_divergent_ones(self):
+        package = self.package('cards')
+        card = {'.studio/designs/mycard/design.json': '{"id": "mycard"}', '.studio/designs/mycard/assets/a.txt': 'asset'}
+        self.add_files(package, card)
+        manifest = deploy.read(package / '.release.json')
+        manifest['personal_source'] = {'cards': {'commit': 'a' * 40, 'ids': ['mycard']}}
+        (package / '.release.json').write_text(json.dumps(manifest))
+        user = self.root / 'asset-library/designs/mycard'
+        (user / 'assets').mkdir(parents=True)
+        (user / 'design.json').write_text('{"id": "mycard"}')
+        (user / 'assets/a.txt').write_text('edited in production')
+        (self.root / 'asset-library/designs/other').mkdir()
+        with self.assertRaisesRegex(ValueError, 'differs from the deployed card.*assets/a.txt'):
+            deploy.deploy(package, self.root, self.config)
+        self.assertFalse((self.root / deploy.MANIFEST).exists())
+        self.assertFalse((self.root / '.studio/designs/mycard').exists())
+        (user / 'assets/a.txt').write_text('asset')
+        (user / 'study').mkdir()
+        (user / 'study/notes.md').write_text('research stays with the retired copy')
+        result = deploy.deploy(package, self.root, self.config)
+        retired = self.root / 'asset-library' / ('designs-retired-' + deploy.time.strftime('%Y%m%d')) / 'mycard'
+        self.assertEqual([{'card': 'mycard', 'from': str(user), 'to': str(retired)}], result['user_cards']['retired'])
+        self.assertFalse(user.exists())
+        self.assertTrue((self.root / 'asset-library/designs/other').is_dir())
+        self.assertEqual('research stays with the retired copy', (retired / 'study/notes.md').read_text())
+        self.assertEqual('asset', (self.root / '.studio/designs/mycard/assets/a.txt').read_text())
+        again = deploy.deploy(package, self.root, None)
+        self.assertEqual('unchanged', again['status'])
+        self.assertEqual({'retired': [], 'failed': []}, again['user_cards'])
+
     def test_idle_ignores_host_cwd_but_blocks_root_children(self):
         root = r'D:\AI\AI+hyperframes'
         host = {'ProcessId': 987654, 'CommandLine': 'node kernel.js --working-dir ' + root,
@@ -52,6 +114,20 @@ class RootDeploymentTests(unittest.TestCase):
             manifest["files"][name] = deploy.digest(path)
         (package / ".release.json").write_text(json.dumps(manifest))
 
+    def test_deployment_and_preflight_only_require_active_workstore(self):
+        (self.root / 'works/parked').rmdir()
+        (self.root / 'works/archive').rmdir()
+        package = self.package('active-only')
+        self.assertEqual('ready', deploy.preflight(self.root, self.config)['status'])
+        deploy.deploy(package, self.root, self.config)
+        deploy.verify_root(self.root)
+        self.assertEqual('ready', deploy.preflight(self.root)['status'])
+        self.assertFalse((self.root / 'works/parked').exists())
+        self.assertFalse((self.root / 'works/archive').exists())
+        (self.root / 'works/active').rmdir()
+        with self.assertRaisesRegex(ValueError, 'Missing WorkStore directory: active'):
+            deploy.preflight(self.root)
+
     def test_incremental_backup_removal_and_two_step_rollback(self):
         first = self.package("one")
         self.add_files(first, {"runtime/python/python.exe": "fixed", "obsolete.txt": "old"})
@@ -67,13 +143,40 @@ class RootDeploymentTests(unittest.TestCase):
         third = self.package("three")
         self.add_files(third, {"runtime/python/python.exe": "fixed", "new.txt": "newer"})
         deploy.deploy(third, self.root, None)
-        self.assertEqual(len(list((self.root / deploy.STATE / "deploy-backups").iterdir())), 2)
+        self.assertEqual(len(list((self.root / deploy.STATE / "deploy-backups").iterdir())), 1)
         deploy.recover(self.root, rollback=True)
         self.assertEqual((self.root / "new.txt").read_text(), "new")
-        deploy.recover(self.root, rollback=True)
-        self.assertEqual((self.root / "obsolete.txt").read_text(), "old")
-        self.assertFalse((self.root / "new.txt").exists())
+        with self.assertRaises((ValueError, OSError)):
+            deploy.recover(self.root, rollback=True)
+        self.assertEqual((self.root / "new.txt").read_text(), "new")
         self.assertEqual(runtime.read_text(), "fixed")
+
+    def test_preflight_rejects_changes_and_recovers_valid_pending_once(self):
+        deploy.deploy(self.package('preflight'), self.root, self.config)
+        self.assertEqual('ready', deploy.preflight(self.root)['status'])
+        state = deploy.read(self.root / deploy.MANIFEST)
+        transaction = deploy.read(self.root / state['backup'] / 'transaction.json')
+        deploy.write_json(self.root / deploy.PENDING, transaction)
+        with self.assertRaisesRegex(ValueError, 'Interrupted deployment'):
+            deploy.preflight(self.root)
+        # The completed first install can be rolled back; preflight then revalidates the supplied config.
+        result = deploy.preflight(self.root, self.config, recover_pending=True)
+        self.assertTrue(result['recovered'])
+        self.assertFalse((self.root / deploy.PENDING).exists())
+        deploy.deploy(self.package('after-preflight'), self.root, self.config)
+        (self.root / 'work.cmd').write_text('user edit')
+        with self.assertRaisesRegex(ValueError, 'Locally modified'):
+            deploy.preflight(self.root)
+
+    def test_identical_candidate_preserves_previous_rollback(self):
+        first, second = self.package('original'), self.package('new')
+        deploy.deploy(first, self.root, self.config)
+        adopted = deploy.deploy(second, self.root, None)
+        again = deploy.deploy(second, self.root, None)
+        self.assertEqual('unchanged', again['status'])
+        self.assertEqual(adopted['backup'], again['backup'])
+        deploy.recover(self.root, rollback=True)
+        self.assertEqual('original', (self.root / 'work.cmd').read_text())
 
     def test_retention_preserves_legacy_unknown_modified_and_failed_backups(self):
         deploy.deploy(self.package("one"), self.root, self.config)
@@ -182,6 +285,14 @@ class RootDeploymentTests(unittest.TestCase):
         (self.root / "work.cmd").write_text("old entry")
         with self.assertRaisesRegex(ValueError, "Unmanaged"):
             deploy.deploy(package, self.root, self.config)
+        retained = {"work.cmd", ".release.json"}
+        with self.assertRaisesRegex(ValueError, "Unmanaged"):
+            deploy.preflight(self.root, self.config, retained=retained, expected={"work.cmd": deploy.digest(package / "work.cmd")})
+        (self.root / "work.cmd").write_text("one")
+        self.assertEqual("ready", deploy.preflight(self.root, self.config, retained=retained,
+                                                    expected={"work.cmd": deploy.digest(package / "work.cmd")})["status"])
+        with self.assertRaisesRegex(ValueError, "Unmanaged"):
+            deploy.preflight(self.root, self.config, retained=retained)
         (self.root / "work.cmd").unlink()
         link = self.root / "asset-library/sources/demo/link"
         if os.name == "nt":
@@ -191,6 +302,16 @@ class RootDeploymentTests(unittest.TestCase):
             link.symlink_to(self.base, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, "Links"):
             deploy.deploy(package, self.root, self.config)
+
+    def test_identical_unmanaged_file_is_adopted(self):
+        package = self.package("adopt")
+        self.add_files(package, {"personal/tool.md": "same bytes"})
+        (self.root / "personal").mkdir()
+        (self.root / "personal/tool.md").write_text("same bytes")
+        result = deploy.deploy(package, self.root, self.config)
+        self.assertIn("personal/tool.md", result["files"])
+        deploy.verify_root(self.root)
+        self.assertEqual("same bytes", (self.root / "personal/tool.md").read_text())
 
     def test_failed_copy_restores_and_pending_recovery(self):
         deploy.deploy(self.package("one"), self.root, self.config)

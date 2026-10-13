@@ -83,7 +83,7 @@ class AssetStoreTest(unittest.TestCase):
             record = STORE.accept_component(self.store, ref, candidate["package_sha256"], "synthetic fixture", runtime_root=self.harness)
             package, _ = STORE.resolve_component(self.harness, ref)
             with patch.object(STORE, "file_sha256", side_effect=AssertionError("Inventory must not hash package bytes")):
-                self.assertTrue(any(row["component_ref"] == ref for row in STORE.discover_components(self.harness)["assets"]))
+                self.assertTrue(any(row["component_ref"] == ref for row in STORE.legacy_discover_components(self.harness)["assets"]))
             binding = {"schema_version": 3, "component_ref": ref, "scene": "S01",
                        "usage": {"role": "subject", "required": True}}
             COMPONENT.install_component(package, project, binding, acceptance=record)
@@ -191,7 +191,7 @@ class AssetStoreTest(unittest.TestCase):
             REPO / ".studio/component_harness.py", REPO / ".studio/asset_store.py", REPO / "windows-runtime.lock.json")}
         source_hash = COMPONENT.package_sha256(self.source)
         STORE.register_source(self.store, self.source)
-        source = STORE.discover_components(self.harness)["assets"][0]
+        source = STORE.legacy_discover_components(self.harness)["assets"][0]
         self.assertEqual((self.ref, False, "source"), (source["component_ref"], source["available"], source["origin"]))
         with self.assertRaisesRegex(COMPONENT.ComponentError, "not accepted"):
             STORE.resolve_component(self.harness, self.ref)
@@ -254,14 +254,14 @@ class AssetStoreTest(unittest.TestCase):
     def test_unaccepted_external_approved_label_and_unsupported_types_fail_closed(self):
         self.metadata(status="library-approved")
         STORE.register_source(self.store, self.source)
-        self.assertFalse(STORE.discover_components(self.harness)["assets"][0]["available"])
+        self.assertFalse(STORE.legacy_discover_components(self.harness)["assets"][0]["available"])
         with self.assertRaisesRegex(COMPONENT.ComponentError, "not accepted"):
             STORE.resolve_component(self.harness, str(self.source))
         self.metadata(asset_type="background")
         with self.assertRaisesRegex(COMPONENT.ComponentError, "Unsupported asset type"):
             STORE.import_component(self.store, self.source)
         with self.assertRaisesRegex(COMPONENT.ComponentError, "Unsupported asset contract"):
-            STORE.import_component(self.store, REPO / ".studio/backgrounds/rse-functional-background/4x3/v1")
+            STORE.import_component(self.store, REPO / "tests/fixtures/legacy-packages/background-only/4x3/v1")
 
     def test_acceptance_digest_and_runtime_are_verified_from_lock(self):
         acceptance = self.accept()
@@ -286,15 +286,14 @@ class AssetStoreTest(unittest.TestCase):
                 self.assertEqual(expected, WORK.main(["--json", "component", *arguments], root=self.harness), errors.getvalue())
             return json.loads(output.getvalue()) if output.getvalue() else errors.getvalue()
 
-        self.assertEqual(str(self.store), command("root")["asset_root"])
-        command("source-add", str(self.source))
+        for arguments in (("root",), ("source-add", str(self.source)), ("import", str(self.source)),
+                          ("pack", str(self.source)), ("accept", self.ref, "--sha256", "0" * 64, "--note", "test")):
+            self.assertIn("v4.2", command(*arguments, expected=2))
         command("validate", str(self.source), "--candidate")
         command("validate", self.ref, expected=2)
-        candidate = command("import", str(self.source))
-        command("accept", self.ref, "--sha256", candidate["package_sha256"],
-                "--note", "Synthetic acceptance for CLI regression test")
+        self.accept()
         assets = command("list", "--query", "external-example")["assets"]
-        self.assertTrue(any(asset["available"] for asset in assets))
+        self.assertEqual([], assets)  # Active discovery never reads the legacy store.
         self.assertEqual(self.ref, command("validate", self.ref)["component_ref"])
         self.assertFalse((self.harness / "works").exists())
 

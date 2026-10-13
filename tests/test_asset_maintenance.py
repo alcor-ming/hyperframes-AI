@@ -219,7 +219,7 @@ class AssetMaintenanceTest(unittest.TestCase):
 
     def test_legacy_ratio_candidate_archive(self):
         legacy = self.root / 'legacy-ratio'
-        shutil.copytree(REPO / '.studio/components/chapter-intro/4x3/v1', legacy)
+        shutil.copytree(REPO / 'tests/fixtures/components/chapter-intro/4x3/v1', legacy)
         candidate = STORE.import_component(self.target, legacy)
         self.assertEqual('chapter-intro/4x3@v1', candidate['component_ref'])
         relative = 'candidates/chapter-intro/4x3/v1'

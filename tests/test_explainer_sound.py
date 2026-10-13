@@ -7,7 +7,7 @@ from test_explainer_cues import alignment
 import test_work_appearance as fixture
 import asset_store
 import explainer
-from component_harness import install_component
+from component_harness import install_component, ComponentError
 from visual_plan import Composition
 
 cli = fixture.cli
@@ -58,11 +58,21 @@ class ExplainerCliTests(unittest.TestCase):
     def test_explicit_build_from_approved_narration_and_installed_sound(self):
         self.check_sound_build("explainer")
 
+    @unittest.skipUnless((fixture.REPO / '.studio/designs/english/design.json').is_file(), 'Personal English card not installed')
     def test_english_build_from_approved_narration_and_installed_sound(self):
         self.check_sound_build("english")
 
-    def check_sound_build(self, mode):
-        identity = self.invoke("new", "Sound", "--workflow", "hyperframes_video", "--account", "a", "--mode", mode)
+    @unittest.skipUnless((fixture.REPO / '.studio/designs/math/design.json').is_file(), 'Personal math card not installed')
+    def test_math_without_account_builds_and_checks_closure(self):
+        self.check_sound_build("math", no_account=True)
+
+    def check_sound_build(self, mode, no_account=False):
+        design = "stage-full" if mode == "explainer" else mode
+        overrides = self.base / 'sound-overrides.json'
+        overrides.write_text(json.dumps({'sfx': {'enabled': True}}))
+        identity = self.invoke("new", "Sound", "--workflow", "hyperframes_video",
+                               *( ["--no-account"] if no_account else ["--account", "a"] ), "--design", design,
+                               '--overrides', str(overrides))
         work, _ = cli.locate_work(self.root, identity)
         variant = work / "variants/main"
         project = variant / "project"
@@ -72,6 +82,14 @@ class ExplainerCliTests(unittest.TestCase):
         raw.write_bytes(alignment("ABC", step=1))
         self.invoke("--work", identity, "--variant", "main", "cues", "build", "--alignment", str(raw))
         self.assertEqual("ABC", json.loads((project / "runtime/cues.json").read_text())["text"])
+        if no_account:
+            runtime = project / 'runtime/cues.js'
+            original_runtime = runtime.read_bytes().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+            runtime.write_bytes(original_runtime)
+            with mock.patch.object(explainer, 'declare_files', side_effect=explainer.ExplainerError('config failure')):
+                with self.assertRaisesRegex(explainer.ExplainerError, 'config failure'):
+                    self.invoke('--work', identity, '--variant', 'main', 'cues', 'build', '--alignment', str(raw))
+            self.assertEqual(original_runtime, runtime.read_bytes())
         source = self.base / "tone"
         source.mkdir()
         result = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
@@ -87,9 +105,30 @@ class ExplainerCliTests(unittest.TestCase):
         (project / "index.html").write_text("<html><body></body></html>")
         sound = {"bgm": None, "sfx": [{"ref": "tone@v1", "cue": "B", "event": "reveal", "tier": "light", "gain": 0.6}]}
         (variant / "ANIMATION_PLAN.md").write_text('---\n{"plan_format":"3.5.2","status":"approved"}\n---\n## S01\nSound event\n## 声音导出\n```sound\n' + json.dumps(sound) + '\n```\n')
+        state = cli.read_json(variant / 'variant.yaml')
+        state['design_values']['sfx.enabled'] = False
+        cli.write_variant(variant, state)
+        before_disabled = (project / 'index.html').read_bytes()
+        with self.assertRaisesRegex(cli.HarnessError, 'SFX are disabled'):
+            self.invoke('--work', identity, '--variant', 'main', 'sound', 'build')
+        self.assertEqual(before_disabled, (project / 'index.html').read_bytes())
+        self.assertFalse((project / 'sound.json').exists())
+        state['design_values']['sfx.enabled'] = True
+        cli.write_variant(variant, state)
         self.invoke("--work", identity, "--variant", "main", "sound", "build")
         self.assertIn('data-start="0.9"', (project / "index.html").read_text())
         self.assertEqual(sound, json.loads((project / "sound.json").read_text()))
+        if no_account:
+            self.assertNotIn('appearance_lock', cli.read_json(variant / 'variant.yaml'))
+            closure = project / 'COMPONENT_LOCK.json'
+            original_closure = closure.read_bytes()
+            closure.write_text('{}')
+            try:
+                with self.assertRaises(ComponentError):
+                    self.invoke('--work', identity, '--variant', 'main', 'sound', 'build')
+            finally:
+                closure.write_bytes(original_closure)
+            self.assertEqual(sound, json.loads((project / 'sound.json').read_text()))
         config = json.loads((project / "project-config.json").read_text())
         self.assertIn("runtime/cues.json", config["snapshot_dependencies"])
         self.assertIn("sound.json", config["snapshot_dependencies"])

@@ -17,7 +17,13 @@
     }
     for (const asset of assets.filter(a => a.kind === "character")) {
       const metadata = await read(`${asset.vendor_path}/asset.json`);
-      if (metadata.kind !== "character" || `${metadata.id}@v${metadata.version}` !== asset.ref) throw new Error("figure_identity_mismatch");
+      let identity = metadata.id;
+      if (asset.ref.includes('/')) {
+        const hashes = await read(`${asset.vendor_path}/HASHES.json`);
+        if (hashes.card_ref?.split('/').length !== 2 || hashes.card_ref.split('/')[1] !== metadata.id || hashes.component_ref !== asset.ref || hashes.package_sha256 !== asset.package_sha256) throw new Error("figure_card_identity_mismatch");
+        identity = hashes.card_ref;
+      }
+      if (metadata.kind !== "character" || `${identity}@v${metadata.version}` !== asset.ref) throw new Error("figure_identity_mismatch");
       const declaration = await read(`${asset.vendor_path}/${metadata.entry}`);
       if (!declaration.states?.[declaration.default_state]) throw new Error("figure_default_state_missing");
       const states = {};

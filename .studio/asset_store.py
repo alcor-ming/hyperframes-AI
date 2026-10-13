@@ -150,6 +150,17 @@ def register_source(store: Path, directory: Path) -> dict:
 
 
 def authoring_project(root: Path, project: Path) -> Path:
+    import designs
+    project = project.expanduser().absolute()
+    user = designs.user_root(root)
+    if user is not None:
+        for identity in designs.catalog(root):
+            card = designs.card_path(identity, root)
+            if card.parent == user and project.is_relative_to(card / "example"):
+                _guard_source(project)
+                if not project.is_dir():
+                    raise ComponentError("Card example project is missing")
+                return project
     store = asset_store_root(root)
     managed = _target(store, "sources")
     project = project.expanduser().absolute()
@@ -309,15 +320,20 @@ def accept_component(store: Path, ref: str, sha256: str, note: str, *, runtime_r
     return acceptance
 
 
+def _entries(directory: Path, match) -> list[Path]:
+    """Every matching directory entry, including link loops that Path.rglob hides on Python 3.11."""
+    return [Path(parent) / name for parent, _, names in os.walk(directory) for name in names if match(name)]
+
+
 def _discover_references(directory: Path, seen: set | None = None) -> tuple[list[dict], list[dict]]:
     assets, warnings = [], []
     seen = set() if seen is None else seen
     required = ("source_ref", "title", "purpose", "tags", "workflow_role",
                 "primary_category", "classification_status", "limits")
-    candidates = {path: "scene-source" for path in directory.rglob("manifest.json")}
-    candidates.update({path: "recipe" for path in directory.rglob("*.md") if path.name != "COMPONENT.md"})
+    candidates = {path: "scene-source" for path in _entries(directory, lambda name: name == "manifest.json")}
+    candidates.update({path: "recipe" for path in _entries(directory, lambda name: name.endswith(".md") and name != "COMPONENT.md")})
     source_approvals = set()
-    for acceptance in directory.rglob("ACCEPTANCE.json"):
+    for acceptance in _entries(directory, lambda name: name == "ACCEPTANCE.json"):
         try:
             if not acceptance.resolve().is_relative_to(directory.resolve()):
                 raise ComponentError("Approval path escapes source root")
@@ -334,7 +350,8 @@ def _discover_references(directory: Path, seen: set | None = None) -> tuple[list
             warnings.append({"path": str(acceptance), "code": "invalid_source_approval", "error": str(error)})
     for path, kind in sorted(candidates.items()):
         try:
-            inside = path.resolve().is_relative_to(directory.resolve())
+            # Strict for existing entries: a link loop resolves silently on Python 3.11 and would vanish behind is_file().
+            inside = Path(os.path.realpath(path, strict=os.path.lexists(path))).is_relative_to(directory.resolve())
         except (OSError, RuntimeError):
             inside = False
         if not inside:
@@ -488,10 +505,13 @@ def _retired_roots(store):
     return {Path(item).resolve() for item in roots}
 
 
-def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
-                        recommendation=None, rebuild=False, research_root=None, audit=False,
-                        config=None, asset_layer=None, include_references=False, broll_role=None) -> dict:
+def legacy_discover_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
+                               recommendation=None, rebuild=False, research_root=None, audit=False,
+                               config=None, asset_layer=None, include_references=False, broll_role=None,
+                               design=None) -> dict:
     from asset_contract import KINDS, validate_asset_layer
+    if design is not None:
+        raise ComponentError("Design scope applies to card discovery, not the legacy AssetStore")
     if asset_layer is not None and asset_layer != "unclassified":
         validate_asset_layer(asset_layer)
     if broll_role is not None and broll_role not in ("hook", "concept", "transition"):
@@ -500,7 +520,8 @@ def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, t
         compatibility = metadata.get("compatibility", {})
         return compatibility.get("ratios", []) if isinstance(compatibility, dict) else []
 
-    roots = [(root / ".studio/components", "legacy")]
+    # v4.2: discovery lives in card asset libraries; no legacy repository root.
+    roots = []
     if config is not None:
         if not isinstance(config.get("asset_root"), str) or not Path(config["asset_root"]).is_absolute():
             raise ComponentError("AssetStore requires an absolute path")
@@ -731,6 +752,10 @@ def _describe_action(asset: dict, *, candidate: bool = False) -> None:
                         else "Use component install with this exact ref, a reviewed --binding-file and explicit --work/--variant or --project; verify package_sha256 on use.")
     elif reference and asset["asset_type"] == "scene-source":
         action, instructions = "derive-reference", "Read the declared source and entry for manual derivation in an authorized editable project; not installable."
+    elif asset.get("origin") == REFERENCE_ORIGIN:
+        action = "referenced-use"
+        instructions = (f"Declared by {asset['referenced_by']}: from a Variant of that card, install or bind "
+                        f"{asset['component_ref']} (read-only source copy); use design localize to edit.")
     elif asset.get("reference_only"):
         action, instructions = "reference-only", "Read this reference and its declared usage; not installable."
     else:
@@ -738,9 +763,9 @@ def _describe_action(asset: dict, *, candidate: bool = False) -> None:
     asset["next_step"] = {"action": action, "instructions": instructions}
 
 
-def component_interface(root: Path, value: str, *, candidate: bool = False) -> dict:
+def _store_component_interface(root: Path, value: str, *, candidate: bool = False) -> dict:
     """Read an exact discovered object without invoking installation resolution."""
-    inventory = discover_components(root, include_references=True, audit=True)
+    inventory = legacy_discover_components(root, include_references=True, audit=True)
     path = Path(value).expanduser()
     if not path.is_absolute():
         path = root / path
@@ -831,7 +856,7 @@ def component_interface(root: Path, value: str, *, candidate: bool = False) -> d
     return card
 
 
-def resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:
+def _store_resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:
     path = Path(value).expanduser()
     if not path.is_absolute():
         path = root / path
@@ -839,7 +864,7 @@ def resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:
     ref = _validate_package(path)["component_ref"] if is_path else value
     parse_component_ref(ref)
     _selection_for_use(root)
-    inventory = discover_components(root, include_references=True)
+    inventory = legacy_discover_components(root, include_references=True)
     if any(item["component_ref"] == ref and item.get("reference_only") and item.get("package_sha256") for item in inventory["assets"]):
         raise ComponentError(f"Reference assets cannot be installed: {ref}")
     matches = [item for item in inventory["assets"] if item["component_ref"] == ref and not item.get("reference_only")]
@@ -875,7 +900,11 @@ def _accepted_closure(store, references, *, runtime_root=None, visiting=None):
         relative = _relative(ref)
         package = _target(store, (Path("packages") / relative).as_posix())
         record = _target(store, (Path("acceptances") / relative / "acceptance.json").as_posix())
-        if not package.is_dir() or not record.is_file():
+        if not package.is_dir() and not _target(store, (Path("candidates") / relative).as_posix()).exists():
+            raise ComponentError(f"Legacy AssetStore package is missing: {ref} (store {store}); "
+                                 "frozen Works keep their vendor copies, new bindings need the package restored "
+                                 "or an explicit rebind to a card asset")
+        if not record.is_file():
             raise ComponentError(f"Asset dependency is not accepted: {ref}")
         report = _validate_package(package, ref)
         if (report["metadata"].get("kind") != reference["kind"] or report["package_sha256"] != reference["package_sha256"]):
@@ -905,15 +934,58 @@ def _selection_for_use(root):
     return _validate_selection(_read_json(path)) if path.exists() else {}
 
 
+def card_asset_reference(root: Path, reference: str):
+    from asset_contract import validate_card_asset, validate_card_asset_reference
+    card, asset = validate_card_asset_reference(reference)
+    source = _design_card_path(card, root) / 'assets' / asset
+    report = validate_card_asset(source, expected_id=asset)
+    return source, {"ref": f"{reference}@v{report['version']}", "kind": report['kind'],
+                    "package_sha256": report['content_sha256'], "metadata": report['metadata'],
+                    "card_ref": reference, "path": str(source), "acceptance": None}
+
+
 def resolve_asset_closure(root: Path, references: list[dict]) -> list[dict]:
     """Resolve dependency-first accepted packages, never candidates or floating versions."""
-    closure = _accepted_closure(asset_store_root(root), references, runtime_root=root)
+    from asset_contract import validate_reference
+    resolved, visiting = {}, set()
+    def visit(reference):
+        validate_reference(reference)
+        ref = reference['ref']
+        if ref in visiting:
+            raise ComponentError('Cyclic asset dependency: ' + ref)
+        if ref in resolved:
+            if any(reference[key] != resolved[ref][key] for key in ('kind', 'package_sha256')):
+                raise ComponentError('Conflicting exact asset references: ' + ref)
+            return
+        if '/' not in ref:
+            try:
+                store = asset_store_root(root)
+            except ComponentError as error:
+                raise ComponentError(f"Legacy asset reference {ref} needs the retired AssetStore, which is not "
+                                     "configured; frozen Works keep their vendor copies, new bindings need asset_root "
+                                     "restored or an explicit rebind to a card asset") from error
+            for item in _accepted_closure(store, [reference], runtime_root=root):
+                resolved[item['ref']] = item
+            return
+        source, item = card_asset_reference(root, ref.rsplit('@v', 1)[0])
+        if any(reference[key] != item[key] for key in ('ref', 'kind', 'package_sha256')):
+            raise ComponentError('Card asset reference changed: ' + ref)
+        visiting.add(ref)
+        for dependency in item['metadata'].get('asset_dependencies', []):
+            visit(dependency)
+        visiting.remove(ref)
+        resolved[ref] = item
+    for reference in references:
+        visit(reference)
+    closure = list(resolved.values())
+    if all(item.get('card_ref') for item in closure):
+        return closure
     selection = _selection_for_use(root)
     for item in closure:
         if _layer(item["metadata"], selection.get(item["ref"])) == "reference":
             raise ComponentError(f"Reference assets cannot be installed: {item['ref']}")
     resolved_refs = {item["ref"] for item in closure}
-    for item in discover_components(root, include_references=True)["assets"]:
+    for item in legacy_discover_components(root, include_references=True)["assets"]:
         if item["component_ref"] in resolved_refs and item.get("conflict"):
             raise ComponentError(f"Conflicting identity/version across asset sources: {item['component_ref']}")
     return closure
@@ -924,3 +996,316 @@ def resolve_asset(root: Path, reference: dict) -> tuple[Path, dict, dict]:
     item = next(item for item in closure if item["ref"] == reference["ref"])
     path = Path(item["path"])
     return path, _validate_package(path, item["ref"]), item["acceptance"]
+
+
+# --- v4.2 in-card asset library (D9/D10/D16) --------------------------------
+
+CARD_ORIGIN = "card"
+REFERENCE_ORIGIN = "reference"
+
+
+def _design_catalog(root, config=None):
+    """Valid cards and per-card problems; one bad card never hides the others."""
+    import designs
+    return designs.catalog_report(root=root, config=config)
+
+
+def _design_card_path(identity, root, config=None):
+    import designs
+    return designs.card_path(identity, root=root, config=config)
+
+
+def _declared_ratios(metadata):
+    compatibility = metadata.get("compatibility", {})
+    return compatibility.get("ratios", []) if isinstance(compatibility, dict) else []
+
+
+def _card_asset_row(card_id, asset_id, asset_dir, report):
+    metadata = report["metadata"]
+    row = {
+        "component_ref": f"{card_id}/{asset_id}", "card": card_id, "asset_id": asset_id,
+        "package_sha256": report["content_sha256"], "path": str(asset_dir.resolve()),
+        "origin": CARD_ORIGIN, "available": True, "status": "source",
+        "asset_type": metadata.get("asset_type", "component"), "ratio": metadata.get("ratio"),
+        "ratios": _declared_ratios(metadata),
+        "communication_goal": metadata.get("communication_goal", metadata.get("description", "")),
+        "information_shapes": metadata.get("information_shapes", []),
+        "anti_use_cases": metadata.get("anti_use_cases", []), "acceptance": None,
+        "verification": "card asset field contract checked; not accepted",
+    }
+    row.update({key: metadata[key] for key in ("purpose", "tags", "entry", "compatibility",
+        "hit_offset", "hit_offset_estimated", "asset_layer", "broll") if key in metadata})
+    if str(metadata.get("entry", "")).lower().endswith(".mp3"):
+        row["media_type"] = "audio"
+    return row
+
+
+def _reference_row(card_id, reference, cards, root, config, problems=()):
+    from asset_contract import validate_card_asset, validate_card_asset_reference
+    source_card, asset_id = validate_card_asset_reference(reference)
+    if source_card not in cards:
+        reason = next((item["error"] for item in problems if item["card"] == source_card), None)
+        if reason:
+            raise ComponentError(f"Reference {reference} targets an unavailable card: {reason}")
+        raise ComponentError(f"Reference {reference} targets a missing card: {source_card}")
+    asset_dir = _design_card_path(source_card, root, config) / "assets" / asset_id
+    if not (asset_dir / "asset.json").is_file():
+        raise ComponentError(f"Reference {reference} targets a missing asset")
+    report = validate_card_asset(asset_dir, expected_id=asset_id)
+    row = _card_asset_row(source_card, asset_id, asset_dir, report)
+    row.update(component_ref=reference, origin=REFERENCE_ORIGIN, available=False,
+               reference_only=True, installable=False, status="reference",
+               referenced_by=card_id, usable_by=[card_id], declaration=str(asset_dir / "asset.json"))
+    return row
+
+
+def _discover_card_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
+                              recommendation=None, rebuild=False, research_root=None, audit=False,
+                              config=None, asset_layer=None, include_references=False, broll_role=None,
+                              design=None) -> dict:
+    """Discover assets from design-card asset libraries.
+
+    Identity is ``<card-id>/<asset-id>``; ``references`` in a card's
+    ``design.json`` resolve read-only to the source card. No AssetStore or
+    legacy repository root is read here.
+    """
+    from asset_contract import validate_asset_layer
+    if asset_layer is not None and asset_layer != "unclassified":
+        validate_asset_layer(asset_layer)
+    if broll_role is not None and broll_role not in ("hook", "concept", "transition"):
+        raise ComponentError("Invalid broll role filter")
+    try:
+        cards, problems = _design_catalog(root, config)
+    except ComponentError:
+        raise
+    except Exception as error:
+        raise ComponentError(f"Cannot read the design catalog: {error}") from error
+    if design is not None and design not in cards:
+        reason = next((item["error"] for item in problems if item["card"] == design), None)
+        raise ComponentError(reason or f"Unknown design card: {design}")
+    assets: list[dict] = []
+    errors: list[dict] = [{"path": item["path"], "card": item["card"], "code": "card_unavailable",
+                           "error": item["error"]} for item in problems]
+    warnings: list[dict] = []
+    seen: set = set()
+    for card_id in sorted(cards):
+        card = cards[card_id]
+        if not isinstance(card, dict):
+            errors.append({"path": str(card_id), "error": "Design card must be an object"})
+            continue
+        try:
+            card_dir = _design_card_path(card_id, root, config)
+        except (ComponentError, OSError, ValueError) as error:
+            errors.append({"path": str(card_id), "error": f"Cannot locate card: {error}"})
+            continue
+        references = card.get("references") or []
+        if not isinstance(references, list):
+            errors.append({"path": str(card_dir / "design.json"), "error": "references must be a list"})
+            references = []
+        for reference in references:
+            try:
+                assets.append(_reference_row(card_id, reference, cards, root, config, problems))
+            except ComponentError as error:
+                errors.append({"path": str(card_dir / "design.json"), "component_ref": reference, "error": str(error)})
+        assets_dir = card_dir / "assets"
+        if not assets_dir.is_dir():
+            continue
+        for metadata_path in sorted(assets_dir.glob("*/asset.json")):
+            asset_dir = metadata_path.parent
+            asset_id = asset_dir.name
+            try:
+                if asset_dir.is_symlink() or not asset_dir.resolve().is_relative_to(assets_dir.resolve()):
+                    raise ComponentError("Card asset path is unsafe")
+                if asset_dir.resolve() in seen:
+                    errors.append({"path": str(asset_dir), "error": "Duplicate card asset path"})
+                    continue
+                seen.add(asset_dir.resolve())
+                from asset_contract import validate_card_asset
+                report = validate_card_asset(asset_dir, expected_id=asset_id)
+            except (ComponentError, OSError, ValueError, KeyError, TypeError) as error:
+                errors.append({"path": str(asset_dir), "error": str(error)})
+                continue
+            assets.append(_card_asset_row(card_id, asset_id, asset_dir, report))
+    # Selected-card scope is what install and appearance binding enforce: owner plus declaring cards.
+    referencing: dict[str, list] = {}
+    for asset in assets:
+        if asset["origin"] == REFERENCE_ORIGIN:
+            referencing.setdefault(asset["component_ref"], []).append(asset["referenced_by"])
+    for asset in assets:
+        if asset["origin"] == CARD_ORIGIN:
+            asset["usable_by"] = [asset["card"], *sorted(referencing.get(asset["component_ref"], []))]
+    for asset in assets:
+        try:
+            asset["asset_layer"] = "reference" if asset.get("reference_only") else _layer(asset)
+        except ComponentError as error:
+            errors.append({"path": asset["path"], "error": str(error)})
+            asset.update(asset_layer="unclassified", available=False)
+        asset["lifecycle"] = "card"
+        asset["recommendation"] = asset.get("recommendation", "pending")
+        asset["group"] = asset["origin"]
+        asset["match_reasons"] = [key for key in ("component_ref", "title", "communication_goal", "purpose",
+            "aliases", "tags", "information_shapes", "workflow_role", "primary_category", "limits")
+            if query and query.casefold() in json.dumps(asset.get(key, ""), ensure_ascii=False).casefold()]
+        if asset["origin"] == REFERENCE_ORIGIN:
+            asset["use"] = (f"read-only reference declared by {asset['referenced_by']}; usable as "
+                            f"{asset['component_ref']} only from Variants of {asset['referenced_by']}")
+        elif asset["asset_type"] in {"theme", "background", "motion"}:
+            asset["use"] = "appearance binding with exact card asset from Variants of: " + ", ".join(asset["usable_by"])
+        else:
+            asset["use"] = "card asset install with exact identity from Variants of: " + ", ".join(asset["usable_by"])
+        _describe_action(asset)
+    if query:
+        assets = [asset for asset in assets if asset["match_reasons"]]
+    if design is not None:
+        assets = [asset for asset in assets if asset["origin"] == CARD_ORIGIN and asset["card"] == design
+                  or asset["origin"] == REFERENCE_ORIGIN and asset["referenced_by"] == design]
+    references_shown = include_references or design is not None
+    assets = [asset for asset in assets if (not kind or asset["asset_type"] == kind or asset.get("media_type") == kind)
+              and (not asset_layer or asset["asset_layer"] == asset_layer)
+              and (references_shown or kind in {"scene-source", "recipe"} or asset_layer == "reference" or asset["asset_layer"] != "reference")
+              and (not ratio or ratio.replace("x", ":") in asset["ratios"] or ratio == "unknown" and not asset["ratios"])
+              and (not tag or tag in asset.get("tags", []))
+              and (not broll_role or isinstance(asset.get("broll"), dict) and asset["broll"].get("role") == broll_role)
+              and (not recommendation or asset["recommendation"] == recommendation)]
+    assets.sort(key=lambda asset: (not asset["available"],
+               {"recommended": 0, "pending": 1, "historical": 2}[asset["recommendation"]],
+               asset["component_ref"], asset["path"]))
+    warnings = list({json.dumps(item, sort_keys=True): item for item in warnings}.values())
+    result = {"assets": assets, "errors": errors, "warnings": warnings, "conflicts": [], "refreshed": [],
+              "filters": {"query": query, "kind": kind, "ratio": ratio, "tag": tag, "design": design,
+                          "asset_layer": asset_layer, "recommendation": recommendation, "broll_role": broll_role,
+                          "include_references": references_shown or kind in {"scene-source", "recipe"} or asset_layer == "reference"}}
+    if not assets:
+        result["message"] = ("No matches for these filters; this is not a complete inventory. "
+                             "Reference entries are hidden unless explicitly requested.")
+    if audit:
+        result["audit"] = {"warnings": warnings, "warning_count": len(warnings), "error_count": len(errors)}
+    if research_root is not None:
+        from research_catalog import query as research_query
+        result["research"] = research_query(research_root, query)["documents"]
+    return result
+
+
+def discover_components(root: Path, query: str = "", *, kind=None, ratio=None, tag=None,
+                        recommendation=None, rebuild=False, research_root=None, audit=False,
+                        config=None, asset_layer=None, include_references=False, broll_role=None,
+                        design=None) -> dict:
+    """Discover live card assets; legacy store discovery is an explicit compatibility API."""
+    result = _discover_card_components(root, query, kind=kind, ratio=ratio, tag=tag,
+        recommendation=recommendation, rebuild=rebuild, audit=audit, config=config,
+        asset_layer=asset_layer, include_references=include_references, broll_role=broll_role, design=design)
+    if research_root is not None:
+        from research_catalog import query as research_query
+        result["research"] = research_query(research_root, query)["documents"]
+    return result
+
+
+def _is_legacy_component_ref(value) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parse_component_ref(value)
+    except ComponentError:
+        return False
+    return True
+
+
+def _card_interface(root: Path, value: str):
+    from asset_contract import validate_card_asset
+    inventory = discover_components(root, include_references=True, audit=True)
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    try:
+        resolved = str(path.resolve())
+    except (OSError, RuntimeError):
+        resolved = None
+    matches = [row for row in inventory["assets"] if row["path"] == resolved]
+    matches = [row for row in matches if "card" in row]
+    if not matches:
+        matches = [row for row in inventory["assets"] if row["component_ref"] == value and "card" in row]
+        owned = [row for row in matches if not row.get("reference_only")]
+        if owned:
+            matches = owned
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise ComponentError("Ambiguous card asset reference; select an exact target: "
+                             + json.dumps([row["component_ref"] for row in matches], ensure_ascii=False))
+    card = dict(matches[0])
+    source = Path(card["path"])
+    if card.get("reference_only"):
+        raise ComponentError(f"Reference assets are read-only: {card['component_ref']}")
+    report = validate_card_asset(source, expected_id=card["asset_id"])
+    metadata = report["metadata"]
+    card["declaration"] = str(source / "asset.json")
+    card["check_scope"] = "card asset field contract checked; not accepted or frozen"
+    keys = ("communication_goal", "purpose", "usage", "example", "examples", "ratio", "compatibility", "layers",
+            "slots", "parameters", "duration_range", "motion_recipe", "customization", "broll", "limits", "limitations")
+    card["interface"] = {key: metadata[key] for key in keys if key in metadata}
+    card["interface"].setdefault("layers", "not declared; verify the selected card asset before use")
+    for key in ("usage", "example"):
+        name = metadata.get(key)
+        if isinstance(name, str):
+            try:
+                attachment = source / _safe_relative(name, f"interface {key}")
+                if not attachment.resolve().is_relative_to(source.resolve()):
+                    raise ComponentError(f"Interface {key} escapes its directory")
+                if not attachment.is_file():
+                    raise ComponentError(f"Missing interface {key}: {attachment}")
+                card["interface"][key] = attachment.read_text(encoding="utf-8-sig")
+            except (OSError, RuntimeError, ValueError) as error:
+                raise ComponentError(f"Invalid interface {key}: {error}") from error
+    card.setdefault("purpose", metadata.get("purpose", metadata.get("communication_goal", metadata.get("description", "not declared"))))
+    card.setdefault("examples", metadata.get("examples", []))
+    card.setdefault("limitations", metadata.get("limits", metadata.get("limitations", metadata.get("anti_use_cases", "not declared"))))
+    card["diagnostics"] = [item for item in [*inventory["errors"], *inventory["warnings"]]
+                           if item.get("component_ref") == card["component_ref"]
+                           or item.get("path") in {card["path"], card["declaration"]}]
+    _describe_action(card)
+    return card
+
+
+def _is_card_asset_path(root: Path, path: Path, config=None) -> bool:
+    """True when ``path`` is inside one catalog card's ``assets/`` directory."""
+    try:
+        cards, _ = _design_catalog(root, config)
+    except (ComponentError, OSError, ValueError):
+        return False
+    for card_id in cards:
+        try:
+            assets_dir = (_design_card_path(card_id, root, config) / "assets").resolve()
+            if path.resolve().is_relative_to(assets_dir):
+                return True
+        except (OSError, RuntimeError):
+            continue
+    return False
+
+
+def component_interface(root: Path, value: str, *, candidate: bool = False) -> dict:
+    """Read an exact card asset or accepted legacy object without installing."""
+    if not candidate and not _is_legacy_component_ref(value):
+        card = _card_interface(root, value)
+        if card is not None:
+            return card
+    return _store_component_interface(root, value, candidate=candidate)
+
+
+def resolve_component(root: Path, value: str) -> tuple[Path, dict | None]:
+    """Resolve a card asset (identity or path) or an explicit legacy accepted ref."""
+    from asset_contract import validate_card_asset
+    if _is_legacy_component_ref(value):
+        return _store_resolve_component(root, value)
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    if path.is_dir() and (path / "asset.json").is_file() and _is_card_asset_path(root, path):
+        validate_card_asset(path, expected_id=path.name)
+        return path.resolve(), None
+    inventory = discover_components(root, include_references=True, audit=True)
+    matches = [row for row in inventory["assets"] if row["component_ref"] == value and "card" in row]
+    if not matches:
+        return _store_resolve_component(root, value)
+    if matches[0].get("reference_only"):
+        raise ComponentError(f"Reference assets cannot be installed: {value}")
+    return Path(matches[0]["path"]), None

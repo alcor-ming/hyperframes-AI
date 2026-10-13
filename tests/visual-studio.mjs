@@ -22,7 +22,7 @@ const playwrightEntry = (await fs.stat(PLAYWRIGHT_PACKAGE)).isDirectory()
 const {chromium} = await import(pathToFileURL(playwrightEntry).href);
 const sharp = createRequire(path.join(HF_PACKAGE, 'package.json'))('sharp');
 const hfVersion = JSON.parse(await fs.readFile(path.join(HF_PACKAGE, 'package.json'), 'utf8')).version;
-assert.equal(hfVersion, '0.8.27', 'Verify an intentional pinned-version change before updating this check');
+assert.equal(hfVersion, '0.8.150', 'Verify an intentional pinned-version change before updating this check');
 const command = WORK_COMMAND ? WORK_COMMAND.startsWith('[') ? JSON.parse(WORK_COMMAND) : [WORK_COMMAND]
   : [process.env.PYTHON || 'python3', path.join(repo, '.studio/work.py')];
 assert(Array.isArray(command) && command.length && command.every(value => typeof value === 'string'));

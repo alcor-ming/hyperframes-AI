@@ -1,0 +1,27 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "asset_ref": "capability-convergence/16x9@v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "5ed714326b244b25cf9b72e789d38d00fe8f57f3974f0c9145cd265bc1a0ce45"
+    },
+    {
+      "path": "artifact.html",
+      "sha256": "42f6cc3bb5ecae8174b8f384cff5e2c8e51e35bdea1ece79cb02336e14cfa5a4"
+    },
+    {
+      "path": "component.html",
+      "sha256": "5d954bdbe9fb2ee878e59e7c49445c4a89bc18dcdb7804aeac17d970ce3f5864"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "e685616b3ec70d917f1838ddb8e900d2dadfe2fbbf1a2a4e5456e5af8714a13d"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "ae13667cceed310eee1c37cc83ceac9ea8fa88f7a590ba03c1f62b107dc4dcaf"
+    }
+  ],
+  "package_sha256": "f5336baa073bb3e845fc0bb85369eae647262240cbff91578293740777474e5e"
+}

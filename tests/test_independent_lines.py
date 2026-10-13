@@ -8,6 +8,7 @@ import unittest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / '.studio'))
 import appearance
+import designs
 import director_plan
 import lines
 import math_build
@@ -15,15 +16,21 @@ import math_kit_assets
 from visual_plan import VisualPlanError, plan_scene_rows
 
 
+@unittest.skipUnless((Path(__file__).resolve().parents[1] / '.studio/designs/math/design.json').is_file(), 'Personal card contract; checked in personal assembly')
 class IndependentLinesTest(unittest.TestCase):
     def test_routes_freeze_and_legacy_math(self):
         catalog = lines.validate_catalogues()
+        self.assertEqual(set(designs.DESIGN_IDS), set(catalog))
         self.assertEqual({'explainer', 'showcase', 'math', 'english'}, set(appearance.MODES))
         self.assertNotIn('card', catalog)
-        self.assertEqual('explainer', lines.select({})['id'])
+        with self.assertRaisesRegex(ValueError, 'No design selected'):
+            lines.select({})
+        for design in designs.DESIGN_IDS:
+            state = {'mode': design}
+            self.assertEqual(design, lines.frozen({'line': lines.bind(state)})['id'])
+            self.assertEqual(design, lines.select(state)['id'])
         for mode in ('math', 'english'):
             state = {'mode': mode}
-            self.assertEqual(mode, lines.frozen({'line': lines.bind(state)})['id'])
             self.assertEqual(mode.upper() + '_PLAN.template.md', lines.select(state)['plan_template'])
             self.assertEqual([], director_plan.parse('', {'line': lines.bind(state)}, {'S01': {}})['findings'])
         for state in ({'mode': 'math'}, {'line': {'id': 'explainer/math-rap', 'version': 1}},
@@ -33,19 +40,24 @@ class IndependentLinesTest(unittest.TestCase):
         self.assertEqual('explainer/math-rap', lines.frozen({'line': {'id': 'explainer/math-rap', 'version': 1}})['id'])
 
     def test_retired_mode_keeps_configuration_source(self):
-        with self.assertRaisesRegex(ValueError, 'retired.*card'):
-            lines.select({'mode': 'card'})
+        for identity in ('card', 'showcase'):
+            with self.subTest(identity=identity), self.assertRaisesRegex(ValueError, 'retired.*reselect'):
+                lines.select({'mode': identity})
         for source in ('Account', 'Series', 'Appearance selection'):
             with self.subTest(source=source), self.assertRaisesRegex(appearance.AppearanceError, source + ' uses retired mode card'):
                 appearance.check_mode('card', source)
         with self.assertRaises(ValueError):
             lines.frozen({'line': {'id': 'card', 'version': 1}})
+        # Historical identities stay locatable for reading, not creation.
+        self.assertEqual('explainer', lines.frozen({'line': {'id': 'explainer', 'version': 1}})['id'])
 
-    def test_math_cannot_disable_captions(self):
-        refs = {kind: {'ref': 'fixture-' + kind + '@v1', 'kind': kind, 'package_sha256': 'a' * 64}
-                for kind in ('theme', 'background')}
-        with self.assertRaisesRegex(appearance.AppearanceError, 'math requires lyric captions'):
-            appearance.resolve(REPO, {**refs, 'mode': 'math', 'captions': False})
+    def test_math_and_english_default_captions_off(self):
+        expected = {'math': False, 'english': False, 'stage-full': True,
+                    'stage-light': True, 'collage': True, 'pdoom': False,
+                    'starline': True}
+        for identity, enabled in expected.items():
+            with self.subTest(identity=identity):
+                self.assertEqual(enabled, designs.defaults(identity)['captions.enabled'])
 
     def test_card_fences_are_rejected_but_plain_panels_and_screens_remain(self):
         header = '---\n{"plan_format":"3.5.2"}\n---\n'

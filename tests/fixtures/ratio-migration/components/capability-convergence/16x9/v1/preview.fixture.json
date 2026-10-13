@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "component_ref": "capability-convergence/16x9@v1",
+  "slots": {
+    "context": "Synthetic / convergence",
+    "items": [
+      {"index": "01", "skill": "Fixture A", "result": "synthetic trace"},
+      {"index": "02", "skill": "Fixture B", "result": "synthetic trace"},
+      {"index": "03", "skill": "Fixture C", "result": "synthetic trace"},
+      {"index": "04", "skill": "Fixture D", "result": "synthetic trace"},
+      {"index": "05", "skill": "Fixture E", "result": "synthetic trace"}
+    ],
+    "proposition": "05 traces -> 01 capability",
+    "core_name": "converge",
+    "summary_emphasis": "synthetic summary emphasis",
+    "summary_suffix": "synthetic summary suffix",
+    "handoff_label": "next"
+  },
+  "surfaces": {
+    "convergence_field": {"kind": "active_media_card", "mode": "none", "fallback": "programmatic"}
+  },
+  "key_times_seconds": [0, 2, 6, 9.6, 12.5]
+}

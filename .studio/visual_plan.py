@@ -83,7 +83,8 @@ def plan_scene_rows(plan_text):
     if meta.get('mode') == 'card' or product_line.get('id') == 'card':
         raise VisualPlanError('Unsupported retired card Plan; adopt a supported line')
     modern = meta.get('plan_format') == '3.7.0'
-    english = meta.get('mode') == 'english' or product_line.get('id') == 'english'
+    import lines
+    english = lines.has_check(meta, 'english')
     rows, information = {}, {}
     screen_count = 0
     for match in markdown_structure_lines(plan_text):
@@ -181,7 +182,7 @@ def plan_scene_rows(plan_text):
         except ValueError as error:
             raise VisualPlanError(str(error)) from error
         for sid, contract in contracts.items():
-            if meta.get('mode') == 'math' or product_line.get('id') == 'math':
+            if lines.has_check(meta, 'math-complete'):
                 required_text = [*contract['symbols'].values(), *contract['invariants']]
                 required_text += [value for unit in contract['units'] for value in unit.values()]
                 required_text += [value for check in contract['zero_basics'] for value in check.values()]

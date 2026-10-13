@@ -17,6 +17,7 @@ import explainer
 import work_tts
 
 
+@unittest.skipUnless((Path(__file__).resolve().parents[1] / '.studio/designs/math/design.json').is_file(), 'Personal card contract; checked in personal assembly')
 class IndependentLinesCliTest(unittest.TestCase):
     asset = test_work_appearance.WorkAppearanceTest.asset
 
@@ -33,14 +34,16 @@ class IndependentLinesCliTest(unittest.TestCase):
 
     def create(self, *arguments):
         identity = self.invoke('new', 'Isolated vocabulary fixture', '--workflow', 'hyperframes_video',
-                               '--account', 'a', '--purpose', 'standard', '--series', 'fixture', *arguments)
+                               '--account', 'a', '--purpose', 'standard', '--series', 'fixture',
+                               '--variant-id', 'main', *arguments)
         work, _ = cli.locate_work(self.root, identity)
         return identity, work
 
     def test_default_and_explicit_math_english_variants_bind_their_own_plans(self):
         identity, work = self.create()
         main = cli.read_json(work / 'variants/main/variant.yaml')
-        self.assertEqual((main['mode'], main['line']), ('explainer', {'id': 'explainer', 'version': 1}))
+        self.assertEqual((main['mode'], main['line']), ('explainer', {'id': 'stage-full', 'version': 1}))
+        self.assertEqual(main['design'], 'stage-full')
         for mode, heading in (('math', '# 数学思维 Plan'), ('english', '# 英语学习 Plan')):
             self.invoke('--work', identity, 'variant', 'add', mode, '--account', 'a', '--mode', mode)
             variant = work / 'variants' / mode
@@ -52,11 +55,12 @@ class IndependentLinesCliTest(unittest.TestCase):
             self.assertIn(heading, (variant / 'ANIMATION_PLAN.md').read_text())
             self.assertEqual(state['appearance_lock']['mode'], mode)
             if mode == 'math':
-                self.assertTrue(state['appearance_lock']['selection']['captions'])
-                self.assertTrue(plan['captions'])
-        with self.assertRaisesRegex(ValueError, 'captions'):
-            self.invoke('--work', identity, 'variant', 'add', 'no-lyrics', '--account', 'a', '--mode', 'math', '--captions', 'off')
-        self.assertFalse((work / 'variants/no-lyrics').exists())
+                self.assertFalse(state['appearance_lock']['selection']['captions'])
+                self.assertFalse(plan['captions'])
+        # Explicit captions still override the per-design default in both directions.
+        self.invoke('--work', identity, 'variant', 'add', 'with-lyrics', '--account', 'a', '--mode', 'math', '--captions', 'on')
+        with_lyrics = cli.read_json(work / 'variants/with-lyrics/variant.yaml')
+        self.assertTrue(with_lyrics['appearance_lock']['selection']['captions'])
 
     def test_retired_card_is_browsable_and_explicit_content_adoption_preserves_history(self):
         identity, work = self.create()
@@ -104,7 +108,7 @@ class IndependentLinesCliTest(unittest.TestCase):
         self.assertIn('english', [row['id'] for row in json.loads(self.invoke('--work', identity, 'variant', 'list'))])
 
     def test_english_cli_script_to_offline_speech_adoption_and_plan_cues(self):
-        identity, work = self.create('--mode', 'english')
+        identity, work = self.create('--mode', 'english', '--captions', 'on')
         variant = work / 'variants/main'
         script = cli.input_path(variant, 'SCRIPT.md')
         script.write_text('---\n{"approval":"approved","revision":2}\n---\n'

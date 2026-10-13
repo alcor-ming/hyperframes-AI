@@ -152,7 +152,10 @@ def references(text):
     return [value for value in re.split(r'[,，、\s]+', match[1].strip() if match else '') if value]
 
 
-def resolve(root, text, line, effective):
+def resolve(root, text, line, effective, *, card=None):
+    compatible = {line}
+    if card is not None:
+        compatible.update([card.get('mode'), *card.get('compatibility', {}).get('supersedes', [])])
     seeds = {item['id']: item for item in lines.catalogue('mechanisms')['mechanisms']}
     samples = {item['id']: item for item in entries(root, 'sample')}
     refs, findings, selected, seed_items = references(text), [], [], []
@@ -180,7 +183,7 @@ def resolve(root, text, line, effective):
             selected.append(item)
         elif item_id in seeds:
             item = seeds[item_id]
-            if line not in item['lines'] and not cross:
+            if not compatible.intersection(item['lines']) and not cross:
                 findings.append({'kind': 'mechanism_line_mismatch', 'id': item_id})
             seed_items.append(item)
         else:
@@ -208,7 +211,7 @@ def freeze(root, variant, revision, text, state, effective):
         if manifest['input'] != expected:
             raise ValueError('Reference inputs changed; refresh a new Plan revision')
         return digest(destination / 'references.json')
-    selected, seeds, findings = resolve(root, text, line_id(state), effective)
+    selected, seeds, findings = resolve(root, text, line_id(state), effective, card=lines.frozen(state) or lines.select(state))
     if any(item.get('severity') != 'warning' for item in findings):
         raise ValueError(json.dumps(findings, ensure_ascii=False))
     destination.parent.mkdir(parents=True, exist_ok=True)

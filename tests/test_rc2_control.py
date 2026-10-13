@@ -20,7 +20,7 @@ class Rc2ControlTest(unittest.TestCase):
         for account in ("a", "b"):
             cli.account_service(self.root).put("account", account, {"name": account})
         for series in ("one", "two"):
-            cli.account_service(self.root).put("series", series, {"name": series})
+            cli.account_service(self.root).put("series", series, {"name": series, "design": "stage-full"})
 
     def run_cli(self, *arguments, expected=0):
         output, error = io.StringIO(), io.StringIO()
@@ -31,7 +31,7 @@ class Rc2ControlTest(unittest.TestCase):
 
     def new(self, title, *, series="one", purpose="standard"):
         return self.run_cli("new", title, "--workflow", "hyperframes_video", "--purpose", purpose,
-                            "--series", series, "--account", "a")
+                            "--series", series, "--account", "a", "--variant-id", "main")
 
     def test_video_scope_and_account_variants(self):
         self.assertIn("requires --purpose", self.run_cli("new", "No purpose", "--workflow", "hyperframes_video", expected=2))
@@ -73,7 +73,8 @@ class Rc2ControlTest(unittest.TestCase):
         self.assertEqual("2030-新趋势", cli.read_frontmatter(work / "WORK.md")["title"])
 
     def test_adopted_production_copy_survives_experiment_removal(self):
-        experiment_id = self.run_cli("new", "S03 对照", "--workflow", "hyperframes_video", "--purpose", "test")
+        experiment_id = self.run_cli("new", "S03 对照", "--workflow", "hyperframes_video", "--purpose", "test",
+                                     "--design", "stage-full", "--variant-id", "main")
         experiment, _ = cli.locate_work(self.root, experiment_id)
         result = experiment / "variants" / "main" / "selected.txt"
         result.write_text("adopted result", encoding="utf-8")
@@ -98,11 +99,12 @@ class Rc2ControlTest(unittest.TestCase):
         self.assertEqual(2, cli.read_frontmatter(next_work / "WORK.md")["series_number"])
 
     def test_duplicate_experiment_requires_explicit_separation(self):
-        first = self.run_cli("new", "S03 对照", "--workflow", "hyperframes_video", "--purpose", "test")
+        first = self.run_cli("new", "S03 对照", "--workflow", "hyperframes_video", "--purpose", "test",
+                             "--design", "stage-full", "--variant-id", "main")
         self.assertIn(first, self.run_cli("new", "S03 对照", "--workflow", "hyperframes_video",
-                                          "--purpose", "test", expected=2))
+                                          "--purpose", "test", "--design", "stage-full", expected=2))
         second = self.run_cli("new", "S03 对照", "--workflow", "hyperframes_video",
-                              "--purpose", "test", "--separate")
+                              "--purpose", "test", "--separate", "--design", "stage-full", "--variant-id", "main")
         self.assertNotEqual(first, second)
         browser = (self.root / "浏览目录.md").read_text(encoding="utf-8")
         self.assertIn("S03 对照 · 001", browser)

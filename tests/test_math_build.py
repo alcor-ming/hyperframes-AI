@@ -22,6 +22,7 @@ FONT = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
 HEADER = '---\n{"plan_format":"3.5.2","series_binding":{"spec":"math-rap"}}\n---\n## S01\n'
 
 
+@unittest.skipUnless((REPO / '.studio/runtime/math-kit.js').is_file(), 'Personal math resources not installed')
 class MathBuildTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -88,6 +89,65 @@ class MathBuildTest(unittest.TestCase):
     def snapshot(self):
         return {path.relative_to(self.project).as_posix(): path.read_bytes()
                 for path in self.project.rglob('*') if path.is_file()}
+
+    def two_scene_plan(self):
+        body = self.plan().split('## S01', 1)[1]
+        return self.plan() + '\n## S02\n' + body.replace('"font.ttf"', '"not-materialized.ttf"').replace('"a"', '"unresolved"')
+
+    def test_scoped_build_ignores_unmaterialized_scenes_and_keeps_closure(self):
+        plan = self.two_scene_plan()
+        self.assertEqual(1, self.build(plan, scene_ids=['S01'])['items'])
+        before = self.snapshot()
+        self.build(plan, scene_ids=['S01'])
+        self.assertEqual(before, self.snapshot())
+        manifest = json.loads((self.project / BUILD.MANIFEST).read_text())
+        self.assertEqual(['S01'], manifest['scene_ids'])
+        self.assertEqual(['S01'], [row['id'] for row in manifest['scenes']])
+        closure = snapshot_files(self.project)
+        self.assertIn('font.ttf', closure)
+        self.assertIn('runtime/math-project.js', closure)
+        self.assertNotIn('not-materialized.ttf', closure)
+        BUILD.verify_generated(self.project, plan.replace('not-materialized.ttf', 'still-missing.ttf'), ['S01'])
+        with self.assertRaisesRegex(VisualPlanError, 'scope differs'):
+            BUILD.verify_generated(self.project, plan)
+        with self.assertRaisesRegex(VisualPlanError, 'outside the snapshot closure'):
+            BUILD.verify_generated(self.project, plan, ['S01'], closure=[name for name in closure if name != 'font.ttf'])
+
+    def test_scoped_selected_inputs_and_generated_content_stay_protected(self):
+        plan = self.two_scene_plan()
+        self.build(plan, scene_ids=['S01'])
+        for changed in (plan.replace('"label": "x"', '"label": "xx"', 1),
+                        plan.replace('"cue": "a"', '"cue": "b"', 1)):
+            with self.subTest(changed=changed), self.assertRaisesRegex(VisualPlanError, 'differs from Plan'):
+                BUILD.verify_generated(self.project, changed, ['S01'])
+        original = self.index.read_text()
+        self.index.write_text(original.replace('data-duration="10"', 'data-duration="11"'))
+        with self.assertRaisesRegex(VisualPlanError, 'timing/source changed'):
+            BUILD.verify_generated(self.project, plan, ['S01'])
+        self.index.write_text(original)
+        for relative in ('runtime/cues.json', 'vendor/components/math-kit/v1/math-kit.js'):
+            path = self.project / relative
+            content = path.read_bytes()
+            path.write_bytes(content + b'\n')
+            with self.subTest(relative=relative), self.assertRaisesRegex(VisualPlanError, 'input changed'):
+                BUILD.verify_generated(self.project, plan, ['S01'])
+            path.write_bytes(content)
+        self.index.write_text(original.replace(BUILD.START, BUILD.START + '\nmanual edit'))
+        with self.assertRaisesRegex(VisualPlanError, 'content changed'):
+            BUILD.verify_generated(self.project, plan, ['S01'])
+
+    def test_scoped_build_requires_selected_binding_and_exact_host(self):
+        plan = self.two_scene_plan()
+        before = self.snapshot()
+        for scene_ids in (['S99'], ['S01', 'S02']):
+            with self.subTest(scene_ids=scene_ids), self.assertRaisesRegex(VisualPlanError, 'exactly one'):
+                self.build(plan, scene_ids=scene_ids)
+            self.assertEqual(before, self.snapshot())
+        self.index.write_text(self.index.read_text().replace('id="S01"', 'id="S02"'))
+        before = self.snapshot()
+        with self.assertRaisesRegex(VisualPlanError, 'binding does not cover'):
+            self.build(plan, scene_ids=['S02'])
+        self.assertEqual(before, self.snapshot())
 
     def test_idempotence_handwriting_and_removal(self):
         self.assertEqual(1, self.build()['items'])
@@ -235,3 +295,35 @@ class MathBuildTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CardMathBuildTest(unittest.TestCase):
+    def test_card_math_runtime_is_used_without_tool_owned_math_project(self):
+        import asset_contract
+        def source(_root, destination):
+            destination.mkdir()
+            metadata = {'schema_version':2,'id':'math-kit','kind':'module','version':1,'contract_version':1,
+                        'entry':'math-kit.js','parameters':{},'compatibility':{},
+                        'dependencies':['math-kit.css','math-project.js']}
+            (destination/'asset.json').write_text(json.dumps(metadata))
+            for name in ('math-kit.js','math-project.js'):
+                (destination/name).write_text('// synthetic card runtime\n')
+            (destination/'math-kit.css').write_text('/* synthetic */')
+        fixture = MathBuildTest()
+        self.addCleanup(fixture.doCleanups)
+        with patch.object(ASSETS, 'export_math_kit', side_effect=source):
+            fixture.setUp()
+        lock_path = fixture.project/'COMPONENT_LOCK.json'
+        lock = json.loads(lock_path.read_text())
+        lock['components'] = [row for row in lock['components'] if row['component_ref'] != 'math-kit@v1']
+        lock_path.write_text(json.dumps(lock))
+        card_source = fixture.root/'card-source'; source(None, card_source)
+        frozen = fixture.root/'card-frozen'
+        asset_contract.freeze_source(card_source, frozen, card_ref='custom/math-kit')
+        COMPONENT.install_component(frozen, fixture.project, {'schema_version':3,'component_ref':'custom/math-kit@v1',
+            'scene':'S01','usage':{'role':'subject','required':True}})
+        self.assertEqual(1, fixture.build()['items'])
+        self.assertEqual('// synthetic card runtime\n', (fixture.project/'runtime/math-project.js').read_text())
+        before = fixture.snapshot()
+        fixture.build()
+        self.assertEqual(before, fixture.snapshot())

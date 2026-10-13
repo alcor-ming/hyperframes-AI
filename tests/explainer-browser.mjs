@@ -1,4 +1,4 @@
-// HF_RUNTIME=<locked 0.8.27 iife> GSAP_FILE=<local gsap> CHROME_PATH=<chromium> node tests/explainer-browser.mjs
+// HF_RUNTIME=<locked 0.8.150 iife> GSAP_FILE=<local gsap> CHROME_PATH=<chromium> node tests/explainer-browser.mjs
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -8,10 +8,10 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { chromium } = createRequire(path.join(repo, '.studio/remotion/package.json'))('playwright-core');
+const { chromium } = createRequire(path.join(repo, '.studio/parser/package.json'))('playwright-core');
 const { HF_RUNTIME, GSAP_FILE, CHROME_PATH } = process.env;
 assert(HF_RUNTIME && GSAP_FILE && CHROME_PATH, 'Set local runtime, GSAP and Chromium paths');
-assert.equal(JSON.parse(await fs.readFile(path.resolve(HF_RUNTIME, '../../package.json'), 'utf8')).version, '0.8.27', 'Use the locked runtime');
+assert.equal(JSON.parse(await fs.readFile(path.resolve(HF_RUNTIME, '../../package.json'), 'utf8')).version, '0.8.150', 'Use the locked runtime');
 const output = await fs.mkdtemp(path.join(os.tmpdir(), 'hf-explainer-'));
 await fs.cp(path.join(repo, '.studio/runtime'), path.join(output, 'runtime'), { recursive: true });
 await fs.copyFile(HF_RUNTIME, path.join(output, 'hf-runtime.js'));

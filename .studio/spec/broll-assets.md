@@ -1,21 +1,21 @@
 # 动效 B-roll 与风格资产创作
 
-本指南适用于生产根 Opus 在 `asset-library/sources` 的库创作，不授予 Work 修改、接纳、发布或部署权限。任务需求使用 [BROLL Brief](../templates/BROLL_BRIEF.template.md)。数学单片只用冻结资产；非数学 explainer 的定制主镜头另走已批准 Work/Scene 的独占交接，不直接入库。
+本指南适用于用户设计卡或素材卡内的镜头资产创作，不绑定执行模型。任务需求使用 [BROLL Brief](../templates/BROLL_BRIEF.template.md)，资产身份为 `<card-id>/<asset-id>`。
 
-## 创作与接纳
+## 创作与校验
 
-1. 用户给需求单；Opus 先提三个文字方向，说明语义、关键时刻、插槽、产品线与限制，选定后再写源。
-2. 在 `asset-library/sources/broll/<style>/<id>/` 制作 module、完整 usage 和独立 sample。先登记已有 AssetSource，不新建平行库。
-3. 用同根 `work-wsl.sh` 的 CLI 截图和诊断自检；在 Windows 官方 Studio 查看样例，至少用两个 Theme 和全部声明画幅。未验证项明确列出，不导出 Draft 视频。
-4. `component pack <source>` 生成 configured AssetStore 中的候选，不手写候选记录。独立样例使用既有 `component install ... --project <registered-source/sample>` 与 `component verify --project <registered-source/sample>`，不伪装正式 Work。
-5. Opus 只起草 purpose、aliases、tags、examples、limitations；用户确认准确 ref/hash 后执行 accept。已有接纳包不覆盖，变更发新版本。Harness 发版不携带库内容。
+1. 明确语义、关键时刻、插槽、适用设计与限制，按用户需求选择方向。
+2. 在用户卡的 `assets/<id>/` 制作 module、完整 usage 与独立 sample；跨卡复用声明 references，需要改造时先 localize。
+3. 在官方 Studio 查看样例，覆盖声明画幅、冷启动、重复 seek 与倒跳；按实际需要检查 Theme、容量与最短/默认/最长时长，不导出 Draft 视频。
+4. 按单资产合同与卡片合同校验，不设库级 pack/accept；许可、署名与 borrowed.json 来源链随本地化保留。
+5. Work 采用后通过 vendor/lock 持有副本；卡片变化不覆盖工程，更新快照后报告需要重新安装的资产。
 
 ## 外观复用
 
 - 账号外观：完整 Theme + Background + Motion，定义某个账号的整体样子。
 - 风格叠加：appearance 文件只写 background / motion，省略 theme，继承账号 Theme；Motion 按槽合并，适合矩阵账号。
 - appearance 文件写了 theme 就会覆盖账号 Theme，不会自动跟随账号。接口卡说明适用哪种用法和限制。
-- 颜色和字体只读 `--appearance-*`。先做并接纳风格叠加，再做镜头；普通入退场、强调和转场引用 Motion，只有整段语义表演留在 module 内。
+- 颜色和字体只读 `--appearance-*`。先制作并校验风格叠加，再做镜头；普通入退场、强调和转场引用 Motion，只有整段语义表演留在 module 内。
 
 Motion v3 支持 pop、stamp、wipe、glitch-in；pulse、shake、wobble、glow；pop-out、wipe-out、glitch-out；wipe、push、glitch-cut。`back-out` / `spring` 为固定缓动，`hold_fps` 为 1..240 整数；低帧量化只影响过程，不移动 cue/endCue。每个新 effect 配 reduced 等价形式，规则见 [资产合同](hyperframes-assets.md)。
 
@@ -62,11 +62,21 @@ function dispose() { shot.dispose(); rolls.dispose(); appearance.dispose(); }
 ## 画面与节奏自检
 
 - 整帧镜头仍在第 2 层，可盖背景；overlay 在上，captions 始终最高。主图与文字避开字幕安全区。
-- 承载信息的独立标题、解释与关键数字进入 text 根，遵守 A1、实际口播 cue 与阅读保护；stage 只放图形附着的短标注。B 结束恢复 A 的既有状态。
+- 承载信息的独立标题、解释与关键数字进入 text 根，遵守 A1、实际口播 cue 与阅读保护；stage 默认只放图形附着的短标注；具体资产声明允许的 embedded 文字类型时可保留该类型的独立文字，须执行下述文字清单与人工确认合同。B 结束恢复 A 的既有状态。
 - 纯注意力镜头不新增可读信息；事实约束不豁免，示意数据或界面标 `data-hf-schematic`。
 - `hold_fps` 等低帧量化只用于原地拍章、pulse、wobble；平移、旋转、翻面、飞离与重排按宿主时间逐帧求值，缓入缓出、不用回弹过冲，同一时刻只做一个主动作。默认时长下运动件单帧位移不超过短边约 4%、旋转不超过 5°；移动件保持不透明，深色背景上的贴纸与线条要有可见切边，结论帧不压暗。
 - 两个 Theme、全部画幅、最短/默认/最长时长都检查容量与 seek。顺播、直接 seek 与回拖结果一致，末帧有收束。
 - 挂载时把带 target、实际秒数的事件注册到 `__hfRhythmSources`，dispose 时注销。探针仍验证可见变化，声明不能冒充事件；hold-end 尾部不自动补节奏，超过 2 秒需处理或声明合理例外。
-- 接口卡写清语义用途、不适用情形、一个完整填槽例子和样例工程。验收标准是 Codex 不看实现源码也能按 usage 正确挂载。
+- 接口卡写清语义用途、不适用情形、一个完整填槽例子和样例工程。验收标准是使用者不看实现源码也能按 usage 正确挂载。
 
 首批建议先做贴纸拼贴（stamp / wobble；hold_fps 仅限原地动作），再做赛博 HUD（glitch / wipe / glow）和综艺花字（pop / shake / pulse / spring）。这是生产根的后续库制作，不是 Harness 开发或部署自动执行的内容。
+
+## 非 DOM 文字与字体
+
+Canvas/WebGL module 提供 `texts()` 完整清单；纯图形画布返回空数组，DOM 文字沿用扫描。`HarnessBroll.mount` 的 build 返回值提供 `texts()`，绑定也公开 `texts()`。每项为 `{id, text, start, end, kind, embedded, text_type?, region?}`：时间为片段本地秒，工具映射到 Work cue 窗；kind 为 attached/independent。独立 embedded 文字必须给出 `text_type` 并匹配该资产 `asset.json` 的 `text_ownership: {"mode":"embedded","kinds":["title"]}`。例如 Hook 3D 标题使用这一明确声明，不再享有隐式例外。region 可为归一化 `{x,y,width,height}`。
+
+文字清单必须覆盖整个片段，不能只返回当前可见文字。运行时校验时间、唯一 ID 和归属，采集到 `__hfTextSources` 并在 dispose 注销。非 HarnessBroll 的 module 由宿主把完整 `texts()` 提供函数注册到该 Set（时间映射为 Work 秒并补 scene/asset/font_family），dispose 必须注销；无字画布也显式注册空清单。多个已安装资产同名时传入完整 `assetRef`，避免把文字归属到另一张卡。A1、数值事实核对和阅读时长使用同一清单；位置、遮挡、挤动标为 `delegated`，不能表示检查通过。未声明的独立 embedded 文字报告错误。
+
+设计卡 `fonts` 使用 `[{"family":"CardFont","path":"fonts/body.woff2","license":"fonts/OFL.txt","weight":400,"style":"normal"}]`，路径均在卡内。卡字体优先于 Theme 字体，Lock 保存摘要和项目内安装路径；第 4、5 层与适配引擎统一使用 `appearance.fontFamily`。字体与许可进入快照闭包；TTF/OTF/WOFF/WOFF2 的 Unicode cmap 加浏览器实际字体检查验证用字，缺字不能接受。文字层/字幕采用卡字体；完整字体或覆盖 Draft 实际用字的子集均可。
+
+Draft 登记会固定 `module-texts.json` 及其摘要；包含 embedded 文字时，`preview accept <draft> --confirm-embedded S01 --confirm-embedded S02` 逐 Scene 记录用户已作出的确认，缺少任何 Scene 则拒绝。全局关闭 Draft 确认不会替代这项逐 Scene 确认。记录保存到 Draft 的 `embedded-text-acceptance.json` 和 Variant 接受状态。不得代替用户虚构确认。

@@ -7,7 +7,7 @@ import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {inspectRhythmFrame} from '../.studio/visual_probe.mjs';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const {chromium} = createRequire(path.join(repo, '.studio/remotion/package.json'))('playwright-core');
+const {chromium} = createRequire(path.join(repo, '.studio/parser/package.json'))('playwright-core');
 const font = await fs.readFile('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
 const output = await fs.mkdtemp(path.join(os.tmpdir(), 'hf-math-kit-'));
 const browser = await chromium.launch({executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox']});

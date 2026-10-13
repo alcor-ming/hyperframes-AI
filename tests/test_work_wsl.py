@@ -1,5 +1,6 @@
 from contextlib import redirect_stderr
 import io
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -41,6 +42,14 @@ class WorkWslTest(unittest.TestCase):
         exported = work_wsl.command(self.root, ['component', 'math-kit-source', 'sources/math-kit'])
         self.assertIn('D:\\production root\\sources\\math-kit', exported)
 
+    def test_production_commands_and_card_identity_forwarded(self):
+        for args in (['doctor'], ['status', '--json'],
+                     ['preview', 'open', 'current', '--no-open', '--json'],
+                     ['finalize', '--work', 'fixture', '--variant', 'main', '--json'],
+                     ['design', 'new', 'example', '--from', 'stage-full']):
+            with self.subTest(args=args):
+                self.assertEqual(work_wsl.command(self.root, args)[6:], args)
+
     def test_external_traversal_symlink_and_metacharacters_rejected(self):
         (self.root / "escape").symlink_to(self.base, target_is_directory=True)
         for value in (str(self.base / "outside.json"), "../outside.json", "escape/outside.json", "C:\\outside.json"):
@@ -62,7 +71,9 @@ class WorkWslTest(unittest.TestCase):
                 mock.patch.object(work_wsl.shutil, 'which', return_value='cmd.exe'), \
                 mock.patch.object(work_wsl.subprocess, "run", return_value=subprocess.CompletedProcess([], 17)) as run:
             self.assertEqual(work_wsl.main(["status"]), 17)
-        self.assertEqual(run.call_args.kwargs, {"cwd": self.root})
+        self.assertEqual(run.call_args.kwargs["cwd"], self.root)
+        self.assertEqual(run.call_args.kwargs["env"]["HYPERFRAMES_INVOCATION"], "wsl-forwarded")
+        self.assertIn("HYPERFRAMES_INVOCATION", run.call_args.kwargs["env"]["WSLENV"].split(":"))
         self.assertEqual(run.call_args.args[0][:4], ["cmd.exe", "/d", "/s", "/c"])
         with mock.patch.object(work_wsl, "__file__", str(self.root / ".studio/work_wsl.py")), \
                 mock.patch.object(work_wsl.subprocess, "run") as run, redirect_stderr(io.StringIO()) as error:
@@ -73,11 +84,14 @@ class WorkWslTest(unittest.TestCase):
     def test_missing_windows_path_uses_cmd_without_changing_environment(self):
         with mock.patch.object(work_wsl, '__file__', str(self.root / '.studio/work_wsl.py')), \
                 mock.patch.object(work_wsl.shutil, 'which', return_value=None), \
+                mock.patch.object(work_wsl.subprocess, 'check_output', return_value='/custom/c/Windows/System32/cmd.exe') as convert, \
                 mock.patch.object(Path, 'is_file', return_value=True), \
                 mock.patch.object(work_wsl.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
             self.assertEqual(work_wsl.main(['math', 'build', '--help']), 0)
-        self.assertEqual('/mnt/c/Windows/System32/cmd.exe', run.call_args.args[0][0])
-        self.assertEqual({'cwd': self.root}, run.call_args.kwargs)
+        self.assertEqual('/custom/c/Windows/System32/cmd.exe', run.call_args.args[0][0])
+        convert.assert_any_call(['wslpath', '-u', r'C:\Windows\System32\cmd.exe'], text=True)
+        self.assertEqual(self.root, run.call_args.kwargs['cwd'])
+        self.assertEqual(os.environ.get('PATH'), run.call_args.kwargs['env'].get('PATH'))
 
 
 if __name__ == "__main__":

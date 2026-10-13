@@ -305,6 +305,13 @@ def build_plan(root: Path, api: Any, *, title_overrides: dict[str, str] | None =
         desired = rename[pointer.read_text(encoding="utf-8").strip()] + "\n"
         operations.append({"kind": "pointer", "path": _relative(store, pointer),
                            "new": desired, "before": _hash(pointer), "after": _digest(desired)})
+    for context in sorted((api.runtime_root(root) / 'contexts').glob('*.json')):
+        data = api.read_json(context)
+        if data.get('work') in rename:
+            data['work'] = rename[data['work']]
+            desired = json.dumps(data, ensure_ascii=False) + '\n'
+            operations.append({'kind': 'pointer', 'path': _relative(store, context),
+                               'new': desired, 'before': _hash(context), 'after': _digest(desired)})
     for target in targets:
         if target["old_id"] == target["new_id"]:
             continue

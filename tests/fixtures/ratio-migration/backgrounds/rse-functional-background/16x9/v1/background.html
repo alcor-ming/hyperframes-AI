@@ -1,0 +1,17 @@
+<template>
+  <style>
+    :host { background: transparent; }
+    .field { background: var(--color-canvas, transparent); color: var(--color-accent-primary); }
+  </style>
+  <main id="rse-functional-background" data-composition-id="rse-functional-background"
+        data-width="1920" data-height="1080" data-duration="6"
+        data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1}]'>
+    <div class="field"></div>
+  </main>
+  <script>
+    (function () {
+      var timeline = gsap.timeline({ paused: true });
+      timeline.to(".field", { opacity: 1 }, 0);
+    })();
+  </script>
+</template>

@@ -2,6 +2,7 @@
 
 from importlib.machinery import SourceFileLoader
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,6 +10,9 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ROOT_TEMPLATE = ".studio/templates/WINDOWS_AGENTS.md"
+STUDIO_TEMPLATE = ".studio/templates/STUDIO_AGENTS.md"
+CLAUDE_TEMPLATE = ".studio/templates/CLAUDE.template.md"
 
 
 def read(path):
@@ -17,21 +21,21 @@ def read(path):
 
 class V35RulesTests(unittest.TestCase):
     def test_mode_scope_direction_and_authority(self):
-        for path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md",
-                     ".studio/workflow.md", ".studio/spec/creative.md", "README.md"):
+        for path in (STUDIO_TEMPLATE, ROOT_TEMPLATE, ".studio/workflow.md",
+                     ".studio/spec/creative.md", "README.md"):
             with self.subTest(path=path):
                 text = read(path)
-                tokens = ("Plan", "visual-design.md") if path == ".studio/spec/creative.md" else ("math", "english", "explainer")
+                tokens = ("Plan", "visual-design.md") if path == ".studio/spec/creative.md" else ("设计", "卡", "Plan")
                 for token in tokens:
                     self.assertIn(token, text)
-                if path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
-                    for token in ("Asset Brief", "一并授权", "提供方"):
-                        self.assertIn(token, text)
                 self.assertNotIn("可保存到创作者平台草稿箱", text)
                 self.assertNotIn("才可用已登录浏览器保存草稿", text)
-        for path in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
-            for boundary in ("不公开发布", "不购买额度", "不得读取 Cookie", "单独取得用户授权"):
-                self.assertIn(boundary, read(path))
+        studio = read(STUDIO_TEMPLATE)
+        for token in ("Asset Brief", "一并授权", "提供方",
+                      "不公开发布", "不购买额度", "不得读取 Cookie", "单独取得用户授权"):
+            self.assertIn(token, studio)
+        for path in (ROOT_TEMPLATE, CLAUDE_TEMPLATE):
+            self.assertNotIn("一并授权", read(path))
         caps = read(".studio/capabilities.yaml")
         self.assertNotIn("bottom_subtitles", caps)
         self.assertNotIn("creator_draft:", caps)
@@ -43,7 +47,7 @@ class V35RulesTests(unittest.TestCase):
     def test_design_and_plan_preserve_explainer_contract(self):
         design = read(".studio/spec/visual-design.md")
         for token in ("`math`", "`english`", "`explainer`",
-                      "任一通道", "A1 只约束第 4 层", "第 5 层口播原文不受 A1",
+                      "任一通道", "A1 约束第 4 层及资产明确声明的 embedded 独立文字", "第 5 层口播原文不受 A1",
                       "镜像回收", "系列声音签名", "同帧可见事件", "ducking",
                       "不设固定数量或间隔配额", "未试听", "Plan 检查", "Q1"):
             self.assertIn(token, design)
@@ -74,12 +78,12 @@ class V35RulesTests(unittest.TestCase):
         files += ["AGENTS.md", ".studio/workflow.md", ".studio/spec/visual-design.md",
                   ".studio/templates/WINDOWS_AGENTS.md", ".studio/templates/ANIMATION_PLAN.template.md",
                   ".studio/templates/RESEARCH.template.md"]
-        validator = read(".agents/skills/hyperframes-codex-workflow/scripts/validate_package.py")
+        validator = read(".agents/skills/hyperframes-production-workflow/scripts/validate_package.py")
         with tempfile.TemporaryDirectory() as directory:
             stage = Path(directory)
-            with mock.patch.object(release.subprocess, "check_output", return_value=b""):
-                hashes = release.freeze_sources(stage, files, repo=ROOT)
-            self.assertEqual(set(hashes), set(files))
+            hashes = release.freeze_sources(stage, files, repo=ROOT)
+            declared = json.loads(read('.studio/release-sources.json'))['files']
+            self.assertEqual(set(hashes), set(declared) | set(files))
             for path in files:
                 self.assertIn(path, validator)
                 self.assertEqual(release.sha256(ROOT / path), release.sha256(stage / path))

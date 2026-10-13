@@ -55,7 +55,7 @@ Beta 1 优先验证两件事：
 | Subtemplate | `module_stage` |
 | Ratio | `4:3` |
 | 时间真源 | `materials/source-video.mp4` 原音频，`86.485s` |
-| Script | revision 1，`verbatim` |
+| Script | revision 1，用户提供的文稿 |
 | Research | revision 1，`ready` |
 | Animation Draft | revision 3，已由正式 Plan 替代 |
 | Animation Plan | revision 1，已于 2026-08-24 获批 |

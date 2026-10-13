@@ -122,13 +122,14 @@ class RequestTest(unittest.TestCase):
         shutil.copytree(REPO / ".studio" / "templates", self.root / ".studio" / "templates")
         review = REQUEST.init_review(self.store, "native-smoke")
         with patch.dict(os.environ, {"HYPERFRAMES_AI_WORK_ROOT": str(review), "HYPERFRAMES_AI_REVIEW": "1"}):
-            self.assertEqual(0, WORK.main(["new", "Native test", "--workflow", "hyperframes_video"], root=self.root))
+            self.assertEqual(0, WORK.main(["new", "Native test", "--workflow", "hyperframes_video",
+                                           "--design", "stage-full"], root=self.root))
         self.assertTrue((review / ".runtime" / "current-work").is_file())
         self.assertFalse((self.store / ".runtime" / "current-work").exists())
 
     def test_component_approval_changes_only_status_not_implementation(self):
         import component_harness as component
-        approved = REPO / ".studio" / "components" / "chapter-intro" / "v1"
+        approved = REPO / "tests" / "fixtures" / "components" / "chapter-intro" / "v1"
         package = self.root / "component"
         shutil.copytree(approved, package)
         metadata = package / "COMPONENT.md"

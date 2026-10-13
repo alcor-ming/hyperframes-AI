@@ -17,7 +17,7 @@ class ControlPlaneTest(unittest.TestCase):
         self.root = Path(self.temp.name)
         shutil.copytree(REPO / ".studio/templates", self.root / ".studio/templates")
         cli.account_service(self.root).put("account", "main", {"name": "Fixture"})
-        cli.account_service(self.root).put("series", "fixture", {"name": "Fixture"})
+        cli.account_service(self.root).put("series", "fixture", {"name": "Fixture", "design": "stage-full"})
 
     def run_cli(self, *args):
         if "new" in args and "--account" not in args and "test" not in args:
@@ -27,6 +27,10 @@ class ControlPlaneTest(unittest.TestCase):
                 args += ("--purpose", "standard")
             if "--series" not in args and args[args.index("--purpose") + 1] != "test":
                 args += ("--series", "fixture")
+            if "--design" not in args and "--mode" not in args:
+                args += ("--design", "stage-full")
+            if "--variant-id" not in args:
+                args += ("--variant-id", "main")
         parsed = cli.build_parser().parse_args(args)
         with redirect_stdout(io.StringIO()) as output:
             parsed.handler(self.root, parsed)
@@ -41,7 +45,7 @@ class ControlPlaneTest(unittest.TestCase):
         self.put("theme", "clean", name="Clean", ratios=["16:9"], modes=["text-led", "animation-led"])
         self.put("account", "a", name="A", theme="clean", ratio="16:9")
         self.put("account", "b", name="B", theme="clean", ratio="16:9")
-        self.put("series", "agents", name="Agents", accounts=["a", "b"])
+        self.put("series", "agents", name="Agents", accounts=["a", "b"], design="stage-full")
         identity = self.run_cli("new", "Episode", "--workflow", "hyperframes_video", "--series", "agents", "--account", "a")
         work, _ = cli.locate_work(self.root, identity)
         self.run_cli("variant", "add", "b", "--account", "b")
@@ -71,9 +75,9 @@ class ControlPlaneTest(unittest.TestCase):
         identity = self.run_cli("new", "Experiment", "--workflow", "hyperframes_video", "--purpose", "test")
         work, _ = cli.locate_work(self.root, identity)
         self.assertEqual("test", cli.read_frontmatter(work / "WORK.md")["series"])
-        self.run_cli("variant", "add", "second", "--batch", "contrast")
+        self.run_cli("variant", "add", "second", "--batch", "contrast", "--design", "stage-full")
         with self.assertRaisesRegex(cli.HarnessError, "batch already"):
-            self.run_cli("variant", "add", "third", "--batch", "contrast")
+            self.run_cli("variant", "add", "third", "--batch", "contrast", "--design", "stage-full")
         with mock.patch.object(cli.subprocess, "run") as process:
             for arguments in (("preview", "render", "draft-v001", "--final", "--output", str(self.root / "bad.mp4")),
                               ("finalize",), ("preview", "accept", "draft-v001")):
@@ -245,6 +249,76 @@ class ControlPlaneTest(unittest.TestCase):
         self.assertEqual(b"mock encoded result", (variant / "final/final.mp4").read_bytes())
         self.assertEqual(1, len(list((variant / ".runtime").glob("finalize-*/candidate.mp4"))))
         self.assertIn("Final is complete; temporary cleanup deferred", warning.getvalue())
+
+    def test_series_rules_are_addressed_by_identity_and_keep_history(self):
+        empty = json.loads(self.run_cli("series", "rules", "show", "fixture"))
+        self.assertFalse(empty["exists"])
+        rules = self.root / "rules.md"
+        rules.write_text("# Fixture\n\n- 避免重复的开场\n", encoding="utf-8")
+        written = json.loads(self.run_cli("series", "rules", "put", "fixture", "--file", str(rules)))
+        self.assertTrue(written["changed"])
+        path = Path(written["path"])
+        self.assertEqual(cli.runtime_root(self.root) / "control-plane/series/fixture/AGENTS.md", path)
+        self.assertFalse(json.loads(self.run_cli("series", "rules", "put", "fixture", "--file", str(rules)))["changed"])
+        rules.write_text("# Fixture\n\n- 第二版\n", encoding="utf-8")
+        self.run_cli("series", "rules", "put", "fixture", "--file", str(rules))
+        shown = json.loads(self.run_cli("series", "rules", "show", "fixture"))
+        self.assertEqual("# Fixture\n\n- 第二版\n", shown["content"])
+        self.assertEqual(2, shown["revisions"])
+        self.assertIn("避免重复的开场", (path.parent / "history/1.md").read_text(encoding="utf-8"))
+        self.assertEqual(["fixture"], [row["id"] for row in json.loads(self.run_cli("series", "list"))])
+
+        # A Work reached through a linked series folder still resolves rules from WORK.md metadata.
+        identity = self.run_cli("new", "Episode", "--workflow", "hyperframes_video")
+        work, _ = cli.locate_work(self.root, identity)
+        linked = self.root / "series-view" / identity
+        linked.parent.mkdir()
+        linked.symlink_to(work, target_is_directory=True)
+        status = json.loads(self.run_cli("--work", identity, "--json", "status"))
+        self.assertEqual({"series": "fixture", "path": str(path), "exists": True}, status["series_rules"])
+
+        with self.assertRaises(cli.HarnessError):
+            self.run_cli("series", "rules", "show", "missing")
+        with self.assertRaises(cli.HarnessError):
+            self.run_cli("series", "rules", "show", "history")
+        rules.write_text("  \n", encoding="utf-8")
+        with self.assertRaises(cli.HarnessError):
+            self.run_cli("series", "rules", "put", "fixture", "--file", str(rules))
+        path.unlink()
+        path.symlink_to(rules)
+        with self.assertRaises(cli.HarnessError):
+            self.run_cli("series", "rules", "show", "fixture")
+
+    def test_series_delete_archives_unreferenced_series_and_rules(self):
+        service = cli.account_service(self.root)
+        service.put("series", "spare", {"name": "Spare"})
+        service.put("series", "spare", {"name": "Spare renamed"})
+        rules = self.root / "rules.md"
+        rules.write_text("# Spare\n", encoding="utf-8")
+        self.run_cli("series", "rules", "put", "spare", "--file", str(rules))
+        removed = json.loads(self.run_cli("series", "rules", "delete", "spare"))
+        self.assertTrue(removed["changed"])
+        self.assertFalse(removed["exists"])
+        self.assertFalse(json.loads(self.run_cli("series", "rules", "delete", "spare"))["changed"])
+        self.assertEqual(1, json.loads(self.run_cli("series", "rules", "show", "spare"))["revisions"])
+
+        self.run_cli("new", "Episode", "--workflow", "hyperframes_video")
+        with self.assertRaisesRegex(cli.HarnessError, "still owns Works"):
+            self.run_cli("series", "delete", "fixture")
+
+        deleted = json.loads(self.run_cli("series", "delete", "spare"))
+        archive = Path(deleted["archive"])
+        self.assertEqual(cli.runtime_root(self.root) / "control-plane/deleted/series", archive.parent)
+        self.assertEqual("Spare renamed", json.loads((archive / "spare.json").read_text(encoding="utf-8"))["name"])
+        self.assertTrue((archive / "history/1.json").is_file())
+        self.assertTrue((archive / "rules/history/1.md").is_file())
+        self.assertEqual(["fixture"], [row["id"] for row in json.loads(self.run_cli("series", "list"))])
+        with self.assertRaises(cli.HarnessError):
+            self.run_cli("series", "get", "spare")
+        with self.assertRaises(cli.HarnessError):
+            self.run_cli("series", "delete", "spare")
+        # A recreated identity starts a fresh revision history.
+        self.assertEqual(1, service.put("series", "spare", {"name": "Spare again"})["revision"])
 
 
 if __name__ == "__main__":

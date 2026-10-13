@@ -1,5 +1,5 @@
 // Real Studio HTTP handlers; isolated files only, no WorkStore or production data.
-// Run as a non-root Linux user with HF_PACKAGE pointing to existing Studio 0.8.27.
+// Run as a non-root Linux user with HF_PACKAGE pointing to existing Studio 0.8.150.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -13,7 +13,7 @@ assert.equal(process.platform, 'linux');
 assert.notEqual(process.getuid(), 0, 'Root bypasses readonly file permissions');
 const {HF_PACKAGE} = process.env;
 assert(HF_PACKAGE, 'Set HF_PACKAGE to the installed HyperFrames package');
-assert.equal(JSON.parse(await fs.readFile(path.join(HF_PACKAGE, 'package.json'))).version, '0.8.27');
+assert.equal(JSON.parse(await fs.readFile(path.join(HF_PACKAGE, 'package.json'))).version, '0.8.150');
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hf-studio-readonly-'));
 const project = path.join(root, 'fixture');
 await fs.mkdir(path.join(project, 'compositions'), {recursive: true});
@@ -66,7 +66,7 @@ try {
     }
     server.kill('SIGTERM'); await once(server, 'exit'); server = null;
   }
-  console.log(JSON.stringify({actualStudio: '0.8.27', uid: process.getuid(), checks, evidence: root}));
+  console.log(JSON.stringify({actualStudio: '0.8.150', uid: process.getuid(), checks, evidence: root}));
 } finally {
   if (server && server.exitCode === null) { server.kill('SIGTERM'); await once(server, 'exit'); }
 }

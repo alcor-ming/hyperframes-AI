@@ -49,7 +49,7 @@ Plan 按各 Scene 的真实内容记录 Script/Research/媒体引用、A/B 叙�
 
 ## 4. 音频与最小数据合同
 
-优先读取已有录音、timestamps 与 section_map，不重复 ASR。Binding 只记录 Anchor、字符范围/明确 occurrence、对象事件和必要偏移；解析秒数与帧数为派生数据，不再手填 Plan、beats 与代码三套秒表。重复词不可全片模糊匹配，标点/token 规范化须保留索引映射；无可靠字时间可用明确手工 cue，不均匀捏造。
+优先读取已有录音、timestamps 与 section_map，不重复测量字词时间。Binding 只记录 Anchor、字符范围/明确 occurrence、对象事件和必要偏移；解析秒数与帧数为派生数据，不再手填 Plan、beats 与代码三套秒表。重复词不可全片模糊匹配，标点/token 规范化须保留索引映射；无可靠字时间可用明确手工 cue，不均匀捏造。
 
 源片段按半开区间和正速率映射：`timeline_in + (source_time - source_in) / rate`。多 take/重叠须明确，删除词无有效 cue；Scene 裁取仅减 crop 起点，不改原对齐。内部保留秒/采样级时间，到输出 fps 才量化，不每层反复 round。
 

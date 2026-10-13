@@ -21,6 +21,9 @@ class V370CliTest(unittest.TestCase):
     def setUp(self):
         legacy_fixture.VisualPlanTest.setUp(self)
         state = cli.read_json(self.variant / 'variant.yaml')
+        # This suite deliberately constructs the legacy line-only state.
+        for key in ('design_live', 'design', 'design_snapshot', 'design_sha256', 'design_values', 'design_sources'):
+            state.pop(key, None)
         state['line'] = lines.bind({'mode': 'explainer'})
         state['settings'] = {'direction_approval': False, 'critic.provider': 'off'}
         cli.write_variant(self.variant, state)
@@ -41,6 +44,33 @@ class V370CliTest(unittest.TestCase):
             self.run_cli(*self.scope, *args, '--json')
         return output.getvalue().strip()
 
+    def test_creator_recovers_same_object_from_cli_evidence(self):
+        import os
+        before_cwd = Path.cwd()
+        self.addCleanup(os.chdir, before_cwd)
+        os.chdir(self.root)
+        with redirect_stdout(io.StringIO()) as output:
+            self.run_cli('current')
+        located = json.loads(output.getvalue())
+        self.assertEqual(self.scope[1], located['work'])
+        before = json.loads(self.call('status'))
+        self.call('settings', 'set', 'critic.model', 'text-only')
+        opened = json.loads(self.call('preview', 'open', 'current', '--hyperframes-cli', str(self.cli_path), '--no-open'))
+        self.assertEqual('current', opened['target'])
+        with mock.patch.object(cli.visual_diagnostics, 'probe', side_effect=self.sampled):
+            evidence = json.loads(self.call('critic', 'round', '--hyperframes-cli', str(self.cli_path), '--browser', '/usr/bin/google-chrome'))
+        self.assertEqual('unverified', evidence['visual_review'])
+        self.assertTrue((Path(evidence['package']) / 'contact-sheet.png').is_file())
+        # A fresh invocation recovers from disk; a lost reply is not a reason to replay new.
+        self.scope = ('--work', located['work'], '--variant', located['variant'])
+        recovered = json.loads(self.call('status'))
+        self.assertEqual(before['path'], recovered['path'])
+        self.assertEqual('text-only', recovered['variant']['settings']['critic.model'])
+        with redirect_stdout(io.StringIO()) as output:
+            self.run_cli('list', '--json')
+        self.assertEqual(1, len(json.loads(output.getvalue())))
+        self.assertIsNone(recovered['variant']['accepted_preview'])
+
     def test_settings_cli_precedence_and_creation_binding(self):
         self.assertEqual({'id': 'explainer', 'version': 1}, cli.read_json(self.variant / 'variant.yaml')['line'])
         self.call('settings', 'set', '--layer', 'user', 'direction_approval', 'true')
@@ -49,9 +79,19 @@ class V370CliTest(unittest.TestCase):
         self.assertEqual({'value':False, 'source':'variant'}, values['direction_approval'])
         self.call('settings', 'unset', 'direction_approval')
         self.assertEqual('user', json.loads(self.call('settings', 'show'))['values']['direction_approval']['source'])
-        for key, value in [('direction_approval', '1'), ('unknown','true'), ('critic.model','text-only')]:
+        for key, value in [('direction_approval', '1'), ('unknown','true'), ('critic.model','   ')]:
             with self.assertRaises(cli.HarnessError):
                 self.call('settings', 'set', key, value)
+
+    def test_old_provider_does_not_block_unrelated_settings_edit(self):
+        state = cli.read_json(self.variant / 'variant.yaml')
+        state['settings']['critic.provider'] = 'codex-subagent'
+        cli.write_variant(self.variant, state)
+        self.call('settings', 'set', 'critic.max_rounds', '2')
+        self.assertEqual('codex-subagent', cli.read_json(self.variant / 'variant.yaml')['settings']['critic.provider'])
+        with self.assertRaises(cli.HarnessError):
+            self.call('settings', 'set', 'critic.provider', 'codex-subagent')
+        self.call('settings', 'set', 'critic.provider', 'external')
 
     def test_direction_toggle_accepts_only_exact_draft_and_plan(self):
         draft = self.call('preview', 'register')
@@ -76,11 +116,32 @@ class V370CliTest(unittest.TestCase):
         self.assertFalse(list(self.variant.rglob('*.mp4')))
         self.assertFalse(list(self.variant.rglob('*.webm')))
 
+    def test_embedded_text_confirmation_is_frozen_per_scene(self):
+        import module_texts
+        import test_module_texts
+        with mock.patch.object(module_texts, 'needs_inventory', return_value=True), \
+                mock.patch.object(module_texts, 'collect', return_value=test_module_texts.inventory()):
+            draft = self.call('preview', 'register')
+            preview = self.variant / 'previews' / draft
+            self.call('preview', 'open', draft, '--hyperframes-cli', str(self.cli_path), '--no-open')
+            with self.assertRaisesRegex(cli.HarnessError, 'per Scene'):
+                self.call('preview', 'accept', draft)
+            self.assertIsNone(cli.read_json(self.variant / 'variant.yaml')['accepted_preview'])
+            frozen = (preview / 'module-texts.json').read_bytes()
+            (preview / 'module-texts.json').write_bytes(frozen + b' ')
+            with self.assertRaisesRegex(cli.HarnessError, 'inventory changed'):
+                self.call('preview', 'accept', draft, '--confirm-embedded', 'S01')
+            (preview / 'module-texts.json').write_bytes(frozen)
+            self.call('preview', 'accept', draft, '--confirm-embedded', 'S01')
+            receipt = cli.read_json(preview / 'embedded-text-acceptance.json')
+            self.assertEqual([{'scene':'S01','confirmed':True}], receipt['scenes'])
+            self.assertEqual(cli.preview_metadata(preview)['module_texts_sha256'], receipt['module_texts_sha256'])
+
     def sampled(self, request, *args):
         destination = Path(request['evidence_dir'])
         destination.mkdir(parents=True)
         samples = []
-        for time in (0, .5, 1, 1.5, 1.8, 1.9, 2 - 1/60, 2, 2.1, 2.2, 2.4, 3, 3.5):
+        for time in (0, .5, 1, 1.5, 1.8, 1.9, 2 - 1/request['fps'], 2, 2.1, 2.2, 2.4, 3, 3.5):
             name = f'{time:.6f}.png'
             Image.new('RGB', (32, 18), 'white').save(destination / name)
             samples.append({'time':round(time,6), 'ready':True, 'texts':[], 'rhythm_candidates':[], 'carry':[], 'screenshot':name})
@@ -97,8 +158,10 @@ class V370CliTest(unittest.TestCase):
 
     def test_two_rounds_off_mode_and_previous_issue_coverage(self):
         mock.patch.object(cli.visual_diagnostics, 'probe', side_effect=self.sampled).start()
-        self.call('settings', 'set', 'critic.provider', 'codex-subagent')
+        self.call('settings', 'set', 'critic.provider', 'external')
         one = json.loads(self.call('critic','round','--hyperframes-cli',str(self.cli_path),'--browser','/usr/bin/google-chrome'))
+        self.assertEqual('unverified', one['visual_review'])
+        self.assertTrue(one['human_checks'])
         package = Path(one['package'])
         self.assertTrue((package/'PROMPT.md').is_file())
         self.assertTrue((package/'contact-sheet.png').is_file())

@@ -1,0 +1,27 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "files": [
+    {
+      "path": "COMPONENT.md",
+      "sha256": "ed20634dbd1637e46eaa07f705c1c6471a0ff0d1872d2a931808400d007aae53"
+    },
+    {
+      "path": "baselines/README.md",
+      "sha256": "bb555e197a20ec0d7889ab1a11fdc34dc76a4f8463091e7acae65bb929bae923"
+    },
+    {
+      "path": "component.html",
+      "sha256": "5e2afc4043a4f27e8af4077b54cf0353f53be144e1e33636019ba726b3265cd0"
+    },
+    {
+      "path": "contract.schema.json",
+      "sha256": "aaef45f06af9eeadc7984c5f0df0de709497c434837c47e2656df21e5fe20f42"
+    },
+    {
+      "path": "preview.fixture.json",
+      "sha256": "b7f2d7854bf57dffcdc7e969675d4ad395eebb2a892099a859863a4980a555db"
+    }
+  ],
+  "package_sha256": "6271efcf525410d995d6bc711f8707fc1ec67474ddcd9bf901c2397309708a7d",
+  "asset_ref": "chapter-intro/4x3@v1"
+}

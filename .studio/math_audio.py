@@ -12,8 +12,8 @@ from math_chain import make_beat_grid
 
 def extract(audio, cli, beats_per_bar, first_downbeat):
     package = cli.parent.parent / "package.json"
-    if json.loads(package.read_text(encoding="utf-8")).get("version") != "0.8.27":
-        raise ValueError("Beat extraction requires pinned HyperFrames 0.8.27")
+    if json.loads(package.read_text(encoding="utf-8")).get("version") != "0.8.150":
+        raise ValueError("Beat extraction requires pinned HyperFrames 0.8.150")
     browser = os.environ.get("HYPERFRAMES_BROWSER_PATH")
     if not browser or not Path(browser).is_file():
         raise ValueError("Beat extraction requires the installed browser; no automatic download")

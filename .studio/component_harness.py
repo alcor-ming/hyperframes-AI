@@ -33,7 +33,7 @@ REQUIRED_RELEASE_FILES = (
     "HASHES.json",
 )
 COMPONENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-COMPONENT_REF_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_.-]*(?:/(?:4x3|16x9|9x16))?)@v([1-9][0-9]*)$")
+COMPONENT_REF_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_.-]*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?)@v([1-9][0-9]*)$")
 SAFE_RELATIVE_RE = re.compile(r"^[^/]+(?:/[^/]+)*$")
 SURFACE_KINDS = {
     "icon_node": {"none", "icon"},
@@ -1012,7 +1012,7 @@ def install_component(
     allow_unapproved = review_root is not None or acceptance is not None
     release = validate_component_release(Path(release_directory), expected_ref=expected_ref, allow_unapproved=allow_unapproved)
     generic = release["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character", "icon-set"}
-    if generic and acceptance is None:
+    if generic and acceptance is None and not release.get("card_ref"):
         raise ComponentError("Asset installation requires exact asset acceptance")
     if acceptance is not None:
         validate_component_acceptance(acceptance, release)
@@ -1069,6 +1069,8 @@ def install_component(
         "surfaces": [surface_records[surface_id] for surface_id in sorted(surface_records)],
     }
     record = _lock_record(release, project, [binding_entry], vendor_path)
+    if release.get("card_ref"):
+        record["card_ref"] = release["card_ref"]
     if generic:
         record["asset_kind"] = release["metadata"]["asset_type"]
     if acceptance is not None:
@@ -1348,8 +1350,10 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
         kind = release["metadata"].get("asset_type")
         acceptance = record.get("acceptance")
         if kind in {"module", "media", "theme", "background", "motion", "character", "icon-set"}:
-            if record.get("asset_kind") != kind or acceptance is None:
+            if record.get("asset_kind") != kind or (acceptance is None and not release.get("card_ref")):
                 raise ComponentError("Asset lock requires matching kind and exact acceptance")
+        if record.get("card_ref") != release.get("card_ref"):
+            raise ComponentError("Card asset lock identity mismatch")
         if acceptance is not None:
             validate_component_acceptance(acceptance, release)
         if (release["package_sha256"] != record.get("work_package_sha256")
@@ -1392,17 +1396,14 @@ def verify_installation(project: Path, *, public_root: Path | None = None, compo
             raise ComponentError("Lock record is missing component_ref")
         if component_ref is not None and ref != component_ref:
             continue
-        component_id, version = parse_component_ref(ref)
         vendor_rel = _safe_relative(str(record.get("vendor_path", "")), "vendor path")
         vendor_path = project / vendor_rel
         acceptance = record.get("acceptance")
         vendor = releases[ref]
         generic = vendor["metadata"].get("asset_type") in {"module", "media", "theme", "background", "motion", "character", "icon-set"}
-        if public_root is not None and acceptance is None:
-            public_path = Path(public_root) / ".studio" / "components" / component_id / f"v{version}"
-            public = validate_component_release(public_path, expected_ref=ref)
-            if public["package_sha256"] != vendor["package_sha256"]:
-                raise ComponentError(f"Public and Work package hashes differ: {ref}")
+        # v4.2: Work vendor copies validate on their own; never fall back to the
+        # removed repository component library. ``public_root`` stays accepted
+        # for callers that pin an explicit public tree but is no longer read here.
         checked_bindings = []
         for binding_record in _lock_bindings(record):
             binding_rel = binding_record["path"]

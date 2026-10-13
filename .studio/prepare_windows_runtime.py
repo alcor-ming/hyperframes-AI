@@ -13,7 +13,8 @@ from urllib.request import urlopen
 import zipfile
 
 REPO = Path(__file__).resolve().parent.parent
-VERSIONS = {"hyperframes": "0.8.27", "gsap": "3.14.2", "three": "0.160.0", "acorn": "8.15.0", "koffi": "3.3.2"}
+# Keep ONNX in the offline closure after upstream made it optional.
+VERSIONS = {"hyperframes": "0.8.150", "gsap": "3.14.2", "three": "0.160.0", "acorn": "8.15.0", "koffi": "3.3.2", "onnxruntime-node": "1.21.1"}
 ARCHIVES = [
     {"kind": "zip", "file": "node-v22.22.2-win-x64.zip", "target": "runtime/node",
      "strip_prefix": "node-v22.22.2-win-x64", "url": "https://nodejs.org/dist/v22.22.2/node-v22.22.2-win-x64.zip"},
@@ -36,7 +37,7 @@ def digest(path: Path) -> str:
 def seed_lock(source: Path, metadata: list[Path], output: Path) -> None:
     lock = read(source)
     if lock.get("lockfileVersion") != 3 or lock["packages"]["node_modules/hyperframes"]["version"] != VERSIONS["hyperframes"]:
-        raise ValueError("Seed must be a complete lockfileVersion 3 for HyperFrames 0.8.27")
+        raise ValueError(f"Seed must be a complete lockfileVersion 3 for HyperFrames {VERSIONS['hyperframes']}")
     for path in metadata:
         package = read(path)
         name = package["name"]
@@ -102,7 +103,7 @@ def python_url(asset: dict, python_version: str) -> str:
 def npm_archive(lock_path: Path, cache: Path) -> Path:
     lock = read(lock_path)
     validate_npm_lock(lock)
-    archive = cache / "hyperframes-0.8.27-windows-npm.zip"
+    archive = cache / f"hyperframes-{VERSIONS['hyperframes']}-windows-npm.zip"
     with tempfile.TemporaryDirectory(prefix="hf-windows-npm-", dir=cache) as temporary:
         project = Path(temporary)
         (project / "package-lock.json").write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
@@ -165,7 +166,7 @@ def prepare(cache: Path, npm_lock: Path, output_lock: Path) -> None:
     assets.append({"kind": "npm-tree", "file": npm.name, "target": "runtime/npm", "sha256": digest(npm),
                    "package_lock_sha256": digest(npm_lock)})
     lock["assets"] = assets
-    lock["versions"].update({"ffmpeg": "7.1.1", "ffprobe": "7.1.1"})
+    lock["versions"].update({**VERSIONS, "ffmpeg": "7.1.1", "ffprobe": "7.1.1"})
     lock.pop("pending_assets", None)
     # Check every required archive member before replacing the public lock.
     supplied = set()

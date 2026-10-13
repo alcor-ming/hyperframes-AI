@@ -356,7 +356,9 @@ export async function inspectFrame(scenes, time) {
   const motion_unverified = [...document.querySelectorAll('canvas,video')].filter(visible)
     .filter(element => ['stage', 'overlay', 'text'].includes(element.closest('[data-hf-layer]')?.dataset.hfLayer))
     .map(element => ({reason: 'media_canvas_motion_unverified', target: selector(element), time}));
-  return {texts, unverified: [...unverified], timeline, icons, motion_unverified};
+  const module_texts = [...(window.__hfTextSources || [])].flatMap(source => source());
+  for (const item of module_texts) if (item.start <= time && time < item.end) texts.push(item);
+  return {texts, module_texts, unverified: [...unverified], timeline, icons, motion_unverified};
 }
 
 export async function probe(input) {
@@ -478,6 +480,7 @@ export async function probe(input) {
             candidate.after = Math.min(duration - .001, candidate.after ?? candidate.time + (candidate.duration / 2 || .001));
           }
           value.icons = info.icons;
+          value.module_texts = info.module_texts;
           value.motion_unverified = info.motion_unverified;
           if (before !== navigation || !await iframe.evaluate(element => getComputedStyle(element).visibility === 'visible'))
             throw new Error('Studio frame reloaded during sampling');

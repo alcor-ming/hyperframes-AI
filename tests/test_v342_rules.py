@@ -16,7 +16,7 @@ class V342RulesTests(unittest.TestCase):
         design = read(".studio/spec/visual-design.md")
         for rule in (
             "拆行、拆卡、逐句揭示或少量换词", "最小必要范围", "例外不覆盖周边说明",
-            "不等于必须换词", "verbatim", "真实素材原生文字按证据用途核验",
+            "不等于必须换词", "不授予整段上屏许可", "真实素材原生文字按证据用途核验",
             "数值、单位、比较对象与归属", "手机等效尺寸",
             "开场、Scene 内与跨 Scene 交接", "隐藏或离屏动作、空 tween",
             "持续镜头运动的中间过程不计为事件", "第 2–4 层",
@@ -41,7 +41,7 @@ class V342RulesTests(unittest.TestCase):
                     self.assertNotIn("拆行、拆卡、逐句揭示或少量换词", content)
                     self.assertNotIn("提炼说明", content)
                     self.assertNotIn("相似度证明", content)
-        for path in (".agents/skills/hyperframes-codex-workflow/SKILL.md",):
+        for path in (".agents/skills/hyperframes-production-workflow/SKILL.md",):
             self.assertIn("visual-design.md", read(path))
             self.assertNotIn("拆行、拆卡、逐句揭示或少量换词", read(path))
 

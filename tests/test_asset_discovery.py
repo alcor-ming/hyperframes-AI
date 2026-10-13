@@ -31,14 +31,14 @@ class DiscoveryTest(unittest.TestCase):
         (directory / "recipe.md").write_text("---\n" + json.dumps(recipe) + "\n---\n# Recipe\n", encoding="utf-8-sig")
         (directory / "unknown.md").write_text("# Undescribed recipe")
         (directory / "notes.md").write_text("---\ntitle: Ordinary note\ntags: [notes]\n---\n# Note")
-        self.assertEqual([], STORE.discover_components(self.harness, audit=True)["audit"]["warnings"])
+        self.assertEqual([], STORE.legacy_discover_components(self.harness, audit=True)["audit"]["warnings"])
         (directory / "invalid.md").write_text('---\n{"source_ref": broken}\n---\n')
-        warning, = STORE.discover_components(self.harness, audit=True)["audit"]["warnings"]
+        warning, = STORE.legacy_discover_components(self.harness, audit=True)["audit"]["warnings"]
         self.assertEqual("invalid_discovery_metadata", warning["code"])
         (directory / "invalid.md").unlink()
         (directory / "reuse-index.json").write_text('{"accepted_scenes":["ignored"]}')
         for kind, query in (("scene-source", "relationships"), ("recipe", "Layered")):
-            row, = STORE.discover_components(self.harness, query, kind=kind, include_references=True)["assets"]
+            row, = STORE.legacy_discover_components(self.harness, query, kind=kind, include_references=True)["assets"]
             self.assertEqual(kind, row["asset_type"])
             self.assertFalse(row["available"])
             self.assertFalse(row["installable"])
@@ -83,7 +83,7 @@ class DiscoveryTest(unittest.TestCase):
         self.accept()
         before = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.root.rglob("*") if p.is_file()}
         with patch.object(STORE, "_atomic_json", side_effect=AssertionError("Audit must not write")):
-            result = STORE.discover_components(self.harness, audit=True)
+            result = STORE.legacy_discover_components(self.harness, audit=True)
         after = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.root.rglob("*") if p.is_file()}
         self.assertEqual(before, after)
         warnings = result["audit"]["warnings"]
@@ -97,7 +97,7 @@ class DiscoveryTest(unittest.TestCase):
         self.assertFalse(any(row.get("reference_only") for row in result["assets"]))
         (self.store / "selection.json").write_text(json.dumps({self.ref: {"purpose": "Explain", "tags": ["text"]}}))
         self.assertFalse(any(item["code"] == "missing_selection_fields"
-                            for item in STORE.discover_components(self.harness, audit=True)["audit"]["warnings"]))
+                            for item in STORE.legacy_discover_components(self.harness, audit=True)["audit"]["warnings"]))
 
     def test_cli_and_doctor_audit(self):
         from contextlib import redirect_stdout
@@ -111,7 +111,7 @@ class DiscoveryTest(unittest.TestCase):
         output = io.StringIO()
         with redirect_stdout(output), patch.object(STORE, "_atomic_json", side_effect=AssertionError("CLI audit must not write")):
             work.command_component_store(self.harness, args)
-        self.assertEqual("card-family-v1", json.loads(output.getvalue())["assets"][0]["source_ref"])
+        self.assertEqual([], json.loads(output.getvalue())["assets"])  # Legacy sources are not active card discovery.
         (self.harness / ".release.json").write_text('{"release":"fixture"}')
         config = {"asset_root": str(self.store), "asset_source_roots": [str(directory)]}
         env = {key: "fixture" for key in ("HYPERFRAMES_AI_CONFIG", "HYPERFRAMES_AI_ASSET_CONFIG", "TEMP", "HYPERFRAMES_NODE",
@@ -124,22 +124,22 @@ class DiscoveryTest(unittest.TestCase):
 
     def test_incremental_selection_missing_files_and_acceptance(self):
         self.accept()
-        first = STORE.discover_components(self.harness)
+        first = STORE.legacy_discover_components(self.harness)
         self.assertTrue(first["refreshed"])
-        self.assertFalse(STORE.discover_components(self.harness)["refreshed"])
+        self.assertFalse(STORE.legacy_discover_components(self.harness)["refreshed"])
         accepted = next(row for row in first["assets"] if row["origin"] == "accepted")
         self.assertEqual("pending", accepted["recommendation"])
         self.assertIn("metadata-only", accepted["check_scope"])
         metadata = self.store / "selection.json"
         metadata.write_text(json.dumps({self.ref: {"aliases": ["章节开场"], "tags": ["title"], "recommendation": "recommended"}}, ensure_ascii=False))
-        found = STORE.discover_components(self.harness, "章节开场", tag="title", recommendation="recommended")
+        found = STORE.legacy_discover_components(self.harness, "章节开场", tag="title", recommendation="recommended")
         self.assertTrue(found["assets"][0]["available"])
         self.assertEqual([str(metadata)], found["refreshed"])
         self.assertIn("aliases", found["assets"][0]["match_reasons"])
-        self.assertFalse(STORE.discover_components(self.harness, ratio="unknown-format")["assets"])
+        self.assertFalse(STORE.legacy_discover_components(self.harness, ratio="unknown-format")["assets"])
         package = Path(accepted["path"])
         (package / "component.html").unlink()
-        broken = STORE.discover_components(self.harness)
+        broken = STORE.legacy_discover_components(self.harness)
         self.assertFalse(any(row["available"] for row in broken["assets"]))
         self.assertTrue(broken["errors"])
         with self.assertRaises(STORE.ComponentError):
@@ -156,15 +156,15 @@ class DiscoveryTest(unittest.TestCase):
         data["package_sha256"] = "0" * 64
         manifest.write_text(json.dumps(data))
         (candidate / "component.html").unlink()
-        result = STORE.discover_components(self.harness)
+        result = STORE.legacy_discover_components(self.harness)
         accepted = next(row for row in result["assets"] if row["origin"] == "accepted")
         self.assertFalse(accepted["available"])
         self.assertIn("conflict", accepted)
-        self.assertEqual(result["assets"], STORE.discover_components(self.harness, rebuild=True)["assets"])
+        self.assertEqual(result["assets"], STORE.legacy_discover_components(self.harness, rebuild=True)["assets"])
         self.assertEqual(before, work.read_bytes())
         acceptance = self.store / "acceptances" / STORE._relative(self.ref) / "acceptance.json"
         acceptance.unlink()
-        self.assertFalse(any(row["available"] for row in STORE.discover_components(self.harness)["assets"]))
+        self.assertFalse(any(row["available"] for row in STORE.legacy_discover_components(self.harness)["assets"]))
 
     def test_selection_states_query_scope_and_cache_failure(self):
         self.accept()
@@ -172,27 +172,27 @@ class DiscoveryTest(unittest.TestCase):
             with self.subTest(state=state):
                 (self.store / "selection.json").write_text(json.dumps({self.ref: {
                     "aliases": ["中文别名"], "recommendation": state, "replacement": "next@v2"}}))
-                rows = STORE.discover_components(self.harness, "中文别名", recommendation=state)["assets"]
+                rows = STORE.legacy_discover_components(self.harness, "中文别名", recommendation=state)["assets"]
                 self.assertTrue(rows)
                 self.assertTrue(rows[0]["available"])
                 self.assertEqual(state, rows[0]["recommendation"])
         for query in (str(self.root), "automated contract tests"):
-            self.assertFalse(STORE.discover_components(self.harness, query)["assets"])
+            self.assertFalse(STORE.legacy_discover_components(self.harness, query)["assets"])
         with patch.object(STORE, "_atomic_json", side_effect=OSError("read-only cache")):
-            result = STORE.discover_components(self.harness, rebuild=True)
+            result = STORE.legacy_discover_components(self.harness, rebuild=True)
         self.assertTrue(result["assets"][0]["available"])
         self.assertTrue(result["errors"][-1]["unsynchronized"])
-        self.assertFalse(STORE.discover_components(self.harness, rebuild=True)["errors"])
+        self.assertFalse(STORE.legacy_discover_components(self.harness, rebuild=True)["errors"])
 
     def test_new_registered_sources_and_schema2_ratios(self):
-        STORE.discover_components(self.harness)
+        STORE.legacy_discover_components(self.harness)
         source = self.root / "new-source"
         source.mkdir()
         STORE.register_source(self.store, source)
         for ratios in (["16:9", "9:16"], []):
             (source / "asset.json").write_text(json.dumps({"id": "new-source", "version": 1,
                 "schema_version": 2, "kind": "theme", "compatibility": {"ratios": ratios}}))
-            rows = STORE.discover_components(self.harness, ratio="16:9" if ratios else "unknown")["assets"]
+            rows = STORE.legacy_discover_components(self.harness, ratio="16:9" if ratios else "unknown")["assets"]
             self.assertEqual(1, len(rows))
             self.assertEqual(ratios, rows[0]["ratios"])
             self.assertEqual("source", rows[0]["group"])

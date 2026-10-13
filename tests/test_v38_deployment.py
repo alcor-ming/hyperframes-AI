@@ -3,6 +3,20 @@ from unittest import mock
 
 
 class RetirementTests(fixtures.RootDeploymentTests):
+    def test_production_skill_rename_uses_managed_retirement(self):
+        old = self.package('old')
+        old_skill = '.agents/skills/hyperframes-codex-workflow/SKILL.md'
+        new_skill = '.agents/skills/hyperframes-production-workflow/SKILL.md'
+        self.add_files(old, {old_skill: 'old router'})
+        fixtures.deploy.deploy(old, self.root, self.config)
+        new = self.package('new')
+        self.add_files(new, {new_skill: 'new router'})
+        fixtures.deploy.verify_package(new)
+        fixtures.deploy.deploy(new, self.root, None)
+        fixtures.deploy.verify_root(self.root)
+        self.assertFalse((self.root / old_skill).exists())
+        self.assertTrue((self.root / new_skill).is_file())
+
     def test_modified_retired_skill_is_preserved_outside_discovery_and_rollback(self):
         old = self.package('old')
         skill = '.agents/skills/retired/SKILL.md'

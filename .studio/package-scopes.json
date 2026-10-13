@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "public_cards": [
+    "stage-full",
+    "stage-light"
+  ],
+  "personal_cards": [],
+  "personal_prefixes": [
+    ".studio/designs/math/",
+    ".studio/designs/english/",
+    ".studio/designs/collage/",
+    ".studio/designs/pdoom/",
+    ".studio/designs/starline/",
+    ".studio/fonts/noto-sans/",
+    ".studio/fonts/permanent-marker/",
+    ".studio/fonts/shantell-sans/",
+    ".studio/fonts/lxgw-wenkai/",
+    ".studio/fonts/source-han-serif/",
+    ".studio/fonts/eb-garamond/",
+    ".studio/painter/"
+  ],
+  "personal_files": [
+    ".studio/runtime/math-kit.css",
+    ".studio/runtime/math-kit.js",
+    ".studio/runtime/math-project.js",
+    ".studio/spec/english.md",
+    ".studio/spec/math-kit.md",
+    ".studio/spec/math-rap.md",
+    ".studio/spec/showcase-pdoom.md",
+    ".studio/spec/showcase-science.md",
+    ".studio/spec/showcase.md",
+    ".studio/templates/ENGLISH_PLAN.template.md",
+    ".studio/templates/MATH_PLAN.template.md",
+    ".studio/templates/MATH_RESEARCH.template.md",
+    ".studio/templates/SHOWCASE_PLAN.template.md",
+    ".studio/fonts/personal-manifest.json",
+    ".studio/designs/shared/starline-rig.js",
+    ".studio/designs/shared/starline-palette.js"
+  ]
+}

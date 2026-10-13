@@ -1,0 +1,14 @@
+{
+  "schema_version": 2,
+  "component_ref": "chapter-intro/16x9@v1",
+  "ratio": "16x9",
+  "slots": {
+    "required": ["title", "kicker"],
+    "properties": {
+      "title": {"type": "string", "minLength": 1, "maxLength": 40},
+      "kicker": {"type": "string", "minLength": 1, "maxLength": 24}
+    }
+  },
+  "assets": {"allowed_types": [], "runtime_network": false},
+  "timing": {"duration_seconds": 1.6, "allowed_time_scale": {"minimum": 0.8, "maximum": 1.2}}
+}

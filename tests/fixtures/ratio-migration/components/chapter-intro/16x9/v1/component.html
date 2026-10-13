@@ -1,0 +1,23 @@
+<template>
+  <style>
+    :host { background: transparent; }
+    .chapter { color: var(--color-text-primary); background: var(--color-surface, transparent); }
+    .kicker { font-family: var(--font-mono); color: var(--color-accent-primary); }
+  </style>
+  <main id="chapter-intro" data-composition-id="chapter-intro"
+        data-width="1920" data-height="1080" data-duration="1.6"
+        data-composition-variables='[{"id":"time_scale","type":"number","label":"Time scale","default":1},{"id":"title","type":"string","label":"title","default":""},{"id":"kicker","type":"string","label":"kicker","default":""}]'>
+    <p class="kicker" data-slot="kicker"></p>
+    <h1 class="chapter" data-slot="title"></h1>
+  </main>
+  <script>
+    (function () {
+      var RUNTIME_VALUES = JSON.parse(document.getElementById("chapter-intro").dataset.compositionVariables || "{}");
+      function textSlot(name, value) { return { name: name, value: value }; }
+      var timeline = gsap.timeline({ paused: true });
+      textSlot("title", RUNTIME_VALUES.title);
+      textSlot("kicker", RUNTIME_VALUES.kicker);
+      timeline.to(".chapter", { opacity: 1 }, 0);
+    })();
+  </script>
+</template>

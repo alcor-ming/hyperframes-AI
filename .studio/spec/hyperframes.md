@@ -2,7 +2,7 @@
 
 ## 实现
 
-- Windows 在 Work-local 或已登记 AssetSource 编写视觉内容；WSL 与 Windows 均可编写组件，WSL 开发计划可包含组件编辑，工具与依赖装配由 WSL 负责。安装包、已接纳包、vendor 与 Accepted Snapshot 不原地改，必要变化派生新源 / 版本。
+- 生产会话在授权 Work-local 或已登记 AssetSource 编写视觉内容；生产与开发会话均可编写组件，开发计划使用隔离夹具，工具与依赖装配在 WSL 开发环境完成。安装包、已接纳包、vendor 与 Accepted Snapshot 不原地改，必要变化派生新源 / 版本。
 - Scene 组合模块与本地媒体，实际能力以已安装合同为准。Scene 只安排所需 Beat，允许计算布局和内聚空间舞台，不强制双画幅或透明根层。
 - 采用 Plan 已确定的视觉主题参数。
 - 阶段与接受边界只见 `.studio/workflow.md`。
@@ -18,7 +18,7 @@
 当前候选通过 `project-config.json` 的 `snapshot_dependencies` 列表显式声明动态依赖；存在该键时按入口静态 src/import/fetch 字面量与声明文件收集闭包，未支持的 srcset/imagesrcset 明确报错，不漏拷后冒充闭合。准确源、副本与接受关系仍冻结，不对可变源使用硬链接。
 
 - 先核对本地 HyperFrames / GSAP / Three.js 版本与适配器，优先复用已有 `hf-seek` / `window.__hfThreeTime` 接口；上游存在不代表当前安装可用。
-- 使用 GSAP 的工程和组件须在本地 GSAP 后显式加载同版本的 `MotionPathPlugin.min.js`，两者随资产进入快照闭包。锁定 Studio 0.8.27 会在插件缺失时自动尝试 CDN；即使当前动作未使用该插件，也不能依赖这个联网 fallback。无 GSAP 的静态样段不因此增加依赖。
+- 使用 GSAP 的工程和组件须在本地 GSAP 后显式加载同版本的 `MotionPathPlugin.min.js`，两者随资产进入快照闭包。锁定 Studio 0.8.150 在使用 `motionPath` 且插件缺失时会尝试 CDN；本项目仍统一携带本地插件，不依赖联网 fallback。无 GSAP 的静态样段不因此增加依赖。
 - DOM / GSAP 与 WebGL 共用全局时间，明确 Scene 偏移和局部重定时；同帧先求值属性、镜头与 shader，再绘制。成片动作不能以独立 RAF 或 `setAnimationLoop()` 为时间权威。
 - 渲染关键状态不能仅放在 `onUpdate` / `onComplete` 回调；随机 seek 可能抑制回调。Flip、拆字与布局状态在字体/资源就绪后固定，不在播放回调中才补正文。
 - 优先复用返回有限 Timeline 的小函数或既有效果注册接口，不另建引擎。效果只暴露实际需要的配置，由宿主控制尺寸、主题、资源、seed 与时间；文字默认 DOM / SVG，效果不拥有全局叙事。
@@ -35,7 +35,7 @@
 
 ### 五层与运行时
 
-模式为 `explainer`、`showcase`、`math` 与 `english`，默认 `explainer`；使用 16:9 / 9:16。`--captions on|off` 在 `appearance_lock.selection.captions` 冻结布尔开关，数学必须开启歌词字幕。showcase 的子模块与创作豁免见 [showcase.md](showcase.md)，五层仅为可选参考；四条链路共用现有渲染器。
+模式为 `explainer`、`showcase`、`math` 与 `english`，默认 `explainer`；使用 16:9 / 9:16。`--captions on|off` 在 `appearance_lock.selection.captions` 冻结布尔开关，数学必须开启歌词字幕。showcase 的子模块与创作豁免见 showcase.md（仅自用包），五层仅为可选参考；四条链路共用现有渲染器。
 
 各链路按专属规则使用共同五层宿主，叙事职责见 `visual-design.md`：
 
@@ -53,14 +53,21 @@
 
 ## Draft QA
 
-showcase 不要求 explainer 分层/角色检查、Q1 或节奏诊断必经闭环；下文表现形式要求不适用，但 CDN、闭包外资产及 `onUpdate` 状态等硬约束继续检查。`math` 与旧 `explainer/math-rap` 保留歌词字幕与数学关系核对，不要求角色／生图或通用 Brief，见 [math-rap.md](math-rap.md)。英语按教学 Plan 核对发音、拼写、词义、记忆提示、回忆任务及声画对应，保留合理阅读停顿，不强加通用角色、生图或 A/B 配额。诊断和代码证据不代替用户观看。
+showcase 不要求 explainer 分层/角色检查、Q1 或节奏诊断必经闭环；下文表现形式要求不适用，但 CDN、闭包外资产及 `onUpdate` 状态等硬约束继续检查。`math` 与旧 `explainer/math-rap` 保留歌词字幕与数学关系核对，不要求角色／生图或通用 Brief，见 math-rap.md（仅自用包）。英语按教学 Plan 核对发音、拼写、词义、记忆提示、回忆任务及声画对应，保留合理阅读停顿，不强加通用角色、生图或 A/B 配额。诊断和代码证据不代替用户观看。
 
 explainer 的 `preview diagnose` 另报告 `explainer_layer_missing`、`captions_lock_mismatch` 与 `sound_asset_outside_closure`，闭包检查覆盖音轨和 character。口播 audio 显式标注 `data-audio-role="voice"` 才豁免声音资产检查，其余 audio 必须来自 media 闭包，不能把 BGM/SFX 标为 voice 绕过校验。角色 DOM 标注 `data-character-ref="<id@vN>"` 辅助静态 diagnose 核对 character 闭包。均为静态疑点；第 5 层口播字幕不按第 4 层 A1 判为照搬。Plan/Q1 还需人工核验每场可见事件、角色与图片风格、遮挡和有声观看，技术报告不代替接受。
 
-在项目目录使用已锁定的本地 CLI；以下 `npx --no-install` 不下载或升级依赖：
+使用安装根内的锁定 Node、CLI 和浏览器。`npx --no-install` 仍按项目/npm 缓存解析包，不能保证选中安装根的版本；工程不需要另装 `node_modules`。Windows PowerShell 示例（替换安装根和工程路径）：
 
-```bash
-npx --no-install hyperframes check
+```powershell
+$runtimeRoot = (Resolve-Path '<安装根>').Path
+$project = (Resolve-Path '<工程目录>').Path
+$env:NODE_OPTIONS = '--require ' + (ConvertTo-Json -Compress "$runtimeRoot\.studio\windows_node.cjs")
+$env:HYPERFRAMES_BROWSER_PATH = "$runtimeRoot\runtime\chromium\chrome-headless-shell.exe"
+$env:HYPERFRAMES_FFMPEG_PATH = "$runtimeRoot\runtime\ffmpeg\bin\ffmpeg.exe"
+$env:HYPERFRAMES_FFPROBE_PATH = "$runtimeRoot\runtime\ffmpeg\bin\ffprobe.exe"
+$env:HYPERFRAMES_NO_TELEMETRY = '1'
+& "$runtimeRoot\runtime\node\node.exe" "$runtimeRoot\runtime\npm\node_modules\hyperframes\bin\hyperframes.mjs" check $project --json
 ```
 
 修复错误、空 Scene、越界、遮挡、不可读和严重节奏问题。对照 Plan 检查问题 Scene 的稳定状态及核心变化：连接有指向，条件分支可区分，反馈在状态中可见，选稿与必需 Slots 不丢失。只看开头或 contact sheet、仅有字段 / CSS 差异不算语义通过；同 easing 或相似外观不自动失败。普通 Warning 不阻止 Draft。Plan 登记的 planned placeholders 允许全片预览，准确标出缺口；占位不是代码错误的豁免，也不具备最终交付资格。只有 full 范围且必需素材齐备的版本能获得完整接受并进入 Final；单 Scene 方向批准不能代替。

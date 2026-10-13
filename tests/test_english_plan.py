@@ -31,6 +31,7 @@ def cues():
                            for i, char in enumerate(text)], 'speech_intervals': [[0, 4.5]]}
 
 
+@unittest.skipUnless((Path(__file__).resolve().parents[1] / '.studio/designs/math/design.json').is_file(), 'Personal card contract; checked in personal assembly')
 class EnglishPlanTest(unittest.TestCase):
     def test_lesson_projects_without_storyboard_and_preserves_recall_pause(self):
         text = plan()
@@ -65,8 +66,8 @@ class EnglishPlanTest(unittest.TestCase):
             english_plan.parse_plan(plan(data))
         data = lesson()
         data['recall'] = []
-        with self.assertRaisesRegex(ValueError, 'english_missing_recall'):
-            english_plan.parse_plan(plan(data))
+        self.assertEqual([], english_plan.check(plan(data), cues()))
+        self.assertEqual([], plan_scene_rows(plan(data))['S01']['exceptions'])
         data = lesson()
         data['cues'][0]['cue'] = 'dog'
         with self.assertRaisesRegex(ValueError, 'english_pronunciation_cue_mismatch'):

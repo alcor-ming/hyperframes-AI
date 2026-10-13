@@ -32,7 +32,7 @@ def parse_plan(text):
                 for line in markdown_structure_lines(text))
     if count != len(plans):
         raise ValueError('english_plan_outside_scene')
-    definitions, recalled, pronounced = {}, set(), set()
+    definitions, pronounced = {}, set()
     for scene, plan in plans.items():
         def fail(code):
             raise ValueError(f'{scene}: {code}')
@@ -97,11 +97,8 @@ def parse_plan(text):
                 fail('invalid_english_recall')
             if recall['task'] == 'spelling' and recall['answer'] != recall['word']:
                 fail('english_recall_spelling_mismatch')
-            recalled.add(recall['word'])
     if set(definitions) - pronounced:
         raise ValueError('english_missing_pronunciation_cue: ' + ', '.join(sorted(set(definitions) - pronounced)))
-    if set(definitions) - recalled:
-        raise ValueError('english_missing_recall: ' + ', '.join(sorted(set(definitions) - recalled)))
     return plans
 
 

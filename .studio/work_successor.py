@@ -226,6 +226,5 @@ def command(root, args, api):
                         shutil.rmtree(staging)
                     raise
         if not args.detached:
-            api.write_pointer(root, "current-work", target.name)
-            api.write_pointer(root, "current-variant", args.variant_id)
+            api.write_current(root, target.name, args.variant_id)
     print(target.name)

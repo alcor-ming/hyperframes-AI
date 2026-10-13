@@ -20,7 +20,8 @@ class AssetEntryTest(unittest.TestCase):
 
     def call(self, *args, status=0):
         stdout, stderr = io.StringIO(), io.StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
+        # Retain legacy selection/summary contracts through explicit compatibility discovery.
+        with patch.object(STORE, "discover_components", STORE.legacy_discover_components), redirect_stdout(stdout), redirect_stderr(stderr):
             result = work.main(list(args), root=self.harness)
         self.assertEqual(status, result, stderr.getvalue())
         return json.loads(stdout.getvalue()) if status == 0 else stderr.getvalue()

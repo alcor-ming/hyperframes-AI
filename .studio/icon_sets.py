@@ -118,7 +118,12 @@ def import_lucide(package, destination, *, asset_version=1):
 def search_icons(packages, query=""):
     results = {}
     for package in sorted(map(Path, packages)):
-        report = ASSET.validate_asset(package)
+        if (package / 'HASHES.json').is_file():
+            report = ASSET.validate_asset(package)
+        else:
+            report = ASSET.validate_card_asset(package)
+            report['component_ref'] = package.parent.parent.name + '/' + report['asset_id']
+            report['package_sha256'] = report['content_sha256']
         if report["metadata"]["kind"] != "icon-set":
             continue
         data = COMPONENT._read_json(package / report["metadata"]["entry"])

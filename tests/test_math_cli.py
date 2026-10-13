@@ -12,6 +12,7 @@ from visual_plan import VisualPlanError
 cli = fixture.cli
 
 
+@unittest.skipUnless((fixture.REPO / '.studio/runtime/math-kit.js').is_file(), 'Personal math resources not installed')
 class MathCliTest(unittest.TestCase):
     asset = fixture.WorkAppearanceTest.asset
     invoke = fixture.WorkAppearanceTest.invoke
@@ -69,6 +70,80 @@ class MathCliTest(unittest.TestCase):
         self.plan.write_text(plan.replace('"status": "approved"', '"status": "draft"'))
         with self.assertRaisesRegex(cli.HarnessError, 'approved'):
             self.scoped('math', 'build')
+
+    def test_reference_build_before_direction_approval(self):
+        self.plan.write_text(self.plan.read_text().replace('"status": "approved"', '"status": "draft"'))
+        before = cli.read_json(self.variant / 'variant.yaml')
+        with self.assertRaisesRegex(cli.HarnessError, 'approved'):
+            self.scoped('math', 'build')
+        with self.assertRaisesRegex(cli.HarnessError, 'RESEARCH.md is not ready'):
+            self.scoped('math', 'build', '--purpose', 'plan')
+        research = cli.input_path(self.variant, 'RESEARCH.md')
+        text = research.read_text()
+        metadata = cli.read_frontmatter(research)
+        metadata['status'] = 'ready'
+        research.write_text('---\n' + json.dumps(metadata) + text[text.index('\n---', 3):])
+        self.scoped('component', 'install', 'math-kit@v1', '--binding-file', str(self.base / 'binding.json'),
+                    '--purpose', 'plan')
+        with patch.object(math_build, 'check_geometry'):
+            self.assertEqual(1, json.loads(self.scoped('math', 'build', '--purpose', 'plan'))['items'])
+        self.assertEqual('draft', cli.read_frontmatter(self.plan)['status'])
+        self.assertEqual(before, cli.read_json(self.variant / 'variant.yaml'))
+        with self.assertRaisesRegex(cli.HarnessError, 'not approved'):
+            self.scoped('preview', 'register')
+        reference = self.scoped('preview', 'register', '--purpose', 'plan', '--scope', 'scene', '--scene', 'S01')
+        self.assertEqual('plan-v001', reference)
+        self.scoped('preview', 'accept', reference)
+        self.assertEqual('approved', cli.read_frontmatter(self.plan)['status'])
+        self.assertIsNone(cli.read_json(self.variant / 'variant.yaml')['accepted_preview'])
+
+    def test_single_scene_math_reference_preserves_complete_plan(self):
+        text = self.plan.read_text().replace('"status": "approved"', '"status": "draft"')
+        self.plan.write_text(text + '\n## S02\n' + text.split('## S01', 1)[1])
+        research = cli.input_path(self.variant, 'RESEARCH.md')
+        body = research.read_text()
+        metadata = cli.read_frontmatter(research)
+        metadata['status'] = 'ready'
+        research.write_text('---\n' + json.dumps(metadata) + body[body.index('\n---', 3):])
+        before = self.plan.read_bytes()
+        state = (self.variant / 'variant.yaml').read_bytes()
+        with patch.object(math_build, 'check_geometry'):
+            result = json.loads(self.scoped('math', 'build', '--purpose', 'plan', '--scene', 'S01'))
+        self.assertEqual(1, result['items'])
+        self.assertEqual(state, (self.variant / 'variant.yaml').read_bytes())
+        reference = self.scoped('preview', 'register', '--purpose', 'plan', '--kind', 'executable',
+                                '--scope', 'scene', '--scene', 'S01')
+        self.assertEqual('plan-v001', reference)
+        snapshot = self.variant / 'previews' / reference / 'source-snapshot'
+        math_build.verify_generated(snapshot, self.plan.read_text(), ['S01'])
+        self.assertEqual(before, self.plan.read_bytes())
+        self.assertIsNone(cli.read_json(self.variant / 'variant.yaml')['accepted_preview'])
+        self.assertIsNone(cli.read_json(self.variant / 'variant.yaml').get('accepted_visual_plan'))
+        with self.assertRaisesRegex(cli.HarnessError, 'approved'):
+            self.scoped('math', 'build')
+
+    def test_full_math_build_with_scenes_sharing_one_document(self):
+        text = self.plan.read_text()
+        self.plan.write_text(text + '\n## S02\n' + text.split('## S01', 1)[1])
+        index = self.project / 'index.html'
+        index.write_text(index.read_text().replace('</body>',
+            '<section id="S02" data-start="0.5" data-duration="5"></section></body>'))
+        binding = self.base / 'binding-s02.json'
+        cli.write_json(binding, {'schema_version': 3, 'component_ref': 'math-kit@v1', 'scene': 'S02',
+                                'usage': {'role': 'subject', 'required': True}})
+        self.scoped('component', 'install', 'math-kit@v1', '--binding-file', str(binding))
+        with patch.object(math_build, 'check_geometry'):
+            self.assertEqual(2, json.loads(self.scoped('math', 'build'))['items'])
+        math_build.verify_generated(self.project, self.plan.read_text())
+        self.assertEqual(1, index.read_text().count(math_build.START))
+        research = cli.input_path(self.variant, 'RESEARCH.md')
+        body = research.read_text()
+        metadata = cli.read_frontmatter(research)
+        metadata['status'] = 'ready'
+        research.write_text('---\n' + json.dumps(metadata) + body[body.index('\n---', 3):])
+        with self.assertRaisesRegex(VisualPlanError, 'must match exactly'):
+            self.scoped('preview', 'register', '--purpose', 'plan', '--kind', 'executable',
+                        '--scope', 'scene', '--scene', 'S01')
 
 
 if __name__ == '__main__':

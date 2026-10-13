@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import json
 import math
 import os
@@ -18,6 +19,7 @@ from visual_plan import VisualPlanError, validate_dependencies
 
 
 ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+CARD_ASSET_REF = re.compile(r"^([a-z][a-z0-9-]*)/([a-z0-9]+(?:-[a-z0-9]+)*)$")
 PRIVATE_NAMES = {"__pycache__", "node_modules", "venv", "cache", "caches", "private", "secrets",
                  "credentials", "tmp", "temp", "works", "requests", "review", "drafts"}
 PRIVATE_FILES = {"work.md", "script.md", "research.md", "package.md", "animation_plan.md", "variant.yaml"}
@@ -58,7 +60,7 @@ def _fields(value, allowed, required=(), label="asset"):
 
 def validate_reference(value):
     _fields(value, {"ref", "kind", "package_sha256"}, {"ref", "kind", "package_sha256"}, "asset reference")
-    if (not isinstance(value["ref"], str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*@v[1-9][0-9]*", value["ref"])
+    if (not isinstance(value["ref"], str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?@v[1-9][0-9]*", value["ref"])
             or not isinstance(value["kind"], str) or value["kind"] not in KINDS
             or not isinstance(value["package_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", value["package_sha256"])):
         raise COMPONENT.ComponentError("Asset reference requires exact ref, kind and package_sha256")
@@ -343,7 +345,7 @@ def _motion2(payload, version=2):
 def _schema2(directory, metadata):
     _fields(metadata, {"schema_version", "id", "version", "kind", "entry", "contract_version", "parameters",
                       "compatibility", "dependencies", "asset_dependencies", "runtime", "usage", "example", "license",
-                      "files", "description", "source_url", "rights", "purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer", "broll"},
+                      "files", "description", "source_url", "rights", "purpose", "tags", "hit_offset", "hit_offset_estimated", "asset_layer", "broll", "text_ownership"},
             {"contract_version", "parameters", "compatibility"}, "schema 2 manifest")
     if "hit_offset" in metadata and (type(metadata["hit_offset"]) not in {int, float} or not math.isfinite(metadata["hit_offset"]) or metadata["hit_offset"] < 0):
         raise COMPONENT.ComponentError("hit_offset must be finite nonnegative seconds")
@@ -608,6 +610,14 @@ def _inputs(directory):
         raise COMPONENT.ComponentError("Asset entry must be JS/MJS for module or PNG/JPEG/WebP/SVG/MP3 for media")
     if metadata["schema_version"] == 2:
         _schema2(directory, metadata)
+    ownership = metadata.get('text_ownership')
+    if ownership is not None:
+        if (kind != 'module' or not isinstance(ownership, dict) or set(ownership) != {'mode', 'kinds'}
+                or ownership['mode'] != 'embedded' or not isinstance(ownership['kinds'], list)
+                or not ownership['kinds']
+                or any(not isinstance(value, str) or not ID.fullmatch(value) for value in ownership['kinds'])
+                or len(ownership['kinds']) != len(set(ownership['kinds']))):
+            raise COMPONENT.ComponentError('text_ownership requires embedded and named text types')
     validate_broll(metadata)
     runtime = metadata.get("runtime", {})
     if not isinstance(runtime, dict) or not isinstance(runtime.get("versions", {}), dict):
@@ -674,15 +684,51 @@ def validate_asset(directory, expected_ref=None):
     if [item["path"] for item in actual] != files:
         raise COMPONENT.ComponentError("Frozen asset contains files outside its declared dependency closure")
     hashes = COMPONENT._validate_hashes(directory)
-    asset_ref = f"{metadata['id']}@v{metadata['version']}"
+    card_ref = hashes.get("card_ref")
+    if card_ref is not None and validate_card_asset_reference(card_ref)[1] != metadata["id"]:
+        raise COMPONENT.ComponentError("Frozen card asset identity does not match metadata")
+    asset_ref = f"{card_ref or metadata['id']}@v{metadata['version']}"
     if hashes.get("component_ref") != asset_ref or (expected_ref is not None and asset_ref != expected_ref):
         raise COMPONENT.ComponentError(f"Asset identity does not match expected package: {asset_ref}")
-    return {"component_ref": asset_ref, "component_id": metadata["id"], "version": metadata["version"],
+    return {"card_ref": card_ref, "component_ref": asset_ref, "component_id": card_ref or metadata["id"], "version": metadata["version"],
             "ratio": None, "metadata": {**metadata, "asset_type": metadata["kind"]},
             "package_sha256": hashes["package_sha256"], "files": hashes["files"]}
 
 
-def freeze_source(source, destination):
+def validate_card_asset_reference(value):
+    """Validate a card-internal asset identity written as ``<card-id>/<asset-id>``."""
+    match = CARD_ASSET_REF.fullmatch(value) if isinstance(value, str) else None
+    if match is None:
+        raise COMPONENT.ComponentError("Card asset reference requires <card-id>/<asset-id>")
+    return match.group(1), match.group(2)
+
+
+def asset_content_sha256(directory, files=None):
+    """Deterministic digest of one card asset's declared file closure."""
+    directory = _root(directory)
+    if files is None:
+        _, files = _inputs(directory)
+    lines = ''.join(f"{COMPONENT.file_sha256(directory / name)}  {name}\n" for name in files)
+    return hashlib.sha256(lines.encode('utf-8')).hexdigest()
+
+
+def validate_card_asset(directory, expected_id=None):
+    """Validate one editable in-card asset by its field contract.
+
+    Reuses the single-asset field/dependency contract without the frozen
+    package and acceptance requirements of :func:`validate_asset`.
+    """
+    directory = _root(directory)
+    metadata, files = _inputs(directory)
+    if expected_id is not None and metadata["id"] != expected_id:
+        raise COMPONENT.ComponentError(
+            f"Card asset id {metadata['id']!r} does not match directory name {expected_id!r}")
+    return {"asset_id": metadata["id"], "version": metadata["version"], "kind": metadata["kind"],
+            "metadata": {**metadata, "asset_type": metadata["kind"]}, "files": files,
+            "content_sha256": asset_content_sha256(directory, files)}
+
+
+def freeze_source(source, destination, *, card_ref=None):
     """Copy only selected inputs; never write hashes or state into editable source."""
     source = _root(source)
     destination = Path(destination).absolute()
@@ -693,6 +739,8 @@ def freeze_source(source, destination):
         if parent.exists() or parent.is_symlink():
             _check_link(parent)
     metadata, files = _inputs(source)
+    if card_ref is not None and validate_card_asset_reference(card_ref)[1] != metadata["id"]:
+        raise COMPONENT.ComponentError("Card asset identity does not match source")
     before = [{"path": name, "sha256": COMPONENT.file_sha256(source / name)} for name in files]
     destination.mkdir(parents=True)
     try:
@@ -707,7 +755,8 @@ def freeze_source(source, destination):
             raise COMPONENT.ComponentError("Asset source changed during freezing; retry from stable inputs")
         COMPONENT._atomic_json(destination / "HASHES.json", {
             "schema_version": 1, "algorithm": COMPONENT.PACKAGE_ALGORITHM,
-            "component_ref": f"{metadata['id']}@v{metadata['version']}", "files": before,
+            "component_ref": f"{card_ref or metadata['id']}@v{metadata['version']}", "files": before,
+            **({"card_ref": card_ref} if card_ref else {}),
             "package_sha256": COMPONENT.package_sha256(destination),
         })
         return validate_asset(destination)

@@ -55,7 +55,7 @@ class AppearanceAssetTest(unittest.TestCase):
         closure = STORE.resolve_asset_closure(self.harness, references)
         self.assertEqual(3, len(closure))
         self.assertEqual({"theme", "background", "motion"}, {item["metadata"]["kind"] for item in closure})
-        self.assertEqual(3, sum(item["available"] for item in STORE.discover_components(self.harness)["assets"]))
+        self.assertEqual(3, sum(item["available"] for item in STORE.legacy_discover_components(self.harness)["assets"]))
         for reference in references:
             path, report, acceptance = STORE.resolve_asset(self.harness, reference)
             self.assertEqual(reference["package_sha256"], report["package_sha256"])

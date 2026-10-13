@@ -22,7 +22,7 @@
       "description": "独立评审提供方",
       "choices": [
         "off",
-        "codex-subagent"
+        "external"
       ]
     },
     "critic.model": {
@@ -33,7 +33,7 @@
       ],
       "stage": "draft",
       "cost": "token",
-      "description": "必须支持图像输入的评审模型"
+      "description": "评审来源记录；默认留空，模型名不证明视觉能力"
     },
     "critic.max_rounds": {
       "type": "integer",
@@ -69,15 +69,6 @@
       "description": "每段冻结参考帧数",
       "minimum": 1,
       "default": 6
-    }
-  },
-  "critic_models": {
-    "gpt-6.1-sol": {
-      "image_input": true
-    },
-    "deepseek-v4.1-flash": {
-      "image_input": true,
-      "host_verification": "required"
     }
   }
 }

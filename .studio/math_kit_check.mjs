@@ -1,15 +1,15 @@
 // Isolated font and layout preflight, never video rendering.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import {existsSync} from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 import {createRequire} from 'node:module';
 const project = path.resolve(process.argv[2]);
 const sources = JSON.parse(process.argv[3]);
-const require = createRequire(import.meta.url);
-let chromium;
-try { ({chromium} = require('playwright-core')); }
-catch { ({chromium} = createRequire(new URL('./remotion/package.json', import.meta.url))('playwright-core')); }
+const runtime = new URL('../runtime/npm/package.json', import.meta.url);
+const require = createRequire(existsSync(runtime) ? runtime : new URL('./parser/package.json', import.meta.url));
+const native = process.platform === 'win32';
 const server = http.createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
@@ -25,14 +25,21 @@ const server = http.createServer(async (request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 let browser;
 try {
-  browser = await chromium.launch({executablePath: process.argv[4] || process.env.HYPERFRAMES_BROWSER_PATH || process.env.CHROME_PATH,
-    headless: true, args: ['--no-sandbox']});
+  const launch = {executablePath: process.argv[4] || process.env.HYPERFRAMES_BROWSER_PATH || process.env.CHROME_PATH,
+    headless: true, args: process.platform === 'linux' ? ['--no-sandbox'] : []};
+  browser = native ? await require('puppeteer-core').launch(launch)
+    : await require('playwright-core').chromium.launch(launch);
   const origin = `http://127.0.0.1:${server.address().port}`;
   for (const source of sources) {
-    const page = await browser.newPage({viewport: {width: 1920, height: 1920}});
-    await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    const page = native ? await browser.newPage() : await browser.newPage({viewport: {width: 1920, height: 1920}});
+    if (native) {
+      await page.setViewport({width: 1920, height: 1920});
+      await page.setRequestInterception(true);
+      page.on('request', request => new URL(request.url()).origin === origin ? request.continue() : request.abort());
+    } else await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     await page.goto(origin + '/' + source.split('/').map(encodeURIComponent).join('/'));
-    await page.waitForFunction(() => window.__hfMathBuildReady || window.__hfMathBuildError, null, {timeout: 15000});
+    const waitOptions = native ? [{timeout: 15000}] : [null, {timeout: 15000}];
+    await page.waitForFunction(() => window.__hfMathBuildReady || window.__hfMathBuildError, ...waitOptions);
     await page.evaluate(async () => {
       if (window.__hfMathBuildError) throw Error(window.__hfMathBuildError);
       const groups = await window.__hfMathBuildReady;
@@ -82,7 +89,7 @@ try {
       }
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
-    const cdp = await page.context().newCDPSession(page);
+    const cdp = native ? await page.target().createCDPSession() : await page.context().newCDPSession(page);
     await cdp.send('DOM.enable');
     await cdp.send('CSS.enable');
     const {root} = await cdp.send('DOM.getDocument', {depth: -1});
@@ -97,7 +104,7 @@ try {
     await cdp.detach();
     await page.close();
   }
-  console.log(JSON.stringify({sources: sources.length, fonts: 'checked', scope: 'DOM only'}));
+  console.log(JSON.stringify({sources: sources.length, fonts: 'checked', geometry: 'checked', scope: 'DOM only'}));
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

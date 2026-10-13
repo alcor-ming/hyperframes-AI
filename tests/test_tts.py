@@ -6,6 +6,7 @@ import io
 import json
 from pathlib import Path
 import sys
+import struct
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -72,6 +73,50 @@ pathlib.Path(a.result).write_text(json.dumps({'audio': result, 'model': model, '
 
 
 class TTSTests(unittest.TestCase):
+    def test_voice_defaults_only_fill_an_explicit_synthesis_task(self):
+        local = {'tools': {'tts': self.config, 'voices': {'narrator': {'reference_audio': '/reference.wav', 'duration_factor': 1.2}}}}
+        state = {'design_values': {'voice.ref': 'narrator', 'voice.duration_factor': 1.05}}
+        with mock.patch.dict('os.environ', {'HYPERFRAMES_AI_RESOLVED_CONFIG': json.dumps(local)}):
+            config = work_tts.generation_config(state)
+            self.assertEqual(1.05, config['options']['duration_factor'])
+            self.assertEqual('/reference.wav', config['options']['reference_audio'])
+            explicit = {**self.config, 'options': {'duration_factor': 0.9}, 'anchors': {'P001': {'duration_factor': 1.1}}}
+            chosen = work_tts.generation_config(state, explicit)
+            self.assertEqual(0.9, chosen['options']['duration_factor'])
+            self.assertEqual(1.1, chosen['anchors']['P001']['duration_factor'])
+            with self.assertRaisesRegex(ValueError, 'not mapped'):
+                work_tts.generation_config({'design_values': {'voice.ref': 'missing'}})
+        self.assertNotIn('audio', state)
+
+    def test_batch_import_checks_every_result_without_calling_provider(self):
+        script_hash = tts.digest(b'current script')
+        request = tts.generation_request(self.rows, self.config, script_hash)
+        folder = self.root / 'batch'
+        folder.mkdir()
+        entries = []
+        for row, basis in zip(request['segments'], request['generation_basis']):
+            audio = folder / (row['anchor'] + '.wav')
+            audio.write_bytes(wav_bytes())
+            entries.append({**row, 'basis': basis, 'model': request['model'],
+                            'audio': audio.name, 'sha256': tts.digest(audio.read_bytes())})
+        batch = {'version': 1, 'script_sha256': script_hash, 'segments': entries}
+        source = folder / 'batch.json'
+        for invalid in ({**batch, 'segments': entries[:1]},
+                        {**batch, 'segments': [entries[0], {**entries[1], 'text': 'wrong'}]},
+                        {**batch, 'segments': [entries[0], {**entries[1], 'sha256': '0' * 64}]}):
+            source.write_bytes(tts.json_bytes(invalid))
+            with self.assertRaises(ValueError):
+                tts.import_batch(self.variant, self.rows, self.config, script_hash, source)
+            self.assertFalse((self.variant / 'materials/tts').exists())
+        source.write_bytes(tts.json_bytes(batch))
+        with mock.patch.object(tts, 'script_provider', side_effect=AssertionError('must use batch')):
+            result = tts.import_batch(self.variant, self.rows, self.config, script_hash, source)
+            again = tts.generate(self.variant, self.rows, self.config, script_hash)
+        self.assertEqual(result['id'], again['id'])
+        self.assertEqual(0.5, result['duration'])
+        self.assertIsNone(result['alignment'])
+        self.assertTrue((folder / 'P001.wav').exists())
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -117,7 +162,7 @@ class TTSTests(unittest.TestCase):
 
     def test_provider_failure_is_redacted_and_keeps_prior_candidate(self):
         previous = tts.generate(self.variant, self.rows, self.config, 'a' * 64)
-        snapshot = {p.name: p.read_bytes() for p in Path(previous['path']).iterdir()}
+        snapshot = {p.relative_to(previous['path']): p.read_bytes() for p in Path(previous['path']).rglob('*') if p.is_file()}
         secret = 'PRIVATE-PROVIDER-SECRET'
         for response in (URLError(secret), io.BytesIO(json.dumps({'code': 42, 'message': secret}).encode()),
                          io.BytesIO(json.dumps({'audio': secret}).encode())):
@@ -126,7 +171,7 @@ class TTSTests(unittest.TestCase):
                 with mock.patch.object(tts, 'urlopen', **kwargs), self.assertRaises(ValueError) as raised:
                     tts.generate(self.variant, self.rows, {}, 'a' * 64)
                 self.assertNotIn(secret, str(raised.exception))
-            self.assertEqual(snapshot, {p.name: p.read_bytes() for p in Path(previous['path']).iterdir()})
+            self.assertEqual(snapshot, {p.relative_to(previous['path']): p.read_bytes() for p in Path(previous['path']).rglob('*') if p.is_file()})
             self.assertEqual([Path(previous['path'])], list((self.variant / 'materials/tts').iterdir()))
         for options in ({'api_key': secret}, {'nested': [{'Authorization': secret}]}):
             with self.assertRaisesRegex(ValueError, 'credentials'):
@@ -209,6 +254,66 @@ class TTSTests(unittest.TestCase):
                 tts.generate(self.variant, rows, self.config, 'a' * 64)
         with self.assertRaisesRegex(ValueError, 'Script SHA-256'):
             tts.generate(self.variant, self.rows, self.config, 'not-a-digest')
+
+    def test_segment_reuse_and_tool_version_invalidation(self):
+        with mock.patch.object(tts, 'script_provider', wraps=tts.script_provider) as provider:
+            first = tts.generate(self.variant, self.rows, self.config, 'a' * 64)
+            changed_rows = [self.rows[0], {**self.rows[1], 'text': 'kitten'}]
+            second = tts.generate(self.variant, changed_rows, self.config, 'b' * 64)
+            self.assertEqual(provider.call_count, 3)
+            self.assertEqual(first['segments'][0]['segment_id'], second['segments'][0]['segment_id'])
+            self.assertTrue((Path(second['path']) / 'P001/audio.wav').is_file())
+            self.assertIsNone(second['alignment'])
+            self.provider.write_text(PROVIDER + '\n# adapter revision\n')
+            third = tts.generate(self.variant, changed_rows, self.config, 'b' * 64)
+            self.assertEqual(provider.call_count, 5)
+            self.assertNotEqual(second['id'], third['id'])
+
+    def test_partial_failure_retains_successful_segments_but_no_candidate(self):
+        config = {**self.config, 'anchors': {'P002': {'mode': 'exit'}}}
+        with self.assertRaises(ValueError):
+            tts.generate(self.variant, self.rows, config, 'a' * 64)
+        self.assertEqual([], list((self.variant / 'materials/tts').iterdir()))
+        with mock.patch.object(tts, 'script_provider', wraps=tts.script_provider) as provider:
+            result = tts.generate(self.variant, self.rows, self.config, 'a' * 64)
+            self.assertEqual(provider.call_count, 1)
+        self.assertEqual(len(result['segments']), 2)
+
+    def test_reference_and_effective_options_invalidate_only_affected_segment(self):
+        reference = self.root / 'ref.wav'
+        reference.write_bytes(wav_bytes())
+        config = {**self.config, 'anchors': {'P001': {'reference_audio': str(reference), 'duration_factor': 1}}}
+        with mock.patch.object(tts, 'script_provider', wraps=tts.script_provider) as provider:
+            first = tts.generate(self.variant, self.rows, config, 'a' * 64)
+            reference.write_bytes(reference.read_bytes()[:-2] + b'\x02\x00')
+            second = tts.generate(self.variant, self.rows, config, 'a' * 64)
+            self.assertEqual(provider.call_count, 3)
+            self.assertNotEqual(first['id'], second['id'])
+            config['anchors']['P001']['duration_factor'] = 1.2
+            tts.generate(self.variant, self.rows, config, 'a' * 64)
+            self.assertEqual(provider.call_count, 4)
+        for factor in (0, -1, True, float('nan'), float('inf')):
+            with self.subTest(factor=factor), self.assertRaisesRegex(ValueError, 'duration_factor'):
+                tts.configuration({**self.config, 'options': {'duration_factor': factor}})
+
+    def test_float_reference_is_hashed_but_output_still_requires_pcm(self):
+        reference = self.root / 'float.wav'
+        samples = struct.pack('<ff', 0.0, 0.5)
+        raw = (b'RIFF' + struct.pack('<I', 36 + len(samples)) + b'WAVEfmt '
+               + struct.pack('<IHHIIHH', 16, 3, 1, 8000, 32000, 4, 32)
+               + b'data' + struct.pack('<I', len(samples)) + samples)
+        reference.write_bytes(raw)
+        options = {'reference_audio': str(reference)}
+        self.assertEqual(tts.digest(raw), tts.generation_basis(self.config, options)['reference_sha256'])
+        with self.assertRaises(ValueError):
+            tts.wav_info(reference)
+        reference.write_bytes(b'')
+        with self.assertRaisesRegex(ValueError, 'reference_audio'):
+            tts.generation_basis(self.config, options)
+        reference.unlink()
+        reference.symlink_to(self.root / 'missing.wav')
+        with self.assertRaisesRegex(ValueError, 'reference_audio'):
+            tts.generation_basis(self.config, options)
 
     def test_only_measured_complete_in_range_alignment_can_be_adopted(self):
         text = '猫 cat'

@@ -32,7 +32,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
                                '<!-- P001 -->\n' + COPY + '\n', encoding="utf-8")
         self.update_frontmatter(CLI.input_path(self.variant, "RESEARCH.md"), status="ready")
         (self.project / "index.html").write_text(
-            '<section id="S01" data-start="0" data-duration="4">' + COPY + '</section>', encoding="utf-8")
+            '<section id="S01" data-hf-layer="text" data-start="0" data-duration="4">' + COPY + '</section>', encoding="utf-8")
         (self.project / "compositions").mkdir(exist_ok=True)
         (self.project / "DESIGN.md").write_text("# Isolated diagnostic fixture\n", encoding="utf-8")
         (self.project / "project-config.json").write_text("{}\n", encoding="utf-8")
@@ -40,7 +40,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
         self.cli.write_text("// Identity-only fixture; never executed.\n", encoding="utf-8")
         self.bind("current", self.project)
         self.sampled = {"samples": [{"time": 0, "ready": True, "texts": [
-            {"scene": "S01", "info": "I01", "text": COPY, "selector": "#S01"}]}],
+            {"scene": "S01", "info": "I01", "text": COPY, "selector": "#S01", "layer": "text"}]}],
             "motion": [], "timeline": [], "unverified": []}
         context = mock.patch.object(CLI.studio_preview, "context", return_value={})
         probe = mock.patch.object(CLI.visual_diagnostics, "probe", return_value=self.sampled)
@@ -166,7 +166,7 @@ class VisualDiagnosticsCliTests(unittest.TestCase):
             path = CLI.input_path(self.variant, name)
             path.write_text(path.read_text(encoding="utf-8") + '\nCurrent-only change\n', encoding="utf-8")
         for actual, kind in (([], 'plan_information_missing'),
-                             ([{"scene": "S01", "info": "I01", "text": "用户", "selector": "#S01"}],
+                             ([{"scene": "S01", "info": "I01", "text": "用户", "selector": "#S01", "layer": "text"}],
                               'plan_information_truncated')):
             with self.subTest(kind=kind):
                 self.sampled['samples'][0]['texts'] = actual

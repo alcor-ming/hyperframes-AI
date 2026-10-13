@@ -1,0 +1,19 @@
+{
+  "algorithm": "asset-package-sha256-v1",
+  "asset_ref": "rse-functional-background/4x3@v1",
+  "files": [
+    {
+      "path": "BACKGROUND.md",
+      "sha256": "357841c2ea737def3d452317e01065545b93f4fdfb0912380d8ca9accde63bcb"
+    },
+    {
+      "path": "artifact.html",
+      "sha256": "9730f13d22883e4c2227d641bb9913bc2cf5d12c623355110c8afcfdcfc8d687"
+    },
+    {
+      "path": "background.html",
+      "sha256": "7ebfc0d4d1be9cc980d1570ef123fbcce90e74d7c3aba51a980142aa568d9447"
+    }
+  ],
+  "package_sha256": "57cdfbe79883385ce08cc717afd9905be2200d934018ef28c7c16e2b527335ea"
+}

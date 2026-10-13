@@ -40,6 +40,18 @@ def copy_source(destination):
 
 
 class BrollManifestContractTest(unittest.TestCase):
+    def test_schema_two_embedded_text_declaration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = copy_source(Path(temp) / 'source')
+            metadata = base_metadata()
+            metadata['text_ownership'] = {'mode': 'embedded', 'kinds': ['title']}
+            (source / 'asset.json').write_text(json.dumps(metadata))
+            asset_contract.validate_card_asset(source)
+            metadata['text_ownership']['kinds'] = ['title', 'title']
+            (source / 'asset.json').write_text(json.dumps(metadata))
+            with self.assertRaisesRegex(ComponentError, 'text_ownership'):
+                asset_contract.validate_card_asset(source)
+
     def test_valid_fixture_and_hold_end_variant(self):
         metadata = base_metadata()
         self.assertIsNone(asset_contract.validate_broll(metadata))
@@ -182,11 +194,14 @@ class BrollFixturePipelineTest(unittest.TestCase):
             harness, store = root / "harness", root / "store"
             harness.mkdir()
             shutil.copyfile(REPO / "windows-runtime.lock.json", harness / "windows-runtime.lock.json")
-            source = copy_source(root / "synthetic-broll")
+            card = harness / '.studio/designs/kit'
+            card.mkdir(parents=True)
+            (card / 'design.json').write_text(json.dumps({'id': 'kit', 'version': 1, 'type': 'material',
+                'assets': {'directory': 'assets'}, 'runtime': {}}))
+            (card / 'assets').mkdir()
+            source = copy_source(card / 'assets/synthetic-broll')
             with mock.patch.dict(os.environ, {"HYPERFRAMES_AI_ASSET_ROOT": str(store), "HYPERFRAMES_AI_ROOT": str(harness)}):
-                candidate = asset_store.pack_source(store, source)
-                ref = candidate["component_ref"]
-                asset_store.accept_component(store, ref, candidate["package_sha256"], "Isolated B-roll catalog test", runtime_root=harness)
+                ref = 'kit/synthetic-broll'
                 matched = {item["component_ref"] for item in asset_store.discover_components(harness, broll_role="concept")["assets"]}
                 self.assertIn(ref, matched)
                 self.assertFalse(asset_store.discover_components(harness, broll_role="hook")["assets"])

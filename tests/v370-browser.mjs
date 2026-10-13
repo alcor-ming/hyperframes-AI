@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {inspectCarry, layerPixels} from '../.studio/visual_probe.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const {chromium} = createRequire(path.join(root, '.studio/remotion/package.json'))('playwright-core');
+const {chromium} = createRequire(path.join(root, '.studio/parser/package.json'))('playwright-core');
 const browser = await chromium.launch({executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox']});
 try {
   const page = await browser.newPage({viewport: {width: 640, height: 360}});

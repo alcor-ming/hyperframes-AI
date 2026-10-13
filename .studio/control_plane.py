@@ -20,11 +20,19 @@ class AccountService:
         identity = self.api.validate_id(identity, kind)
         if not isinstance(data.get("name"), str) or not data["name"].strip():
             raise self.api.HarnessError("Configuration requires a name")
-        allowed = {"account": {"name", "theme", "background", "motion", "overrides", "fps", "seed", "ratio", "mode", "captions", "style", "delivery"},
-                   "series": {"name", "route", "accounts", "ip", "mode", "spec"},
+        allowed = {"account": {"name", "theme", "background", "motion", "overrides", "fps", "seed", "ratio", "mode", "design", "captions", "style", "delivery"},
+                   "series": {"name", "route", "accounts", "ip", "mode", "design", "spec", "overrides", "workflow", "stages"},
                    "theme": {"name", "ratios", "modes", "tokens"}}[kind]
         if set(data) - allowed:
             raise self.api.HarnessError("Unsupported configuration fields")
+        if kind == 'series':
+            import workflow_config
+            workflow_config.validate(data.get('workflow', {}), 'series')
+            workflow_config.recipes({}, 'script', data.get('stages', {}))
+        if kind in ("account", "series"):
+            self.design(data.get("design"))
+            if "overrides" in data:
+                self.overrides(data["overrides"], kind)
         if kind == "theme":
             if not isinstance(data.get("ratios"), list) or not data["ratios"] or not all(isinstance(item, str) for item in data["ratios"]) or not set(data["ratios"]).issubset(self.api.RATIOS - {"source"}):
                 raise self.api.HarnessError("Theme requires explicit supported ratios")
@@ -49,6 +57,100 @@ class AccountService:
             self.api.write_json(path, record)
         return record
 
+    def rules_path(self, series: str) -> Path:
+        """Series rules are addressed by identity, never by a Work or linked folder path."""
+        series = self.api.validate_id(series, "series")
+        if series == "history":
+            raise self.api.HarnessError("Series identity 'history' is reserved")
+        self.get("series", series)
+        directory = self.directory / "series" / series
+        if any(path.is_symlink() for path in (directory, directory / "AGENTS.md", directory / "history")):
+            raise self.api.HarnessError("Series rules cannot be linked")
+        return directory / "AGENTS.md"
+
+    def get_rules(self, series: str) -> dict:
+        path = self.rules_path(series)
+        try:
+            content = path.read_text(encoding="utf-8") if path.is_file() else None
+        except (OSError, UnicodeDecodeError) as error:
+            raise self.api.HarnessError(f"Cannot read series rules {path}: {error}") from error
+        history = path.parent / "history"
+        return {"series": series, "path": str(path), "exists": content is not None,
+                "revisions": len(list(history.glob("*.md"))) + (content is not None), "content": content}
+
+    def put_rules(self, series: str, content: str) -> dict:
+        if not content.strip():
+            raise self.api.HarnessError("Series rules cannot be empty")
+        path = self.rules_path(series)
+        with self.api.naming_lock(self.root):
+            previous = path.read_text(encoding="utf-8") if path.is_file() else None
+            if previous != content:
+                if previous is not None:
+                    history = path.parent / "history"
+                    self.api.atomic_write(history / f"{len(list(history.glob('*.md'))) + 1}.md", previous)
+                self.api.atomic_write(path, content)
+        return {**self.get_rules(series), "changed": previous != content, "content": None}
+
+    def delete_rules(self, series: str) -> dict:
+        path = self.rules_path(series)
+        with self.api.naming_lock(self.root):
+            previous = path.read_text(encoding="utf-8") if path.is_file() else None
+            if previous is not None:
+                history = path.parent / "history"
+                self.api.atomic_write(history / f"{len(list(history.glob('*.md'))) + 1}.md", previous)
+                path.unlink()
+        return {**self.get_rules(series), "changed": previous is not None, "content": None}
+
+    def delete_series(self, series: str, works: list[dict]) -> dict:
+        """Retire an unreferenced series; the caller holds the naming lock while listing works.
+
+        Configuration history and rules move together into control-plane/deleted, so a later
+        series with the same identity starts clean and nothing is hard-deleted.
+        """
+        series = self.api.validate_id(series, "series")
+        if series == "history":
+            raise self.api.HarnessError("Series identity 'history' is reserved")
+        record = self.get("series", series)
+        owners = sorted(row["id"] for row in works if row.get("series") == series)
+        if owners:
+            raise self.api.HarnessError(f"Series {series} still owns Works: {', '.join(owners)}; move them with work series move first")
+        unreadable = sorted(row["id"] for row in works if row.get("error") and row.get("series") is None)
+        if unreadable:
+            raise self.api.HarnessError(f"Cannot confirm series ownership of unreadable Works: {', '.join(unreadable)}")
+        base = self.directory / "series"
+        sources = [(base / f"{series}.json", f"{series}.json"),
+                   (base / "history" / series, "history"), (base / series, "rules")]
+        if any(source.is_symlink() for source, _ in sources):
+            raise self.api.HarnessError("Series configuration cannot be linked")
+        from datetime import datetime
+        stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+        target = self.directory / "deleted" / "series" / f"{series}-r{record.get('revision', 0)}-{stamp}"
+        if target.exists():
+            raise self.api.HarnessError(f"Deleted series archive already exists: {target}")
+        target.mkdir(parents=True)
+        for source, name in sources[1:]:
+            if source.exists():
+                source.replace(target / name)
+        # The live configuration moves last: an interrupted delete still leaves the series visible.
+        sources[0][0].replace(target / sources[0][1])
+        return {"series": series, "deleted": True, "archive": str(target)}
+
+    def design(self, identity) -> dict | None:
+        if identity is None:
+            return None
+        from designs import DesignError, require
+        try:
+            return require(identity)
+        except DesignError as error:
+            raise self.api.HarnessError(str(error)) from error
+
+    def overrides(self, overrides, kind: str) -> dict:
+        from designs import DesignError, layer_values
+        try:
+            return layer_values(overrides, kind.capitalize())
+        except DesignError as error:
+            raise self.api.HarnessError(str(error)) from error
+
     def appearance(self, settings: dict) -> dict:
         from appearance import check_mode, is_asset_appearance, resolve
         from component_harness import ComponentError
@@ -57,8 +159,9 @@ class AccountService:
                 return resolve(self.root, settings)
             except (ValueError, ComponentError) as error:
                 raise self.api.HarnessError(str(error)) from error
-        if any(key in settings for key in ("background", "overrides")):
-            raise self.api.HarnessError("Background and overrides require exact appearance asset references")
+        overrides = settings.get("overrides")
+        if "background" in settings or (isinstance(overrides, dict) and set(overrides) & {"theme", "background", "motion"}):
+            raise self.api.HarnessError("Background and appearance overrides require exact appearance asset references")
         check_mode(settings.get("mode"))
         if "captions" in settings and type(settings["captions"]) is not bool:
             raise self.api.HarnessError("captions require a boolean value")

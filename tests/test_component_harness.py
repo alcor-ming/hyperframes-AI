@@ -30,10 +30,11 @@ class ComponentHarnessTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.public = REPO / ".studio" / "components" / "chapter-intro" / "v1"
-        self.rich = REPO / ".studio" / "components" / "rich-skill-explanation" / "v1"
-        self.rich_v2 = REPO / ".studio" / "components" / "rich-skill-explanation" / "v2"
-        self.convergence = REPO / ".studio" / "components" / "capability-convergence" / "v1"
+        fixtures = REPO / "tests" / "fixtures" / "components"
+        self.public = fixtures / "chapter-intro" / "v1"
+        self.rich = fixtures / "rich-skill-explanation" / "v1"
+        self.rich_v2 = fixtures / "rich-skill-explanation" / "v2"
+        self.convergence = fixtures / "capability-convergence" / "v1"
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -87,7 +88,7 @@ class ComponentHarnessTest(unittest.TestCase):
 
     def test_gap_first_selection_release_validates(self) -> None:
         release = COMPONENT.validate_component_release(
-            REPO / ".studio" / "components" / "gap-first-selection" / "v1"
+            REPO / "tests" / "fixtures" / "components" / "gap-first-selection" / "v1"
         )
         self.assertEqual("gap-first-selection@v1", release["component_ref"])
 
@@ -130,7 +131,7 @@ class ComponentHarnessTest(unittest.TestCase):
             for ratio in ("4x3", "16x9"):
                 ref = f"{component_id}/{ratio}@v1"
                 self.assertEqual((f"{component_id}/{ratio}", 1), COMPONENT.parse_component_ref(ref))
-                source = REPO / ".studio" / "components" / component_id / ratio / "v1"
+                source = REPO / "tests" / "fixtures" / "components" / component_id / ratio / "v1"
                 with self.assertRaisesRegex(COMPONENT.ComponentError, "library-approved"):
                     COMPONENT.validate_component_release(source, expected_ref=ref)
                 # Approval is simulated only in this disposable contract fixture, never in the library.

@@ -6,7 +6,9 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ROUTER = ".agents/skills/hyperframes-codex-workflow/SKILL.md"
+ROUTER = ".agents/skills/hyperframes-production-workflow/SKILL.md"
+ROOT_TEMPLATE = ".studio/templates/WINDOWS_AGENTS.md"
+STUDIO_TEMPLATE = ".studio/templates/STUDIO_AGENTS.md"
 
 
 def read(name):
@@ -15,7 +17,7 @@ def read(name):
 
 class V343RulesTests(unittest.TestCase):
     def test_selective_images_keep_authority_and_evidence_boundaries(self):
-        for name in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md",
+        for name in (STUDIO_TEMPLATE, ROOT_TEMPLATE,
                      ".studio/spec/creative.md", ".studio/workflow.md",
                      ".studio/templates/RESEARCH.template.md",
                      ".studio/templates/ANIMATION_PLAN.template.md"):
@@ -25,7 +27,7 @@ class V343RulesTests(unittest.TestCase):
                     self.assertNotIn(obsolete, text)
                 for obsolete in ("全片零图", "逐 Scene 评估图片", "旧 Plan 表格格式继续有效"):
                     self.assertNotIn(obsolete, text)
-                if name in ("AGENTS.md", ".studio/templates/WINDOWS_AGENTS.md"):
+                if name == STUDIO_TEMPLATE:
                     for required in ("Asset Brief", "一并授权", "未列用途或明显超量", "提供方"):
                         self.assertIn(required, text)
                 else:
@@ -42,7 +44,7 @@ class V343RulesTests(unittest.TestCase):
         self.assertNotIn("| 实际表达 |", plan)
         design = read(".studio/spec/visual-design.md")
         for text in ("任一通道", "必要条件、数值、单位、比较对象与归属",
-                     "## Plan 检查", "Q1", "Three.js / Remotion", "优先复用", "长正文留 DOM/SVG"):
+                     "## Plan 检查", "Q1", "Three.js / p5 局部绘制", "优先复用", "长正文留 DOM/SVG"):
             self.assertIn(text, design)
         self.assertNotIn("反 PPT", design)
 
@@ -59,7 +61,7 @@ class V343RulesTests(unittest.TestCase):
         retired = "hyperframes-" + "anti-ppt"
         self.assertFalse((ROOT / ".agents/skills" / retired / "SKILL.md").exists())
         for name in (".studio/capabilities.yaml", ROUTER, "README.md", ".gitignore",
-                     ".agents/skills/hyperframes-codex-workflow/scripts/validate_package.py"):
+                     ".agents/skills/hyperframes-production-workflow/scripts/validate_package.py"):
             self.assertNotIn(retired, read(name))
         capabilities = read(".studio/capabilities.yaml")
         self.assertNotIn("\nprofiles:", capabilities)
@@ -67,12 +69,11 @@ class V343RulesTests(unittest.TestCase):
         self.assertNotIn("podcast_quote_image", capabilities)
         self.assertNotIn("package_pipeline:", capabilities)
         self.assertIn("optional: [dbs-xhs-title, media-publish-check]", capabilities)
-        self.assertTrue((ROOT / ".agents/skills/hyperframes-codex-workflow/references/"
+        self.assertTrue((ROOT / ".agents/skills/hyperframes-production-workflow/references/"
                          "hyperframes-design-profile-pack-v0.1.0/SKILL.md").is_file())
-        for name in ("README.md", ".studio/templates/WINDOWS_AGENTS.md"):
+        for name in ("README.md", ROOT_TEMPLATE):
             text = read(name)
-            for required in ("资产开发任务完成", "component list --audit", "component source-add",
-                             "JSON front matter", "source_ref", "classification_status", "WSL 不代改"):
+            for required in ("assets/", "asset.json", "references", "本地化", "工程副本"):
                 self.assertIn(required, text)
 
 

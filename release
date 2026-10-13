@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Build the immutable Windows Harness release consumed by Codex App."""
+"""Build the immutable Windows Harness release for production sessions."""
 
 from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import zipfile
 import uuid
 
@@ -56,8 +58,30 @@ LOCAL_SKILLS = {
 }
 VERSION_PATTERN = re.compile(r"^(?:harness-)?(\d{4}\.\d{2}\.\d+)$")
 PUBLIC_ROOT_FILES = {"AGENTS.md", "CLAUDE.md", "work-wsl.sh", "README.md", "LICENSE", ".gitignore", "release", "release.ps1",
-                     "work", "work.cmd", "work.ps1", "asr-wsl.cmd", "windows-runtime.lock.json",
-                     "windows-npm.lock.json", "skills-lock.json", "workspace.ps1"}
+                     "work", "work.cmd", "work.ps1", "windows-runtime.lock.json",
+                     "windows-npm.lock.json", "skills-lock.json", "workspace.ps1", "THIRD_PARTY_NOTICES.md"}
+
+# Shipped artifacts that must never enter a product package (D13/D14/D16).
+FORBIDDEN_ASSET_DIRS = (".studio/components", ".studio/backgrounds", ".studio/designs/shared")
+FORBIDDEN_TEXT_SUFFIXES = {".md", ".json", ".yaml", ".yml", ".py", ".js", ".mjs", ".cjs", ".ts", ".css",
+                           ".html", ".txt", ".toml", ".cfg", ".ini", ".sh", ".cmd", ".ps1", ".template"}
+# Keep fingerprints, not production titles, in public source.
+FORBIDDEN_TITLE_HASHES = ((6, 'ea59336b8bcf84149a40bbd6640469d08f5eec909c325c372931e1df6637e341'), (6, 'c64ef31bca565b9712aeb32637f091e8890ceae6b19591bd50b44ee6663d345c'), (15, 'aa90c8b9fa526ae450ce516127d78d938b521c164562b2bff8016263ad98aaae'), (15, '33caca4a64ff26f6d568d5f63652289531ebe1918e667c8f6980b585acd3c3e4'))
+PRIVATE_PATH = re.compile(r"/(?:home/[A-Za-z0-9_.-]+/|mnt/[a-z]/)|[A-Za-z]:[\\/]+AI[\\/]", re.I)
+PRIVATE_OVERLAY = ("personal/", ".agents/skills/tts/", ".agents/skills/hermes-media-download/")
+# Root files the private source may supply in place of the public ones: rules and the local WSL entry wiring.
+PRODUCT_VERSION = "4.2.0"
+# Private root files replace these public counterparts; `bases` pins the public bytes each one was reviewed against.
+PRIVATE_RULE_BASES = {"AGENTS.md": ".studio/templates/WINDOWS_AGENTS.md", "CLAUDE.md": ".studio/templates/CLAUDE.template.md",
+                      "work-wsl.sh": "work-wsl.sh"}
+PRIVATE_RULE_FILES = set(PRIVATE_RULE_BASES)
+CARD_ID = re.compile(r"[a-z][a-z0-9-]*")
+# Research notes stay in the card repository; deployments ship only the card itself.
+CARD_EXCLUDED_DIRS = {"study"}
+
+
+def private_overlay(name: str) -> bool:
+    return name.startswith(PRIVATE_OVERLAY)
 
 
 class ReleaseError(RuntimeError):
@@ -99,7 +123,7 @@ def directory_sha256(root: Path) -> str:
     return digest.hexdigest()
 
 
-def release_checks(root: Path, *, packaged: bool = False) -> None:
+def check_env() -> dict:
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     parser = REPO / ".studio/.runtime/dependency-parser"
@@ -107,8 +131,13 @@ def release_checks(root: Path, *, packaged: bool = False) -> None:
         raise ReleaseError("Install the pinned WSL dependency parser with prepare_windows_runtime.py dev-parser before building")
     env["HYPERFRAMES_DEPENDENCY_MODULE_ROOT"] = str(parser)
     # Frozen source packages have no node_modules; reuse installed WSL test dependencies.
-    env["NODE_PATH"] = os.pathsep.join([str(REPO / ".studio/remotion/node_modules"),
+    env["NODE_PATH"] = os.pathsep.join([str(REPO / ".studio/parser/node_modules"),
                                       str(REPO / "node_modules"), env.get("NODE_PATH", "")])
+    return env
+
+
+def release_checks(root: Path, *, packaged: bool = False) -> None:
+    env = check_env()
     subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p",
          "test_asset_entry.py" if packaged else "test_*.py", "-q"],
@@ -119,7 +148,7 @@ def release_checks(root: Path, *, packaged: bool = False) -> None:
     if packaged:
         return
     subprocess.run(
-        [sys.executable, ".agents/skills/hyperframes-codex-workflow/scripts/validate_package.py"],
+        [sys.executable, ".agents/skills/hyperframes-production-workflow/scripts/validate_package.py"],
         cwd=root,
         env=env,
         check=True,
@@ -201,8 +230,9 @@ def stage_runtime(staging: Path, cache: Path) -> dict[str, str]:
     return hashes
 
 
-def write_zip(source: Path, archive: Path, prefix: str, timestamp: int) -> None:
+def write_zip(source: Path, archive: Path, prefix: str, timestamp: int, *, verified_runtime: dict | None = None) -> None:
     assert_no_development_harness(source)
+    assert_no_forbidden_artifacts(source, verified_runtime=verified_runtime)
     dt = datetime.fromtimestamp(timestamp, timezone.utc)
     zip_time = (max(dt.year, 1980), dt.month, dt.day, dt.hour, dt.minute, dt.second)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
@@ -217,6 +247,14 @@ def strip_bundled_assets(staging: Path) -> None:
     """Keep migration fixtures in the checkout, not the Windows application."""
     for name in ("components", "backgrounds"):
         directory = staging / ".studio" / name
+        if directory.is_dir():
+            shutil.rmtree(directory)
+
+
+def strip_development_outputs(staging: Path) -> None:
+    if (staging / 'tests').exists():
+        shutil.rmtree(staging / 'tests')
+    for directory in list(staging.rglob('__pycache__')):
         if directory.is_dir():
             shutil.rmtree(directory)
 
@@ -252,9 +290,71 @@ def assert_no_development_harness(staging: Path) -> None:
             raise ReleaseError(f"Development Harness must not enter a product package: {name}")
 
 
+def gsap_library_file(name: str) -> bool:
+    """GSAP and its plugins ship through the locked host npm tree, never in source (D14)."""
+    lowered = name.casefold()
+    return lowered.endswith(".js") and (lowered.startswith("gsap") or lowered.startswith("customease")
+                                        or lowered.endswith("plugin.min.js"))
+
+
+def forbidden_artifact(staging: Path, *, verified_runtime: dict | None = None) -> str | None:
+    private_cards = tuple(f".studio/designs/{card}/" for card in personal_card_ids(staging))
+    for path in sorted(staging.rglob("*")):
+        relative = path.relative_to(staging).as_posix()
+        if relative.startswith("runtime/npm/node_modules/gsap/"):
+            continue  # the locked runtime hosts GSAP and other third-party libraries
+        if path.is_dir():
+            if relative in FORBIDDEN_ASSET_DIRS:
+                return relative
+            continue
+        # Verified upstream bytes may contain example paths and legitimate gsapParser modules.
+        if (relative.startswith("runtime/") and verified_runtime is not None
+                and verified_runtime.get(relative) == sha256(path)):
+            continue
+        if gsap_library_file(path.name) or path.name == "stage-provenance.json":
+            return relative
+        if relative.startswith("docs/PRD/"):
+            continue  # historical PRDs are explicitly preserved unchanged
+        if relative.startswith(private_cards):
+            continue  # locked private cards are personal content already present in the user's own root
+        if path.suffix.casefold() not in FORBIDDEN_TEXT_SUFFIXES:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        # The private overlay is machine wiring by definition; public_source() keeps it out of public packages.
+        if not private_overlay(relative) and PRIVATE_PATH.search(text):
+            return relative + " contains a machine path"
+        for length, expected in FORBIDDEN_TITLE_HASHES:
+            if any(hashlib.sha256(text[offset:offset + length].encode()).hexdigest() == expected
+                   for offset in range(len(text) - length + 1)):
+                return relative + " contains a production title"
+    return None
+
+
+def assert_no_forbidden_artifacts(staging: Path, *, verified_runtime: dict | None = None) -> None:
+    found = forbidden_artifact(staging, verified_runtime=verified_runtime)
+    if found:
+        raise ReleaseError(f"Forbidden product artifact: {found}")
+
+
+def package_scopes() -> dict:
+    # The standalone Windows installer has no source tree and does not build packages.
+    return json.loads((REPO / '.studio/package-scopes.json').read_text(encoding='utf-8'))
+
+
+def personal_card_source(name: str) -> bool:
+    return (name.startswith(tuple(package_scopes()['personal_prefixes']))
+            or name in package_scopes()['personal_files'])
+
+
 def public_source(name: str) -> bool:
     path = safe_member(name)
-    if development_harness(name):
+    if development_harness(name) or personal_card_source(name):
+        return False
+    if private_overlay(name) or name in {
+            'asr-wsl.cmd', '.studio/asr_wsl_bridge.py', 'tests/test_asr_wsl_bridge.py'}:
         return False
     forbidden = {".git", ".runtime", "__pycache__", "node_modules", "works", "sample-library", "known-defects", "retro-summary", "content-summary", "requests", "review",
                  "credentials", "secrets", ".env", ".codex", "dist"}
@@ -265,9 +365,19 @@ def public_source(name: str) -> bool:
     return name in PUBLIC_ROOT_FILES or name.startswith((".studio/", ".agents/skills/", "docs/", "tests/"))
 
 
-def freeze_sources(staging: Path, includes: list[str], repo: Path = REPO) -> dict[str, str]:
-    tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=repo).decode().split("\0")
-    names = {name for name in tracked if name and public_source(name) and (repo / name).exists()}
+def source_hashes(includes: list[str], repo: Path = REPO) -> dict[str, str]:
+    declaration = repo / '.studio/release-sources.json'
+    if not declaration.is_file() or declaration.is_symlink():
+        raise ReleaseError('Missing explicit public source manifest: .studio/release-sources.json')
+    manifest = json.loads(declaration.read_text(encoding='utf-8'))
+    files = manifest.get('files') if isinstance(manifest, dict) else None
+    if (not isinstance(files, list) or not files or any(not isinstance(name, str) for name in files)
+            or len(set(files)) != len(files) or manifest.get('version') != 1):
+        raise ReleaseError('Invalid public source manifest')
+    names = set(files)
+    for name in names:
+        if not public_source(name):
+            raise ReleaseError('Public manifest contains forbidden source: ' + name)
     for name in includes:
         if not public_source(name) or not (repo / name).is_file():
             raise ReleaseError(f"Explicit candidate source is not a public product file: {name}")
@@ -275,12 +385,19 @@ def freeze_sources(staging: Path, includes: list[str], repo: Path = REPO) -> dic
     hashes = {}
     for name in sorted(names):
         source = repo / name
-        if any(parent.is_symlink() for parent in [source, *source.parents]) or not source.is_file():
+        if (any(parent.is_symlink() for parent in [source, *source.parents]) or not source.is_file()
+                or source.stat().st_nlink != 1):
             raise ReleaseError(f"Candidate source must be a regular local file: {name}")
+        hashes[name] = sha256(source)
+    return hashes
+
+
+def freeze_sources(staging: Path, includes: list[str], repo: Path = REPO) -> dict[str, str]:
+    hashes = source_hashes(includes, repo)
+    for name in hashes:
         target = staging / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        hashes[name] = sha256(source)
-        shutil.copy2(source, target)
+        shutil.copy2(repo / name, target)
     # Detect edits during the copy instead of assigning mixed bytes a Git identity.
     for name, digest in hashes.items():
         if sha256(repo / name) != digest or sha256(staging / name) != digest:
@@ -288,8 +405,82 @@ def freeze_sources(staging: Path, includes: list[str], repo: Path = REPO) -> dic
     return hashes
 
 
-def stage_skills(staging: Path) -> dict[str, str]:
+def candidate_fingerprint(includes, channel, runtime_files, personal_source=None):
+    value = {'sources': source_hashes(includes), 'skills': {}, 'channel': channel,
+             'runtime_files': runtime_files, 'private': {}}
+    data = personal_manifest(personal_source) if personal_source is not None else {}
+    for name, expected in LOCAL_SKILLS.items():
+        if name in data.get('exclude_skills', []):
+            continue
+        actual = directory_sha256(REPO / '.agents/skills' / name)
+        if actual != expected:
+            raise ReleaseError('Missing or changed local release dependency: ' + name)
+        value['skills'][name] = actual
+    if personal_source is not None:
+        declaration = personal_source / 'release-sources.json'
+        value['private']['manifest'] = sha256(declaration)
+        for name, expected in data['files'].items():
+            if personal_card_source(name):
+                continue
+            path = personal_source / safe_member(name)
+            if not path.is_file() or any(p.is_symlink() for p in (path, *path.parents)) or sha256(path) != expected:
+                raise ReleaseError('Private source missing, linked or changed: ' + name)
+            value['private'][name] = expected
+        if 'cards' in data:
+            lock = card_lock(personal_source, data['cards'])
+            value['private']['cards'] = {'commit': lock['commit'], 'ids': lock['ids']}
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def module_manifest(staging: Path) -> dict:
+    groups = {}
+    for path in sorted(staging.rglob('*')):
+        if not path.is_file():
+            continue
+        name = path.relative_to(staging).as_posix()
+        parts = name.split('/')
+        if name.startswith('runtime/') or name == '.studio/release-sources.json':
+            continue
+        if name.startswith('.studio/designs/') and len(parts) > 3:
+            module = 'design/' + parts[2]
+        elif personal_card_source(name):
+            module = 'assets/personal'
+        elif name.startswith(('.studio/fonts/', '.studio/painter/', '.studio/components/')):
+            module = 'assets/' + parts[1]
+        elif name.startswith('.agents/skills/') and len(parts) > 3:
+            module = 'skill/' + parts[2]
+        elif name.startswith('personal/'):
+            module = 'personal'
+        else:
+            module = 'core'
+        groups.setdefault(module, {})[name] = sha256(path)
+    result = {}
+    for name, files in groups.items():
+        digest = hashlib.sha256(json.dumps(files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        version = '4.2.0'
+        if name.startswith('design/') and name != 'design/shared':
+            card = staging / '.studio/designs' / name.split('/')[1] / 'design.json'
+            if card.is_file():
+                version = json.loads(card.read_text(encoding='utf-8'))['version']
+        result[name] = {'version': version, 'sha256': digest, 'compatibility': {'product': '4.0.0'}, 'files': files}
+    lock = staging / 'windows-runtime.lock.json'
+    if lock.is_file():
+        result['runtime'] = {'sha256': sha256(lock), 'version': 'locked', 'compatibility': {'target': 'windows-x64'}}
+    return result
+
+
+def skill_lock_bytes(path: Path, excluded) -> bytes:
+    if not excluded:
+        return path.read_bytes()
+    lock = json.loads(path.read_text(encoding='utf-8'))
+    lock['skills'] = {name: value for name, value in lock['skills'].items() if name not in excluded}
+    return (json.dumps(lock, indent=2) + '\n').encode('utf-8')
+
+
+def stage_skills(staging: Path, excluded=()) -> dict[str, str]:
     for name, locked_hash in LOCAL_SKILLS.items():
+        if name in excluded:
+            continue
         source = REPO / ".agents" / "skills" / name
         if not (source / "SKILL.md").is_file() or directory_sha256(source) != locked_hash:
             raise ReleaseError(f"Missing or changed local release dependency: {name}")
@@ -297,7 +488,10 @@ def stage_skills(staging: Path) -> dict[str, str]:
         shutil.copytree(source, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
         if directory_sha256(target) != locked_hash:
             raise ReleaseError(f"Local dependency changed while freezing: {name}")
-    return dict(LOCAL_SKILLS)
+    if excluded:
+        lock = staging / 'skills-lock.json'
+        lock.write_bytes(skill_lock_bytes(lock, excluded))
+    return {name: value for name, value in LOCAL_SKILLS.items() if name not in excluded}
 
 
 def stage_windows_rules(staging: Path) -> None:
@@ -309,9 +503,207 @@ def stage_windows_rules(staging: Path) -> None:
     if not claude.is_file():
         raise ReleaseError("Claude production rules are missing from the frozen sources")
     shutil.copyfile(claude, staging / "CLAUDE.md")
+    module_rules = staging / '.studio/templates/STUDIO_AGENTS.md'
+    if module_rules.is_file():
+        shutil.copyfile(module_rules, staging / '.studio/AGENTS.md')
+    master = staging / 'docs/PRD/PRD_MASTER.md'
+    if master.is_file():
+        master.write_text(''.join(line for line in master.read_text(encoding='utf-8').splitlines(keepends=True)
+                                  if not line.startswith('开发设计记录（本地、不配送）：')), encoding='utf-8')
+    elif (staging / '.studio/AGENTS.md').exists():
+        raise ReleaseError('Missing public module rules; refusing to ship development rules')
 
 
-def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: list[str], *, channel: str = "candidate", runtime_files: dict | None = None) -> Path:
+def personal_manifest(source: Path) -> dict:
+    manifest_path = source / 'release-sources.json'
+    if not manifest_path.is_file():
+        raise ReleaseError('Personal package requires private source release-sources.json')
+    declaration = json.loads(manifest_path.read_text(encoding='utf-8'))
+    if (not isinstance(declaration, dict) or not {'version', 'compatibility', 'files'} <= set(declaration)
+            or set(declaration) - {'version', 'compatibility', 'files', 'exclude_skills', 'cards', 'bases'}
+            or not isinstance(declaration['files'], dict) or not declaration['files']):
+        raise ReleaseError('Invalid private source manifest')
+    excluded = declaration.get('exclude_skills', [])
+    if (not isinstance(excluded, list) or any(not isinstance(name, str) or name not in LOCAL_SKILLS for name in excluded)
+            or len(excluded) != len(set(excluded))):
+        raise ReleaseError('Invalid excluded skills: use unique locked local skill names')
+    compatibility = declaration['compatibility']
+    if not isinstance(compatibility, dict) or compatibility.get('product') != PRODUCT_VERSION:
+        raise ReleaseError(f'Private source targets product {compatibility.get("product") if isinstance(compatibility, dict) else None}, '
+                           f'this tool is {PRODUCT_VERSION}; review the private files and update compatibility.product')
+    bases = declaration.get('bases', {})
+    replaced = PRIVATE_RULE_FILES & set(declaration['files'])
+    if not isinstance(bases, dict) or set(bases) != replaced:
+        raise ReleaseError('Private bases must name exactly the replaced root files: ' + ', '.join(sorted(replaced)))
+    for name in sorted(replaced):
+        public = REPO / PRIVATE_RULE_BASES[name]
+        if bases[name] != sha256(public):
+            raise ReleaseError(f'Private {name} was reviewed against older public {PRIVATE_RULE_BASES[name]}; '
+                               f'merge the public change into the private file, then set bases.{name} to {sha256(public)}')
+    return declaration
+
+
+def card_lock(source: Path, value) -> dict:
+    """Validate the private card pin: an exact commit of the card repository and the card ids it ships."""
+    if not isinstance(value, dict) or set(value) != {'source', 'commit', 'ids'}:
+        raise ReleaseError('Invalid card lock: use source, commit and ids')
+    ids = value['ids']
+    if (not isinstance(ids, list) or not ids or len(ids) != len(set(ids))
+            or any(not isinstance(card, str) or not CARD_ID.fullmatch(card) for card in ids)):
+        raise ReleaseError('Invalid card lock ids: use unique lowercase card ids')
+    public = set(package_scopes()['public_cards'])
+    if public & set(ids):
+        raise ReleaseError('Personal card id collides with a public card: ' + ', '.join(sorted(public & set(ids))))
+    if not isinstance(value['commit'], str) or not re.fullmatch(r'[0-9a-f]{40}', value['commit']):
+        raise ReleaseError('Card lock commit must be a full 40-character Git commit id')
+    if not isinstance(value['source'], str) or not value['source']:
+        raise ReleaseError('Card lock source must name the card repository')
+    repo = (source / value['source']).resolve()
+    if not repo.is_dir():
+        raise ReleaseError(f'Card repository not found: {repo}')
+    exists = subprocess.run(['git', '-C', str(repo), 'cat-file', '-e', value['commit'] + '^{commit}'], capture_output=True)
+    if exists.returncode:
+        raise ReleaseError(f'Card lock commit is missing from {repo}: {value["commit"]}')
+    for card in ids:
+        found = subprocess.run(['git', '-C', str(repo), 'cat-file', '-e', f'{value["commit"]}:{card}/design.json'], capture_output=True)
+        if found.returncode:
+            raise ReleaseError(f'Locked card commit has no {card}/design.json')
+    return {'repo': repo, 'commit': value['commit'], 'ids': list(ids)}
+
+
+def validate_cards(staging: Path) -> None:
+    """Card content is checked by the card validator; the tool test suite never sees personal cards."""
+    before = sorted(p.relative_to(staging).as_posix() for p in staging.rglob('*'))
+    env = {**check_env(), 'HYPERFRAMES_AI_RESOLVED_CONFIG': '{}', 'HYPERFRAMES_AI_CONFIG': '', 'HYPERFRAMES_AI_ASSET_CONFIG': '',
+           'HYPERFRAMES_AI_HOME': '', 'HYPERFRAMES_AI_REVIEW': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
+    result = subprocess.run([sys.executable, '-B', '.studio/work.py', '--json', 'design', 'validate'],
+                            cwd=staging, env=env, capture_output=True, text=True)
+    try:
+        report = json.loads(result.stdout)
+    except ValueError:
+        report = {}
+    if result.returncode or not report.get('ok'):
+        failed = {card: value['errors'] for card, value in report.get('cards', {}).items() if value.get('errors')}
+        raise ReleaseError(f'Packaged cards fail design validate: {failed or result.stderr.strip()[-2000:]}')
+    added = sorted({p.relative_to(staging).as_posix() for p in staging.rglob('*')} - set(before))
+    if added == ['.studio/.runtime', '.studio/.runtime/operations.lock']:
+        # The CLI's command lock is the only expected side effect; the package never carries runtime state.
+        (staging / added[1]).unlink()
+        (staging / added[0]).rmdir()
+        added = []
+    if added:
+        raise ReleaseError('Card validation wrote into the package staging tree: ' + ', '.join(added[:5]))
+
+
+def card_members(lock: dict) -> set[str]:
+    listing = subprocess.run(['git', '-C', str(lock['repo']), 'ls-tree', '-r', '--name-only', '-z', lock['commit'], '--', *lock['ids']],
+                             capture_output=True, check=True).stdout.decode('utf-8').split('\0')
+    return {'.studio/designs/' + name for name in listing
+            if name and not (len(name.split('/')) > 2 and name.split('/')[1] in CARD_EXCLUDED_DIRS)}
+
+
+def stage_cards(staging: Path, lock: dict) -> dict[str, str]:
+    """Copy the locked cards from Git objects, independent of the card working tree."""
+    archive = subprocess.run(['git', '-C', str(lock['repo']), 'archive', '--format=tar', lock['commit'], '--', *lock['ids']],
+                             capture_output=True, check=True).stdout
+    files = {}
+    with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
+        for member in bundle.getmembers():
+            if member.isdir() or member.name == 'pax_global_header':
+                continue
+            if not member.isfile():
+                raise ReleaseError('Locked card contains a link or special file: ' + member.name)
+            relative = safe_member(member.name)
+            if len(relative.parts) > 2 and relative.parts[1] in CARD_EXCLUDED_DIRS:
+                continue
+            name = '.studio/designs/' + relative.as_posix()
+            target = staging / name
+            if target.exists():
+                raise ReleaseError('Personal card overlaps a packaged file: ' + name)
+            data = bundle.extractfile(member).read()
+            if data.startswith(b'version https://git-lfs.github.com/spec/v1'):
+                raise ReleaseError('Locked card file is a Git LFS pointer, not content: ' + member.name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            files[name] = sha256(target)
+    return files
+
+
+def stage_personal(staging: Path, source: Path | None) -> dict:
+    if source is None:
+        return {}
+    declaration = personal_manifest(source)
+    manifest_path = source / 'release-sources.json'
+    result = {}
+    for name, expected in declaration['files'].items():
+        relative = safe_member(name)
+        if personal_card_source(name):
+            continue
+        if (not (private_overlay(name) or name in PRIVATE_RULE_FILES)
+                or any(part in {'.env', 'credentials', 'secrets', '__pycache__'} for part in relative.parts)
+                or relative.suffix.lower() in {'.key', '.pem', '.p12', '.pyc'}):
+            raise ReleaseError('Private package claims unsupported content: ' + name)
+        path = source / relative
+        if (not path.is_file() or path.stat().st_nlink != 1
+                or any(p.is_symlink() for p in (path, *path.parents)) or sha256(path) != expected):
+            raise ReleaseError('Private source missing, linked or changed: ' + name)
+        if name in PRIVATE_RULE_FILES:
+            result[name] = expected  # installed by stage_personal_rules after the public templates
+            continue
+        target = staging / relative
+        if target.exists():
+            raise ReleaseError('Private source overlaps public file: ' + name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, target)
+        if sha256(target) != expected or sha256(path) != expected:
+            raise ReleaseError('Private source changed while freezing: ' + name)
+        result[name] = expected
+    personal = {'version': declaration['version'], 'compatibility': declaration['compatibility'],
+                'manifest_sha256': sha256(manifest_path), 'files': result,
+                'exclude_skills': declaration.get('exclude_skills', [])}
+    if 'cards' in declaration:
+        lock = card_lock(source, declaration['cards'])
+        personal['cards'] = {'commit': lock['commit'], 'ids': lock['ids']}
+    return personal
+
+
+def stage_personal_rules(staging: Path, source: Path | None, personal: dict) -> None:
+    for name in sorted(PRIVATE_RULE_FILES & set(personal.get('files', {}))):
+        shutil.copyfile(source / name, staging / name)
+        if sha256(staging / name) != personal['files'][name]:
+            raise ReleaseError('Private source changed while freezing: ' + name)
+
+
+def personal_card_ids(staging: Path) -> set[str]:
+    manifest = staging / '.release.json'
+    if not manifest.is_file():
+        return set()
+    personal = json.loads(manifest.read_text(encoding='utf-8')).get('personal_source') or {}
+    return set(personal.get('cards', {}).get('ids', []))
+
+
+def validate_distribution(staging: Path, personal_cards=()) -> None:
+    # Public packages ship only the built-in stage cards; a personal package adds exactly the cards its
+    # private source pins from the card repository, and no other personal card resource (D4/P6).
+    scopes = package_scopes()
+    expected = set(scopes['public_cards']) | set(personal_cards)
+    shipped = tuple(f'.studio/designs/{card}/' for card in personal_cards)
+    actual = {p.parent.name for p in (staging / '.studio/designs').glob('*/design.json')}
+    if actual != expected:
+        raise ReleaseError(f'Incomplete package design catalog: expected {sorted(expected)}, got {sorted(actual)}')
+    prefixes = tuple(scopes['personal_prefixes'])
+    personal_files = set(scopes['personal_files'])
+    for path in staging.rglob('*'):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(staging).as_posix()
+        if relative.startswith(shipped):
+            continue
+        if relative.startswith(prefixes) or relative in personal_files:
+            raise ReleaseError('Personal card resource in product package: ' + relative)
+
+
+def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: list[str], *, channel: str = "candidate", runtime_files: dict | None = None, personal_source: Path | None = None) -> Path:
     if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,79}", build_id):
         raise ReleaseError("Candidate ID must use lowercase letters, digits, dots or hyphens")
     if channel not in {"candidate", "local"}:
@@ -320,8 +712,15 @@ def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: li
     output_dir.mkdir(parents=True, exist_ok=True)
     archive = output_dir / f"hyperframes-ai-{identity}-windows-x64.zip"
     checksum = archive.with_suffix(archive.suffix + ".sha256")
+    fingerprint = candidate_fingerprint(includes, channel, runtime_files, personal_source)
     if archive.exists() or checksum.exists():
-        raise ReleaseError(f"Candidate artifact already exists: {archive}")
+        cached_identity = verified_archive(archive)
+        with zipfile.ZipFile(archive) as bundle:
+            cached = json.loads(bundle.read(cached_identity + '/.release.json'))
+        if cached_identity != identity or cached.get('input_fingerprint') != fingerprint:
+            raise ReleaseError(f'Candidate ID already belongs to different inputs: {archive}')
+        print(archive)
+        return archive
     head = run("git", "rev-parse", "HEAD", capture=True)
     dirty = bool(run("git", "status", "--porcelain", capture=True))
     timestamp = int(datetime.now(timezone.utc).timestamp())
@@ -329,25 +728,42 @@ def candidate(build_id: str, output_dir: Path, runtime_cache: Path, includes: li
         staging = Path(temporary) / identity
         staging.mkdir()
         sources = freeze_sources(staging, includes)
-        skills = stage_skills(staging)
+        personal = stage_personal(staging, personal_source)
+        validate_distribution(staging)
+        skills = stage_skills(staging, personal.get('exclude_skills', []))
         runtime = stage_runtime(staging, runtime_cache) if runtime_files is None else {}
-        release_checks(staging)
+        verified_runtime = {p.relative_to(staging).as_posix(): sha256(p)
+                            for p in (staging / "runtime").rglob("*") if p.is_file()} if runtime_files is None else {}
         stage_windows_rules(staging)
+        stage_personal_rules(staging, personal_source, personal)
+        release_checks(staging)
         strip_bundled_assets(staging)
         release_checks(staging, packaged=True)
+        strip_development_outputs(staging)
+        if 'cards' in personal:
+            # Cards join after the tool checks: their content evolves in the card repository, not with the tests.
+            stage_cards(staging, card_lock(personal_source, personal_manifest(personal_source)['cards']))
+            validate_distribution(staging, personal['cards']['ids'])
+            validate_cards(staging)
         sources = {name: digest for name, digest in sources.items() if (staging / name).is_file()}
         manifest = {"schema_version": 3, "layout": "root-v1", "channel": channel, "release": identity,
+                    "input_fingerprint": fingerprint,
+                    "product_version": PRODUCT_VERSION, "flavor": "personal" if personal_source else "public",
+                    "personal_source": personal,
                     "package_kind": "full" if runtime_files is None else "tools",
                     "commit": head, "dirty": dirty, "target": "windows-x64",
                     "built_at": datetime.fromtimestamp(timestamp, timezone.utc).isoformat(),
                     "source_file_sha256": sources, "runtime_asset_sha256": runtime,
+                    "modules": module_manifest(staging),
                     "local_skill_sha256": skills,
                     "files": {p.relative_to(staging).as_posix(): sha256(p)
                               for p in sorted(staging.rglob("*")) if p.is_file()}}
         if runtime_files is not None:
             manifest.update(runtime_files=runtime_files, runtime_lock_sha256=sha256(staging / "windows-runtime.lock.json"))
         (staging / ".release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-        write_zip(staging, archive, identity, timestamp)
+        if candidate_fingerprint(includes, channel, runtime_files, personal_source) != fingerprint:
+            raise ReleaseError('Candidate inputs changed during build; retry from stable inputs')
+        write_zip(staging, archive, identity, timestamp, verified_runtime=verified_runtime)
     checksum.write_text(f"{sha256(archive)}  {archive.name}\n", encoding="ascii")
     print(archive)
     return archive
@@ -377,21 +793,21 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
     with tempfile.TemporaryDirectory() as temporary:
         staging = Path(temporary) / tag
         staging.mkdir()
-        git_tar = Path(temporary) / "tracked.tar"
-        run("git", "archive", "--format=tar", "-o", str(git_tar), tag)
-        with tarfile.open(git_tar) as bundle:
-            bundle.extractall(staging, filter="data")
+        sources = freeze_sources(staging, [])
 
         assert_no_development_harness(staging)
 
         dependency_hashes = stage_skills(staging)
 
         runtime_hashes = stage_runtime(staging, runtime_cache)
+        verified_runtime = {p.relative_to(staging).as_posix(): sha256(p)
+                            for p in (staging / "runtime").rglob("*") if p.is_file()}
         timestamp = int(run("git", "show", "-s", "--format=%ct", f"{tag}^{{commit}}", capture=True))
-        release_checks(staging)
         stage_windows_rules(staging)
+        release_checks(staging)
         strip_bundled_assets(staging)
         release_checks(staging, packaged=True)
+        strip_development_outputs(staging)
         files = {
             path.relative_to(staging).as_posix(): sha256(path)
             for path in sorted(p for p in staging.rglob("*") if p.is_file())
@@ -400,6 +816,8 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
             "schema_version": 3,
             "layout": "root-v1",
             "channel": "stable",
+            "product_version": PRODUCT_VERSION, "flavor": "public",
+            "source_file_sha256": sources, "modules": module_manifest(staging),
             "release": tag,
             "commit": head,
             "target": "windows-x64",
@@ -409,7 +827,7 @@ def build(version_value: str, output_dir: Path, runtime_cache: Path) -> Path:
             "files": files,
         }
         (staging / ".release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-        write_zip(staging, archive, tag, timestamp)
+        write_zip(staging, archive, tag, timestamp, verified_runtime=verified_runtime)
 
     checksum.write_text(f"{sha256(archive)}  {archive.name}\n", encoding="ascii")
     print(archive)
@@ -482,8 +900,9 @@ def install_archive(archive: Path, root: Path, expected_hash: str, keep: int, co
 def deploy_windows(args) -> dict:
     if sys.platform != "linux" or not re.fullmatch(r"[A-Za-z]:[\\/].+", args.root) or any(c in args.root for c in "\r\n\0"):
         raise ReleaseError("Run deploy in WSL with an absolute Windows drive path")
-    if args.keep < 2:
-        raise ReleaseError("Keep at least two rollback versions")
+    if args.keep < 1:
+        raise ReleaseError("Keep at least one rollback version")
+    personal_source = args.personal_source.resolve() if args.personal_source else None
     root = Path(run("wslpath", "-u", args.root, capture=True))
     sys.path.insert(0, str(REPO / ".studio"))
     from root_deploy import safe
@@ -496,17 +915,10 @@ def deploy_windows(args) -> dict:
     import fcntl
     with (parent / ".lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        build_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:12]
-        output = parent / build_id
-        output.mkdir()
-        runtime_files = None if args.full else reusable_runtime(root, RUNTIME_LOCK)
-        archive = candidate(build_id, output, args.runtime_cache.resolve(), args.include,
-                            channel="local", runtime_files=runtime_files)
-        # Bootstrap uses only locked embedded Python, outside the live installation.
-        identity = verified_archive(archive)
-        with zipfile.ZipFile(archive) as bundle:
-            runtime_lock = json.loads(bundle.read(identity + "/windows-runtime.lock.json"))
-            bootstrap = bundle.read(identity + "/release")
+        started = time.monotonic()
+        timing = {}
+        # Only the small locked Python bootstrap precedes the native root preflight.
+        runtime_lock = json.loads(RUNTIME_LOCK.read_text(encoding="utf-8"))
         python_asset = next((asset for asset in runtime_lock["assets"] if asset["kind"] == "python"), None)
         if python_asset is None:
             raise ReleaseError("Runtime lock is missing bootstrap Python")
@@ -514,15 +926,65 @@ def deploy_windows(args) -> dict:
         if sha256(python_zip) != python_asset["sha256"]:
             raise ReleaseError("Bootstrap Python differs from runtime lock")
         staging_parent = safe(root.parent, ".hyperframes-deploy")
-        staging_parent.mkdir(exist_ok=True)
-        stage = staging_parent / ("deploy-" + build_id)
+        staging_parent.mkdir(parents=True, exist_ok=True)
+        stage = staging_parent / ("deploy-" + uuid.uuid4().hex)
         stage.mkdir()
-        print(f"Windows staging: {stage}", flush=True)
         extract_zip(python_zip, stage / "python")
+        (stage / "python/python.exe").chmod(0o700)
+        for name in ("root_deploy.py", "windows_runtime.py"):
+            shutil.copyfile(REPO / ".studio" / name, stage / name)
+        proposed = set(source_hashes(args.include)) | {"AGENTS.md", "CLAUDE.md", ".studio/AGENTS.md", ".release.json"}
+        proposed = {name for name in proposed if not name.startswith((".studio/components/", ".studio/backgrounds/"))}
+        declaration = personal_manifest(personal_source) if personal_source is not None else {}
+        excluded = declaration.get('exclude_skills', [])
+        for skill in LOCAL_SKILLS.keys() - set(excluded):
+            proposed.update(path.relative_to(REPO).as_posix() for path in (REPO / ".agents/skills" / skill).rglob("*")
+                            if path.is_file() and "__pycache__" not in path.parts)
+        if personal_source is not None:
+            proposed.update(name for name in declaration["files"] if not personal_card_source(name))
+            if "cards" in declaration:
+                proposed.update(card_members(card_lock(personal_source, declaration["cards"])))
+        expected = {name: declaration.get('files', {}).get(name, sha256(REPO / template)) for name, template in (
+            *PRIVATE_RULE_BASES.items(), ('.studio/AGENTS.md', '.studio/templates/STUDIO_AGENTS.md'))}
+        for name, value in declaration.get('files', {}).items():
+            expected.setdefault(name, value)  # identical private files already present are adopted, not refused
+        expected['skills-lock.json'] = hashlib.sha256(skill_lock_bytes(REPO / 'skills-lock.json', excluded)).hexdigest()
+        (stage / 'expected.json').write_text(json.dumps(expected), encoding='utf-8')
+        installed = safe(root, ".studio/.runtime/deployment.json")
+        if installed.is_file():
+            proposed.update(name for name in json.loads(installed.read_text(encoding="utf-8"))["files"] if name.startswith("runtime/"))
+        (stage / "retained.json").write_text(json.dumps(sorted(proposed)), encoding="utf-8")
+        win = lambda path: run("wslpath", "-w", str(path), capture=True)
+        preflight_command = [str(stage / "python/python.exe"), "-B", win(stage / "root_deploy.py"),
+                             "preflight", "--root", target, "--retained", win(stage / "retained.json"),
+                             "--expected", win(stage / 'expected.json'), "--recover-once"]
+        if args.config:
+            preflight_command.extend(["--config", args.config])
+        preliminary = subprocess.run(preflight_command, cwd=stage, capture_output=True, text=True)
+        (stage / "preflight.stdout.log").write_text(preliminary.stdout, encoding="utf-8")
+        (stage / "preflight.stderr.log").write_text(preliminary.stderr, encoding="utf-8")
+        if preliminary.returncode:
+            raise ReleaseError(f"Native preflight failed ({preliminary.returncode}); no candidate built; evidence: {stage}\n{preliminary.stderr}")
+        timing["preflight_seconds"] = time.monotonic() - started
+        runtime_files = None if args.full else reusable_runtime(root, RUNTIME_LOCK)
+        fingerprint = candidate_fingerprint(args.include, "local", runtime_files, personal_source)
+        build_id = fingerprint[:32]
+        output = parent / build_id
+        output.mkdir(exist_ok=True)
+        build_started = time.monotonic()
+        cached = any(output.glob("*.zip"))
+        archive = candidate(build_id, output, args.runtime_cache.resolve(), args.include,
+                            channel="local", runtime_files=runtime_files, personal_source=personal_source)
+        timing["build_seconds"] = time.monotonic() - build_started
+        identity = verified_archive(archive)
+        with zipfile.ZipFile(archive) as bundle:
+            bootstrap = bundle.read(identity + "/release")
         (stage / "release.py").write_bytes(bootstrap)
+        transfer_started = time.monotonic()
         for path in (archive, archive.with_suffix(archive.suffix + ".sha256")):
             shutil.copy2(path, stage / path.name)
-        win = lambda path: run("wslpath", "-w", str(path), capture=True)
+        timing["transfer_seconds"] = time.monotonic() - transfer_started
+        install_started = time.monotonic()
         command = [str(stage / "python/python.exe"), "-B", win(stage / "release.py"),
                    "_install", "--archive", win(stage / archive.name), "--root", target,
                    "--sha256", sha256(archive), "--keep", str(args.keep)]
@@ -534,8 +996,11 @@ def deploy_windows(args) -> dict:
         if result.returncode:
             raise ReleaseError(f"Native deployment failed ({result.returncode}); staging retained: {stage}; logs: {output}\n{result.stderr}")
         receipt = json.loads(result.stdout)
-        receipt.update(owner="release-deploy-v1", target=target, archive_bytes=archive.stat().st_size)
-        receipt["artifacts"] = {path.name: sha256(path) for path in output.iterdir()}
+        receipt.update(owner="release-deploy-v1", target=target, archive_bytes=archive.stat().st_size,
+                       preflight=json.loads(preliminary.stdout), candidate_reused=cached,
+                       timings={**timing, "install_seconds": time.monotonic() - install_started,
+                                "total_seconds": time.monotonic() - started})
+        receipt["artifacts"] = {path.name: sha256(path) for path in output.iterdir() if path.is_file() and path.name != "receipt.json"}
         (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
         try:
             # The native process has exited; only this invocation's fresh staging is removed.
@@ -561,6 +1026,7 @@ def parser() -> argparse.ArgumentParser:
     candidate_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
     candidate_parser.add_argument("--runtime-cache", type=Path, required=True)
     candidate_parser.add_argument("--include", action="append", default=[], help="Explicit new public file; repeat for each untracked addition")
+    candidate_parser.add_argument('--personal-source', type=Path, help='Assemble exact private release-sources.json; omitted builds public content')
     verify_parser = subcommands.add_parser("verify")
     verify_parser.add_argument("archive", type=Path)
     deploy_parser = subcommands.add_parser("deploy", help="Build and deploy from WSL to a Windows root")
@@ -569,13 +1035,14 @@ def parser() -> argparse.ArgumentParser:
     deploy_parser.add_argument("--output-dir", type=Path, default=REPO / "dist")
     deploy_parser.add_argument("--include", action="append", default=[])
     deploy_parser.add_argument("--config", help="Windows JSON path for first installation only")
-    deploy_parser.add_argument("--keep", type=int, default=2, help="Rollback versions (minimum 2); archives keep this many plus current")
+    deploy_parser.add_argument("--keep", type=int, default=1, help="Rollback versions (minimum 1); archives keep this many plus current")
     deploy_parser.add_argument("--full", action="store_true", help="Include runtime even if its lock matches")
+    deploy_parser.add_argument("--personal-source", type=Path, help="Assemble exact private release-sources.json; omitted deploys public content")
     install_parser = subcommands.add_parser("_install", help=argparse.SUPPRESS)
     install_parser.add_argument("--archive", required=True, type=Path)
     install_parser.add_argument("--root", required=True, type=Path)
     install_parser.add_argument("--sha256", required=True)
-    install_parser.add_argument("--keep", type=int, default=2)
+    install_parser.add_argument("--keep", type=int, default=1)
     install_parser.add_argument("--config", type=Path)
     return command
 
@@ -586,7 +1053,8 @@ def main(arguments: list[str] | None = None) -> int:
         if args.command == "build":
             build(args.version, args.output_dir.resolve(), args.runtime_cache.resolve())
         elif args.command in {"candidate", "local"}:
-            candidate(args.build_id, args.output_dir.resolve(), args.runtime_cache.resolve(), args.include, channel=args.command)
+            candidate(args.build_id, args.output_dir.resolve(), args.runtime_cache.resolve(), args.include, channel=args.command,
+                      personal_source=args.personal_source.resolve() if args.personal_source else None)
         elif args.command == "deploy":
             print(json.dumps(deploy_windows(args), indent=2))
         elif args.command == "_install":

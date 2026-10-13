@@ -28,19 +28,22 @@ class V352CliTests(unittest.TestCase):
         external = tempfile.TemporaryDirectory()
         self.addCleanup(external.cleanup)
         base = Path(external.name)
-        package, source, store = base / "npm", base / "sources/lucide", base / "store"
+        package, source, store = base / "npm", base / "cards/kit/assets/lucide-static", base / "store"
         (package / "icons").mkdir(parents=True)
         (package / "package.json").write_text(json.dumps({"name": "lucide-static", "version": "1.45.0", "license": "ISC"}))
         (package / "LICENSE").write_text("Synthetic ISC fixture")
         (package / "icons/fixture.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 3 L4 5"/></svg>')
         (package / "icon-metadata.json").write_text(json.dumps({"fixture": {"aliases": ["sample"], "tags": ["synthetic"]}}))
-        call(self, "component", "root", str(store), "--json")
+        import asset_store
+        config = asset_store.configure_asset_store(self.root, store)
+        import designs
+        configuration = asset_store._config_path(self.root)
+        data = json.loads(configuration.read_text()); data['design_root'] = str(base / 'cards')
+        configuration.write_text(json.dumps(data))
+        designs.new('kit', kind='material', root=self.root)
         result = json.loads(call(self, "icons", "import", "--from", str(package), "--source", str(source), "--json"))
         self.assertFalse(result["accepted"])
         self.assertFalse((store / "packages").exists())
-        candidate = json.loads(call(self, "component", "pack", str(source), "--json"))
-        call(self, "component", "accept", candidate["component_ref"], "--sha256", candidate["package_sha256"],
-             "--note", "Synthetic import fixture", "--json")
         return base, store
 
     def test_icon_cli_import_search_use_and_interface(self):
@@ -48,20 +51,22 @@ class V352CliTests(unittest.TestCase):
         for query in ("fixture", "sample", "synthetic"):
             row = json.loads(call(self, "icons", "search", query, "--json"))[0]
             self.assertEqual("lucide:fixture@1.45.0", row["ref"])
-            self.assertEqual("lucide-static@v1", row["asset_ref"])
-        card = json.loads(call(self, "component", "interface", "lucide-static@v1", "--json"))
-        self.assertEqual("lucide-static@v1", card["component_ref"])
+            self.assertEqual("kit/lucide-static", row["asset_ref"])
+        card = json.loads(call(self, "component", "interface", "kit/lucide-static", "--json"))
+        self.assertEqual("kit/lucide-static", card["component_ref"])
         self.assertIn("parameters", card["interface"])
         self.assertNotIn("M2 3", json.dumps(card))
         project = base / "sources/project"
-        project.mkdir()
+        project.mkdir(parents=True)
         (project / "index.html").write_text('<img src="assets/fixture.svg">')
-        call(self, "component", "source-add", str(base / "sources"), "--json")
+        import asset_store
+        asset_store.register_source(store, base / "sources")
         import component_harness as components
-        package = store / "packages/lucide-static/v1"
-        acceptance = json.loads((store / "acceptances/lucide-static/v1/acceptance.json").read_text())
-        components.install_component(package, project, {"schema_version": 3, "component_ref": "lucide-static@v1",
-                                     "usage": {"role": "icon-set", "required": True}}, acceptance=acceptance)
+        package = base / 'frozen'
+        import asset_contract
+        asset_contract.freeze_source(base / 'cards/kit/assets/lucide-static', package, card_ref='kit/lucide-static')
+        components.install_component(package, project, {"schema_version": 3, "component_ref": "kit/lucide-static@v1",
+                                     "usage": {"role": "icon-set", "required": True}})
         result = json.loads(call(self, "icons", "use", row["ref"], "--project", str(project), "--output", "assets/fixture.svg", "--json"))
         self.assertEqual("assets/fixture.svg", result["path"])
         svg = (project / result["path"]).read_text()
@@ -83,10 +88,8 @@ class V352CliTests(unittest.TestCase):
             self.assertEqual(original['detail'], row['detail'])
             self.assertEqual(original['asset_type'], row['asset_type'])
 
-    @unittest.skipUnless((fixture.REPO / '.studio/components/script-draft-core/16x9/v1').is_dir(),
-                         'Source-checkout-only: legacy component fixtures are excluded from releases')
     def test_existing_component_interface_has_parameters_and_example(self):
-        source = fixture.REPO / '.studio/components/script-draft-core/16x9/v1'
+        source = fixture.REPO / 'tests/fixtures/components/capability-convergence/16x9/v1'
         card = json.loads(call(self, 'component', 'interface', str(source), '--candidate', '--json'))['interface']
         self.assertIn('slots', card)
         self.assertIn('slots', card['example'])

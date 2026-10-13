@@ -25,7 +25,7 @@ class MathDeliveryTests(unittest.TestCase):
         self.cli.parent.mkdir(parents=True)
         self.cli.write_text('// fixture', encoding='utf-8')
         self.package = self.cli.parent.parent / 'package.json'
-        self.package.write_text('{"version":"0.8.27"}', encoding='utf-8')
+        self.package.write_text('{"version":"0.8.150"}', encoding='utf-8')
         self.browser = self.root / 'browser'
         self.browser.write_bytes(b'fixture')
         self.audio = self.root / 'formal.MP3'
@@ -69,7 +69,7 @@ class MathDeliveryTests(unittest.TestCase):
             with patch.dict(os.environ, {'HYPERFRAMES_BROWSER_PATH': ''}), self.assertRaisesRegex(ValueError, 'browser'):
                 math_audio.extract(self.audio, self.cli, 4, 0)
             self.package.write_text('{"version":"0.8.28"}', encoding='utf-8')
-            with self.assertRaisesRegex(ValueError, '0.8.27'):
+            with self.assertRaisesRegex(ValueError, '0.8.150'):
                 math_audio.extract(self.audio, self.cli, 4, 0)
             run.assert_not_called()
 

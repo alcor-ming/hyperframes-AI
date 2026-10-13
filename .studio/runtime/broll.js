@@ -95,10 +95,12 @@
       } else throw new Error('broll_unsupported_slot_type');
     }
     const map = time => start + time * (contract.timing === 'stretch' ? duration / contract.duration.default : 1);
-    let performance, rhythm, disposed = false;
+    let performance, rhythm, textSource, disposed = false;
     const dispose = () => {
       if (disposed) return;
-      disposed = true; global.__hfRhythmSources?.delete(rhythm); performance?.dispose?.();
+      disposed = true; global.__hfRhythmSources?.delete(rhythm);
+      if (textSource) global.__hfTextSources?.delete(textSource);
+      performance?.dispose?.();
     };
     try {
       for (const root of [stage, text].filter(Boolean)) {
@@ -107,10 +109,48 @@
       performance = await build({stage, text, slots: values, params: resolvedParams, appearance, start, end, duration});
       if (typeof performance?.renderAt !== 'function' || !Array.isArray(performance.events)) throw new Error('broll_invalid_performance');
       await doc.fonts.ready;
+      const ownership = metadata.text_ownership;
+      if ((stage.tagName === 'CANVAS' || stage.querySelector?.('canvas') || own(metadata, 'text_ownership')) && typeof performance.texts !== 'function') throw new Error('broll_requires_texts_inventory');
+      const rawTexts = typeof performance.texts === 'function' ? await performance.texts() : [];
+      if (!Array.isArray(rawTexts)) throw new Error('broll_invalid_texts_inventory');
+      let scene = stage.closest?.('[data-scene-id]')?.dataset?.sceneId;
+      if (scene === undefined) for (let node = stage; node; node = node.parentElement) {
+        if (typeof node.id === 'string' && /^S[0-9]+$/.test(node.id)) { scene = node.id; break; }
+      }
+      const fontFamily = getComputedStyle(stage).fontFamily, ids = new Set();
+      const inventory = rawTexts.map(item => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('broll_invalid_text_item');
+        if (typeof item.id !== 'string' || !item.id || ids.has(item.id)) throw new Error('broll_invalid_text_id');
+        ids.add(item.id);
+        if (typeof item.text !== 'string' || !item.text) throw new Error('broll_invalid_text_value:' + item.id);
+        if (!finite(item.start) || !finite(item.end) || item.start < 0 || item.start >= item.end || item.end > contract.duration.default) throw new Error('broll_invalid_text_window:' + item.id);
+        if (!['attached', 'independent'].includes(item.kind)) throw new Error('broll_invalid_text_kind:' + item.id);
+        if (typeof item.embedded !== 'boolean') throw new Error('broll_invalid_text_embedded:' + item.id);
+        if (item.kind === 'independent' && item.embedded && (typeof item.text_type !== 'string' || !item.text_type)) throw new Error('broll_invalid_text_type:' + item.id);
+        let region;
+        if (item.region !== undefined) {
+          const box = item.region, unit = value => finite(value) && value >= 0 && value <= 1;
+          if (!box || typeof box !== 'object' || !unit(box.x) || !unit(box.y) || !unit(box.width) || !unit(box.height) || box.x + box.width > 1 + tolerance || box.y + box.height > 1 + tolerance) throw new Error('broll_invalid_text_region:' + item.id);
+          region = {x: box.x, y: box.y, width: box.width, height: box.height};
+        }
+        const record = {id: item.id, text: item.text, start: map(item.start), end: Math.min(map(item.end), end), kind: item.kind, embedded: item.embedded};
+        if (item.text_type !== undefined) record.text_type = item.text_type;
+        if (region) record.region = region;
+        record.scene = scene; record.asset = options.assetRef || metadata.id;
+        record.selector = '#' + metadata.id + ' [data-hf-id="' + item.id + '"]';
+        record.layer = item.embedded ? 'stage' : 'text';
+        record.font_family = fontFamily;
+        record.ownership_allowed = item.kind === 'attached' || !item.embedded || ownership?.mode === 'embedded' && Array.isArray(ownership.kinds) && ownership.kinds.includes(item.text_type);
+        return record;
+      });
+      textSource = () => inventory.map(entry => ({...entry, ...(entry.region ? {region: {...entry.region}} : {})}));
+      (global.__hfTextSources ??= new Set()).add(textSource);
       for (const [name, spec] of Object.entries(contract.slots)) if (['text', 'number'].includes(spec.type)) {
         const label = performance.labels?.[name];
+        const embedded = (!label || !label.isConnected) && inventory.find(entry => entry.id === name && entry.embedded && entry.text === String(values[name]));
+        if (embedded) continue;
         layer(label, spec.layer, doc);
-        if (!appearance.theme.fonts?.length || label.textContent !== String(values[name]) || label.clientWidth <= 0 || label.clientHeight <= 0 || label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1) throw new Error('broll_frozen_font_capacity:' + name);
+        if (!(appearance.lock.card_fonts?.fonts || appearance.theme?.fonts)?.length || label.textContent !== String(values[name]) || label.clientWidth <= 0 || label.clientHeight <= 0 || label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1) throw new Error('broll_frozen_font_capacity:' + name);
       }
       const events = performance.events.map(event => {
         if (!finite(event.time) || event.time < 0 || event.time > contract.duration.default || !event.target?.isConnected || !(stage.contains(event.target) || text?.contains(event.target))) throw new Error('broll_invalid_moment_target');
@@ -125,6 +165,7 @@
             (t - start) * (contract.timing === 'stretch' ? contract.duration.default / duration : 1))), t);
         },
         moments: () => ({key_moments: [...new Set(events.map(event => event.time))].sort((a, b) => a - b), sfx_cues: contract.sfx_cues.map(cue => ({...cue, time: map(cue.time)}))}),
+        texts: textSource,
         dispose,
       };
       binding.renderAt(start); return binding;

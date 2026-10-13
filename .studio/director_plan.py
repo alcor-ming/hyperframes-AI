@@ -2,16 +2,18 @@
 import re
 
 import lines
+import designs
 
 
 FORMAT = '3.7.0'
 
 
 def parse(text, metadata, scenes):
-    line = lines.frozen({'line': metadata.get('line')})
+    line = lines.frozen(metadata)
     if line is None:
         raise ValueError('New Plan requires a frozen line')
-    if line['mode'] in ('math', 'english'):
+    caps = designs.capabilities(line)
+    if 'director' not in caps['checks']:
         # Teaching units and their cues own the sequence for these lines.
         return {'brief': {}, 'segments': {sid: [] for sid in scenes}, 'findings': []}
     brief_section = re.search(r'^## 导演 Brief\s*\n(.*?)(?=^## |\Z)', text, re.M | re.S)
@@ -19,7 +21,7 @@ def parse(text, metadata, scenes):
     findings = [{'kind': 'missing_brief_field', 'field': key} for key in line['brief']['required'] if not brief.get(key, '').strip()]
     references = [value for value in re.split(r'[,，、\s]+', brief.get('参考机制', '').strip()) if value]
     known = {item['id']: item for item in lines.catalogue('mechanisms')['mechanisms']}
-    if line['mode'] == 'explainer' and not 1 <= len(references) <= 3:
+    if 'reference-count' in caps['checks'] and not 1 <= len(references) <= 3:
         findings.append({'kind': 'reference_count', 'expected': '1–3'})
     for reference in references:
         cross = reference.startswith('跨线:')
@@ -29,8 +31,11 @@ def parse(text, metadata, scenes):
             continue
         if identity not in known:
             findings.append({'kind': 'unknown_mechanism', 'id': identity})
-        elif line['id'] not in known[identity]['lines'] and not cross:
+        elif (line['id'] not in known[identity]['lines'] and line.get('mode') not in known[identity]['lines']
+              and not set(line.get('compatibility', {}).get('supersedes', [])) & set(known[identity]['lines']) and not cross):
             findings.append({'kind': 'mechanism_line_mismatch', 'id': identity})
+    if not caps['rolls']:
+        return {'brief': brief, 'segments': {sid: [] for sid in scenes}, 'findings': findings}
     section = re.search(r'^## 分镜表\s*\n(.*?)(?=^## |\Z)', text, re.M | re.S)
     segments, seen, previous_scene = {}, set(), None
     for row in (section[1] if section else '').splitlines():
